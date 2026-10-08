@@ -1,3 +1,4 @@
+// Changed by Hookwars: program ids and derived addresses.
 //! `bordrless_bridge`: SPL Token, Token-2022 and native SOL in; Bordrless Token Standard out, one
 //! for one, and back.
 //!
@@ -21,7 +22,7 @@ pub mod state;
 
 pub use instructions::*;
 
-declare_id!("CtLkuFVitoXHTa86Hfp8KmfSDfqJaMYFWr6EGmQVsKb7");
+declare_id!("5TzyKXK6tzSrkkRdximMebWoV4rRjuyzEwCnisS6DKwj");
 
 #[cfg(not(feature = "no-entrypoint"))]
 solana_security_txt::security_txt! {

@@ -1,5 +1,5 @@
 {
-  "address": "GyzKSnnEu2uN5bBRecE4XYY2enbfR2D2MtxnbJPGy7hk",
+  "address": "AhmowBwJF7E1uDQ3quQz8xMKevre3i8kYPBEbkhAedvo",
   "metadata": {
     "name": "bordrless_swap",
     "version": "0.1.0",
@@ -257,7 +257,7 @@
         },
         {
           "name": "bridge_program",
-          "address": "CtLkuFVitoXHTa86Hfp8KmfSDfqJaMYFWr6EGmQVsKb7"
+          "address": "5TzyKXK6tzSrkkRdximMebWoV4rRjuyzEwCnisS6DKwj"
         },
         {
           "name": "bridge_config"
@@ -279,7 +279,7 @@
         },
         {
           "name": "token_program",
-          "address": "2XoEWp8cF3kRXg74eVwPAyTFhVCAztn3V88komxAvr22"
+          "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
         },
         {
           "name": "token_event_authority"

@@ -1,3 +1,4 @@
+// Changed by Hookwars: program ids and derived addresses.
 //! Constants of the kit. Addresses the kit compares against are constants rather than derived on
 //! chain (`docs/hooks-v2.md` §4.12); the unit tests check each against its derivation.
 
@@ -10,34 +11,34 @@ pub const KIT_SEED: &[u8] = b"kit";
 /// `["kit-caller", mint]` under [`LAUNCH_ID`]: the only signer `init` and `graduate` accept.
 pub const KIT_CALLER_SEED: &[u8] = b"kit-caller";
 /// The launchpad (`bordrless_launch`). A constant: the kit has no crate dependency on the launch.
-pub const LAUNCH_ID: Pubkey = Pubkey::from_str_const("1jcBymHxBjniZDhNPy51Vgm5Nz7pLUdxa9UBHc4TavC");
+pub const LAUNCH_ID: Pubkey = Pubkey::from_str_const("fBvY7neytvwSuJLF1Sur5tHk7vkWyPzjyfDVDm1m2qD");
 /// The companion program (`bordrless_companion`, docs/companions.md): a launch whose creator is
 /// `PDA(["creator", mint], COMPANION_ID)` has its creator excluded like the pool. A constant: the
 /// companion depends on the kit, not the other way round (its tests check the two agree).
 pub const COMPANION_ID: Pubkey =
-    Pubkey::from_str_const("6ZUM1gWBH9hBBNoJoaVAGwSftyZ6CUda6vUZTW9MsJuo");
+    Pubkey::from_str_const("HzeAN8e7HbGx8wzgd5SpduF51c7rXCTqkQKcmw44YHkK");
 pub const COMPANION_CREATOR_SEED: &[u8] = b"creator";
 /// The DEX (`bordrless_swap`).
-pub const SWAP_ID: Pubkey = Pubkey::from_str_const("GyzKSnnEu2uN5bBRecE4XYY2enbfR2D2MtxnbJPGy7hk");
+pub const SWAP_ID: Pubkey = Pubkey::from_str_const("AhmowBwJF7E1uDQ3quQz8xMKevre3i8kYPBEbkhAedvo");
 /// The bridge (`bordrless_bridge`).
 pub const BRIDGE_ID: Pubkey =
-    Pubkey::from_str_const("CtLkuFVitoXHTa86Hfp8KmfSDfqJaMYFWr6EGmQVsKb7");
+    Pubkey::from_str_const("5TzyKXK6tzSrkkRdximMebWoV4rRjuyzEwCnisS6DKwj");
 /// The token program (`bordrless_token`).
 pub const TOKEN_ID: Pubkey = bordrless_token::ID;
 /// The token program's signer of every callback to the kit: `["hook-authority", KIT_ID]` under
 /// the token program. The token program signs each hook's callbacks with a PDA of that hook's
 /// id, so a signer another hook received and passed on in a CPI of its own is never this one.
 pub const TOKEN_HOOK_AUTHORITY: Pubkey =
-    Pubkey::from_str_const("C2Y3B3hZTesJQqLYrZ7qoaZUoRmwYWh5Qh3MuFxruouE");
+    Pubkey::from_str_const("B1rkktspgQt6ghUrQBRBU5JhLxSKbayB2zt2UkcFdZQT");
 /// The token program's event authority.
 pub const TOKEN_EVENT_AUTHORITY: Pubkey =
-    Pubkey::from_str_const("69vhpnkYjtiJgdfU7QsA5Ww7V8FWtvPcZ2r4znuyByvq");
+    Pubkey::from_str_const("DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R");
 /// This program's `["hook-authority"]` PDA: it signs the token program's `write_hook_data` in
 /// `claim`.
 pub const HOOK_AUTHORITY: Pubkey =
-    Pubkey::from_str_const("2repKA1JgDkBo4AffscVee342dcBcH6c2yfpUTRrAiEN");
+    Pubkey::from_str_const("Fu5LjHRW9e9tqn3Mhem3frUPDJxTzGf5ZPiBTnYKtsYX");
 /// Bump of [`HOOK_AUTHORITY`].
-pub const HOOK_AUTHORITY_BUMP: u8 = 255;
+pub const HOOK_AUTHORITY_BUMP: u8 = 254;
 /// Layout version written into new accounts.
 pub const VERSION: u8 = 1;
 /// Discriminator length.

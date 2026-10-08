@@ -1,3 +1,4 @@
+// Changed by Hookwars: program ids and derived addresses.
 //! Constants of the DEX.
 
 /// `["config"]`.
@@ -6,8 +7,8 @@ pub const CONFIG_SEED: &[u8] = b"config";
 pub const POOL_SEED: &[u8] = b"pool";
 /// `["lp", pool]`.
 pub const LP_SEED: &[u8] = b"lp";
-/// Bump of `["config"]` (`2XLvgczuVACmvvjfRLLAcLwMzFHutbAAro61zZKP8fsx`).
-pub const CONFIG_BUMP: u8 = 254;
+/// Bump of `["config"]` (`HnckfEpqfiSan7VurzXtFxmHHTsKmkD2dwepwTdkrF5Z`).
+pub const CONFIG_BUMP: u8 = 255;
 /// Layout version.
 pub const VERSION: u8 = 1;
 /// Largest LP fee a pool or a hook may set.
@@ -28,7 +29,7 @@ pub const FEE_MODEL_SHARE: u8 = 1;
 /// The test suite checks it equals `bordrless_launch::ID` (the DEX cannot depend on the launch
 /// program, which depends on the DEX).
 pub const LAUNCHPAD_ID: anchor_lang::prelude::Pubkey =
-    anchor_lang::prelude::Pubkey::from_str_const("1jcBymHxBjniZDhNPy51Vgm5Nz7pLUdxa9UBHc4TavC");
+    anchor_lang::prelude::Pubkey::from_str_const("fBvY7neytvwSuJLF1Sur5tHk7vkWyPzjyfDVDm1m2qD");
 /// Discriminator length.
 pub const DISCRIMINATOR_LEN: usize = 8;
 /// Name of every LP mint.
@@ -42,10 +43,10 @@ pub const BPF_LOADER_UPGRADEABLE_ID: anchor_lang::prelude::Pubkey =
 /// The bridge (`bordrless_bridge`): `collect_protocol_fees_sol` calls its `unwrap_sol`. Constants
 /// rather than a crate dependency; the unit tests check each against the bridge's own.
 pub const BRIDGE_ID: anchor_lang::prelude::Pubkey =
-    anchor_lang::prelude::Pubkey::from_str_const("CtLkuFVitoXHTa86Hfp8KmfSDfqJaMYFWr6EGmQVsKb7");
+    anchor_lang::prelude::Pubkey::from_str_const("5TzyKXK6tzSrkkRdximMebWoV4rRjuyzEwCnisS6DKwj");
 /// Bridged SOL: the bridge's `["wrapped", NATIVE_MINT]`, the quote of every launch pool.
 pub const BRIDGED_SOL_MINT: anchor_lang::prelude::Pubkey =
-    anchor_lang::prelude::Pubkey::from_str_const("A49oVhX22ExMwTEtFC6Y8nhBdZ4LJDGhdXLDn4c2f59i");
+    anchor_lang::prelude::Pubkey::from_str_const("7YMXcZ3AUD5pBceT4QzM2hrApoH3rEmPZUAzpKPHVvR4");
 /// The bridge's `unwrap_sol` instruction discriminator.
 pub const UNWRAP_SOL_DISCRIMINATOR: [u8; 8] = [99, 40, 14, 105, 45, 107, 172, 201];
 

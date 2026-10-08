@@ -1,3 +1,4 @@
+// Changed by Hookwars: program ids and derived addresses.
 //! `bordrless_swap`: the Bordrless DEX.
 //!
 //! Constant-product pools between two Bordrless Token Standard mints. A pool has an LP fee that
@@ -32,7 +33,7 @@ pub mod token;
 
 pub use instructions::*;
 
-declare_id!("GyzKSnnEu2uN5bBRecE4XYY2enbfR2D2MtxnbJPGy7hk");
+declare_id!("AhmowBwJF7E1uDQ3quQz8xMKevre3i8kYPBEbkhAedvo");
 
 #[cfg(not(feature = "no-entrypoint"))]
 solana_security_txt::security_txt! {

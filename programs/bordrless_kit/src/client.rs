@@ -1,3 +1,4 @@
+// Changed by Hookwars: program ids and derived addresses.
 //! Addresses, the hook accounts of a kit mint and instruction builders for calling the kit: used
 //! by the launch program (CPI), the tests and as the reference for the TypeScript SDK. Account
 //! order is that of each `Accounts` struct, with the event authority and the program appended as
@@ -193,7 +194,7 @@ mod tests {
         assert_eq!(crate::KIT_ID, crate::ID);
         assert_eq!(
             crate::ID.to_string(),
-            "14RJQXPdJfkehit6ezktjd3xujamf8nVSKw2shKamaEH"
+            "CLEEZe3v8Sqa45J1VdmfKkjxqFGSj44MxA5prQH3xTLG"
         );
     }
 

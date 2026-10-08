@@ -1,3 +1,4 @@
+// Changed by Hookwars: program ids and derived addresses.
 //! Instruction builders for calling the launchpad (tests and the TypeScript SDK's reference). They
 //! derive every address they need, off chain.
 
@@ -677,7 +678,7 @@ mod tests {
         );
         assert_eq!(
             bordrless_kit::constants::BRIDGE_ID.to_string(),
-            "CtLkuFVitoXHTa86Hfp8KmfSDfqJaMYFWr6EGmQVsKb7"
+            "5TzyKXK6tzSrkkRdximMebWoV4rRjuyzEwCnisS6DKwj"
         );
     }
 

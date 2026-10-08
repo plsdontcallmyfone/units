@@ -1,5 +1,5 @@
 {
-  "address": "CtLkuFVitoXHTa86Hfp8KmfSDfqJaMYFWr6EGmQVsKb7",
+  "address": "5TzyKXK6tzSrkkRdximMebWoV4rRjuyzEwCnisS6DKwj",
   "metadata": {
     "name": "bordrless_bridge",
     "version": "0.1.0",
@@ -186,7 +186,7 @@
         },
         {
           "name": "token_program",
-          "address": "2XoEWp8cF3kRXg74eVwPAyTFhVCAztn3V88komxAvr22"
+          "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
         },
         {
           "name": "token_event_authority"
@@ -394,7 +394,7 @@
         },
         {
           "name": "token_program",
-          "address": "2XoEWp8cF3kRXg74eVwPAyTFhVCAztn3V88komxAvr22"
+          "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
         },
         {
           "name": "token_event_authority"

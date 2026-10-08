@@ -1,5 +1,5 @@
 {
-  "address": "53SpmtkdPWQ63mWoDeXk8P9tuwiT4ed2Wx4fwfy5NSF8",
+  "address": "67nAgW7h9wYmM1jLzrXVNy8UDNxgVFqGTqrTEPamtokh",
   "metadata": {
     "name": "half_life",
     "version": "0.1.0",
@@ -156,7 +156,7 @@
         },
         {
           "name": "token_program",
-          "address": "2XoEWp8cF3kRXg74eVwPAyTFhVCAztn3V88komxAvr22"
+          "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
         },
         {
           "name": "token_event_authority"
@@ -290,7 +290,7 @@
         },
         {
           "name": "this_program",
-          "address": "53SpmtkdPWQ63mWoDeXk8P9tuwiT4ed2Wx4fwfy5NSF8"
+          "address": "67nAgW7h9wYmM1jLzrXVNy8UDNxgVFqGTqrTEPamtokh"
         },
         {
           "name": "hook_signer",
@@ -298,7 +298,7 @@
         },
         {
           "name": "token_program",
-          "address": "2XoEWp8cF3kRXg74eVwPAyTFhVCAztn3V88komxAvr22"
+          "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
         },
         {
           "name": "token_event_authority"

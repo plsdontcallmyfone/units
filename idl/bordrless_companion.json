@@ -1,5 +1,5 @@
 {
-  "address": "6ZUM1gWBH9hBBNoJoaVAGwSftyZ6CUda6vUZTW9MsJuo",
+  "address": "HzeAN8e7HbGx8wzgd5SpduF51c7rXCTqkQKcmw44YHkK",
   "metadata": {
     "name": "bordrless_companion",
     "version": "0.1.0",
@@ -276,7 +276,7 @@
         },
         {
           "name": "bridged_sol_mint",
-          "address": "A49oVhX22ExMwTEtFC6Y8nhBdZ4LJDGhdXLDn4c2f59i"
+          "address": "7YMXcZ3AUD5pBceT4QzM2hrApoH3rEmPZUAzpKPHVvR4"
         },
         {
           "name": "creator_quote",
@@ -284,7 +284,7 @@
         },
         {
           "name": "token_program",
-          "address": "2XoEWp8cF3kRXg74eVwPAyTFhVCAztn3V88komxAvr22"
+          "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
         },
         {
           "name": "token_event_authority"
@@ -484,7 +484,7 @@
         },
         {
           "name": "launch_program",
-          "address": "1jcBymHxBjniZDhNPy51Vgm5Nz7pLUdxa9UBHc4TavC"
+          "address": "fBvY7neytvwSuJLF1Sur5tHk7vkWyPzjyfDVDm1m2qD"
         },
         {
           "name": "event_authority"

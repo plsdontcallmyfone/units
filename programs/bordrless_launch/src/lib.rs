@@ -1,3 +1,4 @@
+// Changed by Hookwars: program ids and derived addresses.
 //! `bordrless_launch`: the Bordrless launchpad (`docs/hooks-v2.md` §5).
 //!
 //! One transaction creates a Bordrless Token Standard mint with fixed metadata and the token rules
@@ -36,7 +37,7 @@ pub mod state;
 
 pub use instructions::*;
 
-declare_id!("1jcBymHxBjniZDhNPy51Vgm5Nz7pLUdxa9UBHc4TavC");
+declare_id!("fBvY7neytvwSuJLF1Sur5tHk7vkWyPzjyfDVDm1m2qD");
 
 #[cfg(not(feature = "no-entrypoint"))]
 solana_security_txt::security_txt! {

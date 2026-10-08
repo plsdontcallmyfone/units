@@ -1,3 +1,4 @@
+// Changed by Hookwars: program ids and derived addresses.
 //! `half_life`: a Bordrless token hook whose exit fee has a half-life.
 //!
 //! Every holding remembers how old its tokens are: the average time they arrived, kept in the 64
@@ -40,7 +41,7 @@ use bordrless_hook::{
 use bordrless_launch::state::Launch;
 use bordrless_token::client as token_client;
 
-declare_id!("53SpmtkdPWQ63mWoDeXk8P9tuwiT4ed2Wx4fwfy5NSF8");
+declare_id!("67nAgW7h9wYmM1jLzrXVNy8UDNxgVFqGTqrTEPamtokh");
 
 #[cfg(not(feature = "no-entrypoint"))]
 solana_security_txt::security_txt! {

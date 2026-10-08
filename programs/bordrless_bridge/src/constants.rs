@@ -1,3 +1,4 @@
+// Changed by Hookwars: program ids and derived addresses.
 //! Constants of the bridge.
 
 use anchor_lang::prelude::Pubkey;
@@ -11,7 +12,7 @@ pub const WRAPPED_SEED: &[u8] = b"wrapped";
 /// `["sol-vault"]`: the lamports behind wrapped SOL.
 pub const SOL_VAULT_SEED: &[u8] = b"sol-vault";
 /// Bump of `["config"]` (`Dwf4C8tTMYwicp8cU5MYcTtMQVVJTN7W3LcXCQ1UEhMs`).
-pub const CONFIG_BUMP: u8 = 250;
+pub const CONFIG_BUMP: u8 = 254;
 /// Bump of `["sol-vault"]` (`EAcZR2i8A6BbnKRdWuyMVDTuiNkD6qc4RkFpxUYJ9Qba`).
 pub const SOL_VAULT_BUMP: u8 = 255;
 /// Layout version.

@@ -1,3 +1,4 @@
+// Changed by Hookwars: program ids and derived addresses.
 //! `hook_tester`: a test-only hook program for the LiteSVM suites. It is never deployed (it is not
 //! in `scripts/solana/deploy.sh` nor in the local validator's program list).
 //!
@@ -43,7 +44,7 @@ use bordrless_token::client as token_client;
 
 pub mod client;
 
-declare_id!("9xrQXAxhbRRCVfE5E7DFnxYHESmy4hrtcKpSvZUNmiWM");
+declare_id!("HCqwefEgryEDQo3hMqxirkmeAvaUhfFQSA8sCULDUdGt");
 
 /// `["script", key]`.
 pub const SCRIPT_SEED: &[u8] = b"script";

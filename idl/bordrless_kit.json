@@ -1,5 +1,5 @@
 {
-  "address": "14RJQXPdJfkehit6ezktjd3xujamf8nVSKw2shKamaEH",
+  "address": "CLEEZe3v8Sqa45J1VdmfKkjxqFGSj44MxA5prQH3xTLG",
   "metadata": {
     "name": "bordrless_kit",
     "version": "0.1.0",
@@ -29,7 +29,7 @@
         {
           "name": "hook_signer",
           "signer": true,
-          "address": "C2Y3B3hZTesJQqLYrZ7qoaZUoRmwYWh5Qh3MuFxruouE"
+          "address": "B1rkktspgQt6ghUrQBRBU5JhLxSKbayB2zt2UkcFdZQT"
         },
         {
           "name": "mint"
@@ -94,7 +94,7 @@
         {
           "name": "hook_signer",
           "signer": true,
-          "address": "C2Y3B3hZTesJQqLYrZ7qoaZUoRmwYWh5Qh3MuFxruouE"
+          "address": "B1rkktspgQt6ghUrQBRBU5JhLxSKbayB2zt2UkcFdZQT"
         },
         {
           "name": "mint"
@@ -204,15 +204,15 @@
         },
         {
           "name": "kit_hook_authority",
-          "address": "2repKA1JgDkBo4AffscVee342dcBcH6c2yfpUTRrAiEN"
+          "address": "Fu5LjHRW9e9tqn3Mhem3frUPDJxTzGf5ZPiBTnYKtsYX"
         },
         {
           "name": "token_program",
-          "address": "2XoEWp8cF3kRXg74eVwPAyTFhVCAztn3V88komxAvr22"
+          "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
         },
         {
           "name": "token_event_authority",
-          "address": "69vhpnkYjtiJgdfU7QsA5Ww7V8FWtvPcZ2r4znuyByvq"
+          "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
         },
         {
           "name": "event_authority"
@@ -385,11 +385,11 @@
         },
         {
           "name": "token_program",
-          "address": "2XoEWp8cF3kRXg74eVwPAyTFhVCAztn3V88komxAvr22"
+          "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
         },
         {
           "name": "token_event_authority",
-          "address": "69vhpnkYjtiJgdfU7QsA5Ww7V8FWtvPcZ2r4znuyByvq"
+          "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
         },
         {
           "name": "system_program",
@@ -463,11 +463,11 @@
         },
         {
           "name": "token_program",
-          "address": "2XoEWp8cF3kRXg74eVwPAyTFhVCAztn3V88komxAvr22"
+          "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
         },
         {
           "name": "token_event_authority",
-          "address": "69vhpnkYjtiJgdfU7QsA5Ww7V8FWtvPcZ2r4znuyByvq"
+          "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
         },
         {
           "name": "event_authority"

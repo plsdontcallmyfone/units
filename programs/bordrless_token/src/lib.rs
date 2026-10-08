@@ -1,3 +1,4 @@
+// Changed by Hookwars: program ids and derived addresses.
 //! `bordrless_token`: the Bordrless Token Standard.
 //!
 //! A mint is an account of this program holding supply, authorities, hook settings and metadata.
@@ -31,7 +32,7 @@ pub mod state;
 pub use instructions::*;
 pub use state::AuthorityKind;
 
-declare_id!("2XoEWp8cF3kRXg74eVwPAyTFhVCAztn3V88komxAvr22");
+declare_id!("5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618");
 
 #[cfg(not(feature = "no-entrypoint"))]
 solana_security_txt::security_txt! {

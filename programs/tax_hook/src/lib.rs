@@ -1,3 +1,4 @@
+// Changed by Hookwars: program ids and derived addresses.
 //! `tax_hook`: an example token hook for the Bordrless Token Standard, and the worked example of a
 //! creator's own hook on a launch (`docs/hooks-v2.md` §5.8).
 //!
@@ -24,7 +25,7 @@ use bordrless_hook::{
 use bordrless_token::client as token_client;
 use bordrless_token::state::Mint as TokenMint;
 
-declare_id!("8tjnVSreJGBRQFyDBf1SyyhBgLsdBxa2rHYh9sbxFyX7");
+declare_id!("q9mMtM6vfJ8YMffnkUNW5XLz7xeVyyeo1HL8SA27AuX");
 
 #[cfg(not(feature = "no-entrypoint"))]
 solana_security_txt::security_txt! {

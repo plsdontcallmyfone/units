@@ -1,3 +1,4 @@
+// Changed by Hookwars: program ids and derived addresses.
 //! `bordrless_companion`: a launch whose creator is a program (`docs/companions.md`).
 //!
 //! A companion is made for a mint before it exists (`create`), then creates the launch through the
@@ -26,7 +27,7 @@ pub mod state;
 
 pub use instructions::*;
 
-declare_id!("6ZUM1gWBH9hBBNoJoaVAGwSftyZ6CUda6vUZTW9MsJuo");
+declare_id!("HzeAN8e7HbGx8wzgd5SpduF51c7rXCTqkQKcmw44YHkK");
 
 #[cfg(not(feature = "no-entrypoint"))]
 solana_security_txt::security_txt! {

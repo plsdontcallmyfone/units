@@ -1,5 +1,5 @@
 {
-  "address": "8tjnVSreJGBRQFyDBf1SyyhBgLsdBxa2rHYh9sbxFyX7",
+  "address": "q9mMtM6vfJ8YMffnkUNW5XLz7xeVyyeo1HL8SA27AuX",
   "metadata": {
     "name": "tax_hook",
     "version": "0.1.0",
@@ -141,7 +141,7 @@
         },
         {
           "name": "token_program",
-          "address": "2XoEWp8cF3kRXg74eVwPAyTFhVCAztn3V88komxAvr22"
+          "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
         },
         {
           "name": "token_event_authority"

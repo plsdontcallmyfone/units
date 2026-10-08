@@ -1,3 +1,4 @@
+// Changed by Hookwars: program ids and derived addresses.
 //! Constants of the launchpad. Addresses this program compares against are constants rather than
 //! derived on chain (`docs/hooks-v2.md` §4.12); the unit tests check each against its derivation.
 
@@ -13,19 +14,19 @@ pub const LAUNCH_SEED: &[u8] = b"launch";
 pub const KIT_CALLER_SEED: &[u8] = bordrless_kit::constants::KIT_CALLER_SEED;
 /// `["kit", mint]` under the kit: a token's `KitConfig`.
 pub const KIT_SEED: &[u8] = bordrless_kit::constants::KIT_SEED;
-/// Bump of this program's `["hook-authority"]` (`3dfEZLdjRcpTJ4RxPzgkqnqaG2FipRdaHgRW72AL6kqL`).
+/// Bump of this program's `["hook-authority"]` (`FSHhimQGTZQHenfuRStNhNsgwuBWBLiPhGhWc2tgEKW`).
 pub const HOOK_AUTHORITY_BUMP: u8 = 255;
-/// Bump of `["config"]` (`5n25iAaXFsjs4UgGQM6fCiRhaQcCVQ1L5BgyRZ7UrmaE`).
-pub const CONFIG_BUMP: u8 = 253;
+/// Bump of `["config"]` (`CQDSEYEXuKA8MgBXpuS6D3Tyvi5iDe5hK9ifxcCyuNYh`).
+pub const CONFIG_BUMP: u8 = 255;
 /// This program's `["config"]`.
 pub const CONFIG_ADDRESS: Pubkey =
-    Pubkey::from_str_const("5n25iAaXFsjs4UgGQM6fCiRhaQcCVQ1L5BgyRZ7UrmaE");
+    Pubkey::from_str_const("CQDSEYEXuKA8MgBXpuS6D3Tyvi5iDe5hK9ifxcCyuNYh");
 /// This program's `["hook-authority"]`: it creates launch pools and finalizes their curves.
 pub const LAUNCH_HOOK_AUTHORITY: Pubkey =
-    Pubkey::from_str_const("3dfEZLdjRcpTJ4RxPzgkqnqaG2FipRdaHgRW72AL6kqL");
+    Pubkey::from_str_const("FSHhimQGTZQHenfuRStNhNsgwuBWBLiPhGhWc2tgEKW");
 /// The DEX's `["config"]`.
 pub const DEX_CONFIG: Pubkey =
-    Pubkey::from_str_const("2XLvgczuVACmvvjfRLLAcLwMzFHutbAAro61zZKP8fsx");
+    Pubkey::from_str_const("HnckfEpqfiSan7VurzXtFxmHHTsKmkD2dwepwTdkrF5Z");
 /// Layout version.
 pub const VERSION: u8 = 1;
 /// Discriminator length.
@@ -48,7 +49,7 @@ pub const TOKEN_EVENT_AUTHORITY: Pubkey = bordrless_token::EVENT_AUTHORITY_AND_B
 /// DEX. The DEX signs each pool hook's callbacks with a PDA of that hook's id, so a signer another
 /// pool hook received and passes on in a CPI here is refused.
 pub const DEX_HOOK_AUTHORITY: Pubkey =
-    Pubkey::from_str_const("6Ztfr97cUewdViXDXdZUsQq4pz7MYdygvK1WijALjZ5q");
+    Pubkey::from_str_const("ACEJWkSdbGJ1T1YLJWhZ16RGWaXdRrvE7BqhB5hf3xK8");
 /// The DEX's event authority.
 pub const DEX_EVENT_AUTHORITY: Pubkey = bordrless_swap::EVENT_AUTHORITY_AND_BUMP.0;
 /// The callbacks a launch pool subscribes to.
@@ -78,8 +79,8 @@ pub const LABEL_MAX: usize = 32;
 /// tax_hook). A hook anyone else can upgrade could be swapped for other code after its token
 /// launched, so `create_config` and `create_launch` refuse it.
 pub const HOOK_UPGRADE_AUTHORITIES: [Pubkey; 2] = [
-    Pubkey::from_str_const("CS1NRyXNCPxEUP4CRoa26cHQSeSJCxXh5SPijwFhDW6W"),
-    Pubkey::from_str_const("5xsibKwtiN6ruxsYrEyWVpV3KcwuzSPbQd1n28a7spEd"),
+    Pubkey::from_str_const("6ve794V3v88GFaGjRrZ1mH83Z49e6q6NZym4GZJ94mCK"),
+    Pubkey::from_str_const("CFi9xajnSxM1WMSndVoyQHmfm6DuEdzFodfjRfhTuzxa"),
 ];
 
 /// The BPF loader 2 and loader v4 (whose programs `check_hook_authority` reads; the upgradeable

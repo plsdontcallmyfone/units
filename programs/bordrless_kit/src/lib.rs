@@ -1,3 +1,4 @@
+// Changed by Hookwars: program ids and derived addresses.
 //! `bordrless_kit`: the token hook a Bordrless launch installs for the rules it fixes at launch
 //! (`docs/hooks-v2.md` §4).
 //!
@@ -41,7 +42,7 @@ pub use constants::{mint_flags, modules, LAUNCH_ID};
 pub use instructions::*;
 pub use state::{HolderData, KitConfig, KitInitArgs};
 
-declare_id!("14RJQXPdJfkehit6ezktjd3xujamf8nVSKw2shKamaEH");
+declare_id!("CLEEZe3v8Sqa45J1VdmfKkjxqFGSj44MxA5prQH3xTLG");
 
 #[cfg(not(feature = "no-entrypoint"))]
 solana_security_txt::security_txt! {
