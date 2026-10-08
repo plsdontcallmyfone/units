@@ -51,7 +51,7 @@ Spot only: every effect is a transfer, a cut, a burn, a fee change or a spot swa
 | `bordrless_swap` | changed | DEX; **observation ring** per pool; **route context** for multi-hop swaps |
 | `bordrless_launch` | changed | launchpad; launches create a slot table; its pool hook **forwards to pool-kind items** |
 | `bordrless_companion` | changed | gains `war_bps` in its split, paid to the token's war chest |
-| `bordrless_kit` | kept | launch rules; equippable only in a locked slot (it keeps its own accounting) |
+| `bordrless_kit` | changed | launch rules in a `Locked` slot (bytes 0..32); `init` accepts a slot mint (R9); treats war chests as excluded owners where it can (R10) |
 | `bordrless_bridge` | kept | unchanged |
 | `half_life`, `tax_hook` | kept | kept as programs; their behaviour is also offered as templates in `hookwars_items` |
 | `hook_tester` | kept | test-only |
@@ -79,6 +79,7 @@ two keys Bordrless hard-codes in `HOOK_UPGRADE_AUTHORITIES`.
 | `Relation` | 3 | token transfers | cuts, hook data; reads other pools |
 | `Pool` | 4 | launch pool swaps, through the launchpad | fee override, cuts, burn (within the launchpad's own rules and the slot's bounds), war-state marks |
 | `Locked` | 5 | as the kit does today | whatever the equipped program's flags allow; never re-equipped |
+| `War` | 6 | nothing (no callbacks) | none; its item's parameters configure `hookwars_war` (siege threshold, counter-strike trigger) |
 
 ### 4.2 Equip rules
 
@@ -86,7 +87,7 @@ two keys Bordrless hard-codes in `HOOK_UPGRADE_AUTHORITIES`.
 | --- | --- | --- |
 | `Locked` | 0 | the launch item stays for ever |
 | `Vote` | 1 | holders vote by locking tokens; equips after `notice_secs` |
-| `Performance` | 2 | reverts to the launch item when its on-chain condition holds; anyone cranks |
+| `Performance` | 2 | accepts votes like `Vote`, and also reverts to the launch item when its on-chain condition holds for its hold time; anyone cranks |
 
 ### 4.3 Seeds (all new; upstream seeds unchanged)
 
@@ -104,15 +105,24 @@ two keys Bordrless hard-codes in `HOOK_UPGRADE_AUTHORITIES`.
 | `Season` | war | `["season", number: u32 le]` |
 | `LootTicketQueue` / roll request | war | `["roll", holding, nonce: u64 le]` |
 | `Observations` | swap | `["obs", pool]` |
+| `RaidLedger` (raid marks, inbound raid windows, pool-cut accrual) | items | `["raid-ledger", mint]` |
+| `EquipState`, equip vault owner | items | `["equip", mint, slot: u8]` |
+| `PoolCuts` vault owner | items | `["pool-cuts", mint]` |
+| item registry | items | `["bordrless-hook-accounts", mint, item]` |
+| war signers | war | `["war-signer"]`, `["loot-signer"]`, `["war-config"]`, `["prize-vault"]`, `["loot", season: u32 le]` |
+| armory loot caller check | war | `["loot-signer"]` is the only signer `mint_loot` accepts |
 | hook signer | token, swap, launch | upstream `["hook-authority", program]`, unchanged |
 
 ### 4.4 Hook data
 
 Upstream: 64 bytes per holding, written only by the mint's hook. Hookwars splits them into
 **ranges**, one per slot, fixed when the slot is created (`data_offset`, `data_len`); an item may
-read and write only its own range; the token program enforces it. Templates declare how many
-bytes they need (04). Byte 0 of each range is a layout tag; a range of all zeros means
-"never stamped". The holding can be closed only when all 64 bytes are zero (upstream rule).
+read and write only its own range; the token program enforces it. The **first byte of every item
+range is the token program's epoch byte** (01): it changes on every equip, so a previous item's
+bytes read as empty. An item sees `data_len - 1` bytes and its own layout tag is the first byte it
+sees; templates (04) declare their byte count without the epoch byte. A `Locked` slot (the kit)
+uses the upstream arguments with the full 64 bytes, but the token program applies only the bytes
+inside its range (R8). The holding can be closed only when all 64 bytes are zero (upstream rule).
 
 ### 4.5 Money words
 
@@ -164,6 +174,15 @@ Parts refer to them by name only.
 | `SEASON_SECS`, `CHALLENGE_SECS` | season length, challenge window | O |
 | `SEASON_PRIZE_SHARE_BPS` | share of the protocol's fee share paid to the season's winner | O |
 | `WAR_BPS_MAX` | ceiling on a companion's `war_bps` | O |
+| `MAX_POOL_ITEM_CUT_BPS` | ceiling on all Pool-item cuts on one side of a swap, inside upstream's 3% per side | O |
+| `PARAM_FIELDS` | number of `u32` parameter fields per item (layout constant) | M |
+| `FORGE_GAIN_BPS` | how far a forge moves each field toward its ceiling | O |
+| `POINT_UNIT_LAMPORTS` | quote volume per raid point | O |
+| `MAX_CAPTURED`, `RAID_TABLE_LEN`, `RAID_WINDOW_SECS` | war state table sizes and raid window | M, O |
+| `SIEGE_MAX_PREMIUM_BPS`, `SIEGE_SLIPPAGE_BPS`, `COUNTER_STRIKE_MIN_INTERVAL_SECS` | siege and counter-strike guards | O |
+| `ROLL_EXPIRY_SECS`, `LOOT_TABLE_LEN` | loot roll expiry, loot table size | O, M |
+| `QUEST_*` | quest periods and thresholds (05) | O |
+| per-template ceilings | named in 04, one per parameter field | O |
 
 ## 7. Decisions open at spec level
 
@@ -190,3 +209,66 @@ The owner-level decisions (names, royalty ceiling, season prize and the rest) ar
 | M4 | War: chest, siege, counter-strike, raze, bounties |
 | M5 | Loot, forge, quests, seasons |
 | M6 | App: indexer, API, site, bots; devnet |
+
+## 9. Integration rulings (2026-10-08, after the first drafts)
+
+Where a part disagrees with a ruling, the part is revised. Numbered for reference from the parts.
+
+- **R1 Item money, token side.** A cutting item answers at most **one** delta per transfer, paid
+  into its equip vault (`["equip", mint, slot]` under items). The token program does **not**
+  compute royalties. `settle_equip` (04, permissionless, bounty) later pays the royalty to the
+  item's royalty holding (02) and routes the rest to the item's destination (burn, war chest,
+  partner, collector). So `MAX_CUTTING_SLOTS` token-side is at most `MAX_DELTAS` (3), less any
+  delta a `Locked` slot answers on the same transfer.
+- **R2 Item money, pool side.** The launchpad already answers 2 of 3 deltas per side on a buy. All
+  Pool-item cuts on one side merge into **one** delta into `["pool-cuts", mint]` (items); each
+  item records its share in its own `EquipState` in the same call; `settle_equip` pays from there.
+  No royalty marks through the war chest, no `pay_royalties` in war.
+- **R3 Raid state is owned by items.** Items are leaves (no CPIs). Pool items write the
+  `RaidLedger` (`["raid-ledger", mint]`, owned by `hookwars_items`) directly; `hookwars_war` reads
+  it. There is no `record_marks` CPI from the launchpad and no `war-caller` PDA.
+- **R4 The raid mark.** One mark per `RaidLedger`: `(clock slot, recipient, rival, quote volume)`,
+  written by the Raid pool half in `after_swap`, overwritten by the next swap of that pool. The
+  token half consumes it on the first transfer into `recipient`'s holding in the same clock slot
+  (the delivery: the DEX sends `after_swap` deltas only to other holdings, then delivers). No
+  dependence on `Pool.swap_count` (the DEX increments it before `after_swap`, `swap.rs:331`, and
+  Anchor writes the pool back only at the end of the instruction).
+- **R5 Route.** The route reaches pool hooks in a new DEX-filled field `PoolHookArgs.route:
+  RouteContext`, never in `hook_data` (a trader writes `hook_data` freely). A plain swap carries a
+  one-hop route. Each hop's input is what the previous hop delivered.
+- **R6 Pool items never set the LP fee** (it is the protocol's revenue on launch pools). Raid
+  discounts come out of the target token's own creator and holder fees, capped at them.
+- **R7 Params.** An item's parameters are a fixed array of `PARAM_FIELDS` `u32` fields. The armory
+  checks floor and ceiling per field from the `Template` record; `hookwars_items` exposes
+  `validate_params` and `combine_params` for template-specific rules; the forge rule uses
+  `FORGE_GAIN_BPS` per field toward its ceiling, defined per template in 04.
+- **R8 Locked slots.** The kit (and upstream Half-Life or tax_hook if used locked) keep upstream
+  args and `HookReturn`; the token program passes the full 64 bytes and applies only the bytes in
+  the slot's range. The kit's range is bytes 0..32 (hooks-v2 4.4). A mint with the kit has 32
+  bytes left for item ranges.
+- **R9 The kit changes in two places:** `init` accepts a mint whose kit is in a `Locked` slot
+  (`programs/bordrless_kit/src/instructions/init.rs:92-96`), and R10.
+- **R10 Sieges and the kit.** A kit with holder rewards refuses off-curve owners (hooks-v2 4.5), so
+  a war chest cannot hold such a token. For v1, `siege` refuses a rival whose kit has holder
+  rewards on (`SiegeTargetHasRewards`). Exempting war chests in the kit is open (D-7).
+- **R11 Votes lock in place.** `set_vote_lock(amount, until)` on the token program, signed by the
+  armory, stores a lock in `Holding.reserved`; a transfer may not take the holding below its
+  locked amount. No escrow holdings.
+- **R12 Equip at launch.** Non-`Locked` slots start empty at mint creation; the launchpad equips
+  launch items through the armory **before** the supply `mint_to`; items never subscribe to mints
+  on non-`Locked` slots, which keeps a companion launch inside call depth 5.
+- **R13 Treaty payments** go to the partner's war chest, which streams to holders with the kit's
+  `share` (never a direct reward-vault deposit, which a buy just before could capture).
+- **R14 Season prize.** The DEX `fee_collector` points at `["prize-vault"]` under war;
+  `split_protocol_fees` sends `SEASON_PRIZE_SHARE_BPS` to the last winner's chest and the rest to
+  the protocol wallet. No DEX code change.
+- **R15 Events the app relies on** (06 section 9): every part emits the events 06 lists, with the
+  names 06 uses unless the part already named them; 06 adopts the parts' names where they differ.
+
+Open after integration:
+
+| Id | Question | Recommendation |
+| --- | --- | --- |
+| D-7 | Exempt war chests in the kit so sieges can target holder-reward tokens | Later: needs the rival chest's mint in the kit's accounts; measure first |
+| D-8 | Epoch byte wraps after 255 equips of one slot | Widen to 2 bytes only if a slot can plausibly see 255 equips (vote period bounds it) |
+| D-9 | Timelock on season admin powers (score weights, loot tables) | Yes, the same timelock as the protocol's other admin setters |
