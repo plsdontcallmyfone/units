@@ -42,7 +42,7 @@ pub const TAX_SEED: &[u8] = b"tax";
 /// under the token program. The token program signs each hook's callbacks with a PDA of that
 /// hook's id, so a signer another hook received and passes on in a CPI here is refused.
 pub const TOKEN_HOOK_SIGNER: Pubkey =
-    Pubkey::from_str_const("8v2CVajpJMVKXLpZePXQpqvq2nyn7r1so7DxgXu4CkAw");
+    Pubkey::from_str_const("7TXEjARSzFuojgJEywFa9tGd2zD4yYPVshkLBKNPXstS");
 /// Index of the collector's holding in a callback's account list (prefix of 5, the tax config, the
 /// collector holding).
 pub const COLLECTOR_INDEX: u8 = TOKEN_PREFIX_ACCOUNTS as u8 + 1;

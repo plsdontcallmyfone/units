@@ -63,7 +63,7 @@ pub const LAUNCH_ID: Pubkey = bordrless_launch::ID;
 /// The token program's signer of every callback to this hook: `["hook-authority", half_life]`
 /// under the token program (checked against its derivation in the unit tests).
 pub const TOKEN_HOOK_SIGNER: Pubkey =
-    Pubkey::from_str_const("FBZPj9PmV9dXL8U4qmRffXdXm11e23KEBnNgEVXxhfhF");
+    Pubkey::from_str_const("9XyWNU43yubo6Rd1XEADiUMMjRk2Mtd2jGtpoQVfBD85");
 /// The flags a `LaunchConfig` names for this hook: `before_transfer`, which may take a delta and
 /// write hook data. No mint or burn callbacks.
 pub const FLAGS: u16 = token_flags::BEFORE_TRANSFER
