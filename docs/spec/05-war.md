@@ -515,7 +515,7 @@ All emitted by self-CPI (`emit_cpi!`), as upstream.
 | `ConfigProposed`, `ConfigApplied`, `PendingCancelled` | `change, eta` |
 
 The raid mark event 06 calls `RaidMarked` is emitted by `hookwars_items` (R3; 04 names it
-`RaidStamped`), not by this program.
+`RaidMarked`), not by this program.
 
 ## 13. Errors
 

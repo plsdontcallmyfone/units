@@ -287,7 +287,7 @@ Effects: as `create_item`, with `royalty_bps = T.loot_royalty_bps`, `source Loot
 ### 5.1 How they accrue (R1, R2; restated so 02 and 04 agree)
 
 - Token side: a cutting item answers at most one delta per transfer, into its equip vault
-  (`holding(token_mint, ["equip-vault", equip_state])` under items).
+  (the holding of `token_mint` owned by `["equip", mint, slot]` under items, 01 section 3.3).
 - Pool side: all Pool-item cuts on one side of a swap merge into one delta into
   `["pool-cuts", mint]` (items); each item's share is recorded in its `EquipState`.
 - `settle_equip(equip_state, cut_mint)` (04 section 2.5), permissionless with a bounty, pays
@@ -401,7 +401,7 @@ through the `Launch` account. Sets `Passed` or `Failed`; on `Failed`, `open_prop
 4. CPI `set_slot_item` (I-01-1) signed by `SlotAuthority`.
 5. For a `Pool` slot, CPI the launchpad's `refresh_pool_registry(mint)` (03 4.3).
 6. `status = Executed`, `open_proposal = None`. Event `EquipApplied { mint, slot, old_item,
-   new_item, by: Vote, ts }` (01 also emits `SlotItemSet`).
+   new_item, by: Vote, ts }` (01 also emits `SlotEquipped`).
 
 `fail_stale(proposal)` (anyone): a `Passed` proposal whose 6.1 checks now fail becomes `Failed`;
 `open_proposal = None`; event `ProposalResolved`.

@@ -76,7 +76,7 @@ two keys Bordrless hard-codes in `HOOK_UPGRADE_AUTHORITIES`.
 | `Fee` | 0 | token transfers | cuts (token side) |
 | `Reward` | 1 | token transfers | cuts, hook data |
 | `Defense` | 2 | token transfers | refuse, hook data |
-| `Relation` | 3 | token transfers | cuts, hook data; reads other pools |
+| `Relation` | 3 | token transfers, and launch pool swaps through the launchpad when its template has a pool half (04 lists which) | cuts, hook data; reads other pools |
 | `Pool` | 4 | launch pool swaps, through the launchpad | fee override, cuts, burn (within the launchpad's own rules and the slot's bounds), war-state marks |
 | `Locked` | 5 | as the kit does today | whatever the equipped program's flags allow; never re-equipped |
 | `War` | 6 | nothing (no callbacks) | none; its item's parameters configure `hookwars_war` (siege threshold, counter-strike trigger) |

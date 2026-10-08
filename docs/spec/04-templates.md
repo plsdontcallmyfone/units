@@ -92,13 +92,14 @@ other 32:
 
 | Template | Bytes seen | `data_len` with epoch |
 | --- | --- | --- |
-| Raid | 17 | 18 |
+| Raid | 11 | 12 |
 | Shield | 6 | 7 |
 | Half-Life | 5 | 6 |
 | Wall, Spy, Treaty, Tribute, Transfer Fee, War orders | 0 | 0 |
 
-Raid + Shield + Half-Life = 31 of 32: a kit token can carry all three. Without the kit, 64 bytes are
-free.
+Raid + Shield + Half-Life = 12 + 7 + 6 = 25 of 32: a kit token can carry all three with 7 bytes to
+spare. Quest markers are not in any range: they live in 05's `QuestMark` PDA (05 9). Without the
+kit, 64 bytes are free.
 
 ### 2.5 Money: token side (R1) and pool side (R2)
 
@@ -143,12 +144,13 @@ balance or `pool_owed > pool_settled` (`VaultNotSettled`); the site puts `settle
 | Instruction | Args | Effect | Errors |
 | --- | --- | --- | --- |
 | `validate_params` | `template_id: u16`, `params: [u32; PARAM_FIELDS]` | none; template rules beyond per-field floor and ceiling (cross-field rules, section 3) | `BadParams` |
+| `manifest` | `template_id`, `params` | return data: `Manifest` (2.7), stored in the `Item` at creation (02 1.6) | `BadParams` |
 | `combine_params` | `template_id`, `field_max: [u32; PARAM_FIELDS]`, `a`, `b` | return data: the forged params | `NotForgeable`, `BadParams` |
 | `init_equip` | `slot: u8`, `item: Pubkey`, `config: EquipConfig` | creates or resets `EquipState`, writes the item registry, creates the equip vault and, the first time, `RaidLedger` | `VaultNotSettled`, `BadTargets` |
 | `close_equip` | `slot: u8` | marks `EquipState` empty | `VaultNotSettled` |
 
-`validate_params` and `combine_params` touch no account but the signer, so a client may simulate
-them as views. The per-field floor and ceiling live in the armory's `Template` (`field_min`,
+`validate_params`, `manifest` and `combine_params` touch no account but the signer, so a client may
+simulate them as views. The per-field floor and ceiling live in the armory's `Template` (`field_min`,
 `field_max`, 02 2.2); the armory checks them in one place, and this program adds only what a
 per-field check cannot express.
 
@@ -167,6 +169,29 @@ fields: index, meaning, floor and ceiling (by name, to set), and its **forge rul
 distance to the ceiling, so levels have diminishing returns and never pass the ceiling. The results
 are deterministic and symmetric in `(a, b)`. These three rules map onto 02's table as `Max`-based
 (`TowardCeiling`), `Min`-based (`TowardFloor`) and `Keep` (see C3).
+
+**The manifest** (16 bytes, Borsh, field order fixed; 02 stores it in the `Item`):
+
+| # | Field | Type | Meaning |
+| --- | --- | --- | --- |
+| 1 | `kind` | u8 | slot kind, 00 4.1 |
+| 2 | `token_flags` | u16 | upstream `token_flags` bits plus 01's `ANSWERS_TOUCH`; 0 when the item gets no token callbacks |
+| 3 | `pool_flags` | u8 | bit 0 `pool_before_swap`, bit 1 `pool_after_swap`, bit 2 writes the raid mark; 0 when it gets no pool callbacks |
+| 4 | `max_cut_buy_bps` | u16 | worst-case pool cut on a buy, from the params |
+| 5 | `max_cut_sell_bps` | u16 | worst-case pool cut on a sell |
+| 6 | `max_cut_transfer_bps` | u16 | worst-case token-side cut on a transfer |
+| 7 | `max_discount_bps` | u16 | largest creator and holder fee discount it may ask for |
+| 8 | `may_refuse` | bool | can fail a transfer (Wall, Transfer Fee with a wallet cap) |
+| 9 | `may_burn` | bool | answers a burn |
+| 10 | `data_bytes` | u8 | range bytes it uses, without the epoch byte (2.4) |
+| 11 | `reads_other_pools` | u8 | foreign `Observations`, `Launch` or `Mint` accounts it reads |
+
+1 + 2 + 1 + 2 + 2 + 2 + 2 + 1 + 1 + 1 + 1 = 16 bytes. 06's `ItemManifest.marks` is `pool_flags`
+bit 2.
+
+**Site sentence.** Each template in section 3 fixes one sentence the site prints for an item, with
+`{field}` replaced by the field's value (bps shown as a percent, seconds as a duration) and
+`{target}` by the equipped target's name. Nothing else is said about an item's behaviour.
 
 ### 2.8 The pool-item answer
 
@@ -258,11 +283,14 @@ sections 7 to 9). The token program forwards `TokenSlotArgs.context` and the cal
 
 ```rust
 pub enum WarTouch {
-    SpendRaidPoints { amount: u32 },
-    SpendTicket,
-    MarkQuest { kind: u8, period: u16 },   // kind: 0 Hold, 1 Raid, 2 Forge (05 9)
+    SpendRaidPoints { amount: u32 },   // claim_bounty (05 7), Raid quest (05 9)
+    SpendTicket,                       // roll (05 8.2)
+    AddTicket { amount: u16 },         // claim_quest (05 9)
 }
 ```
+
+Quest "once per period" markers are not in hook data: they live in 05's `QuestMark` PDA
+`["quest", season, mint, owner]`.
 
 Accepted only when `args.authority == WAR_SIGNER` and the token program reports it as a signer
 (01); any other caller gets `NotWarSigner`. Behaviour in 3.1. Every other template answers a touch
@@ -276,15 +304,19 @@ with nothing.
 | 1 | Raid | Pool, with token half | `pool_before_swap`, `pool_after_swap`; `before_transfer`, `on_touch` | rival mints, 1..`RAID_MAX_RIVALS` |
 | 2 | Shield | Pool, with token half | `pool_after_swap`; `before_transfer` | rival mints, 1..`SHIELD_MAX_RIVALS` |
 | 3 | Wall | Defense | `before_transfer` | none |
-| 4 | Spy | Pool | `pool_before_swap`, `pool_after_swap` | one rival mint |
-| 5 | Treaty | Relation (pool side) | `pool_before_swap` | the partner mint |
-| 6 | Tribute | Relation (pool side) | `pool_before_swap` | the partner mint; role Pay or Receive |
+| 4 | Spy | Pool | `pool_before_swap`, `pool_after_swap`; no token callbacks | one rival mint |
+| 5 | Treaty | Relation, pool half only | `pool_before_swap`; no token callbacks | the partner mint |
+| 6 | Tribute | Relation, pool half only | `pool_before_swap`; no token callbacks | the partner mint; role Pay or Receive |
 | 7 | Half-Life | Fee | `before_transfer` | none |
 | 8 | Transfer Fee | Fee | `before_transfer` | the collector |
 | 9 | War orders | War | none | none |
 
 A Pool-kind item with a token half needs its slot called on token transfers too, with a data range
-(I-01.1). Kinds 00 4.1 marks "token transfers" never receive pool callbacks. Counter-strike, siege,
+(I-01.1). Under 00 4.1, a `Relation` item runs on token transfers and, when its template has a pool
+half, on launch pool swaps through the launchpad. Treaty and Tribute have **only** a pool half: their
+manifest's `token_flags` is 0, so the token program never calls them, and `pool_flags` is bit 0
+(`pool_before_swap`). Spy is kind `Pool` with `pool_flags` bits 0 and 1 and `token_flags` 0. Fee,
+Defense and War items never receive pool callbacks. Counter-strike, siege,
 raze and bounties are `hookwars_war` instructions (05) configured by the War orders item; they are
 not hooks.
 
@@ -307,7 +339,7 @@ Targets: 1 to `RAID_MAX_RIVALS` rival mints, each with a Hookwars launch. An emp
 **Extras:** `RaidLedger` (w); `WarConfig` (r); for each target, its `Launch` at `["launch", rival]`
 under `<LAUNCH_ID>` (r), fixed keys in the registry.
 
-**Range** (17 bytes):
+**Range** (11 bytes):
 
 | Bytes | Field |
 | --- | --- |
@@ -315,10 +347,9 @@ under `<LAUNCH_ID>` (r), fixed keys in the registry.
 | 1..5 | `season_id: u32` |
 | 5..9 | `raid_points: u32` |
 | 9..11 | `tickets: u16` |
-| 11..17 | `quest_period: [u16; 3]` (Hold, Raid, Forge; 05 9) |
 
-A range whose `season_id` is not the current season reads as `raid_points = 0` (tickets and quest
-periods carry over; 05 decides whether tickets expire, C5).
+A range whose `season_id` is not the current season reads as `raid_points = 0` (tickets carry over;
+05 decides whether tickets expire, C5).
 
 **Raid test** (both pool callbacks):
 
@@ -356,7 +387,6 @@ if mark accepted (2.9):
 else if both owners are holders (neither the launch pool, the launch PDA nor a program vault):
     moved = floor(s.raid_points * amount / source_balance); same for tickets
     s -= moved; d += moved
-    d.quest_period[k] = max(s.quest_period[k], d.quest_period[k]) for each k   // receiver-marker rule (05 9)
 else if destination_owner == launch pool (a sell):
     s.raid_points -= floor(s.raid_points * amount / source_balance); same for tickets
 clear s when source_balance == amount
@@ -369,7 +399,7 @@ answer source_data / destination_data
 | --- | --- | --- |
 | `SpendRaidPoints { amount }` | `raid_points -= amount` for the current season | `NotEnoughPoints` |
 | `SpendTicket` | `tickets -= 1` | `NoTicket` |
-| `MarkQuest { kind, period }` | requires `quest_period[kind] < period`; sets it; `tickets += 1` | `QuestAlreadyMarked` |
+| `AddTicket { amount }` | `tickets += amount` (saturating) | none |
 
 **Abuse**
 
@@ -379,12 +409,18 @@ answer source_data / destination_data
   slippage on both pools and the toll. Points are linear in SOL routed; splitting gains nothing;
   tickets need `LOOT_MIN_RAID_LAMPORTS` per buy and a running season.
 - Raid then dump: a sell destroys points and tickets pro rata.
-- Fresh wallets: points move with tokens, never copy; quest markers move as the larger of the two.
+- Fresh wallets: points and tickets move with tokens, never copy. Quests cannot be farmed by moving
+  tokens: their markers are 05's `QuestMark` PDA per owner, and the Raid quest spends points.
 - Sieges built on raid volume (05) refuse rivals whose kit has holder rewards on (R10): a war chest,
   off curve, cannot hold that token. Raiding such a rival is still allowed; only the siege is not.
 
-**Manifest:** kind Pool; token flags `BEFORE_TRANSFER | WRITES_HOOK_DATA | ANSWERS_TOUCH` (01);
-pool callbacks before and after; `cut_fields`: buy side field 1, sell side none; marks yes.
+**Manifest:** `kind` Pool; `token_flags` `BEFORE_TRANSFER | WRITES_HOOK_DATA | ANSWERS_TOUCH`;
+`pool_flags` bits 0, 1, 2; `max_cut_buy_bps` = `toll_bps`; `max_cut_sell_bps` 0;
+`max_cut_transfer_bps` 0; `max_discount_bps` = `discount_bps`; `may_refuse` false; `may_burn` false;
+`data_bytes` 11; `reads_other_pools` = number of targets.
+
+**Site sentence:** "Buyers who sold {target} pay {discount_bps} less creator and holder fee, pay a
+{toll_bps} toll, and earn {points_per_unit} raid points per unit of SOL raided."
 
 ### 3.2 Shield (id 2)
 
@@ -431,7 +467,12 @@ Pool-side destination: our war chest.
 **Abuse:** sending to a fresh wallet first carries the origin. Waiting out `window_secs` pays
 nothing, which is intended: it taxes hit-and-run, not holders.
 
-**Manifest:** kind Pool; `BEFORE_TRANSFER | WRITES_HOOK_DATA`; `cut_fields`: sell side field 0; marks yes.
+**Manifest:** `kind` Pool; `token_flags` `BEFORE_TRANSFER | WRITES_HOOK_DATA`; `pool_flags` bits
+1, 2; `max_cut_sell_bps` = `sell_cut_bps`; other cuts 0; `max_discount_bps` 0; `may_refuse` false;
+`may_burn` false; `data_bytes` 6; `reads_other_pools` = number of targets.
+
+**Site sentence:** "Holders who came from {target} pay {sell_cut_bps} extra when they sell within
+{window_secs}" followed, when `only_under_siege` is 1, by " while we are under siege".
 
 ### 3.3 Wall (id 3)
 
@@ -463,7 +504,11 @@ No data, no cuts. A sell never fails on it (the destination is the pool). `siege
 **Abuse:** a siege cannot outlast 05's bound on `under_siege_until`, so a Wall cannot freeze buys
 indefinitely. It bounds each wallet, not the sum.
 
-**Manifest:** kind Defense; `BEFORE_TRANSFER`; may refuse.
+**Manifest:** `kind` Defense; `token_flags` `BEFORE_TRANSFER`; `pool_flags` 0; all cuts 0;
+`max_discount_bps` 0; `may_refuse` true; `may_burn` false; `data_bytes` 0; `reads_other_pools` 0.
+
+**Site sentence:** "While we are under siege, no wallet may hold more than {max_wallet_bps} of
+supply."
 
 ### 3.4 Spy (id 4)
 
@@ -492,7 +537,16 @@ Momentum, change_bps <= -trigger, BUY,  pool_before_swap: discount_bps = effect_
 Pool-side destination: our war chest. **Abuse:** moving the rival's time-weighted price costs holding
 a manipulated price on the rival's own pool for `window_secs`, paying its fees both ways.
 
-**Manifest:** kind Pool; reads 1 pool; `cut_fields`: sell side field 3 (Rivalry only).
+**Callbacks:** `pool_before_swap` (Momentum discount) and `pool_after_swap` (Rivalry cut); never a
+token callback.
+
+**Manifest:** `kind` Pool; `token_flags` 0; `pool_flags` bits 0, 1; `max_cut_sell_bps` =
+`effect_bps` in Rivalry, else 0; `max_discount_bps` = `effect_bps` in Momentum, else 0; other cuts 0;
+`may_refuse` false; `may_burn` false; `data_bytes` 0; `reads_other_pools` 1.
+
+**Site sentence:** Rivalry: "When {target} rises {trigger_bps} over {window_secs}, sellers pay
+{effect_bps} extra." Momentum: "When {target} falls {trigger_bps} over {window_secs}, buyers pay
+{effect_bps} less creator and holder fee."
 
 ### 3.5 Treaty (id 5)
 
@@ -523,8 +577,21 @@ partner's holders with the kit's `share` (R13). Never a direct deposit into a ki
 upstream distributes direct deposits at once (`hooks-v2.md` 4.7), which a buy just before could
 capture.
 
+**Callbacks:** `pool_before_swap` only; never a token callback, never `pool_after_swap`.
+
+**Equip check (`init_equip`):** the partner must have the kit in a `Locked` slot with holder rewards
+on, since its treaty inbox is streamed through the kit's `share` (05); else `BadTargets`.
+
 **Abuse:** a treaty nobody accepted is inert. A side that stops paying has unequipped, so the
 other side sees no partner and stops too.
+
+**Manifest:** `kind` Relation; `token_flags` 0; `pool_flags` bit 0; `max_cut_buy_bps` = the larger
+of fields 0 and 1; other cuts 0; `max_discount_bps` 0; `may_refuse` false; `may_burn` false;
+`data_bytes` 0; `reads_other_pools` 1 (the partner `Mint`).
+
+**Site sentence:** "Every buy of us sends {my_side_bps} to {target}'s holders, and every buy of
+{target} sends {their_side_bps} to ours" (the two sides read from fields 0 and 1 by key order),
+followed, when `returns_captured` is 1, by "; captured bags are returned while it holds".
 
 ### 3.6 Tribute (id 6)
 
@@ -532,6 +599,16 @@ A one-way Treaty. Field 0 `bps` (0, `TRIBUTE_MAX_BPS`; not forgeable). Both mint
 item targeting each other, the payer with role `Pay`, the receiver with role `Receive`; active only
 when both roles are present. On the payer's buys, as Treaty; on the receiver's swaps, nothing.
 Anything granted back (a Raid discount for the payer's holders, for example) is a separate item.
+
+**Callbacks:** `pool_before_swap` only, and only the payer's equip answers; never a token callback.
+The receiver needs the kit with holder rewards on, as Treaty.
+
+**Manifest:** `kind` Relation; `token_flags` 0; `pool_flags` bit 0; `max_cut_buy_bps` = `bps` (payer
+side); other cuts 0; `max_discount_bps` 0; `may_refuse` false; `may_burn` false; `data_bytes` 0;
+`reads_other_pools` 1.
+
+**Site sentence:** payer: "Every buy of us sends {bps} to {target}'s holders as tribute." Receiver:
+"{target} pays us {bps} of every buy of it as tribute."
 
 ### 3.7 Half-Life (id 7)
 
@@ -554,11 +631,14 @@ every `EquipState` of the mint and the royalty owners (upstream exempted launch,
 burn (`settle_equip` burns what is left after the royalty and bounty). Fees are never refused for a
 missing furnace: `init_equip` creates the vault.
 
-05's `Hold` quest reads `since` from this range (05 9). A token without a Half-Life item has no
-`Hold` quest (C5).
+**Manifest:** `kind` Fee; `token_flags` `BEFORE_TRANSFER | TRANSFER_RETURNS_DELTA |
+WRITES_HOOK_DATA` (upstream `FLAGS`, `lib.rs:68`); `pool_flags` 0; `max_cut_transfer_bps` =
+`ceil(max_fee_ppm / 100)`; pool cuts 0; `max_discount_bps` 0; `may_refuse` false; `may_burn` false
+(the burn happens in `settle_equip`, not in an answer); `data_bytes` 5; `reads_other_pools` 0.
 
-**Manifest:** kind Fee; `BEFORE_TRANSFER | TRANSFER_RETURNS_DELTA | WRITES_HOOK_DATA` (upstream
-`FLAGS`, `lib.rs:68`); token-side max cut `ceil(max_fee_ppm / 100)` bps.
+**Site sentence:** "Selling or sending costs {max_fee_ppm} of the tokens moved, halving every
+{half_life_secs} held, and nothing after {zero_after_halvings} halvings; buys are free; fees are
+burned."
 
 ### 3.8 Transfer Fee (id 8)
 
@@ -572,7 +652,14 @@ Upstream `tax_hook` as a template (`programs/tax_hook/src/lib.rs:127-165`).
 Target: the collector. Cross-field rule (`validate_params`): `max_wallet_bps` is 0 or at least
 `TF_MIN_MAX_WALLET_BPS`. **`before_transfer`:** upstream's fee as one delta into the equip vault and
 upstream's wallet cap (`lib.rs:147-154`); exempt owners as Half-Life plus the collector. Token-side
-destination: the collector's holding. May refuse when `max_wallet_bps > 0`.
+destination: the collector's holding.
+
+**Manifest:** `kind` Fee; `token_flags` `BEFORE_TRANSFER | TRANSFER_RETURNS_DELTA`; `pool_flags` 0;
+`max_cut_transfer_bps` = `fee_bps`; pool cuts 0; `max_discount_bps` 0; `may_refuse` =
+`max_wallet_bps > 0`; `may_burn` false; `data_bytes` 0; `reads_other_pools` 0.
+
+**Site sentence:** "Every transfer pays {fee_bps} to {target}" followed, when `max_wallet_bps` is
+above 0, by "; no wallet may hold more than {max_wallet_bps} of supply".
 
 ### 3.9 War orders (id 9)
 
@@ -596,6 +683,15 @@ how a community sets its war policy.
 
 Cross-field rule: `counter_short_secs < counter_long_secs`. War orders are policy, not a weapon, so
 the template is not forgeable (02 `forge_enabled = false`); loot may still mint them.
+
+**Manifest:** `kind` War; `token_flags` 0; `pool_flags` 0; all cuts 0; `max_discount_bps` 0;
+`may_refuse` false; `may_burn` false; `data_bytes` 0; `reads_other_pools` 0.
+
+**Site sentence:** "Siege a rival once {siege_threshold} of its holders' SOL has raided us, spending
+up to {siege_spend_bps} of the chest; counter-strike when our price falls {counter_drop_bps} between
+{counter_short_secs} and {counter_long_secs}, at most every {counter_interval_secs}, spending up to
+{counter_spend_bps}; bounties pay {bounty_rate} per raid point" followed, when `raze_enabled` is 1, by
+"; captured bags may be razed".
 
 ## 4. Accounts of `hookwars_items`
 
@@ -626,7 +722,7 @@ level); top-level instructions use `emit_cpi!` as upstream.
 
 `BadHookSigner`, `WrongItem`, `NotEquipped`, `UnknownTemplate`, `BadParams`, `BadTargets`,
 `NotForgeable`, `WallHolds`, `WalletTooLarge`, `VaultNotSettled`, `NotWarSigner`, `NotEnoughPoints`,
-`NoTicket`, `QuestAlreadyMarked`, `Overflow`.
+`NoTicket`, `Overflow`.
 
 ## 7. Interfaces
 
@@ -656,6 +752,7 @@ level); top-level instructions use `emit_cpi!` as upstream.
 - `WarConfig.current_season`; `WarState.under_siege_until` and `WarState.siege_by_chest`.
 - `["treaty-inbox", mint]` under `<WAR_ID>`, whose bridged-SOL holding 05 streams to holders.
 - The Raid range layout (3.1), `WarTouch` payloads (2.10) and War orders fields (3.9).
+- Quest markers in 05's `QuestMark` PDA; no quest state in any range.
 
 ## 8. Conflicts and assumptions for the integrator
 
@@ -669,8 +766,8 @@ level); top-level instructions use `emit_cpi!` as upstream.
   `SumCapped` with the two rules here.
 - **C4** 05 must store the attacking chest (`siege_by_chest`) next to `under_siege_until` for Wall,
   and add the `["treaty-inbox", mint]` seed to 00 4.3.
-- **C5** 05 decides whether tickets expire with the season (Raid keeps them); `Hold` needs a
-  Half-Life item on the token.
+- **C5** 05 decides whether tickets expire with the season (Raid keeps them). `Hold` is dropped
+  (05 9); quest markers are 05's `QuestMark` PDA.
 - **C6** New parameters for 00 section 6: `MAX_ITEM_TARGETS`, `RAID_TABLE_LEN` and
   `RAID_WINDOW_SECS` (with 05), `POINT_UNIT_LAMPORTS`, `SIEGE_UNIT_LAMPORTS`, and every per-template
   floor and ceiling in section 3. `PARAM_FIELDS` is at least 11 (War orders).
