@@ -19,3 +19,9 @@ Program keypairs live outside the repo (`keys/` is git-ignored); back them up be
 | Who | Area | Started | Status |
 | --- | --- | --- | --- |
 | Claude (spec lead, session d79dfc8e) | CLAUDE.md, NOTICE, docs/spec/00-overview.md, docs/spec/07-budgets-tests.md, integration of all spec parts | 2026-10-08 | active |
+| Claude (spec writer: token slots, fork of session d79dfc8e) | docs/spec/01-token-slots.md only; read-only elsewhere; no builds, no commits | 2026-10-08 | active |
+| Claude (spec writer: armory, fork of session d79dfc8e) | docs/spec/02-armory.md only; read-only elsewhere; no builds, no commits | 2026-10-08 | active |
+| Claude (spec writer: DEX and launch, fork of session d79dfc8e) | docs/spec/03-dex-launch.md only; read-only elsewhere; no builds, no commits | 2026-10-08 | active |
+| Claude (spec writer: templates, fork of session d79dfc8e) | docs/spec/04-templates.md only; read-only elsewhere; no builds, no commits | 2026-10-08 | active |
+| Claude (spec writer: war, fork of session d79dfc8e) | docs/spec/05-war.md only; read-only elsewhere; no builds, no commits | 2026-10-08 | active |
+| Claude (spec writer: app, fork of session d79dfc8e) | docs/spec/06-app.md only; read-only elsewhere; no builds, no commits | 2026-10-08 | active |
