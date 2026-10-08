@@ -27,3 +27,4 @@ Program keypairs live outside the repo (`keys/` is git-ignored); back them up be
 | Claude (spec writer: templates, fork of session d79dfc8e) | docs/spec/04-templates.md only; read-only elsewhere; no builds, no commits | 2026-10-08 | done 2026-10-08, released |
 | Claude (spec writer: war, fork of session d79dfc8e) | docs/spec/05-war.md only; read-only elsewhere; no builds, no commits | 2026-10-08 | done 2026-10-08, released |
 | Claude (spec writer: app, fork of session d79dfc8e) | docs/spec/06-app.md only; read-only elsewhere; no builds, no commits | 2026-10-08 | done 2026-10-08, released |
+| Claude (M1 builder: slots in the token program, fork of session d79dfc8e) | programs/bordrless_token, crates/bordrless-hook, programs/hook_tester (test hooks for slots), programs/tests (new slots.rs, budgets.rs), docs/spec/01-token-slots.md (only to record measured values); build server /root/hookwars | 2026-10-08 | active |
