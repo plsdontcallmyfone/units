@@ -111,6 +111,10 @@ two keys Bordrless hard-codes in `HOOK_UPGRADE_AUTHORITIES`.
 | item registry | items | `["bordrless-hook-accounts", mint, item]` |
 | war signers | war | `["war-signer"]`, `["loot-signer"]`, `["war-config"]`, `["prize-vault"]`, `["loot", season: u32 le]` |
 | armory loot caller check | war | `["loot-signer"]` is the only signer `mint_loot` accepts |
+| armory's own signer (calls into items) | armory | `["armory"]` |
+| launchpad signer for `equip_launch` | launch | `["armory-caller", mint]` |
+| `TreatyInbox` owner | war | `["treaty-inbox", mint]` |
+| `QuestMark` | war | `["quest", holding, quest_id: u8, period: u32 le]` (05 is authoritative) |
 | hook signer | token, swap, launch | upstream `["hook-authority", program]`, unchanged |
 
 ### 4.4 Hook data
@@ -183,6 +187,10 @@ Parts refer to them by name only.
 | `ROLL_EXPIRY_SECS`, `LOOT_TABLE_LEN` | loot roll expiry, loot table size | O, M |
 | `QUEST_*` | quest periods and thresholds (05) | O |
 | per-template ceilings | named in 04, one per parameter field | O |
+| `MAX_ITEM_TARGETS`, `SIEGE_UNIT_LAMPORTS` | items per-equip targets; siege threshold unit (04) | O |
+| `ADMIN_TIMELOCK_SECS` | delay on every admin setter of armory and war (D-9) | O |
+
+`PARAM_FIELDS` is at least 11 (the War orders template, 04).
 
 ## 7. Decisions open at spec level
 
@@ -262,6 +270,14 @@ Where a part disagrees with a ruling, the part is revised. Numbered for referenc
 - **R14 Season prize.** The DEX `fee_collector` points at `["prize-vault"]` under war;
   `split_protocol_fees` sends `SEASON_PRIZE_SHARE_BPS` to the last winner's chest and the rest to
   the protocol wallet. No DEX code change.
+- **R16 Protocol payouts skip item slots.** Transfers out of protocol vaults (equip vaults,
+  pool cuts, royalty holdings, war chests, treaty inboxes) prove their source with
+  `ProtocolSource` and run only the `Locked` slot (01 section 3.3).
+- **R17 Launch equip name.** The launchpad calls `hookwars_armory::equip_launch`, signed by
+  `["armory-caller", mint]` under `<LAUNCH_ID>`, inside `prepare_launch` (03), before any supply.
+- **R18 Item events are program logs.** Items are leaves, and `emit_cpi!` is a self-CPI, so
+  `hookwars_items` callbacks emit with `emit!` (logs); the indexer decodes logs for items and
+  self-CPI events for every other program (06).
 - **R15 Events the app relies on** (06 section 9): every part emits the events 06 lists, with the
   names 06 uses unless the part already named them; 06 adopts the parts' names where they differ.
 

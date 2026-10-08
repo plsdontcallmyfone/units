@@ -1,713 +1,678 @@
 # Hookwars spec 04: templates (`hookwars_items`)
 
-Status: specification, 2026-10-08. Nothing here is built. Follows `00-overview.md`; where they
-differ, 00 wins and this file is wrong. Upstream references are to Bordrless at `43688f3`.
+Status: specification, 2026-10-08, revised after the integration rulings (00 section 9). Nothing
+here is built. Follows `00-overview.md`; where they differ, 00 wins and this file is wrong.
+Upstream references are to Bordrless at `43688f3`. Sibling names used here: `TokenSlotArgs`,
+`SlotReturn`, `on_touch` (01); `Item`, `Template`, combine rules (02); `RouteContext`,
+`ItemPoolContext`, `pool_before_swap` / `pool_after_swap` (03); `WarConfig`, `WarState`, seeds
+`["war-signer"]`, `["war-chest", mint]` (05).
 
 ## 1. What this program is
 
 `hookwars_items` (`<ITEMS_ID>`) is **one program implementing every template** (00 D-2). An item
-is a record in the armory (`Item` at `["item", item_mint]`, 02) holding a `template_id` and a
-`params` byte string. When a slot holding an item runs, the caller invokes `hookwars_items`, passes
-the `Item` account as the **first extra account**, and the program dispatches on
-`Item.template_id`. So one deployed program, one audit and one hook signer per caller serve every
-template and every item.
+is an armory record (`Item` at `["item", item_mint]`, 02) holding a `template_id` and
+`params: [u32; PARAM_FIELDS]` (R7). When a slot holding an item runs, the caller invokes
+`hookwars_items` and the program dispatches on `Item.template_id`. One deployed program, one audit
+and one hook signer per caller serve every template and every item.
 
-Templates mint parameters, never code (00 rule 4): loot and forging produce new `params` for a
-registered template, always inside that template's ceilings.
+Templates mint parameters, never code (00 rule 4). Items are **leaves**: no callback makes a CPI
+(R3). Everything an item must remember beyond a holding's range goes into accounts this program
+owns: `EquipState` and `RaidLedger`.
 
 ## 2. Common machinery
 
-### 2.1 Callers and the hook signer check
+### 2.1 Signers
 
-Upstream pattern: the caller signs every callback with `["hook-authority", hook_program]` under the
-caller's id, and the hook compares the signer with that constant
-(`crates/bordrless-hook/src/lib.rs:476`, `hook_signer`; checked as
-`#[account(signer, address = TOKEN_HOOK_SIGNER)]` in `programs/half_life/src/lib.rs:466-470` and
-`programs/tax_hook/src/lib.rs:265-268`).
+Upstream pattern: the caller signs every callback with `["hook-authority", hook_program]` under its
+own id, and the hook compares the signer with that constant (`crates/bordrless-hook/src/lib.rs:476`;
+checked as `#[account(signer, address = TOKEN_HOOK_SIGNER)]` in
+`programs/half_life/src/lib.rs:466-470` and `programs/tax_hook/src/lib.rs:265-268`).
 
-`hookwars_items` accepts exactly two signers, as constants:
-
-| Constant | Value | Signs |
+| Constant | Value | Accepted for |
 | --- | --- | --- |
-| `TOKEN_ITEMS_SIGNER` | `["hook-authority", <ITEMS_ID>]` under `<TOKEN_ID>` | token callbacks (`before_transfer`, `before_mint`, `before_burn`, and `touch`, 01) |
-| `LAUNCH_ITEMS_SIGNER` | `["hook-authority", <ITEMS_ID>]` under `<LAUNCH_ID>` | pool-item callbacks forwarded by the launchpad's pool hook (03) |
+| `TOKEN_ITEMS_SIGNER` | `["hook-authority", <ITEMS_ID>]` under `<TOKEN_ID>` | token slot callbacks (`before_transfer`, `on_touch`) |
+| `LAUNCH_ITEMS_SIGNER` | `["hook-authority", <ITEMS_ID>]` under `<LAUNCH_ID>` | `pool_before_swap`, `pool_after_swap` forwarded by the launchpad (03 5.1) |
+| `ARMORY_SIGNER` | the armory PDA that calls items (02 names it) | `init_equip`, `close_equip` |
+| `WAR_SIGNER` | `["war-signer"]` under `<WAR_ID>` | the `authority` of a `touch` carrying a war payload (2.10) |
 
-A token callback signed by anything but `TOKEN_ITEMS_SIGNER`, or a pool callback signed by anything
-but `LAUNCH_ITEMS_SIGNER`, fails with `BadHookSigner`. Pool items are never the DEX's pool hook
-directly; the DEX's own signer is refused, so a pool someone opens on the DEX with
-`hook_program = <ITEMS_ID>` cannot drive an item.
+A callback with any other signer fails with `BadHookSigner`. The DEX's own pool-hook signer is
+refused, so a pool someone opens on the DEX with `hook_program = <ITEMS_ID>` cannot drive an item.
 
-The armory calls `validate_params`, `manifest`, `combine_params` and `init_equip`, signed by
-`PDA(["armory"], <ARMORY_ID>)` (`ARMORY_SIGNER`, a constant here; the name is 02's to confirm).
+### 2.2 Which item, and proof that it is equipped
 
-### 2.2 Which item, and is it really equipped
-
-Every callback receives, after the caller's prefix accounts (upstream: 5 token prefix accounts,
-`lib.rs:36`; 5 pool prefix accounts, `lib.rs:39`):
+Extras come from the item registry `["bordrless-hook-accounts", mint, item]` under `<ITEMS_ID>`
+(00 4.3), written by `init_equip`. Every callback receives, after the caller's prefix:
 
 | Extra | Account | Writable |
 | --- | --- | --- |
 | 0 | `Item` (owned by `<ARMORY_ID>`) | no |
-| 1 | `EquipState` at `["equip", item, mint, slot]` under `<ITEMS_ID>` | yes |
+| 1 | `EquipState` at `["equip", mint, slot]` under `<ITEMS_ID>` | yes |
 | 2.. | the template's own extras (section 3) | per template |
 
 Checks on every callback, in order:
 
 1. signer (2.1);
-2. `Item` is owned by `<ARMORY_ID>` and has the `Item` discriminator (`WrongItem`);
-3. the `Mint` in the prefix (token callbacks: prefix index 1; pool callbacks: `base_mint`, read from
-   the prefix `base_mint` account, which the launchpad must pass as the `Mint` account itself) is
-   owned by `<TOKEN_ID>`, and its slot table entry at `args.slot` (01) names this `Item` key and
-   `<ITEMS_ID>` (`NotEquipped`). This is the cheap equip proof: one read of an account the caller
-   already passes;
-4. `EquipState` is at its seeds for `(item, mint, slot)` (`WrongEquipState`);
-5. `Item.template_id` is a known template and `Item.params` decodes for it (`BadParams`).
+2. `Item` is owned by `<ARMORY_ID>`, has the `Item` discriminator and its key equals the `item` in
+   the args (`TokenSlotArgs.item`, 01; `ItemPoolContext.item`, 03) (`WrongItem`);
+3. `EquipState` is at `["equip", mint, slot]` and `EquipState.item == item` (`NotEquipped`). The
+   caller (token program or launchpad) only calls the item its slot table names, and the item
+   re-checks against its own equip record, so a client cannot substitute another item's extras;
+4. `Item.template_id` is known (`UnknownTemplate`) and `validate` of the params holds (`BadParams`).
 
-The caller decides which item runs; the item still re-checks against the mint, so a client cannot
-substitute another item's extras.
+### 2.3 Targets and roles: chosen when equipping, not in the item
 
-### 2.3 Registries
+Params are `u32` fields (R7), so they cannot name a mint. An item is a weapon with strengths; **what
+it is aimed at is chosen by the community that equips it**. The equip carries:
 
-Upstream keys a hook's registry by mint: `["bordrless-hook-accounts", mint]`
-(`lib.rs:490`). Several slots of one mint all run `<ITEMS_ID>`, so that key collides. Items publish
-one registry per slot:
-
-```
-["bordrless-hook-accounts", mint, [slot]]   under <ITEMS_ID>
+```rust
+pub struct EquipConfig {
+    pub targets: Vec<Pubkey>,     // at most MAX_ITEM_TARGETS; meaning per template (section 3)
+    pub role: u8,                 // 0 none; Tribute: 1 Pay, 2 Receive
+}
 ```
 
-written by `init_equip` (2.6). Its first two entries are always the `Item` key and the
-`EquipState` PDA; the template's extras follow. 01 must resolve slot registries with this seed
-(Interfaces, I-01.3).
+It is part of the armory's equip proposal (vote) or launch equip (R12), passed to `init_equip`,
+stored in `EquipState`, and fixed for as long as the item stays in that slot. Forging never touches
+targets (they are not params), so a Raid forged from two Raids can be aimed anywhere when equipped.
 
 ### 2.4 Hook data ranges
 
-00 4.4: each slot owns `data_offset .. data_offset + data_len` of the 64 bytes. Byte 0 of a range is
-the template's layout tag; all zeros means never stamped. The args carry the full 64 bytes of each
-side (upstream `TokenHookArgs.source_hook_data`, `destination_hook_data`, `lib.rs:198-201`); an item
-reads only its range and answers a full 64-byte array in which every byte outside its range equals
-the input. 01 enforces this (I-01.2). An item that needs no bytes declares `data_len = 0` and never
-answers hook data.
+00 4.4: the first byte of every item range is the token program's epoch byte; an item sees
+`data_len - 1` bytes in `TokenSlotArgs.source_data` / `destination_data` (01) and answers the same
+length in `SlotReturn` (01 3.1). All byte counts in section 3 are **without** the epoch byte; the
+slot's `data_len` is that count plus one. The first byte an item sees is its layout tag; all zeros
+means never stamped (or stale after a re-equip). Every template clears its bytes when the holding it
+describes is emptied (upstream rule, `half_life/src/lib.rs:335-340`), so holdings stay closeable.
 
-Every template clears its range when the holding it describes is emptied (upstream rule,
-`half_life/src/lib.rs:335-340`), so holdings stay closeable.
+Timestamps in ranges are `u32` unix seconds (valid until 2106) to fit the budget; full `i64` times
+stay in accounts.
 
-### 2.5 Cuts, the equip vault and royalties
+**Budget with the kit.** The kit takes bytes 0..32 (R8, `hooks-v2.md` 4.4). Item ranges share the
+other 32:
 
-**One delta per cutting item.** Upstream allows `MAX_DELTAS = 3` per answer
-(`lib.rs:43`), and the launchpad already uses two on a buy (creator fee to index 6, holder fee to
-index 7, `docs/hooks-v2.md` 5.4). So every item sends **all** of its cut as **one** delta into its
-**equip vault**:
+| Template | Bytes seen | `data_len` with epoch |
+| --- | --- | --- |
+| Raid | 17 | 18 |
+| Shield | 6 | 7 |
+| Half-Life | 5 | 6 |
+| Wall, Spy, Treaty, Tribute, Transfer Fee, War orders | 0 | 0 |
+
+Raid + Shield + Half-Life = 31 of 32: a kit token can carry all three. Without the kit, 64 bytes are
+free.
+
+### 2.5 Money: token side (R1) and pool side (R2)
+
+**Token side.** A cutting item answers at most **one** delta per transfer, into its **equip vault**:
+`holding(mint, EquipState)` (the `EquipState` PDA owns it). The token program never computes
+royalties. `MAX_CUTTING_SLOTS` token-side is at most `MAX_DELTAS` (3, upstream `lib.rs:43`) less any
+delta the `Locked` slot answers on the same transfer.
+
+**Pool side.** The launchpad already answers two of three deltas on a buy (creator fee, holder fee,
+`hooks-v2.md` 5.4). All Pool-item cuts on one side are merged by the launchpad into **one** delta
+into the pool-cuts holding `holding(BRIDGED_SOL, PoolCuts)`, `PoolCuts = ["pool-cuts", mint]` under
+`<ITEMS_ID>`. Each item records its own share **in the same call**:
+`EquipState.pool_owed += cut`. The item computes `cut` on `ItemPoolContext.quote_after_launch`
+(03), the exact quote the launchpad then cuts, so what is recorded is what is applied; if the
+launchpad refuses the answer the whole swap fails and nothing is recorded.
+
+**`settle_equip(mint, slot)`**, permissionless, pays both:
 
 ```
-EquipVaultOwner = PDA(["equip-vault", equip_state], <ITEMS_ID>)
-equip vault     = holding(cut_mint, EquipVaultOwner)          (token program)
+token side:  b = equip vault balance
+             royalty = floor(b * Item.royalty_bps / 10_000) -> holding(mint, RoyaltyOwner)
+             bounty  = floor((b - royalty) * MAX_CRANK_BOUNTY_BPS / 10_000) -> sender's holding
+             rest    -> the template's token-side destination (burn, collector)
+pool side:   p = EquipState.pool_owed - EquipState.pool_settled
+             royalty = floor(p * Item.royalty_bps / 10_000) -> holding(BRIDGED_SOL, RoyaltyOwner)
+             bounty  = floor((p - royalty) * MAX_CRANK_BOUNTY_BPS / 10_000) -> sender
+             rest    -> the template's pool-side destination (our war chest; partner's treaty inbox)
+             pool_settled += p   (PoolCuts signs)
 ```
 
-`cut_mint` is the mint the cut is taken in: the token itself for token callbacks, the side's mint
-for pool callbacks (bridged SOL on the quote side, the token on the base side).
+The royalty is exactly a share of what the item collected, never an extra charge (00 rule 1). The
+DEX takes Bordrless's protocol share of every hook cut on the swap itself (`hooks-v2.md` 3.1), before
+the cut reaches `PoolCuts`, so the protocol share is always first. `RoyaltyOwner` is
+`["royalty", item]` under the armory (00 4.3).
 
-`settle_equip(equip_state, cut_mint)`, permissionless, splits the vault's balance:
-
-1. `royalty = floor(balance * Item.royalty_bps / 10_000)` to the royalty holding
-   `holding(cut_mint, RoyaltyOwner)` (00 4.3, `["royalty", item]` under armory);
-2. the rest to the template's **destination** (section 3: burn, war chest, partner war chest, a
-   named collector);
-3. a crank bounty of `MAX_CRANK_BOUNTY_BPS` at most, from the rest, to the sender.
-
-The royalty is therefore exactly a share of what the hook collected, never an extra charge
-(00 rule 1, 2.2 of ideas DESIGN). Royalty first or protocol share first (ideas DECISIONS H4): the
-DEX applies Bordrless's protocol share to cuts on the swap itself (`hooks-v2.md` 3.1), before
-anything reaches the equip vault, so the protocol share is always first.
-
-Equip vault holdings are program-owned PDAs. Delta recipients are credited without calling the
-mint's hook (`hooks-v2.md` 1.6), so the kit's on-curve rule for destinations does not apply to them;
-`settle_equip` must not transfer the token itself into another program-owned holding of a kit token
-with holder rewards on (Interfaces, I-05.4).
+An item can leave its slot only when settled: `close_equip` refuses while the equip vault holds a
+balance or `pool_owed > pool_settled` (`VaultNotSettled`); the site puts `settle_equip` before every
+`execute` of an unequip (02).
 
 ### 2.6 Entry points the armory calls
 
-All take no user funds. The first three touch no account except the armory signer, so a client may
-also simulate them as views.
-
-| Instruction | Args | Returns (return data, Borsh) | Errors |
+| Instruction | Args | Effect | Errors |
 | --- | --- | --- | --- |
-| `validate_params` | `template_id: u16`, `ceilings: Vec<u8>`, `params: Vec<u8>` | nothing | `BadParams`, `AboveCeiling` |
-| `manifest` | `template_id`, `params` | `Manifest` (2.7) | `BadParams` |
-| `combine_params` | `template_id`, `ceilings`, `a: Vec<u8>`, `b: Vec<u8>` | `Vec<u8>` (the forged params) | `NotForgeable`, `BadParams` |
-| `init_equip` | `slot: u8`, `data_offset: u8`, `data_len: u8` | nothing | creates `EquipState` and the slot registry (2.3), lights the equip vault holding of every cut mint the template names |
-| `close_equip` | `slot` | nothing | refuses while any equip vault holds a balance (`VaultNotSettled`) |
+| `validate_params` | `template_id: u16`, `params: [u32; PARAM_FIELDS]` | none; template rules beyond per-field floor and ceiling (cross-field rules, section 3) | `BadParams` |
+| `combine_params` | `template_id`, `field_max: [u32; PARAM_FIELDS]`, `a`, `b` | return data: the forged params | `NotForgeable`, `BadParams` |
+| `init_equip` | `slot: u8`, `item: Pubkey`, `config: EquipConfig` | creates or resets `EquipState`, writes the item registry, creates the equip vault and, the first time, `RaidLedger` | `VaultNotSettled`, `BadTargets` |
+| `close_equip` | `slot: u8` | marks `EquipState` empty | `VaultNotSettled` |
 
-`ceilings` are the template's ceilings as stored in the armory's `Template` account (02), encoded
-as the template's `Ceilings` struct. Items never store ceilings themselves, so a ceiling is set once,
-at template registration, by whoever registers the template under 00 rule 3.
+`validate_params` and `combine_params` touch no account but the signer, so a client may simulate
+them as views. The per-field floor and ceiling live in the armory's `Template` (`field_min`,
+`field_max`, 02 2.2); the armory checks them in one place, and this program adds only what a
+per-field check cannot express.
 
-### 2.7 Params and manifest encoding
+### 2.7 Params and forging
 
-`Item.params`: byte 0 is the params layout version (`1`), then the Borsh encoding of the template's
-`Params` struct. Length at most `PARAMS_MAX_LEN` (to set, 02).
+`params: [u32; PARAM_FIELDS]`; fields a template does not use are 0. Each template below lists its
+fields: index, meaning, floor and ceiling (by name, to set), and its **forge rule**:
 
-```rust
-pub struct Manifest {
-    pub kind: u8,                 // 00 4.1 slot kind
-    pub token_flags: u16,         // upstream token_flags the item subscribes to
-    pub pool_callbacks: u8,       // bit 0 before_swap, bit 1 after_swap
-    pub max_cut_bps_buy: u16,     // worst case, from params
-    pub max_cut_bps_sell: u16,
-    pub max_cut_bps_transfer: u16,
-    pub max_discount_bps: u16,    // creator fee discount it may ask for (pool items)
-    pub may_refuse: bool,
-    pub may_burn: bool,
-    pub data_bytes: u8,           // hook-data bytes its range needs
-    pub reads_other_pools: u8,    // how many foreign Observations / Mint accounts it reads
-}
-```
+| Rule | `combine(a, b)` with ceiling `c` and floor `f` |
+| --- | --- |
+| `TowardCeiling` | `m = max(a, b)`; `m + floor((c - m) * FORGE_GAIN_BPS / 10_000)` |
+| `TowardFloor` | `m = min(a, b)`; `m - floor((m - f) * FORGE_GAIN_BPS / 10_000)` |
+| `Keep` | `a`; both must be equal, else `NotForgeable` (modes and flags) |
 
-The armory compares the manifest with the slot's bounds before equipping (02).
+`FORGE_GAIN_BPS` is the one forge constant (R7). Each forge closes a share of the remaining
+distance to the ceiling, so levels have diminishing returns and never pass the ceiling. The results
+are deterministic and symmetric in `(a, b)`. These three rules map onto 02's table as `Max`-based
+(`TowardCeiling`), `Min`-based (`TowardFloor`) and `Keep` (see C3).
 
 ### 2.8 The pool-item answer
 
-The launchpad forwards upstream `PoolHookArgs` (`lib.rs:206-247`) plus `slot` and the route
-(03). A pool item answers `ItemPoolReturn`:
+The launchpad calls `pool_before_swap(args: PoolHookArgs, ctx: ItemPoolContext)` and
+`pool_after_swap(...)` (03 5.1). `PoolHookArgs.route: RouteContext` is filled by the DEX (R5); the
+launchpad passes it unchanged. An item answers:
 
 ```rust
-pub struct ItemPoolReturn {
-    pub base: HookReturn,               // upstream struct, lib.rs:265: at most ONE delta, to extra
-                                        // index of its equip vault on the side being cut; burn as allowed
-    pub creator_fee_discount_bps: u16,  // share of the launch's creator fee to waive on this swap
+pub struct ItemPoolAnswer {
+    /// Basis points of the launchpad's creator and holder fees on this side to waive (R6).
+    pub discount_bps: u16,
+    /// This item's cut of ctx.quote_after_launch, merged by the launchpad into the one PoolCuts delta.
+    pub cut: u64,
+    /// Base to burn, only where the slot allows a burn on this side.
+    pub burn: u64,
 }
 ```
 
-The launchpad merges item answers with its own (03): discounts add up and are capped at the
-creator fee; the item deltas and the launchpad's deltas together must fit `MAX_DELTAS`. Because the
-launchpad uses two deltas on a buy, **at most one pool item may cut on a buy** while the launch
-takes both creator and holder fees; `MAX_CUTTING_SLOTS` on the pool side is to measure and decide
-(00 parameters; Interfaces I-03.4).
+Items never set the LP fee (R6). Discounts are summed and capped by the launchpad, and come out of
+the creator and holder fees only (03 5.3). No royalty field and no mark field: the royalty is taken
+by `settle_equip` (2.5) and the mark is written by the item into `RaidLedger` directly (2.9).
 
-### 2.9 Marks: how a pool item reaches per-holder state
+### 2.9 `RaidLedger` and the raid mark (R3, R4)
 
-Pool callbacks cannot see holdings' hook data or write it; token callbacks can, but cannot see the
-route. Both run inside the same DEX `swap` instruction, in a fixed order (upstream `hooks-v2.md`
-3.1, "A buy"):
-
-```
-1. DEX -> launchpad before_swap -> pool items (pool half)     route known; writes a Mark
-2. DEX moves the input, runs the curve
-3. DEX -> launchpad after_swap -> pool items
-4. DEX delivers the output: token transfer pool vault -> recipient holding
-       token program -> items before_transfer (token half)     reads the Mark, stamps hook data,
-                                                               clears the Mark
-```
-
-**Pool slot marks, token slot stamps.** The Mark lives in the token's `WarState` (05), one per slot:
+Pool callbacks see the route but cannot write holdings; token callbacks write holdings but cannot
+see the route. The bridge between them is `RaidLedger` at `["raid-ledger", mint]`, owned by
+`hookwars_items`, written by pool items during swaps and read by `hookwars_war` (05 2.4).
 
 ```rust
-pub struct Mark {                 // in WarState.marks[slot]; all zero = none
-    pub kind: u8,                 // 1 raid buy, 2 shield origin
-    pub clock_slot: u64,          // Clock::slot when written
-    pub pool_swap_count: u64,     // PoolHookArgs.swap_count of the swap that wrote it
-    pub recipient: Pubkey,        // PoolHookArgs.recipient
-    pub rival: u8,                // index into the item's rival list
-    pub quote_in: u64,            // the swap's quote input after before_swap cuts (lamports)
+pub struct RaidLedger {
+    pub version: u8, pub bump: u8,
+    pub mint: Pubkey,
+    pub season_id: u32,                       // WarConfig.current_season when last rolled
+    pub outbound_volume_season: u64,          // raid volume our raids brought into us this season (05 name)
+    pub inbound: [RaidWindow; RAID_TABLE_LEN],// per rival whose holders were raided into us
+    pub mark: Mark,
+    pub reserved: [u8; 32],
+}
+pub struct RaidWindow { pub rival_mint: Pubkey, pub window_start: i64, pub volume: u64, pub prev_volume: u64 }
+pub struct Mark {
+    pub clock_slot: u64,                      // Clock::slot when written; 0 = none
+    pub recipient: Pubkey,                    // PoolHookArgs.recipient
+    pub rival: Pubkey,                        // RouteContext.route_input_mint
+    pub quote_volume: u64,                    // PoolHookArgs.amount_in of the raid buy (bridged SOL)
+    pub stamped_slots: u8,                    // bit i set once slot i's token half stamped it
 }
 ```
 
-The token half accepts a Mark only when all hold: `clock_slot == Clock::slot`;
-`args.source_owner == launch pool`; `args.destination_owner == mark.recipient`;
-`mark.pool_swap_count` equals the swap counter the token half reads from the `Pool` account (03 must
-state whether `swap_count` is incremented before or after delivery, I-03.3); and the Mark is for its
-own slot. It then zeroes the Mark in its answer path (it writes `WarState` directly, as a writable
-extra). A Mark that is not consumed is dead after its slot ends and is overwritten by the next one;
-it can never stamp a different swap, because the swap counter and recipient must both match.
+**Windows (05's two-window rolling rule).** Adding `v` from `rival` at `now`, `W = RAID_WINDOW_SECS`:
 
-`WarState` becomes writable on every launch-pool swap that runs a marking item. Every buy already
+```
+e = entry for rival, else a free entry: one whose window ended (now >= window_start + 2*W),
+    oldest window_start first; if none is free, the raid is not recorded in inbound (a flood of dust
+    rivals cannot evict a live raid); the mark and points still happen
+k = (now - e.window_start) / W                   // whole windows passed
+if k == 1: e.prev_volume = e.volume; e.volume = 0
+if k >= 2: e.prev_volume = 0;        e.volume = 0
+e.window_start += k * W                          // new entry: window_start = now, both 0
+e.volume += v                                    // checked
+```
+
+The rolling volume 05 reads at `t` is
+`volume + prev_volume * (window_start + W - t) / W` (05 2.4).
+
+**Season roll.** Every write first reads `WarConfig.current_season` (read-only extra) and, if it
+differs from `season_id`, sets `season_id` and zeroes `outbound_volume_season`.
+
+**The mark (R4).** Written in `pool_after_swap` by any marking item (Raid, Shield) that sees a raid
+buy from one of its targets; overwritten by the next swap of that pool (which resets
+`stamped_slots`). Two marking items on one swap write identical values. A token half consumes it on
+the **first transfer into `recipient`'s holding in the same clock slot**, which is the delivery: the
+DEX pays `after_swap` deltas only to other holdings, then delivers (R4). A token half accepts the
+mark only when `clock_slot == Clock::slot`, `destination_owner == recipient`,
+`source_owner == the launch pool` and its own bit in `stamped_slots` is clear; it then sets the bit.
+No dependence on `Pool.swap_count`.
+
+`RaidLedger` is writable on every launch-pool swap that runs a marking item. Every buy already
 write-locks the `Launch` account (`hooks-v2.md` 5.4), so trades of one token are already serialized;
-this adds no new contention between different tokens.
+this adds no contention between tokens.
+
+`init_raid_ledger(mint)`: permissionless, the payer pays rent; `init_equip` of a marking template
+creates it if missing.
+
+### 2.10 Touch payloads (01 `on_touch`)
+
+`hookwars_war` changes a holding's Raid bytes only through `touch`, signed by `WAR_SIGNER` (05
+sections 7 to 9). The token program forwards `TokenSlotArgs.context` and the caller as `authority`
+(01). The Raid item decodes:
+
+```rust
+pub enum WarTouch {
+    SpendRaidPoints { amount: u32 },
+    SpendTicket,
+    MarkQuest { kind: u8, period: u16 },   // kind: 0 Hold, 1 Raid, 2 Forge (05 9)
+}
+```
+
+Accepted only when `args.authority == WAR_SIGNER` and the token program reports it as a signer
+(01); any other caller gets `NotWarSigner`. Behaviour in 3.1. Every other template answers a touch
+with nothing.
 
 ## 3. Templates
 
-| Id | Template | Slot kind | Callbacks |
-| --- | --- | --- | --- |
-| 0 | none | | invalid |
-| 1 | Raid | Pool (with token half) | `before_swap` (pool); `before_transfer` (token) |
-| 2 | Shield | Pool (with token half) | `before_swap`, `after_swap` (pool); `before_transfer` (token) |
-| 3 | Wall | Defense | `before_transfer` |
-| 4 | Spy | Pool | `before_swap`, `after_swap` |
-| 5 | Treaty | Relation (pool side) | `before_swap` |
-| 6 | Tribute | Relation (pool side) | `before_swap` |
-| 7 | Half-Life | Fee | `before_transfer` |
-| 8 | Transfer Fee | Fee | `before_transfer` |
+| Id | Template | Slot kind (00 4.1) | Callbacks | Targets |
+| --- | --- | --- | --- | --- |
+| 0 | none | | | |
+| 1 | Raid | Pool, with token half | `pool_before_swap`, `pool_after_swap`; `before_transfer`, `on_touch` | rival mints, 1..`RAID_MAX_RIVALS` |
+| 2 | Shield | Pool, with token half | `pool_after_swap`; `before_transfer` | rival mints, 1..`SHIELD_MAX_RIVALS` |
+| 3 | Wall | Defense | `before_transfer` | none |
+| 4 | Spy | Pool | `pool_before_swap`, `pool_after_swap` | one rival mint |
+| 5 | Treaty | Relation (pool side) | `pool_before_swap` | the partner mint |
+| 6 | Tribute | Relation (pool side) | `pool_before_swap` | the partner mint; role Pay or Receive |
+| 7 | Half-Life | Fee | `before_transfer` | none |
+| 8 | Transfer Fee | Fee | `before_transfer` | the collector |
+| 9 | War orders | War | none | none |
 
-Counter-strike is **not** a hook: it is a war-chest instruction in `hookwars_war` triggered by
-time-weighted price (05). Siege, raze and bounties are likewise 05.
-
-A Pool-kind item with a token half needs the token program to call it on token transfers too and to
-give its slot a data range (Interfaces I-01.4). Slot kinds that 00 4.1 marks as "token transfers"
-only never receive pool callbacks.
-
-Forge rule used below. For a parameter whose stronger value is higher:
-
-```
-forge_up(x, y, cap)   = min(cap, max(x, y) + floor(min(x, y) * FORGE_GAIN_BPS / 10_000))
-```
-
-and for one whose stronger value is lower:
-
-```
-forge_down(x, y, floor_) = max(floor_, min(x, y) - floor(... same gain on the difference to floor_ ...))
-                         = max(floor_, min(x, y) - floor((max(x, y) - floor_) * FORGE_GAIN_BPS / 10_000))
-```
-
-`FORGE_GAIN_BPS` is a new parameter (to set, O; not yet in 00's table). Identity parameters
-(rival lists, partners, collectors) are merged as stated per template or make the pair
-`NotForgeable`. Combining is deterministic: the same `(a, b)` in either order gives the same result
-(lists are sorted and deduplicated by key).
+A Pool-kind item with a token half needs its slot called on token transfers too, with a data range
+(I-01.1). Kinds 00 4.1 marks "token transfers" never receive pool callbacks. Counter-strike, siege,
+raze and bounties are `hookwars_war` instructions (05) configured by the War orders item; they are
+not hooks.
 
 ### 3.1 Raid (id 1)
 
-Buyers who reach us by **selling a listed rival** get part of the creator fee waived, optionally pay
-a toll to this item, and earn raid points and loot tickets in their holding.
+Buyers who reach us by **selling a targeted rival** pay less creator and holder fee, may pay a toll
+to the item, and earn raid points and loot tickets in their holding.
 
-**Params**
+**Fields**
 
-```rust
-pub struct RaidParams {
-    pub rivals: Vec<Pubkey>,      // rival mints, at most RAID_MAX_RIVALS; empty = any token
-    pub discount_bps: u16,        // share of the creator fee waived on a raid buy
-    pub toll_bps: u16,            // this item's own cut of the raid buy's quote input
-    pub points_per_unit: u16,     // points per POINT_UNIT_LAMPORTS of quote_in
-}
-```
+| # | Field | Floor, ceiling | Forge |
+| --- | --- | --- | --- |
+| 0 | `discount_bps` | 0, `RAID_MAX_DISCOUNT_BPS` (at most 10,000) | `TowardCeiling` |
+| 1 | `toll_bps` | 0, `RAID_MAX_TOLL_BPS` | `TowardCeiling` |
+| 2 | `points_per_unit` | 0, `RAID_MAX_POINTS_PER_UNIT` | `TowardCeiling` |
 
-| Ceiling | Bounds |
-| --- | --- |
-| `RAID_MAX_RIVALS` | length of `rivals` |
-| `RAID_MAX_DISCOUNT_BPS` | `discount_bps` (at most 10,000: a full waiver of the creator fee) |
-| `RAID_MAX_TOLL_BPS` | `toll_bps` |
-| `RAID_MAX_POINTS_PER_UNIT` | `points_per_unit` |
+Targets: 1 to `RAID_MAX_RIVALS` rival mints, each with a Hookwars launch. An empty list is refused
+(`BadTargets`): otherwise anyone could launch a junk token, route through it and take the discount.
 
-`POINT_UNIT_LAMPORTS` is a new parameter (to set, O). Loot tickets use 00's `LOOT_MIN_RAID_LAMPORTS`.
+**Extras:** `RaidLedger` (w); `WarConfig` (r); for each target, its `Launch` at `["launch", rival]`
+under `<LAUNCH_ID>` (r), fixed keys in the registry.
 
-**Extras** (after Item, EquipState): `WarState` of the mint (w); the toll equip vault, a bridged-SOL
-holding of `EquipVaultOwner` (w); the launch `Pool` (r, for the swap counter).
-
-**Hook data range** (`RAID_DATA_BYTES` = 13):
+**Range** (17 bytes):
 
 | Bytes | Field |
 | --- | --- |
 | 0 | tag `0x01` |
-| 1..3 | `season: u16`, the season the points belong to |
-| 3..11 | `points: u64` |
-| 11..13 | `tickets: u16`, loot tickets not yet rolled |
+| 1..5 | `season_id: u32` |
+| 5..9 | `raid_points: u32` |
+| 9..11 | `tickets: u16` |
+| 11..17 | `quest_period: [u16; 3]` (Hold, Raid, Forge; 05 9) |
 
-**`before_swap` (pool half)**
+A range whose `season_id` is not the current season reads as `raid_points = 0` (tickets and quest
+periods carry over; 05 decides whether tickets expire, C5).
+
+**Raid test** (both pool callbacks):
 
 ```
-if args.direction != BUY: answer nothing
-route = args.route (03 RouteContext); i = route.index
-raid  = i >= 1
-        and route.hops[i].input_mint == bridged SOL
-        and route.hops[i-1].output_mint == bridged SOL
-        and (rivals is empty or route.hops[i-1].input_mint in rivals)
-        and route.hops[i-1].input_mint != our mint
-if not raid: answer nothing
-quote_in = args.amount_in
-toll = toll_bps > 0 ? fee_amount(quote_in, toll_bps) : 0          // rounds up, upstream fee_amount
-WarState.raid_inflow_add(rival = route.hops[i-1].input_mint, quote_in)   // 05 window accumulator
-WarState.marks[slot] = Mark { kind: 1, clock_slot, pool_swap_count: args.swap_count,
-                              recipient: args.recipient, rival: idx, quote_in: quote_in - toll }
-answer ItemPoolReturn {
-    base: { deltas: toll > 0 ? [Delta { amount: toll, account: <toll vault index> }] : [] },
-    creator_fee_discount_bps: discount_bps }
+r = args.route
+raid = args.direction == BUY
+       and r.hop_index >= 1
+       and r.route_input_mint != our mint and r.route_input_mint != BRIDGED_SOL
+       and r.route_input_mint in targets
+       and r.first_pool == Launch(r.route_input_mint).pool       // the rival really sold on its own launch pool
 ```
 
-**`before_transfer` (token half)**
+Each hop's input is what the previous hop delivered (R5), so the SOL entering our pool is the
+proceeds of the rival sale; no outside top-up is possible.
+
+**`pool_before_swap`:** if raid, answer `{ discount_bps, cut: fee_amount(ctx.quote_after_launch,
+toll_bps), burn: 0 }` (upstream `fee_amount` rounds up) and `EquipState.pool_owed += cut`.
+Otherwise answer nothing.
+
+**`pool_after_swap`:** if raid: roll the season; `inbound.add(route_input_mint, args.amount_in)`;
+`outbound_volume_season += args.amount_in`; write the mark
+`{ clock_slot, recipient: args.recipient, rival, quote_volume: args.amount_in, stamped_slots: 0 }`.
+
+**`before_transfer`** (token half):
 
 ```
 if source == destination: nothing
-mark = WarState.marks[slot]
+d = dest range (season-checked), s = source range (season-checked)
 if mark accepted (2.9):
-    pts = (mark.quote_in / POINT_UNIT_LAMPORTS) * points_per_unit         // checked
-    tix = mark.quote_in >= LOOT_MIN_RAID_LAMPORTS and WarState.war_active ? 1 : 0
-    dest = read range(destination); if dest.season != WarState.season: dest = zero
-    dest.points  = dest.points.saturating_add(pts)
-    dest.tickets = dest.tickets.saturating_add(tix)
-    zero WarState.marks[slot]
-else if transfer between two holders (neither is the pool nor the launch nor a program vault):
-    // points travel with tokens, pro rata, like Half-Life's age
-    src = range(source) (season-checked)
-    moved_pts = floor(src.points * amount / source_balance); same for tickets
-    src -= moved; dest += moved
-else if destination is the launch pool (a sell): 
-    src.points  -= floor(src.points * amount / source_balance)   // points leave with the tokens
-    src.tickets -= floor(src.tickets * amount / source_balance)
-clear src range if source_balance == amount
-answer source/destination hook data (own range only); no deltas
+    pts = (mark.quote_volume / POINT_UNIT_LAMPORTS) * points_per_unit         // saturating u32
+    tik = mark.quote_volume >= LOOT_MIN_RAID_LAMPORTS and WarConfig.current_season > 0 ? 1 : 0
+    d.raid_points += pts; d.tickets += tik (saturating); d.season_id = current
+    set stamped bit; emit RaidMarked { mint, rival: mark.rival, trader: recipient,
+                                        volume: mark.quote_volume, points: pts, loot_ticket: tik == 1 }
+else if both owners are holders (neither the launch pool, the launch PDA nor a program vault):
+    moved = floor(s.raid_points * amount / source_balance); same for tickets
+    s -= moved; d += moved
+    d.quest_period[k] = max(s.quest_period[k], d.quest_period[k]) for each k   // receiver-marker rule (05 9)
+else if destination_owner == launch pool (a sell):
+    s.raid_points -= floor(s.raid_points * amount / source_balance); same for tickets
+clear s when source_balance == amount
+answer source_data / destination_data
 ```
 
-Raid points are spent by `claim_bounty` and tickets by `roll` in 05, both through `touch` (01).
+**`on_touch`** (`WAR_SIGNER` only, 2.10):
+
+| Payload | Effect | Error |
+| --- | --- | --- |
+| `SpendRaidPoints { amount }` | `raid_points -= amount` for the current season | `NotEnoughPoints` |
+| `SpendTicket` | `tickets -= 1` | `NoTicket` |
+| `MarkQuest { kind, period }` | requires `quest_period[kind] < period`; sets it; `tickets += 1` | `QuestAlreadyMarked` |
 
 **Abuse**
 
-- Faking a route: the route is built by the DEX's multi-hop instruction, not the client, and hop
-  `i`'s input must be exactly hop `i-1`'s delivered output (I-03.2). A raider cannot top up with
-  outside SOL or sell dust X and claim a large raid.
-- Wash raiding with one's own X: costs X's fees, our fees after discount, slippage on both pools,
-  and the toll. Points are linear in SOL routed, so splitting gains nothing; loot needs
-  `LOOT_MIN_RAID_LAMPORTS` per buy and an active war.
-- Selling right after a raid destroys the points pro rata, so raid-and-dump keeps nothing.
-- Sending points to a fresh wallet moves them, it does not copy them.
+- Faking a route: the DEX fills `route` (R5); `hook_data` is never read. The rival's own launch pool
+  must be the first hop, so the trader really sold the rival there and paid its fees.
+- Wash raiding with one's own rival tokens: costs the rival's fees, our fees after discount,
+  slippage on both pools and the toll. Points are linear in SOL routed; splitting gains nothing;
+  tickets need `LOOT_MIN_RAID_LAMPORTS` per buy and a running season.
+- Raid then dump: a sell destroys points and tickets pro rata.
+- Fresh wallets: points move with tokens, never copy; quest markers move as the larger of the two.
+- Sieges built on raid volume (05) refuse rivals whose kit has holder rewards on (R10): a war chest,
+  off curve, cannot hold that token. Raiding such a rival is still allowed; only the siege is not.
 
-**Forge:** `rivals` = sorted union, refused if above `RAID_MAX_RIVALS` (`NotForgeable`); empty list
-(any token) only with an empty list. `discount_bps`, `toll_bps`, `points_per_unit`: `forge_up`.
-
-**Manifest:** kind Pool; token flags `BEFORE_TRANSFER | WRITES_HOOK_DATA`; pool callbacks
-before_swap; `max_cut_bps_buy = toll_bps`; `max_discount_bps = discount_bps`; may_refuse false;
-data_bytes 13.
+**Manifest:** kind Pool; token flags `BEFORE_TRANSFER | WRITES_HOOK_DATA | ANSWERS_TOUCH` (01);
+pool callbacks before and after; `cut_fields`: buy side field 1, sell side none; marks yes.
 
 ### 3.2 Shield (id 2)
 
-Holders whose tokens arrived **from a listed rival's route** within a window pay an extra cut when
-they sell: it taxes hit-and-run raiders who rotate in and straight back out.
+Holders whose tokens arrived **from a targeted rival's raid route** within a window pay an extra
+cut when they sell: a toll on raiders who rotate in and straight back out.
 
-**Params**
+**Fields**
 
-```rust
-pub struct ShieldParams {
-    pub rivals: Vec<Pubkey>,      // at most SHIELD_MAX_RIVALS; empty = any token
-    pub sell_cut_bps: u16,        // extra cut on a sell by a marked holder, in SOL
-    pub window_secs: u32,         // how long an origin counts
-    pub only_under_siege: bool,   // apply only while WarState.under_siege_until > now
-}
-```
+| # | Field | Floor, ceiling | Forge |
+| --- | --- | --- | --- |
+| 0 | `sell_cut_bps` | 0, `SHIELD_MAX_SELL_CUT_BPS` | `TowardCeiling` |
+| 1 | `window_secs` | `SHIELD_MIN_WINDOW_SECS`, `SHIELD_MAX_WINDOW_SECS` | `TowardCeiling` |
+| 2 | `only_under_siege` | 0, 1 | `Keep` |
 
-Ceilings: `SHIELD_MAX_RIVALS`, `SHIELD_MAX_SELL_CUT_BPS`, `SHIELD_MAX_WINDOW_SECS`.
+Targets: 1 to `SHIELD_MAX_RIVALS` rival mints with launches.
 
-**Extras:** `WarState` (w); the equip vault in bridged SOL (w); the launch `Pool` (r); the actor's
-holding of our mint (r), registry seed `["holding", mint, actor]` under `<TOKEN_ID>` (upstream
-`Seed::Account` on the prefix `actor`).
+**Extras:** `RaidLedger` (w); `WarConfig` (r); `WarState` at `["war", mint]` under `<WAR_ID>` (r);
+the target `Launch` accounts (r); the actor's holding `["holding", mint, actor]` under `<TOKEN_ID>`
+(r, upstream `Seed::Account` on the prefix actor).
 
-**Hook data range** (`SHIELD_DATA_BYTES` = 10):
+**Range** (6 bytes): 0 tag `0x02`; 1 `origin: u8` (target index + 1, 0 none); 2..6 `origin_at: u32`.
 
-| Bytes | Field |
-| --- | --- |
-| 0 | tag `0x02` |
-| 1 | `origin: u8`, index into `rivals` + 1 (0 = none) |
-| 2..10 | `origin_at: i64`, weighted arrival time of the marked tokens |
+**`pool_after_swap`, buy:** the Raid test (3.1) against Shield's targets; if it holds, write the
+mark as Raid does (identical values if both are equipped) and roll `inbound` the same way only if no
+Raid item is equipped in the mint (the item reads the mint's slot table from `ItemPoolContext`, 03;
+one writer per swap, so volume is never counted twice).
 
-**Stamping the origin.** `before_swap` on a buy runs the same route test as Raid and, if the buyer
-came from a listed rival, writes `Mark { kind: 2, ... }` into `WarState.marks[slot]`. The token half
-on delivery stamps `origin` and blends `origin_at` by weight with what the holding already had
-(upstream `blend`, `half_life/src/lib.rs:127-134`). A plain buy into a marked holding blends the
-time but keeps the origin; a transfer between holders carries origin and time like Half-Life.
+**`before_transfer`:** on an accepted mark, `origin = index(mark.rival) + 1` and `origin_at` blended
+by weight with what the holding held (upstream `blend`, `half_life/src/lib.rs:127-134`). Between
+holders, origin and time move with the tokens like Half-Life's age. Cleared when emptied.
 
-**`after_swap` on a sell** (the SOL output is known here, `hooks-v2.md` 5.4):
+**`pool_after_swap`, sell:**
 
 ```
-h = range(actor holding)          // read-only account
+h = Shield bytes of the actor's holding (offset from the mint's slot table; stale epoch reads empty)
 marked = h.origin != 0 and now - h.origin_at < window_secs
-         and (!only_under_siege or WarState.under_siege_until > now)
-if marked: cut = fee_amount(args.amount_out, sell_cut_bps)   // from the SOL output
-           answer { deltas: [Delta { amount: cut, account: <equip vault> }] }
+         and (only_under_siege == 0 or WarState.under_siege_until > now)
+if marked: cut = fee_amount(ctx.quote_after_launch, sell_cut_bps); EquipState.pool_owed += cut
+           answer { cut }
 ```
 
-`before_swap` on a sell answers nothing. Destination after `settle_equip`: our war chest (05).
+Pool-side destination: our war chest.
 
-**Abuse:** a raider can send the tokens to a fresh wallet before selling; origin travels with
-tokens, so the fresh wallet is marked too. A raider who waits `window_secs` pays nothing, which is
-the point (it defends against hit-and-run, not against holders).
+**Abuse:** sending to a fresh wallet first carries the origin. Waiting out `window_secs` pays
+nothing, which is intended: it taxes hit-and-run, not holders.
 
-**Forge:** rivals union as Raid; `sell_cut_bps`, `window_secs`: `forge_up`; `only_under_siege`: the
-pair must agree, else `NotForgeable`.
-
-**Manifest:** kind Pool; `max_cut_bps_sell = sell_cut_bps`; data_bytes 10; may_refuse false.
+**Manifest:** kind Pool; `BEFORE_TRANSFER | WRITES_HOOK_DATA`; `cut_fields`: sell side field 0; marks yes.
 
 ### 3.3 Wall (id 3)
 
-A temporary max wallet while the token is **under siege** (05 sets `WarState.under_siege_until`
-when another token's war chest spot-buys us). It slows accumulation of our supply by a rival chest
-and by whales riding the siege.
+A temporary max wallet while the token is **under siege** (05 sets `WarState.under_siege_until` and
+the attacker). It caps wallets and the attacking war chest.
 
-**Params**
+**Fields**
 
-```rust
-pub struct WallParams {
-    pub max_wallet_bps: u16,      // of supply
-}
-```
-
-Ceiling: `WALL_MIN_MAX_WALLET_BPS` (the tightest wall allowed; a stronger wall is a lower value).
+| # | Field | Floor, ceiling | Forge |
+| --- | --- | --- | --- |
+| 0 | `max_wallet_bps` | `WALL_MIN_MAX_WALLET_BPS`, 10,000 | `TowardFloor` (a tighter wall is stronger) |
 
 **Extras:** `WarState` (r).
 
-**`before_transfer`**
+**`before_transfer`:**
 
 ```
-if WarState.under_siege_until <= now: answer nothing
-if destination_owner in { launch pool, launch PDA, our war chest, any equip vault owner }: nothing
-cap   = supply * max_wallet_bps / 10_000                 // u128, as tax_hook, lib.rs:151
-after = destination_balance + amount
-require(after <= cap, WallHolds)
+if WarState.under_siege_until <= now: nothing
+capped = destination_owner.is_on_curve()                       // wallets (upstream kit syscall, hooks-v2 4.5)
+         or destination_owner == WarState.siege_by_chest      // the attacking war chest
+if !capped: nothing                                           // pool, launch, vaults, royalty owners
+cap = supply * max_wallet_bps / 10_000                        // u128, as tax_hook lib.rs:151
+require(destination_balance + amount <= cap, WallHolds)
 ```
 
-No hook data, no cuts. It refuses, so `may_refuse = true`; a sell never fails on it (the
-destination is the pool).
+No data, no cuts. A sell never fails on it (the destination is the pool). `siege_by_chest` is a field
+05 must keep (C4).
 
-**Abuse:** a siege cannot last longer than 05 allows (`under_siege_until` is bounded there), so a
-Wall cannot freeze buys indefinitely. The siege itself is not stopped by the Wall when the
-attacker's chest is under the cap; the Wall bounds each wallet, not the sum.
+**Abuse:** a siege cannot outlast 05's bound on `under_siege_until`, so a Wall cannot freeze buys
+indefinitely. It bounds each wallet, not the sum.
 
-**Forge:** `forge_down(a, b, WALL_MIN_MAX_WALLET_BPS)`.
-
-**Manifest:** kind Defense; `BEFORE_TRANSFER`; may_refuse true; data_bytes 0.
+**Manifest:** kind Defense; `BEFORE_TRANSFER`; may refuse.
 
 ### 3.4 Spy (id 4)
 
-Our fees move with a **rival's time-weighted price**. Reads the rival pool's `Observations`
-(03), never its spot price (00 rule 7).
+Our fees move with a **rival's time-weighted price**, read from its `Observations` (03), never spot
+(00 rule 7).
 
-**Params**
+**Fields**
 
-```rust
-pub struct SpyParams {
-    pub rival_pool: Pubkey,
-    pub window_secs: u32,         // >= MIN_TWAP_SECS
-    pub trigger_bps: u16,         // change between the last two windows that arms it
-    pub mode: u8,                 // 1 Rivalry, 2 Momentum
-    pub effect_bps: u16,          // Rivalry: sell cut; Momentum: creator fee discount on buys
-}
-```
+| # | Field | Floor, ceiling | Forge |
+| --- | --- | --- | --- |
+| 0 | `mode` | 1 Rivalry, 2 Momentum | `Keep` |
+| 1 | `window_secs` | `MIN_TWAP_SECS`, `SPY_MAX_WINDOW_SECS` | `TowardFloor` (reacts sooner) |
+| 2 | `trigger_bps` | `SPY_MIN_TRIGGER_BPS`, `SPY_MAX_TRIGGER_BPS` | `TowardFloor` |
+| 3 | `effect_bps` | 0, `SPY_MAX_EFFECT_BPS` | `TowardCeiling` |
 
-Ceilings: `SPY_MAX_EFFECT_BPS`, `SPY_MIN_TRIGGER_BPS`, `SPY_MAX_WINDOW_SECS`; `window_secs >=
-MIN_TWAP_SECS` always.
-
-**Extras:** the rival pool's `Observations` at `["obs", rival_pool]` under `<SWAP_ID>` (r); the
-equip vault in bridged SOL (w).
-
-**Logic** (`twap(a, b)` is 03's helper over the ring):
+Target: one rival mint. **Extras:** the rival `Launch` (r); `["obs", rival_pool]` under `<SWAP_ID>` (r).
 
 ```
-now_w  = twap(now - window, now)
-prev_w = twap(now - 2*window, now - window)
-if ring cannot cover 2*window: answer nothing          // young pool or short ring
-change_bps = (now_w - prev_w) * 10_000 / prev_w        // signed
-Rivalry (rival up):    if change_bps >= trigger and SELL: after_swap cut = fee_amount(out, effect_bps)
-Momentum (rival down): if change_bps <= -trigger and BUY: before_swap discount = effect_bps
+now_w  = twap(now - window, now); prev_w = twap(now - 2*window, now - window)   // 03 helper
+if either is none (ring too short): nothing
+change_bps = (now_w - prev_w) * 10_000 / prev_w                                // signed
+Rivalry,  change_bps >=  trigger, SELL, pool_after_swap: cut = fee_amount(quote_after_launch, effect_bps)
+Momentum, change_bps <= -trigger, BUY,  pool_before_swap: discount_bps = effect_bps
 ```
 
-**Abuse:** moving the rival's time-weighted price over `window_secs` costs holding a manipulated
-price for that long on the rival's own pool, paying its fees both ways. The armory refuses a
-`window_secs` below `MIN_TWAP_SECS`.
+Pool-side destination: our war chest. **Abuse:** moving the rival's time-weighted price costs holding
+a manipulated price on the rival's own pool for `window_secs`, paying its fees both ways.
 
-**Forge:** same `rival_pool` and `mode`, else `NotForgeable`; `effect_bps`: `forge_up`;
-`trigger_bps`: `forge_down(.., SPY_MIN_TRIGGER_BPS)`; `window_secs`: the shorter of the two, never
-below `MIN_TWAP_SECS`.
-
-**Manifest:** kind Pool; `max_cut_bps_sell` or `max_discount_bps` = `effect_bps` by mode;
-`reads_other_pools = 1`.
+**Manifest:** kind Pool; reads 1 pool; `cut_fields`: sell side field 3 (Rivalry only).
 
 ### 3.5 Treaty (id 5)
 
-Two tokens pay each other's holders from their buys. **One** Treaty item is equipped by **both**
-mints; it does nothing until both have equipped it.
+Two tokens pay each other from their buys. **One** Treaty item is equipped by **both** mints, each
+targeting the other; it does nothing until both have.
 
-**Params**
+**Fields**
 
-```rust
-pub struct TreatyParams {
-    pub mint_a: Pubkey,           // sorted: mint_a < mint_b
-    pub mint_b: Pubkey,
-    pub a_to_b_bps: u16,          // cut of A's buys (SOL input) to B
-    pub b_to_a_bps: u16,
-}
-```
+| # | Field | Floor, ceiling | Forge |
+| --- | --- | --- | --- |
+| 0 | `low_to_high_bps` | 0, `TREATY_MAX_BPS` | not forgeable |
+| 1 | `high_to_low_bps` | 0, `TREATY_MAX_BPS` | not forgeable |
+| 2 | `returns_captured` | 0, 1 | not forgeable |
 
-Ceiling: `TREATY_MAX_BPS` on each side.
+"Low" is the numerically smaller mint key of the pair. `returns_captured = 1` lets 05's
+`return_captured` send captured holdings back under this treaty (05 6.4).
 
-**Extras:** the partner's `Mint` (r); the equip vault in bridged SOL (w).
+**Extras:** the partner's `Mint` (r); the partner's `EquipState` for the slot holding this item (r;
+the client finds the slot from the partner's slot table).
 
-**Verifying the partner cheaply:** the partner's `Mint` is passed read-only; the item scans its slot
-table (at most `MAX_SLOTS` entries, 01) for an entry naming this `Item` key and `<ITEMS_ID>`. Found:
-active. Not found: answer nothing. No extra account per treaty, no keeper, and either side leaves
-by unequipping under its own rule and notice.
+**Active when:** the partner's `EquipState.item == this item`, its `targets[0] == our mint`, and the
+partner's slot table entry at that slot names this item (01 layout). One read each, no keeper.
 
-**`before_swap`, buy:** `cut = fee_amount(amount_in, my_side_bps)`; one delta to the equip vault.
-Destination after `settle_equip`: the **partner's war chest**, tagged as treaty inflow, which 05
-passes to the partner's kit through `kit.share` (streamed over upstream's hour, so a buyer cannot
-sandwich it; `hooks-v2.md` 4.10). The item never deposits into the kit's reward vault directly:
+**`pool_before_swap`, buy:** `cut = fee_amount(ctx.quote_after_launch, my_side_bps)`;
+`EquipState.pool_owed += cut`. Pool-side destination: the **partner's treaty inbox**
+`holding(BRIDGED_SOL, ["treaty-inbox", partner])` under `<WAR_ID>`, which 05 streams to the
+partner's holders with the kit's `share` (R13). Never a direct deposit into a kit reward vault:
 upstream distributes direct deposits at once (`hooks-v2.md` 4.7), which a buy just before could
 capture.
 
-**Abuse:** a treaty minted without consent is inert: the partner never equips it. A side that stops
-paying has unequipped, so the other side's item sees no partner and stops too.
-
-**Forge:** `NotForgeable` (identity).
-
-**Manifest:** kind Relation; `max_cut_bps_buy` = the larger side; `reads_other_pools = 1`
-(a foreign `Mint`).
+**Abuse:** a treaty nobody accepted is inert. A side that stops paying has unequipped, so the
+other side sees no partner and stops too.
 
 ### 3.6 Tribute (id 6)
 
-A one-way Treaty: `payer_mint` pays `bps` of its buys to `receiver_mint`'s holders. Active only when
-both mints equip it (the receiver accepts). Anything granted back (for example a Raid discount for
-the payer's holders) is a separate item the receiver equips: Tribute does not bundle it.
-
-```rust
-pub struct TributeParams { pub payer_mint: Pubkey, pub receiver_mint: Pubkey, pub bps: u16 }
-```
-
-Ceiling `TRIBUTE_MAX_BPS`. Logic as Treaty with one side zero; on the receiver's swaps it answers
-nothing. **Forge:** `NotForgeable`.
+A one-way Treaty. Field 0 `bps` (0, `TRIBUTE_MAX_BPS`; not forgeable). Both mints equip the same
+item targeting each other, the payer with role `Pay`, the receiver with role `Receive`; active only
+when both roles are present. On the payer's buys, as Treaty; on the receiver's swaps, nothing.
+Anything granted back (a Raid discount for the payer's holders, for example) is a separate item.
 
 ### 3.7 Half-Life (id 7)
 
-Upstream `half_life` as a template (`programs/half_life/README.md`; logic
-`programs/half_life/src/lib.rs:276-356`), with its constants made parameters:
+Upstream `half_life` as a template (`programs/half_life/README.md`, logic
+`programs/half_life/src/lib.rs:276-356`), its constants made fields:
 
-```rust
-pub struct HalfLifeParams {
-    pub max_fee_ppm: u32,         // upstream MAX_FEE_PPM, lib.rs:75
-    pub half_life_secs: u32,      // upstream HALF_LIFE_SECS, lib.rs:77
-    pub zero_after_halvings: u8,  // upstream ZERO_AFTER_HALVINGS, lib.rs:79
-}
-```
+| # | Field | Floor, ceiling | Forge |
+| --- | --- | --- | --- |
+| 0 | `max_fee_ppm` (upstream `MAX_FEE_PPM`, `lib.rs:75`) | 0, `HL_MAX_FEE_PPM` | `TowardCeiling` |
+| 1 | `half_life_secs` (`HALF_LIFE_SECS`, `lib.rs:77`) | `HL_MIN_HALF_LIFE_SECS`, `HL_MAX_HALF_LIFE_SECS` | `TowardCeiling` |
+| 2 | `zero_after_halvings` (`ZERO_AFTER_HALVINGS`, `lib.rs:79`) | 1, `HL_MAX_HALVINGS` | `TowardCeiling` |
 
-Ceilings: `HL_MAX_FEE_PPM`, `HL_MIN_HALF_LIFE_SECS`, `HL_MAX_HALF_LIFE_SECS`, `HL_MAX_HALVINGS`.
+**Range** (5 bytes): 0 tag `0x07`; 1..5 `since: u32` (upstream used a 3-byte magic and an `i64`,
+`lib.rs:83-121`).
 
-**Hook data range** (`HL_DATA_BYTES` = 9): byte 0 tag `0x07`; bytes 1..9 `since: i64`. (Upstream
-used a 3-byte magic and 11 bytes, `lib.rs:83-121`; a range tag replaces the magic.)
+**`before_transfer`:** upstream's function with three changes: `fee_ppm(age)` uses the fields
+(`lib.rs:87-99`); exempt owners are the launch PDA, the launch pool, our war chest, `PoolCuts`,
+every `EquipState` of the mint and the royalty owners (upstream exempted launch, pool and furnace,
+`lib.rs:292-300`); the fee is one delta into the equip vault, not a furnace. Token-side destination:
+burn (`settle_equip` burns what is left after the royalty and bounty). Fees are never refused for a
+missing furnace: `init_equip` creates the vault.
 
-**`before_transfer`:** upstream's function with three changes:
-
-1. `fee_ppm(age)` uses the params (`lib.rs:87-99`);
-2. exempt owners: the launch PDA, the launch pool, our war chest, every equip vault owner of this
-   mint and the royalty owners (upstream exempted the launch, the pool and the furnace,
-   `lib.rs:292-300`);
-3. the fee is one delta to the item's equip vault in the token, not to a furnace;
-   `settle_equip` burns the rest after the royalty (destination: burn). The "furnace not lit" rule
-   becomes "equip vault not lit": `init_equip` lights it, so fees are never refused after equip.
-
-**Forge:** `max_fee_ppm`: `forge_up`; `half_life_secs`: `forge_up` (a slower decay is stronger),
-capped by `HL_MAX_HALF_LIFE_SECS`; `zero_after_halvings`: `forge_up`.
+05's `Hold` quest reads `since` from this range (05 9). A token without a Half-Life item has no
+`Hold` quest (C5).
 
 **Manifest:** kind Fee; `BEFORE_TRANSFER | TRANSFER_RETURNS_DELTA | WRITES_HOOK_DATA` (upstream
-`FLAGS`, `lib.rs:68`); `max_cut_bps_transfer = ceil(max_fee_ppm / 100)`; may_refuse false.
+`FLAGS`, `lib.rs:68`); token-side max cut `ceil(max_fee_ppm / 100)` bps.
 
 ### 3.8 Transfer Fee (id 8)
 
 Upstream `tax_hook` as a template (`programs/tax_hook/src/lib.rs:127-165`).
 
-```rust
-pub struct TransferFeeParams {
-    pub fee_bps: u16,             // upstream fee_bps, bounded 2,000 there (lib.rs:58-60)
-    pub max_wallet_bps: u16,      // 0 = off
-    pub collector: Pubkey,        // receives the rest after royalty
-}
-```
+| # | Field | Floor, ceiling | Forge |
+| --- | --- | --- | --- |
+| 0 | `fee_bps` | 0, `TF_MAX_FEE_BPS` | `TowardCeiling` |
+| 1 | `max_wallet_bps` | 0 (off) or `TF_MIN_MAX_WALLET_BPS`, 10,000 | `TowardFloor` when both are on, else `Keep` |
 
-Ceilings: `TF_MAX_FEE_BPS`, `TF_MIN_MAX_WALLET_BPS`.
+Target: the collector. Cross-field rule (`validate_params`): `max_wallet_bps` is 0 or at least
+`TF_MIN_MAX_WALLET_BPS`. **`before_transfer`:** upstream's fee as one delta into the equip vault and
+upstream's wallet cap (`lib.rs:147-154`); exempt owners as Half-Life plus the collector. Token-side
+destination: the collector's holding. May refuse when `max_wallet_bps > 0`.
 
-**`before_transfer`:** upstream's logic: the fee as one delta to the equip vault (not straight to
-the collector, so the royalty can be taken), the wallet cap as upstream (`lib.rs:147-154`), exempt
-owners as Half-Life plus the collector. Destination after `settle_equip`: the collector's holding.
+### 3.9 War orders (id 9)
 
-**Forge:** same `collector`, else `NotForgeable`; `fee_bps`: `forge_up`; `max_wallet_bps`:
-`forge_down(.., TF_MIN_MAX_WALLET_BPS)` when both are on.
+Kind `War` (00 4.1, value 6): **no callbacks**; the token program and launchpad never call it.
+`hookwars_war` reads its fields from the `Item` in the mint's War slot (05). Equipping it by vote is
+how a community sets its war policy.
 
-**Manifest:** kind Fee; `max_cut_bps_transfer = fee_bps`; may_refuse = `max_wallet_bps > 0`.
+| # | Field | Floor, ceiling | Forge | Used by 05 |
+| --- | --- | --- | --- | --- |
+| 0 | `siege_threshold` (units of `SIEGE_UNIT_LAMPORTS`) | `WAR_MIN_SIEGE_THRESHOLD`, `WAR_MAX_SIEGE_THRESHOLD` | not forgeable | `siege`: rolling inbound volume from the rival must reach it |
+| 1 | `siege_spend_bps` | 0, `SIEGE_MAX_SPEND_BPS` | not forgeable | `siege` spend cap, of the chest |
+| 2 | `siege_twap_secs` | `MIN_TWAP_SECS`, `WAR_MAX_TWAP_SECS` | not forgeable | `siege` premium check |
+| 3 | `counter_drop_bps` | `WAR_MIN_COUNTER_DROP_BPS`, `WAR_MAX_COUNTER_DROP_BPS` | not forgeable | `counter_strike` trigger |
+| 4 | `counter_short_secs` | `MIN_TWAP_SECS`, `WAR_MAX_TWAP_SECS` | not forgeable | trigger window, short TWAP |
+| 5 | `counter_long_secs` | `MIN_TWAP_SECS`, `WAR_MAX_TWAP_SECS` | not forgeable | trigger window, long TWAP |
+| 6 | `counter_interval_secs` | `COUNTER_STRIKE_MIN_INTERVAL_SECS`, `WAR_MAX_INTERVAL_SECS` | not forgeable | spacing |
+| 7 | `counter_spend_bps` | 0, `COUNTER_STRIKE_MAX_SPEND_BPS` | not forgeable | spend cap per call |
+| 8 | `raze_enabled` | 0, 1 | not forgeable | `raze` allowed |
+| 9 | `bounty_rate` (lamports per raid point) | 0, `WAR_MAX_BOUNTY_RATE` | not forgeable | `claim_bounty` |
+| 10 | `crank_bounty_bps` | 0, `MAX_CRANK_BOUNTY_BPS` | not forgeable | war step bounties |
+
+Cross-field rule: `counter_short_secs < counter_long_secs`. War orders are policy, not a weapon, so
+the template is not forgeable (02 `forge_enabled = false`); loot may still mint them.
 
 ## 4. Accounts of `hookwars_items`
 
 | Account | Seeds | Fields |
 | --- | --- | --- |
-| `EquipState` | `["equip", item, mint, [slot]]` | `item`, `mint`, `slot`, `template_id`, `data_offset`, `data_len`, `equipped_at`, `runs: u64`, `collected: [u64; 2]` (token side, quote side), `settled: [u64; 2]`, `bump`, `vault_bump`, reserved |
-| `EquipVaultOwner` | `["equip-vault", equip_state]` | none (system-owned; signs `settle_equip` transfers and burns) |
-| slot registry | `["bordrless-hook-accounts", mint, [slot]]` | upstream `HookAccountList` (`lib.rs:533`) |
+| `EquipState` (also owns the token-side equip vault) | `["equip", mint, slot]` | `mint`, `slot`, `item` (default = empty), `template_id`, `config: EquipConfig`, `equipped_at`, `runs: u64`, `collected_token: u64`, `pool_owed: u64`, `pool_settled: u64`, `bump`, reserved |
+| `PoolCuts` (owns the pool-side holding) | `["pool-cuts", mint]` | none (system-owned signer) |
+| `RaidLedger` | `["raid-ledger", mint]` | 2.9 |
+| item registry | `["bordrless-hook-accounts", mint, item]` | upstream `HookAccountList` (`lib.rs:533`) |
 
-`runs` and `collected` are what the armory and the site read for an item's level and royalties (02,
-06); they are counters, never promises.
+`runs`, `collected_token` and `pool_owed` are what 02 and 06 read for an item's record; counters,
+never promises.
 
 ## 5. Events
 
-`ItemRan { item, mint, slot, template_id, cut, cut_mint, discount_bps, marked: bool }` on each
-callback that does something; `EquipSettled { item, mint, cut_mint, royalty, destination, amount,
-bounty }`; `RaidStamped { mint, owner, points, tickets, season }`; `ShieldTaken { mint, owner, cut }`.
-Emitted by self-CPI (`emit_cpi!`), as upstream.
+Callbacks run inside other programs' CPIs, so they log with `emit!` (program log, no extra call
+level); top-level instructions use `emit_cpi!` as upstream.
+
+| Event | Where | Fields |
+| --- | --- | --- |
+| `RaidMarked` | Raid token half, on stamping | `mint, rival, trader, volume, points, loot_ticket` (06's name and fields) |
+| `ShieldTaken` | Shield sell | `mint, owner, cut` |
+| `ItemCut` | any pool or token cut | `mint, slot, item, side, amount` |
+| `EquipSettled` | `settle_equip` | `mint, slot, item, royalty_token, royalty_quote, destination, amount_token, amount_quote, bounty` |
+| `EquipInitialized`, `EquipClosed` | `init_equip`, `close_equip` | `mint, slot, item, config` |
 
 ## 6. Errors
 
-`BadHookSigner`, `WrongItem`, `NotEquipped`, `WrongEquipState`, `BadParams`, `AboveCeiling`,
-`NotForgeable`, `WallHolds`, `WalletTooLarge`, `VaultNotSettled`, `UnknownTemplate`,
-`MarkMismatch` (never returned to users; a mismatched Mark is ignored, not an error), `Overflow`.
+`BadHookSigner`, `WrongItem`, `NotEquipped`, `UnknownTemplate`, `BadParams`, `BadTargets`,
+`NotForgeable`, `WallHolds`, `WalletTooLarge`, `VaultNotSettled`, `NotWarSigner`, `NotEnoughPoints`,
+`NoTicket`, `QuestAlreadyMarked`, `Overflow`.
 
 ## 7. Interfaces
 
-### Needed from 01 (token slots)
+### From 01 (token slots)
 
-- **I-01.1** `TokenHookArgs` gains `slot: u8` and the slot's `data_offset`, `data_len` (or the item
-  reads them from the `Mint` it is passed; either works, 01 chooses).
-- **I-01.2** The token program passes the full 64 bytes of each side and rejects an answer that
-  changes bytes outside the item's range.
-- **I-01.3** Per-slot extras resolved from `["bordrless-hook-accounts", mint, [slot]]` under the
-  slot's program.
-- **I-01.4** A `Pool`-kind slot also receives token callbacks (Raid and Shield token halves) and has
-  a data range; its token answers carry hook data only, no deltas.
-- **I-01.5** The `Mint` slot table is readable at a stable offset so an item can find
-  `slots[i].item` and `slots[i].program` without the token crate's full deserializer (Treaty reads a
-  foreign `Mint`).
-- **I-01.6** `touch` calls the slot's item with `TokenOp::Touch` (new) and accepts hook data for the
-  touched holding only; 05's `claim_bounty` and `roll` use it to clear Raid points and tickets.
-- **I-01.7** Delta recipients may be holdings owned by `EquipVaultOwner` PDAs (credited without a
-  hook call, upstream 1.6).
+- **I-01.1** A `Pool`-kind slot also receives `before_transfer` and `on_touch` with a data range;
+  its token answers carry data only, no deltas.
+- **I-01.2** `TokenSlotArgs.authority` for a touch is the caller and the token program verifies it
+  signed, so the Raid item can trust `authority == WAR_SIGNER`.
+- **I-01.3** The `Mint` slot table at a stable offset (Shield and Treaty read a slot's offset, epoch
+  and item from a `Mint` they are passed).
 
-### Needed from 02 (armory)
+### From 02 (armory)
 
-- `Item { template_id: u16, params: Vec<u8>, royalty_bps: u16, owner, author, item_mint, ... }`.
-- `Template { template_id, program == <ITEMS_ID>, ceilings: Vec<u8>, code_hash, ... }`.
-- `ARMORY_SIGNER` seeds; the armory calls `init_equip` on equip and `close_equip` on unequip, and
-  checks `Manifest` against slot bounds.
-- `FORGE_GAIN_BPS`, `PARAMS_MAX_LEN` and every template ceiling named in section 3 live in
-  `Template.ceilings` or 00's parameter table.
+- `Item.params: [u32; PARAM_FIELDS]`, `Template.field_min` / `field_max`, `forge_enabled`; the
+  equip proposal and launch equip carry `EquipConfig` and pass it to `init_equip`.
 
-### Needed from 03 (DEX and launch)
+### From 03 (DEX and launch)
 
-- **I-03.1** `RouteContext { hops: Vec<RouteHop { pool, input_mint, output_mint }>, index: u8 }`
-  passed to the launchpad in `PoolHookArgs.hook_data` and forwarded to pool items.
-- **I-03.2** Hop `i`'s input amount equals hop `i-1`'s delivered output; no outside top-up.
-- **I-03.3** Whether `Pool.swap_count` changes before or after output delivery, so the Mark check
-  (2.9) compares the right value.
-- **I-03.4** The launchpad forwards to pool items with `LAUNCH_ITEMS_SIGNER`, passes `slot`, the
-  base `Mint` account, and merges `ItemPoolReturn` (discounts capped at the creator fee; total
-  deltas within `MAX_DELTAS`).
-- **I-03.5** `Observations` at `["obs", pool]` and a `twap(from, to)` helper (crate function) that
-  returns none when the ring does not cover the range.
+- `PoolHookArgs.route: RouteContext` (R5) with `route_input_mint`, `first_pool`, `hop_index`.
+- `ItemPoolContext { slot, item, quote_after_launch, ... }` and the merge of `ItemPoolAnswer`
+  (`discount_bps`, `cut`, `burn`) into one `PoolCuts` delta per side (R2).
+- `["obs", pool]` and `twap(from, to)` returning none when the ring does not cover the range.
 
-### Needed from 05 (war)
+### From 05 (war)
 
-- `WarState` fields: `season: u16`, `war_active: bool`, `under_siege_until: i64`,
-  `marks: [Mark; MAX_SLOTS]`, `raid_inflow` accumulators per rival mint with a window (written by
-  Raid via an instruction-free field update, since items write `WarState` as a writable extra:
-  `WarState` must be writable by `<ITEMS_ID>` for the `marks` and `raid_inflow` fields only, or be
-  owned by `<ITEMS_ID>`; see conflict C1).
-- War chest destination holdings for Shield, Spy, Raid toll and Treaty/Tribute inflow, with a
-  treaty inflow tag and a crank that calls `kit.share`.
+- `WarConfig.current_season`; `WarState.under_siege_until` and `WarState.siege_by_chest`.
+- `["treaty-inbox", mint]` under `<WAR_ID>`, whose bridged-SOL holding 05 streams to holders.
+- The Raid range layout (3.1), `WarTouch` payloads (2.10) and War orders fields (3.9).
 
 ## 8. Conflicts and assumptions for the integrator
 
-- **C1 `WarState` ownership.** Only the owning program can write an account. Items must write
-  `marks` and `raid_inflow` during swaps. Options: `WarState` split in two (`WarMarks` at
-  `["war-marks", mint]` owned by `<ITEMS_ID>`, read by 05), or items CPI into `hookwars_war` (one
-  more call level on a buy: DEX 1, launchpad 2, item 3, war 4; inside 5 but to measure).
-  Recommendation: `WarMarks` owned by items.
-- **C2 Pool-side cutting slots.** With the launchpad's two deltas on a buy, only one pool item can
-  cut per buy; `MAX_CUTTING_SLOTS` must be stated per side, not as one number.
-- **C3 Kit tokens and war chests.** With kit holder rewards on, a transfer of that token to a
-  program-owned owner is refused (`hooks-v2.md` 4.5, `DestinationNotAllowed`). A siege buying a
-  kit token with rewards on into a war chest PDA fails. 05 must restrict sieges to targets without
-  that kit rule, or the kit rule must exempt war chests.
-- **C4 Hook data ranges.** Raid 13 + Shield 10 + Half-Life 9 = 32 bytes; the kit (Locked slot)
-  already uses 32 (`hooks-v2.md` 4.4). A kit token with all three items fits 64 exactly; any more
-  does not.
-- **C5 New parameters** not in 00's table: `FORGE_GAIN_BPS`, `POINT_UNIT_LAMPORTS`,
-  `PARAMS_MAX_LEN`, and every per-template ceiling in section 3.
-- **C6 `TokenOp::Touch`** is a new upstream enum value (01).
+- **C1** 03 section 5.2 still has `royalty` and `mark` in its answer and pays item cuts to the war
+  chest; R2 and R3 replace both: the answer here is `{ discount_bps, cut, burn }`, cuts go to
+  `PoolCuts`, royalties are paid by `settle_equip`, marks are written into `RaidLedger`.
+- **C2** Targets are per equip (`EquipConfig`), not params: 02's proposal and launch equip must carry
+  them, and `MAX_ITEM_TARGETS` joins 00's parameters.
+- **C3** Forge rules: this file uses `TowardCeiling` / `TowardFloor` with `FORGE_GAIN_BPS` (R7); 02's
+  table has `Max`, `Min`, `SumCapped`, `MaxPlusStep`, `Keep`. 02 should replace `MaxPlusStep` and
+  `SumCapped` with the two rules here.
+- **C4** 05 must store the attacking chest (`siege_by_chest`) next to `under_siege_until` for Wall,
+  and add the `["treaty-inbox", mint]` seed to 00 4.3.
+- **C5** 05 decides whether tickets expire with the season (Raid keeps them); `Hold` needs a
+  Half-Life item on the token.
+- **C6** New parameters for 00 section 6: `MAX_ITEM_TARGETS`, `RAID_TABLE_LEN` and
+  `RAID_WINDOW_SECS` (with 05), `POINT_UNIT_LAMPORTS`, `SIEGE_UNIT_LAMPORTS`, and every per-template
+  floor and ceiling in section 3. `PARAM_FIELDS` is at least 11 (War orders).
+- **C7** Events from callbacks are program logs (`emit!`); 06's indexer must decode logs as well as
+  self-CPI events.

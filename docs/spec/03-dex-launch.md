@@ -1,8 +1,7 @@
 # Hookwars spec 03: DEX, launchpad and companion changes
 
-Status: specification, 2026-10-08. Nothing here is built. Follows `00-overview.md`; where this file
-disagrees with it, this file is wrong, except for the conflicts listed in section 9, which the spec
-lead must resolve in 00.
+Status: specification, 2026-10-08, revised after the integration rulings (00 section 9). Nothing
+here is built. Follows `00-overview.md`; where this file disagrees with it, this file is wrong.
 
 Upstream references are to Bordrless at `43688f3`. "hooks-v2" means `docs/hooks-v2.md`.
 
@@ -10,43 +9,45 @@ Upstream references are to Bordrless at `43688f3`. "hooks-v2" means `docs/hooks-
 
 | Program | Change |
 | --- | --- |
-| `bordrless_swap` | an **observation ring** per pool; a **multi-hop** `swap_route`; a DEX-filled **route context** in every pool callback |
-| `bordrless_launch` | `create_launch` creates the mint with a **slot table**; `LaunchConfig` carries slots instead of `custom_hook`; the launch pool hook **forwards to `Pool`-kind items**; war marks are forwarded to `hookwars_war` |
+| `bordrless_swap` | an **observation ring** per pool (price, quote volume, swap count); a **multi-hop** `swap_route`; a DEX-filled **route** in every pool callback (R5) |
+| `bordrless_launch` | a two-step launch: `prepare_launch` creates the mint with its **slot table** and equips launch items through the armory before any supply exists (R12); `LaunchConfig` carries slots instead of `custom_hook`; the launch pool hook **forwards to `Pool`-kind items** and merges their cuts into one delta (R2) |
 | `bordrless_companion` | `war_bps` in the split, paid to the token's war chest |
 
-Everything else in these programs is upstream behaviour and keeps upstream's tests.
+The DEX's code for protocol fees is unchanged; its `fee_collector` is pointed at war's prize vault by
+configuration (R14, section 6.4). Everything else in these programs is upstream behaviour and keeps
+upstream's tests.
 
-## 2. Two rules this part adds to the contract
+## 2. Two rules this part relies on
 
-1. **Items are leaves.** An item program (`hookwars_items`) never makes a CPI of its own on any
-   callback. It reads accounts and answers. Everything an item wants done (a cut, a burn, a war
-   mark) is applied by the program that called it. This is what keeps every path inside Solana's
-   invoke height of 5 (section 7) and what stops an item from writing another token's war state.
-2. **The route is the DEX's word, never the trader's.** Pool hooks read the route from a field the
-   DEX fills (section 3.3), never from `hook_data`, which the trader controls.
+1. **Items are leaves** (R3). An item program (`hookwars_items`) makes no CPI on any callback. It
+   reads accounts, writes accounts it owns (`EquipState`, `RaidLedger`) and answers. Cuts and burns
+   are applied by the DEX from the launchpad's merged answer. This keeps every swap path inside
+   Solana's invoke height of 5 (section 8).
+2. **The route is the DEX's word, never the trader's** (R5). Pool hooks read the route from a field
+   the DEX fills (section 3.2), never from `hook_data`, which the trader controls.
 
 ## 3. DEX (`bordrless_swap`)
 
 ### 3.1 Observations
 
-A new account per pool, `Observations` at `["obs", pool]` under the DEX, created by `create_pool`
-in the same instruction as the pool (payer: the pool's creator), so every pool of the Hookwars
-deployment has one from its first swap. There is no migration path because there are no pools from
-before: Hookwars is a new deployment with new program ids (00 section 3).
+A new account per pool, `Observations` at `["obs", pool]` under the DEX, created by `create_pool` in
+the same instruction as the pool (payer: the pool's creator). Every pool of the Hookwars deployment
+therefore has one from its first swap; there are no pools from before (new program ids, 00
+section 3), so there is no migration.
 
 ```rust
 pub struct ObservationHeader {
     pub version: u8,
     pub bump: u8,
     pub pool: Pubkey,
-    /// Price after the last write, quote per base as Q64.64, virtual reserves included
-    /// (the same price `Swapped` implies: (quote_reserve + virtual_quote) / (base_reserve + virtual_base)).
+    /// Price at the end of the last write, quote per base as Q64.64, virtual reserves included:
+    /// (quote_reserve + virtual_quote) / (base_reserve + virtual_base).
     pub last_price_q64: u128,
     /// Time of the last accumulation.
     pub last_ts: i64,
-    /// Next slot of the ring to write.
+    /// Next ring entry to write.
     pub index: u16,
-    /// How many entries are filled (grows to OBS_RING_LEN, then the ring wraps).
+    /// Entries filled (grows to OBS_RING_LEN, then the ring wraps).
     pub filled: u16,
 }
 
@@ -54,54 +55,62 @@ pub struct Observation {
     pub ts: i64,
     /// Sum over time of last_price_q64 * seconds, wrapping (readers subtract, as Uniswap v2 does).
     pub price_cumulative: u128,
-    /// The pool's `quote_volume` (upstream `state.rs` Pool, u128) at `ts`.
+    /// `Pool.quote_volume` at `ts` (upstream `state.rs`, u128, both directions).
     pub quote_volume: u128,
+    /// `Pool.swap_count` at `ts` (upstream `state.rs`, u64).
+    pub swap_count: u64,
 }
 ```
 
-Size: header plus `OBS_RING_LEN` entries of 40 bytes each; `OBS_RING_LEN` is to measure (rent
-against the longest window a relation item may read).
+An entry is 48 bytes; the account is the header plus `OBS_RING_LEN` entries. `OBS_RING_LEN` is to
+measure (rent against the longest window a relation item or a `Performance` rule may read).
 
-**When it is written.** At the **start** of every instruction that can move the price
-(`swap`, each hop of `swap_route`, `add_liquidity`, `remove_liquidity`, `finalize_curve`), before
-any reserve changes:
+**When it is written.** At the **start** of every instruction that can move the price (`swap`, each
+hop of `swap_route`, `add_liquidity`, `remove_liquidity`, `finalize_curve`), before any reserve
+changes:
 
-1. `dt = now - last_ts`. If `dt > 0`: `cumulative += last_price_q64 * dt` (wrapping), and if the
-   newest entry's `ts` is older than `now`, write a new entry `{ now, cumulative, pool.quote_volume }`
+1. `dt = now - last_ts`. If `dt > 0`, accumulate `last_price_q64 * dt` (wrapping) and, when the
+   newest entry is older than `now`, write `{ now, cumulative, pool.quote_volume, pool.swap_count }`
    at `index`, advance `index` modulo `OBS_RING_LEN`, raise `filled` up to `OBS_RING_LEN`.
 2. At the **end** of the same instruction, `last_price_q64` is set to the new price and
    `last_ts = now`.
 
-So the price that accrues for any second is the price at which the previous second ended. A swap
-can never change the price it is itself accumulated at. At most one entry is written per second.
+The price that accrues for any second is the price at which the previous second ended, so a swap
+never changes the price it is itself accumulated at. At most one entry is written per second.
 
-**Reading a TWAP** (a pure function in `bordrless_core`, used by items, `hookwars_war` and the
-SDK, pinned to each other by test vectors as upstream pins its fee math):
+**Reads** (pure functions in `bordrless_core`, mirrored in the SDK and pinned by test vectors as
+upstream pins its fee math; used by items, the armory's `Performance` rule (02 section 6.7) and
+`hookwars_war`):
 
 ```
-twap(obs, now, window):
-  require window >= MIN_TWAP_SECS                     else TwapWindowTooShort
-  cum_now = cumulative of the newest entry + last_price_q64 * (now - last_ts)
-  e = newest entry with e.ts <= now - window          else ObservationTooOld (history too short)
-  price = (cum_now - e.price_cumulative) / (now - e.ts)
-  volume = pool.quote_volume - e.quote_volume
+window_read(obs, pool, now, window):
+  require window >= MIN_TWAP_SECS                       else TwapWindowTooShort
+  cum_now = newest.price_cumulative + last_price_q64 * (now - last_ts)
+  e = newest entry with e.ts <= now - window            else ObservationTooOld
+  twap        = (cum_now - e.price_cumulative) / (now - e.ts)
+  quote_volume = pool.quote_volume - e.quote_volume
+  swaps        = pool.swap_count - e.swap_count
 ```
 
-A reader that cannot get a TWAP (a new pool, too short a history) must treat the read as "no
-signal": every template in 04 is defined so that "no signal" means "no effect". A missing history
-never blocks a trade.
+The current `pool.quote_volume` and `pool.swap_count` are read from the `Pool` account, so a reader
+passes both accounts. Neither read needs the DEX's signer (02 I-03-1). A reader that cannot read (a
+new pool, too short a history) treats it as **no signal**: every template (04) and the
+`Performance` rule (02) define no signal as no effect. A short history never blocks a trade.
 
 **Manipulation.** A price held for one slot weighs one slot's time in a window of at least
-`MIN_TWAP_SECS`. Moving a TWAP by `p` over a window `W` means holding the pool at `p * W / t`
-above its price for `t` seconds, paying the LP fee (on a launch pool, Bordrless's) and the curve's
-slippage both ways, and being arbitraged the whole time. A validator that leads several
-consecutive slots can hold a price without arbitrage for those slots only, so `MIN_TWAP_SECS` must
-be many leader rotations long. The value is an owner decision with this cost in front of it.
+`MIN_TWAP_SECS`. Moving a TWAP by `p` over a window `W` means holding the pool `p * W / t` away from
+its price for `t` seconds, paying the LP fee (on a launch pool, Bordrless's) and the curve's
+slippage both ways while being arbitraged. A leader of several consecutive slots can hold a price
+without arbitrage for those slots only, so `MIN_TWAP_SECS` must span many leader rotations (owner
+decision with this cost in front of it). Volume and swap-count windows can be inflated by wash
+trading at the trader's own fees; a `Performance` rule reading them is a revert to the launch item,
+never a payment, so inflating them buys nothing but the revert's timing.
 
 `Observations` is passed **writable** to every price-moving instruction (one more account on each
-swap; measured in 07). Relation items take it **read-only** for other pools.
+swap; measured in 07). Relation items, the armory and war read other pools' observations
+**read-only**.
 
-### 3.2 `PoolHookArgs.route`
+### 3.2 `PoolHookArgs.route` (R5)
 
 Upstream `PoolHookArgs` (`crates/bordrless-hook/src/lib.rs:206`) gains one field, filled only by the
 DEX:
@@ -112,374 +121,410 @@ pub struct RouteContext {
     pub route_input_mint: Pubkey,
     /// The mint the trader ends with (the last hop's output).
     pub route_output_mint: Pubkey,
-    /// The pool of the first hop (so an item can check it is a launch pool of route_input_mint).
+    /// The pool of the first hop (an item checks it is the launch pool of a rival).
     pub first_pool: Pubkey,
     /// What the first hop took from the trader, in route_input_mint units.
     pub route_amount_in: u64,
     /// This hop, from 0.
     pub hop_index: u8,
-    /// How many hops.
+    /// How many hops; 0 on liquidity and initialize callbacks (not a swap).
     pub hop_count: u8,
 }
 ```
 
-- A plain `swap` fills it as a **one-hop route**: `route_input_mint = in_mint`,
-  `route_output_mint = out_mint`, `first_pool = pool`, `hop_index 0`, `hop_count 1`. It is never
-  absent, so no item has a case where a route is "unknown".
+- A plain `swap` fills a **one-hop route**: `route_input_mint = in_mint`,
+  `route_output_mint = out_mint`, `first_pool = pool`, `hop_index 0`, `hop_count 1`. The route is
+  never absent, so no item has an "unknown route" case.
 - `hook_data` stays the trader's opaque bytes (`MAX_HOOK_DATA`, upstream `lib.rs:41`), forwarded as
-  today. The launchpad and every Hookwars template ignore it.
-- Why not in `hook_data` (as the design note suggested): any trader can put any bytes there in a
-  plain `swap`, so a route read from it could be forged ("I came from X" with no X sold). A field
-  the DEX fills cannot.
+  today; the launchpad and every Hookwars template ignore it, because any trader can write any bytes
+  there and a route read from it could be forged.
 
-Liquidity callbacks and initialize carry a one-hop route of their own pool with `hop_count 0`
-(meaning "not a swap").
-
-`PoolHookArgs` is a shared type of `crates/bordrless-hook`; the change is not wire-compatible with
-upstream, which is fine for a new deployment. Its serialized size grows by 106 bytes; the CPI
-instruction data stays far under limits.
+The change to the shared crate type is not wire-compatible with upstream, which is fine for a new
+deployment. It adds 106 bytes to each pool callback's instruction data.
 
 ### 3.3 `swap_route`
 
 ```rust
 pub struct SwapRouteArgs {
-    /// The exact input of the first hop.
+    /// Exact input of the first hop.
     pub amount_in: u64,
     /// The least the trader's final holding must gain.
     pub min_amount_out: u64,
-    /// Per hop, in order.
-    pub hops: Vec<HopArgs>,          // 1 ..= MAX_ROUTE_HOPS, else RouteTooLong / EmptyRoute
+    /// Per hop, in order; 1 ..= MAX_ROUTE_HOPS (EmptyRoute, RouteTooLong).
+    pub hops: Vec<HopArgs>,
 }
 
 pub struct HopArgs {
     pub direction: u8,               // as SwapArgs
-    pub accounts: u8,                // how many remaining accounts this hop takes
+    pub accounts: u8,                // remaining accounts this hop takes
     pub in_hook_accounts: u8,
     pub out_hook_accounts: u8,
 }
 ```
 
-Accounts: `trader` (signer), `config`, `token_program`, `token_event_authority`, then the
-remaining accounts as consecutive hop groups. A hop group is exactly what `swap` takes for one pool
-(pool, `Observations`, base mint, quote mint, base vault, quote vault, trader input holding, trader
-output holding, hook program or this program's id, hook signer or this program's id), followed by
-that hop's token-hook slices and pool-hook extras, `accounts` in all.
+Accounts: `trader` (signer), `config`, `token_program`, `token_event_authority`, event authority and
+program, then the remaining accounts as consecutive hop groups. A hop group is what `swap` takes for
+one pool (pool, `Observations`, base mint, quote mint, base vault, quote vault, trader input
+holding, trader output holding, hook program or this program's id, hook signer or this program's
+id) followed by that hop's token-hook slices (01 section 2.2) and pool-hook extras, `accounts` in
+all.
 
 Rules:
 
-1. Hop `i`'s output mint must equal hop `i+1`'s input mint, and hop `i`'s trader output holding must
-   be hop `i+1`'s trader input holding (`RouteBroken`).
-2. No pool appears twice (`RoutePoolRepeated`): a route cannot be used to swap through one pool
-   back and forth inside one instruction.
-3. Hop `i+1`'s `amount_in` is what hop `i` **delivered**, measured on the holding (upstream's rule
-   that amounts are measured, never assumed, `swap.rs:27`). A token hook's cut on the delivery is
-   therefore never counted twice.
+1. Hop `i`'s output mint equals hop `i+1`'s input mint, and hop `i`'s trader output holding is hop
+   `i+1`'s trader input holding (`RouteBroken`).
+2. No pool appears twice (`RoutePoolRepeated`).
+3. Hop `i+1`'s `amount_in` is what hop `i` **delivered**, measured on the holding (upstream rule,
+   `swap.rs:27`), so a token hook's cut on a delivery is never counted twice.
 4. Each hop runs the whole of upstream `process_swap` (`swap.rs:107`), steps 1 to 7, with the route
-   context of section 3.2. The hops are a loop **inside one instruction**, not CPIs, so a route
-   is no deeper than a swap (section 7).
-5. Only the last hop checks `min_amount_out` (`Slippage`); intermediate hops use 0, since the
-   trader's bound is on what they end with.
-6. Each hop emits its own `Swapped` (upstream `events.rs`, unchanged fields) and the instruction
-   emits one `RouteSwapped { trader, route_input_mint, route_output_mint, amount_in,
-   amount_out, hops: Vec<Pubkey /* pools */>, slot, ts }`.
+   of section 3.2. Hops are a loop **inside one instruction**, not CPIs: a route is no deeper than a
+   swap (section 8).
+5. Only the last hop checks `min_amount_out` (`Slippage`); intermediate hops use 0.
+6. Each hop emits its own `Swapped` (with its `route`, section 9) and the instruction emits
+   `RouteSwapped` once.
 
-`MAX_ROUTE_HOPS` is to measure; the account count per hop (a launch pool hop with a kit slice and
-one Pool item is about 20 accounts) makes two hops the expected ceiling with the protocol lookup
-table. The raid template (04) needs exactly two: rival to bridged SOL, bridged SOL to us.
+`MAX_ROUTE_HOPS` is to measure: a launch-pool hop with a kit slice and one Pool item is on the order
+of twenty accounts, so two hops with the protocol lookup table is the expected ceiling. The Raid
+template needs exactly two: rival to bridged SOL, bridged SOL to us.
 
-New errors: `EmptyRoute`, `RouteTooLong`, `RouteBroken`, `RoutePoolRepeated`, `TwapWindowTooShort`,
-`ObservationTooOld`, `WrongObservations`.
+New DEX errors: `EmptyRoute`, `RouteTooLong`, `RouteBroken`, `RoutePoolRepeated`,
+`TwapWindowTooShort`, `ObservationTooOld`, `WrongObservations`.
 
-## 4. Launchpad: slot table at launch (`bordrless_launch`)
+## 4. Launchpad: the slot table and launch items (`bordrless_launch`)
 
 ### 4.1 What replaces the single hook
 
-Upstream decides the mint's one hook in `plan()` (`launch.rs:500-540`): the kit when a kit module
-is on, else the `LaunchConfig`'s `custom_hook` (hooks-v2 5.8), else none. Hookwars replaces that
-with a **slot table** written into the mint at creation (layout owned by 01).
+Upstream picks the mint's one hook in `plan()` (`launch.rs:500-540`): the kit when a kit module is
+on, else the `LaunchConfig`'s `custom_hook` (hooks-v2 5.8), else none. Hookwars replaces that with a
+**slot table** (layout owned by 01 section 1, created by 01's `create_mint` with `SlotInit`).
 
 ```rust
 pub struct SlotSpec {
     pub kind: u8,                 // 00 section 4.1
-    pub bounds: SlotBounds,       // 01 defines the struct; it is fixed for ever
     pub equip_rule: u8,           // 00 section 4.2
-    pub notice_secs: u32,         // MIN_NOTICE_SECS ..= MAX_NOTICE_SECS unless equip_rule is Locked
+    pub bounds: SlotBounds,       // 01; fixed for ever
+    pub notice_secs: u32,         // MIN_NOTICE_SECS ..= MAX_NOTICE_SECS for Vote and Performance
     pub data_len: u8,             // bytes of hook data this slot owns
-    pub initial_item: Option<Pubkey>, // an armory Item, or None for an empty slot
-    pub rule_params: Vec<u8>,     // the performance condition, decoded by the armory (02)
+    pub launch_item: Option<Pubkey>, // an armory Item equipped before the supply exists (R12)
+    pub rule_data: Vec<u8>,       // Performance condition, decoded by the armory (02 section 6.7)
 }
 ```
 
-`CreateLaunchArgs` (`launch.rs:29`) gains `slots: Vec<SlotSpec>`. `LaunchConfig`
-(`state.rs:169`) replaces `custom_hook` and `custom_hook_flags` (`state.rs:181-183`) with
-`slots: Vec<SlotSpec>`; with a config, the inline slots must equal the config's (`ConfigMismatch`,
-upstream's rule for rules and creator fee, hooks-v2 5.7). Listed configs and the author share are
-unchanged.
+`LaunchConfig` (`state.rs:169`) replaces `custom_hook` and `custom_hook_flags` (`state.rs:181-183`)
+with `slots: Vec<SlotSpec>`; a launch from a config must pass the config's slots unchanged
+(`ConfigMismatch`, upstream's rule for rules and creator fee, hooks-v2 5.7). Listed configs and the
+author share are unchanged. Upstream's custom-hook path (`check_custom_hook_accounts`,
+`launch.rs:415`, and its errors) is removed; the safety rule it carried (who may upgrade a hook,
+hooks-v2 section 7) moves to template registration (02).
 
-### 4.2 Checks at launch (in `plan`, before anything is created)
+**The kit is slot 0, `Locked`** (R8). When the rules install a kit module, the launchpad writes slot
+0 as `{ kind: Locked, equip_rule: Locked, locked_program: KIT_ID, data_len: 32 }`. The kit keeps
+bytes 0..32 (`programs/bordrless_kit/src/state.rs:280`); items share the other 32. The kit's own
+flags, registry and `kit-caller` init are unchanged except for R9 (its `init` accepts a mint whose
+kit is in a Locked slot, 02 and 01).
+
+**Slot authority.** `slot_authority = PDA(["slots", mint], <ARMORY_ID>)` whenever any slot is not
+`Locked` (01 section 1.4); upstream's `hook_authority` stays `None`.
+
+### 4.2 Checks (in `prepare_launch`, repeated by `create_launch` against the mint)
 
 | Check | Error |
 | --- | --- |
 | `slots.len() <= MAX_SLOTS` | `TooManySlots` |
 | kinds known; at most one `Locked` slot, and it is slot 0 | `InvalidSlotKind` |
-| equip rule known; `Locked` kind has the `Locked` rule | `InvalidEquipRule` |
-| notice inside `MIN_NOTICE_SECS ..= MAX_NOTICE_SECS` for `Vote` and `Performance` | `NoticeOutOfBounds` |
-| sum of `data_len` `<= 64`; ranges are laid out in slot order from byte 0 | `HookDataOverflow` |
-| at most `MAX_CUTTING_SLOTS` slots whose bounds allow cuts | `TooManyCuttingSlots` |
-| a `Pool` slot's bounds: per side, `max_cut_bps <= MAX_POOL_ITEM_CUT_BPS` (section 9, C2) | `SlotBoundsTooHigh` |
-| each `initial_item` is an armory `Item` whose template fits the slot's kind and whose manifest is inside the slot's bounds (read through the armory client crate; 02 owns the check function) | `ItemDoesNotFit` |
-| `Performance` slots have a non-empty `rule_params` the armory accepts | `InvalidRule` |
+| equip rule known; a `Locked` kind has the `Locked` rule | `InvalidEquipRule` |
+| notice within `MIN_NOTICE_SECS ..= MAX_NOTICE_SECS` for `Vote` and `Performance` | `NoticeOutOfBounds` |
+| sum of `data_len <= 64` (01 assigns offsets in slot order) | `HookDataOverflow` |
+| token-side cutting slots `<= MAX_CUTTING_SLOTS` (R1) | `TooManyCuttingSlots` |
+| a `Pool` slot's `max_cut_bps` (applied per side, cut and burn together) `<= MAX_POOL_ITEM_CUT_BPS`, and the sum over `Pool` slots `<= MAX_POOL_ITEM_CUT_BPS` | `SlotBoundsTooHigh` |
+| a `Performance` slot has `rule_data` the armory accepts and a `launch_item` | `InvalidRule` |
+| each `launch_item` fits its slot (the armory's check, run by the armory in 4.3 step 3) | the armory's errors (02) |
 
-**The kit becomes slot 0, `Locked`.** When the rules install a kit module, the launchpad writes slot
-0 as `{ kind: Locked, equip_rule: Locked, program: KIT_ID, data_len: 32 }`. The kit uses bytes
-0..32 of the hook data today (`programs/bordrless_kit/src/state.rs:280`), so its range is 0..32 and
-needs no change in the kit. The kit's own flags, registry and `kit-caller` init are unchanged
-(hooks-v2 4.1). A kit slot is never an armory item and earns no royalty.
+### 4.3 Two steps: `prepare_launch`, then `create_launch` (R12)
 
-**Slot authority.** The mint is created with its slot authority set to the armory's
-`SlotAuthority` PDA, `["slots", mint]` under `<ARMORY_ID>` (00 section 4.3, D-5). The upstream
-`hook_authority` stays `None`: nobody, including the creator, can change the slot table's shape.
+Upstream does everything in one `create_launch` (`launch.rs:1055-1079`: plan, launch fee, mint,
+launch holdings, supply, kit, curve pool, pool registry, record, event), and its own launch with a
+custom hook already uses about 1,200 of the 1,232 bytes (half_life README, measured). Equipping
+items before the supply (R12) adds the armory, the items program and each item's accounts, which
+cannot fit in that transaction. Hookwars splits it, the way upstream's Half-Life flow already splits
+`prepare`, launch and `light` into three transactions (`programs/half_life/README.md`, "Launching
+with it").
 
-### 4.3 Order inside `create_launch`
+**Transaction 1, `prepare_launch(args: PrepareLaunchArgs { name, symbol, uri, slots })`**, signed by
+the creator and the new mint keypair:
 
-Upstream order (`launch.rs:1055-1079`): plan, launch fee, mint, two launch holdings, supply, kit,
-curve pool, pool registry, launch record, event. Hookwars keeps it and changes three steps:
+1. Check section 4.2.
+2. CPI token `create_mint` (01 section 4.1) with the slot table, `slot_authority`, and
+   `mint_authority = PDA(["launch-mint", mint], <LAUNCH_ID>)` (a PDA with no other power, so only
+   `create_launch` can ever mint the supply). Metadata authority as upstream.
+3. For each slot with a `launch_item`, CPI `hookwars_armory::equip_launch(slot, item)` (02 must
+   add it; I-02 below), signed by `PDA(["armory-caller", mint], <LAUNCH_ID>)`. The armory checks the
+   item fits the slot, records it as the slot's **launch item** (the target of a `Performance`
+   revert), CPIs token `set_slot_item` signed as `SlotAuthority` (01 section 4.2), and CPIs
+   `hookwars_items::init_equip` (04 section 2.6), which creates `EquipState`, the item registry and
+   the equip vault holdings.
+4. Write `PreparedLaunch` at `["prepared", mint]` under `<LAUNCH_ID>`: `creator`, `slots_hash`,
+   `prepared_at`. Event `LaunchPrepared { mint, creator, slots }`.
 
-- **create_mint** passes the slot table to the token program (01).
-- **mint_supply**: no template subscribes to mints (04 rule; 01 refuses a `BEFORE_MINT` or
-  `AFTER_MINT` flag on any non-`Locked` slot), so the supply `mint_to` calls no item.
-- **write_pool_registry** (`launch.rs:926`) writes the launch pool's registry with upstream's four
-  extras (`registry_list`, `launch.rs:187`: launch, quote holding, holder vault, kit config) plus,
-  for Hookwars, at fixed indices 9 to 11:
+**Transaction 2, `create_launch(args: CreateLaunchArgs)`**, signed by the creator and the mint
+keypair: upstream's steps with three changes.
+
+- The mint already exists: `create_mint` is skipped; the mint's slot table must hash to
+  `PreparedLaunch.slots_hash` and `PreparedLaunch.creator` must be the signer (`NotPrepared`,
+  `WrongCreator`). Only the mint keypair can call it (it signs), so nobody can launch someone else's
+  prepared mint.
+- **Supply:** `mint_to` signed by `["launch-mint", mint]`, then the mint authority is revoked (as
+  upstream revokes it at the end, hooks-v2 5.3). Items never subscribe to mints on non-`Locked`
+  slots (R12, 01), so `mint_to` calls only a `Locked` slot that subscribes (upstream kit: it does
+  not).
+- **Pool registry** (`write_pool_registry`, `launch.rs:926`): upstream's four extras
+  (`registry_list`, `launch.rs:187`: launch, quote holding, holder vault, kit config) at indices 5 to
+  8, then Hookwars' fixed extras at 9 to 12, then each equipped `Pool` slot's item extras (section
+  5.5).
 
 | Index | Account | Why |
 | --- | --- | --- |
-| 9 | `WarChest`'s bridged-SOL holding, `["holding", BRIDGED_SOL, WarChest]` | the one destination of every Pool item's cut (section 5.3) |
-| 10 | `WarState` `["war", mint]` under `<WAR_ID>` (writable) | where war marks land (section 5.4) |
-| 11 | the launch pool's own `Observations` (read-only) | items read their own pool's TWAP |
+| 9 | the `PoolCuts` holding of the quote: `holding(BRIDGED_SOL, PDA(["pool-cuts", mint], <ITEMS_ID>))` (writable) | the single delta of all Pool-item cuts on a side (R2) |
+| 10 | the launch pool's `Observations` (read-only) | items read their own pool's TWAP |
+| 11 | the launchpad's event authority | `emit_cpi!` of `PoolItemCuts` (section 9) |
+| 12 | the launchpad program | likewise |
 
-then, per equipped `Pool`-kind slot, that item's program and its registry extras (04 defines each
-template's list). Because items change, the pool registry must change with them: the launchpad
-gains `refresh_pool_registry(mint)`, permissionless, which rewrites the pool registry from the
-mint's current slot table and the items' registries. The armory calls it in the same transaction as
-every equip (02); a swap with a stale registry fails in the DEX's account checks rather than running
-a removed item.
+`create_launch` creates the `PoolCuts` quote holding (token `create_holding`, payer the creator)
+before the registry is written.
 
-`create_launch` creates the `WarChest` and `WarState` through a CPI to `hookwars_war::open_war`
-(05), signed by the launch's PDA, after the pool exists. Depth: create_launch (1), war (2).
+**Transaction 3, `hookwars_war::init_war(mint)`** (05 section 5), when the launch has a `War` slot:
+permissionless, sent by the site right after transaction 2. Not a CPI from `create_launch`, so
+`create_launch`'s size and depth stay upstream's plus the registry entries.
 
-Upstream's custom-hook path (`check_custom_hook_accounts`, `launch.rs:415`) and its errors
-(`CustomHookWithKitRules`, `HookRegistryMissing`, `HookExtrasMismatch`, ...) are removed; the
-token-hook slice the launchpad passes on `mint_to`, the pool deposit and `graduate` becomes the
-mint's slot slice (01 defines its layout: per slot, program, the token program's signer for it,
-extras).
+**Between the steps.** After transaction 1 the mint has no supply and only the launch program can
+mint it; after transaction 2 trading is open with every launch item already equipped, so no trade
+ever runs without its items. A war chest that does not exist yet (before transaction 3) has nothing
+to spend and receives nothing: the companion's `claim_fees` and the Raid template's settlement wait
+for its holding (05).
+
+**Depth of the two steps.**
+
+| Path | Height |
+| --- | --- |
+| `prepare_launch` (1), token `create_mint` (2) | 2 |
+| `prepare_launch` (1), armory `equip_launch` (2), token `set_slot_item` (3) | 3 |
+| `prepare_launch` (1), armory (2), items `init_equip` (3), token `create_holding` (4) | 4 |
+| the same from a companion | 5, the limit |
+| `create_launch` (1), DEX `create_pool` (2), token deposit transfer (3), slot programs (4) | 4 |
+| the same from a companion | 5, the limit (upstream reaches 5 there with the kit, `docs/companions.md:75`) |
+
+The deposit transfer moves the launch's reserve into the pool vault and runs token-side items; it
+fits only because items are leaves (section 2). Every row is measured in 07.
+
+A companion launches by calling `prepare_launch` and then `create_launch`, in two transactions,
+signing as its creator PDA (upstream `docs/companions.md`, "The companion is the launch's creator").
+
+### 4.4 `refresh_pool_registry(mint)`
+
+The pool registry names the equipped Pool items' accounts, which change on every equip. New,
+permissionless: rewrites the pool registry from the mint's current slot table and each Pool item's
+registry (04 section 2.3). The armory calls it in the same transaction as every equip and every
+`Performance` revert of a Pool slot (I-02 below). A swap built from a stale registry fails in the
+DEX's and the launchpad's account checks (`StaleRegistry`) instead of running a removed item.
 
 ## 5. Launchpad: forwarding to `Pool` items
 
 ### 5.1 Order inside `before_swap` and `after_swap`
 
-Upstream callbacks: `launch/src/instructions/hooks.rs:128` (`before_swap`) and `:162`
-(`after_swap`). Hookwars keeps them and appends the items:
+Upstream callbacks: `programs/bordrless_launch/src/instructions/hooks.rs:128` (`before_swap`) and
+`:162` (`after_swap`). Hookwars keeps them and appends the items:
 
 1. **The launchpad's own rules, unchanged**: sniper LP fee (and the creator's one-time first buy),
-   creator fee, holder fee, burn, computed by `bordrless_core::launch_before_swap` /
-   `launch_after_swap` exactly as upstream. Call this answer `L`.
-2. **Each equipped `Pool` slot, in slot order**: the launchpad invokes the item's `pool_before_swap`
-   or `pool_after_swap` (names owned by 04), signing as `["hook-authority", <ITEMS_ID>]` under
+   creator fee, holder fee, burn, from `bordrless_core::launch_before_swap` / `launch_after_swap`.
+   Call this answer `L`.
+2. **Each equipped `Pool` slot, in slot order**, whose template subscribes to this callback (04's
+   `pool_callbacks` bits): the launchpad invokes `hookwars_items`'s `before_swap` or `after_swap`
+   (04 section 2.1), signing as `LAUNCH_ITEMS_SIGNER` = `["hook-authority", <ITEMS_ID>]` under
    `<LAUNCH_ID>`, with:
-   - the DEX's `PoolHookArgs` unchanged (including the route),
-   - `ItemPoolContext { slot: u8, item: Pubkey, launch_answer: L (fee, cuts, burn), quote_after_launch: u64 }`
-     (`quote_after_launch` is the quote side this callback acts on after `L`'s cuts),
-   - accounts: the item signer, the five pool prefix accounts, then the item's own extras from the
-     pool registry.
-3. The launchpad reads each item's answer, checks it (section 5.2), merges it (section 5.3),
-   collects war marks (section 5.4), and returns **one** `HookReturn` to the DEX.
+   - args: the DEX's `PoolHookArgs` unchanged (with the route) and
+     `ItemPoolContext { slot: u8, launch_fee_bps: u16 /* L's creator + holder fee rate this side */,
+     launch_cut: u64, side_amount: u64 }`, where `side_amount` is what this callback acts on after
+     `L`'s cuts (before: the input; after: the output it was told);
+   - accounts: the signer, the five pool prefix accounts (with `base_mint` the `Mint` itself, 04
+     section 2.2 check 3), then the item's extras (`Item`, `EquipState`, the template's extras, which
+     include `RaidLedger` writable for templates that keep raid state).
+3. The launchpad reads each answer (section 5.2), merges them (section 5.3) and returns **one**
+   `HookReturn` to the DEX, then emits `PoolItemCuts` (section 9).
 
-### 5.2 What an item may answer to the launchpad
+### 5.2 What an item answers
 
 ```rust
 pub struct ItemPoolAnswer {
     /// Basis points of the launchpad's creator and holder fees on this side to waive (raids).
-    pub discount_bps: u16,       // <= 10_000
-    /// The item's own cut, in the quote, to the war chest.
+    pub discount_bps: u16,       // <= the template's max_discount_bps (04), <= 10_000
+    /// The item's cut, in the quote, into the PoolCuts holding.
     pub cut: u64,
-    /// The item's royalty, as a part of `cut` (02 rule: royalty comes out of the cut).
-    pub royalty: u64,            // <= cut * item.royalty_bps / 10_000, checked
-    /// A burn of base, only on the sides where the slot allows burns.
+    /// A burn of base, where the side's input or output is base.
     pub burn: u64,
-    /// A war mark.
-    pub mark: Option<WarMark>,   // 05 owns WarMark
 }
 ```
 
-Checks, each against the slot's fixed bounds (01) and the side:
+The item has already added its `cut` to its own `EquipState.collected[1]` in the same call (R2);
+the launchpad checks it did (`collected` read before and after, `CutNotRecorded`).
 
 | Check | Error |
 | --- | --- |
-| `cut <= quote_after_launch * slot.max_cut_bps / 10_000` | `ItemCutOutOfBounds` |
-| `burn == 0` unless the slot allows burns on this side; burn is base, so only on a sell's input (before) or a buy's output (after), as upstream's burn | `ItemBurnNotAllowed` |
-| `royalty <= cut * royalty_bps / 10_000` with `royalty_bps` read from the `Item` | `RoyaltyTooHigh` |
-| `mark` only if the slot's kind is `Pool` and the template's manifest declares marks | `MarkNotAllowed` |
+| `cut` only where the side being acted on is the quote: a buy's `before_swap` (input) or a sell's `after_swap` (output) | `ItemCutWrongSide` |
+| `burn` only where it is base: a sell's `before_swap` or a buy's `after_swap` (upstream's burn sides) | `ItemBurnWrongSide` |
+| `cut + burn <= side_amount * slot.bounds.max_cut_bps / 10_000` | `ItemCutOutOfBounds` |
 | the answer is the item program's own return data | `ForeignAnswer` |
 
-### 5.3 Merging
+### 5.3 Merging (R2, R6)
 
-- **LP fee.** Items never set the LP fee. On a launch pool the LP fee is Bordrless's revenue
-  (hooks-v2 3.1, "The LP fee of a launch pool is Bordrless's"), and the sniper schedule protects
-  every launch equally. The merged answer carries `L.lp_fee_bps` unchanged. A Shield that "raises
-  the fee" does so as its own `cut`, which goes to the token's war chest, not to the protocol.
-- **Discounts.** `discount = min(10_000, sum of discount_bps)`. The launchpad's creator fee and
-  holder fee on this side are multiplied by `(10_000 - discount) / 10_000`, rounded down. The burn
-  and the LP fee are never discounted. A raid is therefore paid by the token being raided **into**
-  (its creator and holders give up their fee on raid buys), which is the community's choice when it
-  equipped the Raid item.
-- **Cuts.** Upstream's answer already uses up to two deltas per side (creator fee to index 6,
-  holder fee to index 7, `hooks.rs:102-124`) of `MAX_DELTAS = 3` (`bordrless-hook/src/lib.rs:43`).
-  All items' cuts on a side are therefore **summed into one delta** to registry index 9, the war
-  chest's bridged-SOL holding. The sum must keep `L`'s cuts plus the items' cuts plus the burn below
-  the side's amount (the DEX's `DeltaTooLarge`, `swap.rs:182`).
-- **Royalties** cannot be separate deltas (no delta is left). Each item's `royalty` is recorded as
-  a **royalty mark** for `hookwars_war` (section 5.4): the war chest owes it, and
-  `hookwars_war::pay_royalties` (05) moves it from the chest to each item's royalty holding
-  (`["holding", BRIDGED_SOL, RoyaltyOwner]`, 00 section 4.3), permissionless. This replaces 00's
-  "a royalty takes one delta" for pool items (section 9, C1).
+- **LP fee.** Items never set it (R6). On a launch pool the LP fee is Bordrless's revenue (hooks-v2
+  3.1, "The LP fee of a launch pool is Bordrless's") and the sniper schedule protects every launch
+  alike. The merged answer carries `L.lp_fee_bps` unchanged. A Shield that charges more does so as
+  its own `cut`.
+- **Discounts.** `discount = min(10_000, sum of discount_bps)`. The launchpad's creator fee and holder
+  fee on this side are multiplied by `(10_000 - discount) / 10_000`, rounded down; the burn and the
+  LP fee never are. A raid discount is paid by the creator and holders of the token raided into,
+  capped at their own fees (R6), which is what its holders accepted when the item was equipped.
+- **Cuts.** Upstream already answers up to two deltas per side (creator fee to index 6, holder fee to
+  index 7, `hooks.rs:102-124`) of `MAX_DELTAS = 3` (`crates/bordrless-hook/src/lib.rs:43`). All
+  items' cuts on a side are summed into **one** delta to index 9, the `PoolCuts` quote holding (R2).
+  The sum is capped again by `MAX_POOL_ITEM_CUT_BPS` of the side (`PoolCutsTooHigh`), and `L`'s
+  cuts, the items' cuts and the burns together must stay below the side's amount (the DEX's
+  `DeltaTooLarge`, `swap.rs:182`).
+- **Royalties** are not the launchpad's business: each item's share sits in its `EquipState`, and
+  `settle_equip` (04) later pays the royalty and the item's destination from the `PoolCuts` holding
+  (R2). There are no royalty marks and no war-chest royalty path.
 - **Burns** add to `L.burn`.
-- **Protocol share.** Unchanged. The DEX measures `cuts_in` and `cuts_out` (`swap.rs:261`,
-  `:415`) and takes its share (`protocol_share_bps`, 25% today) of everything a hook cut, so item
-  cuts pay Bordrless's share exactly like the creator fee. A launch whose items cut nothing pays
-  nothing extra.
-- **Ceiling.** Upstream caps creator + holder + burn per side by the launch config's
-  `max_rules_fee_bps` (`launch.rs:220-245`). Item cuts are capped separately by each slot's
-  bounds, which `create_launch` caps by `MAX_POOL_ITEM_CUT_BPS` per slot and side, and the sum over
-  `Pool` slots by the same parameter times `MAX_CUTTING_SLOTS`. Both are shown on the token page.
+- **Protocol share.** Unchanged. The DEX measures `cuts_in` and `cuts_out` (`swap.rs:261`, `:415`)
+  and takes `protocol_share_bps` of everything a hook cut, so item cuts pay Bordrless's share
+  exactly like the creator fee. A launch whose items cut nothing pays nothing more.
 
-### 5.4 War marks
+### 5.4 Raid marks (R3, R4)
 
-Items cannot write `WarState` (rule 1 of section 2; `WarState` is owned by `<WAR_ID>`). An item
-returns marks; the launchpad delivers them:
+The launchpad delivers no marks and holds no war state. The Raid template's pool half writes the
+token's `RaidLedger` (`["raid-ledger", mint]`, owned by `hookwars_items`) itself, as a leaf, in
+`after_swap`: one mark `(clock slot, recipient, rival, quote volume)`, overwritten by the next swap of
+that pool. The token half consumes it on the first transfer into `recipient`'s holding in the same
+clock slot, which is the DEX's delivery (after `after_swap`, the DEX sends deltas only to other
+holdings, `swap.rs:379-409`, then delivers). Nothing depends on `Pool.swap_count`. 03's part is only
+to pass `RaidLedger` writable among the item's extras (from the item's registry) and to call the
+Raid item's `after_swap` on buys. `hookwars_war` reads the ledger (05).
 
-- After merging, if any item answered a mark or a royalty, the launchpad CPIs
-  `hookwars_war::record_marks(mint, marks: Vec<WarMark>, royalties: Vec<(Pubkey /* item */, u64)>)`,
-  signing with `["war-caller", mint]` under `<LAUNCH_ID>` (a PDA with no other power, the pattern of
-  upstream's `kit-caller`, hooks-v2 4.1). `hookwars_war` accepts marks only from that signer for that
-  mint.
-- Depth: DEX `swap` (1), launchpad `before_swap`/`after_swap` (2), `hookwars_war::record_marks`
-  (3). The item calls (also 3) have returned before.
-- Marks recorded in `before_swap` describe the swap now running. Every mark carries the pool's
-  `swap_count` **after** this swap's increment (upstream increments it at `swap.rs:331`, before
-  `after_swap`; in `before_swap` the launchpad uses `args.swap_count + 1`), the route context and
-  the recipient. The token-side half of the Raid template (04) reads `WarState` on the delivery
-  transfer, which happens after `after_swap` (`swap.rs:400`), and stamps the holding only when the
-  mark's `swap_count` equals the pool's current one and the mark's recipient is the transfer's
-  destination owner. A stale or foreign mark stamps nothing.
+### 5.5 Accounts
 
-### 5.5 Accounts and registry
+The launchpad's `HookCallback` accounts (`hooks.rs:49-81`) gain indices 9 to 12 (section 4.3).
+After them, per equipped `Pool` slot in slot order: `<ITEMS_ID>`, `LAUNCH_ITEMS_SIGNER`, then the
+item's registry extras. Each slot's extras count comes from the slot table and the item registry,
+so the launchpad splits them without arguments. New errors: `WrongItemProgram`,
+`ItemAccountsMissing`, `StaleRegistry`, `CutNotRecorded`, `ItemCutWrongSide`, `ItemBurnWrongSide`,
+`ItemCutOutOfBounds`, `PoolCutsTooHigh`, `ForeignAnswer`.
 
-The launchpad's `HookCallback` accounts (`hooks.rs:49-81`) gain indices 9 to 11 (section 4.3) and
-the item programs with their extras as remaining accounts, located by the slot table. New errors:
-`WrongItemProgram`, `ItemAccountsMissing`, `StaleRegistry`.
-
-## 6. Companion (`bordrless_companion`)
+## 6. Companion and protocol fees
 
 ### 6.1 The split
 
-`Split` (`programs/bordrless_companion/src/state.rs:9`) gains `war_bps: u16`. Its `valid()` becomes
+`Split` (`programs/bordrless_companion/src/state.rs:9`) gains `war_bps: u16`. `valid()` becomes
 `buyback_bps + holders_bps + beneficiary_bps + war_bps == 10_000`, with `war_bps <= WAR_BPS_MAX`
 (`WarBpsTooHigh`). `Companion` gains `paid_war_total: u64` (from `reserved`).
 
 ### 6.2 Paying the chest
 
-`claim_fees` (`steps.rs:246`) splits what it claimed as today and sends the `war_bps` part
-**directly** to the war chest's bridged-SOL holding in the same step (a token-program transfer
-signed by the creator PDA; bridged SOL has no hook, so depth is companion (1), token (2)). There is
-no `pending_war`: the chest is the account that holds it. Event `WarFunded { companion, mint,
-amount, total }`. The bounty is taken before the split, as upstream.
+`claim_fees` (`steps.rs:246`) splits what it claimed as today and moves the `war_bps` part
+**directly** to the war chest's bridged-SOL holding, `holding(BRIDGED_SOL, ["war-chest", mint] under
+<WAR_ID>)`, in the same step (a token transfer signed by the creator PDA; bridged SOL has no hook,
+so the height is companion 1, token 2). The bounty is taken before the split, as upstream. If the
+chest's holding does not exist yet (before `init_war`), the war part stays in the creator's holding
+as `pending_war` and is moved by the next `claim_fees` after it exists (`ChestNotReady` is never an
+error, so other shares are never blocked). Event `CompanionWarFunded { companion, mint, amount,
+total }`; 05's `record_funding` counts it on the war side.
 
-### 6.3 Call depth when a companion launches
+### 6.3 Launching from a companion
 
-`docs/companions.md:75`: `create_launch` reaches invoke height 4 and, from the companion, 5, which is
-Solana's limit. With slots:
+The companion calls `prepare_launch` and `create_launch` in two transactions (section 4.3), both at
+height 5 at most. `create` (upstream `create.rs`) gains `war_bps` in its `Split` argument and the
+companion's creation event carries it.
 
-- the supply `mint_to` calls no item (section 4.3);
-- the pool deposit (companion (1), launch (2), DEX `create_pool` (3), token transfer (4), slot items
-  (5)) reaches 5, the same height as upstream's kit callback on that transfer. It works only
-  because items are leaves (section 2, rule 1). Any item that made a CPI there would break every
-  companion launch;
-- `open_war` from `create_launch` is at height 3 under a companion.
+### 6.4 Protocol fees and the season prize (R14)
 
-Mitigation beyond the leaf rule, to decide in M1 from measurement: a companion launch may also be
-created with `initial_item: None` in every non-`Locked` slot and equip after the launch lands (the
-armory's equip in the next transaction). The cost is a window with no items; it is not needed if the
-measured height is 5 as computed.
+No DEX code changes. The DEX config's `fee_collector` is set to `PDA(["prize-vault"], <WAR_ID>)`:
 
-## 7. Call depth
+- `collect_protocol_fees_sol` (permissionless, `pool.rs:675`) unwraps a pool's
+  `protocol_fees_quote` and moves the lamports to `fee_collector` (address-checked); the prize vault
+  is a system-owned PDA, so it receives lamports like a wallet;
+- the admin path `collect_protocol_fees` (`pool.rs:578`) pays into the collector's **holding of the
+  quote**, `holding(BRIDGED_SOL, prize-vault)`. That holding must exist (anyone may create it,
+  upstream `create_holding` is permissionless) and 05's `split_protocol_fees` must sweep both the
+  lamports and that holding.
+
+## 7. Sieges and the kit (R10)
+
+Nothing in 03: the restriction that `siege` refuses a rival whose kit has holder rewards on
+(`SiegeTargetHasRewards`) lives in 05.
+
+## 8. Call depth
 
 | Path | Height | Notes |
 | --- | --- | --- |
-| `swap`: token transfer to a token item | DEX 1, token 2, item 3 | as upstream's kit |
-| `swap`: launch hook to a Pool item | DEX 1, launch 2, item 3 | new |
-| `swap`: launch hook to `record_marks` | DEX 1, launch 2, war 3 | new |
-| `swap_route` | as `swap` (hops are a loop, not CPIs) | new |
-| `graduate`: reserve top-up transfer to token items | launch 1, token 2, item 3 | upstream passes the hook slice (graduate.rs header) |
+| `swap`: delivery transfer to token-side items | DEX 1, token 2, items 3 | as upstream's kit |
+| `swap`: launch hook to Pool items | DEX 1, launch 2, items 3 | new; items write `EquipState`, `RaidLedger` without CPI |
+| `swap`: launch hook `emit_cpi!` | DEX 1, launch 2, launch self-CPI 3 | `PoolItemCuts` |
+| `swap_route` | as `swap` | hops are a loop |
+| `graduate`: reserve top-up to token-side items | launch 1, token 2, items 3 | upstream passes the slice (graduate.rs header) |
 | `graduate`: `finalize_curve`, LP mint | launch 1, DEX 2, token 3 | LP mints have no slots |
-| `create_launch` pool deposit to items | launch 1, DEX 2, token 3, item 4 | |
-| companion `create_launch` deposit to items | 5 | the limit; section 6.3 |
+| `prepare_launch` | up to 4; 5 from a companion | section 4.3 |
+| `create_launch` deposit | 4; 5 from a companion | section 4.3 |
 | companion `claim_fees` to the chest | companion 1, token 2 | |
 
-Every row is to be measured in LiteSVM (07) and asserted as a ceiling, as upstream does for its
-paths (hooks-v2 section 6).
+Every row is measured in LiteSVM (07) and asserted as a ceiling, as upstream does (hooks-v2
+section 6).
 
-## 8. Events, errors, compatibility
+## 9. Events (R15, 06 section 9)
 
-New events: `RouteSwapped` (DEX), `ObservationsCreated { pool, len }` (DEX), `PoolItemsAnswered {
-launch, swap_count, discount_bps, items_cut, items_burn, marks }` (launchpad),
-`PoolRegistryRefreshed { mint, items }` (launchpad), `WarFunded` (companion). `Swapped`,
-`LaunchCreated` and every other upstream event keep their fields; `LaunchCreated` gains `slots`.
+| Event | Program | Fields |
+| --- | --- | --- |
+| `Swapped` (extended) | DEX | upstream fields (`events.rs`) plus `route: RouteContext` |
+| `RouteSwapped` (new) | DEX | `trader, route_input_mint, route_output_mint, amount_in, amount_out, pools: Vec<Pubkey>, slot, ts` |
+| `ObservationsCreated` (new) | DEX | `pool, observations, len` |
+| `PoolItemCuts` (new) | launchpad | `launch, pool, mint, side (0 input, 1 output), discount_bps, cuts: Vec<{ slot, item, amount }>, burns: Vec<{ slot, item, amount }>, pool_cuts_delta, slot, ts`; one per callback in which any item answered. The DEX's `Swapped.deltas_in` / `deltas_out` show the one merged `PoolCuts` delta; this event attributes it to slots |
+| `LaunchPrepared` (new) | launchpad | `mint, creator, slots: Vec<SlotSpec>` |
+| `LaunchCreated` (extended) | launchpad | upstream fields plus `slots` (the table as created), `war_chest: Pubkey` (`["war-chest", mint]`, whether or not opened yet), `war_bps: u16` (0 unless the creator is a companion's creator PDA; the companion passes its `Companion` account as an optional account so the launchpad can read it) |
+| `PoolRegistryRefreshed` (new) | launchpad | `mint, pool, items: Vec<{ slot, item }>` |
+| `CompanionWarFunded` (new) | companion | `companion, mint, amount, total` |
+| companion creation event (extended) | companion | plus `war_bps` |
 
-Upstream tests that must still pass unchanged in meaning: `swap.rs`, `swap_hooks.rs`,
-`launch.rs`, `launch_money.rs`, `launch_rules.rs`, `protocol_fees_sol.rs`, `companion*.rs`,
-`vectors.rs` (with the one-hop route added to the expected `PoolHookArgs`). Tests that change:
-`launch_configs.rs`, `hook_authority.rs`, `studio_template.rs` (the custom-hook path is replaced by
-slots; their safety assertions move to slot and item tests). New tests listed in 07: observation
-math against a reference, TWAP under a one-slot spike, route forgery through `hook_data` refused,
-route rules, item answers out of bounds, discount merge, the single merged delta, royalty marks,
-stale registry, stale marks, depth ceilings.
+Slot-level events (`SlotTableCreated`, `SlotEquipped`) are 01's and 02's.
 
-## 9. Interfaces and conflicts for the other parts
+## 10. Upstream tests
 
-Needs from **01** (token slots): the slot table type and `SlotBounds` (max cut per side, may
-refuse, may burn, marks allowed); `create_mint` taking the table and the slot authority; the slot
-slice layout the launchpad passes on transfers; refusal of mint callbacks on non-`Locked` slots.
+Unchanged in meaning: `swap.rs`, `swap_hooks.rs`, `launch_money.rs`, `launch_rules.rs`,
+`protocol_fees_sol.rs`, `companion*.rs`, `vectors.rs` (with the one-hop route in the expected
+`PoolHookArgs`). Changed: `launch.rs` and `launch_configs.rs` (two-step launch, slots instead of the
+custom hook), `hook_authority.rs` and `studio_template.rs` (their safety assertions move to template
+registration and slot tests). New tests (07): observation math against a reference, reads under a
+one-slot spike, route forgery through `hook_data` ignored, route rules, item answers on the wrong
+side or out of bounds, the discount merge, the single `PoolCuts` delta and `CutNotRecorded`, stale
+registry, the raid mark consumed only by the same-slot delivery, both depth ceilings from a
+companion, `pending_war` before `init_war`.
 
-Needs from **02** (armory): `SlotAuthority` = `["slots", mint]` under `<ARMORY_ID>`; a client
-function `check_fits(item, slot_spec)`; `rule_params` validation; the armory calls
-`refresh_pool_registry` in every equip transaction.
+## 11. Interfaces with the other parts
 
-Needs from **04** (templates): callback names `pool_before_swap`, `pool_after_swap` taking
-`(PoolHookArgs, ItemPoolContext)` and returning `ItemPoolAnswer`; each template's pool-registry
-extras; the Raid token half reading `WarState` marks as section 5.4 describes; no template sets
-mint flags or makes a CPI.
+From **01**: `create_mint` with `slot_authority` and `SlotInit` (incl. `locked_program`); `SlotBounds`
+with `max_cut_bps` (03 applies it per side to Pool slots, cut and burn together); the slot slice
+layout; refusal of mint subscriptions on non-`Locked` slots; `set_slot_item` callable during
+`prepare_launch`.
 
-Needs from **05** (war): `open_war(mint)` callable by the launchpad's PDA; `record_marks` accepting
-only `["war-caller", mint]` under `<LAUNCH_ID>`; `WarMark` (must carry swap_count, recipient,
-route_input_mint, first_pool, quote amount, kind); `pay_royalties`; the war chest's bridged-SOL
-holding address.
+From **02**: `equip_launch(slot, item)` accepting only `PDA(["armory-caller", mint], <LAUNCH_ID>)`,
+recording the launch item, then `set_slot_item` and `init_equip` (I-02); `rule_data` validation; the
+armory calls `refresh_pool_registry` with every equip and `Performance` revert of a Pool slot. This
+replaces 02's I-03-2 ("create_launch writes each slot's launch item through 01"): only the armory's
+`SlotAuthority` may write an item into a slot, so the launchpad goes through the armory.
 
-Conflicts for the spec lead (00):
+From **04**: pool callbacks `before_swap` / `after_swap` taking `(PoolHookArgs, ItemPoolContext)`
+and answering `ItemPoolAnswer`; `max_discount_bps` per template; each item adds its cut to
+`EquipState.collected[1]` in the call; Raid's pool half writes the R4 mark in `after_swap` (04's
+current `Mark` in `WarState` with `pool_swap_count` is superseded by R3 and R4); the item registry
+seed (00 section 4.3); `init_equip` creates the `PoolCuts` accounting it needs, while 03 creates the
+`PoolCuts` quote holding.
 
-- **C1, royalties as deltas.** 00 section 6 says "a royalty takes one delta per cutting item". On a
-  launch pool only one delta per side is free (upstream uses two of three), so pool-item royalties
-  are recorded as royalty marks and paid from the war chest (section 5.3). Either accept this for
-  pool items, or raise `MAX_DELTAS` in the fork (each delta is one more token transfer CPI and
-  trace entries; measure first).
-- **C2, a missing parameter.** `MAX_POOL_ITEM_CUT_BPS` (per slot and side ceiling on a Pool item's
-  cut) is not in 00's table. Add it (owner decision).
-- **C3, route location.** The brief said route context in `hook_data`; this part puts it in a new
-  `PoolHookArgs.route` field because `hook_data` can be forged by any trader (section 3.2). The
-  hook crate type change must be agreed with 01.
-- **C4, items never set the LP fee** on launch pools (section 5.3). If the owner wants Raid to lower
-  the LP fee, the protocol gives up its own revenue on raid buys; that is an owner decision.
-- **C5, `WarState` writes** go through `record_marks` from the launchpad, never from items, which
-  05 must reflect (00 section 4.3 lists `WarState` under war, consistent).
-- **C6, `Observations` per pool** (00 seeds table has `["obs", pool]` under swap, consistent); the
-  account adds one writable account to every swap and liquidity change.
+From **05**: `init_war(mint)` as the third launch transaction; the chest's bridged-SOL holding
+address; `record_funding` counting companion transfers; `split_protocol_fees` sweeping both the
+prize vault's lamports and its quote holding (6.4); the siege restriction (R10).

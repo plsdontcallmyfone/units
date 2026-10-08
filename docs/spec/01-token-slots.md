@@ -1,29 +1,32 @@
 # Hookwars spec 01: token slots
 
-Status: specification, 2026-10-08. Nothing is built. Follows `00-overview.md` (names, seeds,
-parameters, rules). Upstream reference: Bordrless `43688f3`, `docs/hooks-v2.md` sections 1 and 2,
-and the code cited by `file:line` below (paths relative to the repository root).
+Status: specification, 2026-10-08, revised to the integration rulings of `00-overview.md` section 9
+(R1, R8, R11, R12; War kind; Pool slots with a token half; R15 events). Nothing is built. Follows
+`00-overview.md` (names, seeds, parameters, rules). Upstream reference: Bordrless `43688f3`,
+`docs/hooks-v2.md` sections 1 and 2, and the code cited by `file:line` below (paths relative to the
+repository root).
 
 This part covers the token program (`bordrless_token`, crate name kept per D-3) and the hook
 protocol crate (`crates/bordrless-hook`). It replaces the single token hook of a Hookwars mint with
 a **slot table**, defines how the token program calls and merges slot items, how each item is held
-to its own range of the 64 hook-data bytes, how royalties are taken, and adds `set_slot_item` and
-`touch`.
+to its own range of the 64 hook-data bytes, where an item's cut goes, and adds `set_slot_item`,
+`set_vote_lock` and `touch`.
 
 ## 0. What stays exactly as upstream
 
 - Holdings: `["holding", mint, owner]`, one per (mint, owner), `create_holding` idempotent, rent,
   delegation, freezing, `set_authority`, `update_metadata`
   (`programs/bordrless_token/src/instructions/holding.rs:10-150`).
-- The **legacy hook** path: a mint whose `hook_program` is set (bridge-wrapped mints have none; a
-  mint launched with the kit, Half-Life or a custom hook the upstream way). `HookCall`,
-  `TokenHookArgs`, `HookReturn`, `apply_deltas`, `write_hook_data` and every upstream check apply to
-  it unchanged (`programs/bordrless_token/src/hooks.rs:16-166`,
+- The **legacy hook** path: a mint whose `hook_program` is set (a mint launched the upstream way
+  with the kit, Half-Life or a custom hook). `HookCall`, `TokenHookArgs`, `HookReturn`,
+  `apply_deltas`, `write_hook_data` and every upstream check apply to it unchanged
+  (`programs/bordrless_token/src/hooks.rs:16-166`,
   `programs/bordrless_token/src/instructions/transfer.rs:55-171`,
-  `programs/bordrless_token/src/instructions/holding.rs:187-221`).
+  `programs/bordrless_token/src/instructions/holding.rs:187-221`). Bridge-wrapped and LP mints have
+  no hook and no slots.
 - The safety rules of hooks-v2 section 1: an answer is read only when the callback and flags allow
   it, only from the hook program's own return data, return data is cleared before every call
-  (`hooks.rs:90`), at most `MAX_DELTAS` (3) deltas per answer, no zero delta, no account twice
+  (`hooks.rs:90`), at most `MAX_DELTAS` (3) deltas, no zero delta, no account twice
   (`crates/bordrless-hook/src/lib.rs:392-417`), every delta target an extra that is a writable,
   unfrozen holding of the mint and not one the instruction manages (`hooks.rs:122-148`).
 - A hook never receives a user's signature: the prefix accounts are passed read-only and
@@ -32,12 +35,10 @@ to its own range of the 64 hook-data bytes, how royalties are taken, and adds `s
   `programs/bordrless_token/src/state.rs:44-47`).
 - Token prefix accounts: `hook_signer`, `mint`, `source`, `destination`, `authority`
   (`TOKEN_PREFIX_ACCOUNTS = 5`, `crates/bordrless-hook/src/lib.rs:36`). The owners travel in the
-  arguments, and registries resolve them with `Seed::SourceOwner` / `Seed::DestinationOwner`
-  (`lib.rs:496-507`). Note: `docs/architecture.md` lists seven prefix accounts; the code has five and
-  wins.
+  arguments; registries resolve them with `Seed::SourceOwner` / `Seed::DestinationOwner`
+  (`lib.rs:496-507`). `docs/architecture.md` lists seven prefix accounts; the code has five and wins.
 
-A mint uses **either** the legacy hook **or** a slot table, never both (section 1.4,
-`MixedHookModes`).
+A mint uses **either** the legacy hook **or** a slot table, never both (1.4, `MixedHookModes`).
 
 ## 1. The slot table in the mint (D-1)
 
@@ -61,42 +62,49 @@ pub struct SlotBounds {
 
 #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Slot {
-    /// `SlotKind` (00 section 4.1): Fee 0, Reward 1, Defense 2, Relation 3, Pool 4, Locked 5.
+    /// `SlotKind` (00 section 4.1): Fee 0, Reward 1, Defense 2, Relation 3, Pool 4, Locked 5, War 6.
     pub kind: u8,
-    /// `EquipRule` (00 section 4.2), copied at creation so the rule is fixed with the bounds.
-    /// The token program never acts on it; `hookwars_armory` does.
+    /// `EquipRule` (00 section 4.2), copied at creation so it is fixed with the bounds. The token
+    /// program never acts on it; `hookwars_armory` does.
     pub equip_rule: u8,
     /// Fixed bounds.
     pub bounds: SlotBounds,
     /// First byte of this slot's range in `Holding.hook_data`; 0 with `data_len` 0.
     pub data_offset: u8,
-    /// Length of the range, including the epoch byte (section 3.4); 0 when the slot keeps no data.
+    /// Length of the range. Item slots: including the epoch byte (3.4). Locked: the legacy program's
+    /// own bytes, starting at 0, no epoch byte. 0 when the slot keeps no data.
     pub data_len: u8,
-    /// The equipped item (`Item` account of the armory, `["item", item_mint]`), or the default key
-    /// for an empty slot. For a Locked slot: the default key (no item record).
+    /// The equipped item (armory `Item`, `["item", item_mint]`), or the default key when empty.
+    /// Default for a Locked slot (no item record).
     pub item: Pubkey,
-    /// The program that runs for the equipped item (default key when empty).
+    /// The program that runs for the equipped item (default when empty).
     pub program: Pubkey,
-    /// Which callbacks run and what they may answer (section 2.3). 0 when empty.
+    /// Token-side callbacks and answers (section 2.3). 0 when empty.
     pub flags: u16,
-    /// The item's royalty share of its own cuts, in bps (copied from the item at equip).
-    pub royalty_bps: u16,
-    /// The holding that receives the royalty: `["holding", mint, PDA(["royalty", item], ARMORY)]`.
-    /// Default key when `royalty_bps` is 0 or the slot cannot cut.
-    pub royalty_holding: Pubkey,
-    /// Bump of the caller's signer for `program`: this program's `["hook-authority", program]` for
-    /// every kind but Pool; the launchpad's `["hook-authority", program]` under `<LAUNCH_ID>` for a
-    /// Pool slot (03 calls Pool slots; this program never does).
+    /// Pool slots only: the upstream `pool_flags` the launchpad uses to call the item's pool half
+    /// (03). 0 for every other kind. The token program stores it and never reads it.
+    pub pool_flags: u16,
+    /// The only holding a cut of this slot may credit (R1): `["holding", mint, PDA(["equip", mint,
+    /// slot], <ITEMS_ID>)]`. Set at `create_mint` for every slot with `max_cut_bps > 0`; default
+    /// otherwise. Fixed for life (it names the slot, not the item).
+    pub equip_vault: Pubkey,
+    /// Bump of this program's signer `["hook-authority", program]` (token callbacks).
     pub signer_bump: u8,
+    /// Pool slots only: bump of the launchpad's signer `["hook-authority", program]` under
+    /// `<LAUNCH_ID>` (03 calls the pool half with it). 0 otherwise.
+    pub launch_signer_bump: u8,
     /// Increments (wrapping, skipping 0) each time the item changes; tags this slot's data in every
-    /// holding (section 3.4). Starts at 1.
+    /// holding (3.4). Starts at 1. Unused by Locked slots.
     pub data_epoch: u8,
 }
 ```
 
 Bytes per `Slot` (Borsh, fixed): `kind 1 + equip_rule 1 + bounds 5 + data_offset 1 + data_len 1 +
-item 32 + program 32 + flags 2 + royalty_bps 2 + royalty_holding 32 + signer_bump 1 + data_epoch 1
-= 111`.
+item 32 + program 32 + flags 2 + pool_flags 2 + equip_vault 32 + signer_bump 1 + launch_signer_bump 1
++ data_epoch 1 = 112`.
+
+No royalty field: the token program does not compute or pay royalties (R1). The site shows an
+item's royalty from its armory `Item` record (02), not from the mint.
 
 ### 1.2 New `Mint` layout
 
@@ -107,7 +115,7 @@ offsets (`decimals` 9, `supply` 10) still hold. New fields are appended after `r
 pub struct Mint {
     // ... every upstream field, unchanged, through `reserved: [u8; 31]` ...
     /// The armory's `SlotAuthority` for this mint (`PDA(["slots", mint], <ARMORY_ID>)`), which
-    /// alone may call `set_slot_item`; `None` when the table can never change.
+    /// alone may call `set_slot_item` and `set_vote_lock`; `None` when the table never changes.
     pub slot_authority: Option<Pubkey>,
     /// How many entries of `slots` are in use (0: no slot table).
     pub slot_count: u8,
@@ -116,18 +124,17 @@ pub struct Mint {
 }
 ```
 
-Size: `Mint::LEN = 519 + 33 + 1 + 111 * MAX_SLOTS` bytes (upstream `Mint` is 519 bytes including the
-8-byte discriminator: 511 from the fields of `state.rs:10-50` plus 8; the SDK's integration guide
-`docs/integration/01-the-standard.md` lists the same 519). Every mint pays this size, slots or not; the extra rent per mint is to measure once
-`MAX_SLOTS` is set. An alternative that keeps non-slot mints small (a separate `SlotTable` account)
+Size: `Mint::LEN = 519 + 33 + 1 + 112 * MAX_SLOTS` bytes (upstream `Mint` is 519 bytes including
+the 8-byte discriminator: 511 from the fields of `state.rs:10-50` plus 8; the SDK's integration
+guide `docs/integration/01-the-standard.md` lists the same 519). Every mint pays this size, slots or
+not; the extra rent per mint is to measure once `MAX_SLOTS` is set. A separate `SlotTable` account
 was rejected by D-1 because it adds an account to every transfer.
 
 ### 1.3 Helpers
 
 - `Mint::uses_slots() -> bool`: `slot_count > 0`.
-- `Mint::locked_program() -> Option<Pubkey>`: the program of a Locked slot, if any (there is at
-  most one, 1.4).
-- `Mint::data_writer_ranges()`: the `(offset, len, epoch)` of every slot with `data_len > 0`.
+- `Mint::locked_slot() -> Option<(u8, &Slot)>`: the Locked slot, if any (at most one, 1.4).
+- `Mint::token_called_slots(op, phase)`: the slots this program calls for `op` and `phase` (2.1).
 
 ### 1.4 Rules of a slot table (checked by `create_mint`)
 
@@ -136,28 +143,40 @@ was rejected by D-1 because it adds an account to every transfer.
 | `slot_count <= MAX_SLOTS` | `InvalidSlotTable` |
 | A mint with `slot_count > 0` has `hook_program = None`, `hook_flags = 0`, `hook_authority = None` | `MixedHookModes` |
 | `slot_authority` is `None` or exactly `PDA(["slots", mint], <ARMORY_ID>)` | `InvalidSlotAuthority` |
-| `kind` is one of the six values; `equip_rule` is one of the three | `InvalidSlotTable` |
-| A Locked slot has `equip_rule = Locked` and a non-default `program`; at most one Locked slot | `InvalidSlotTable` |
-| If any slot has `equip_rule != Locked`, `slot_authority` is `Some` | `InvalidSlotAuthority` |
-| `bounds.max_cut_bps > 0` only for kinds Fee, Reward, Relation (and Locked, whose program's flags decide); Defense and Pool slots have 0 at the token level (a Pool slot's swap bounds are 03's) | `InvalidSlotTable` |
+| `kind` is one of the seven values; `equip_rule` one of the three | `InvalidSlotTable` |
+| A Locked slot has `equip_rule = Locked`, a non-default `program`; at most one Locked slot | `InvalidSlotTable` |
+| A non-Locked slot may have `equip_rule = Locked`: it starts empty (R12), the armory equips it once at launch and never again (02); kind and rule pairs 02 does not allow are refused | `InvalidSlotTable` |
+| If any non-Locked slot exists, `slot_authority` is `Some` | `InvalidSlotAuthority` |
+| `bounds.max_cut_bps > 0` only for kinds Fee, Reward, Relation, and Locked when its flags have `TRANSFER_RETURNS_DELTA`; Defense, Pool and War slots have 0 at the token level (a Pool slot's swap cuts are 03's, under `MAX_POOL_ITEM_CUT_BPS`) | `InvalidSlotTable` |
 | Sum of `max_cut_bps` over all slots `<= 10_000` | `InvalidSlotTable` |
-| Number of slots with `max_cut_bps > 0` `<= MAX_CUTTING_SLOTS` | `TooManyCuttingSlots` |
-| `may_write_data` implies `data_len >= 2` (epoch byte plus at least one byte); otherwise `data_len = 0` | `InvalidSlotTable` |
-| A Locked slot that writes data takes the whole 64 bytes (`data_len = 64`, `data_offset = 0`, no epoch byte, section 3.4), so it is then the only data-writing slot | `InvalidSlotTable` |
-| Pool slots have `data_len = 0` (the token program never calls them) | `InvalidSlotTable` |
-| `data_offset` is assigned by the program in slot order (not passed): the ranges are packed from byte 0 and their sum is `<= HOOK_DATA_LEN` (64) | `InvalidSlotTable` |
-| `may_answer_touch` only with `may_write_data` and kind Reward, Defense or Relation | `InvalidSlotTable` |
+| Item slots with `max_cut_bps > 0` number at most `MAX_CUTTING_SLOTS`, and `MAX_CUTTING_SLOTS + (1 if the Locked slot may answer deltas) <= MAX_DELTAS` (R1) | `TooManyCuttingSlots` |
+| `may_write_data` implies `data_len >= 2` for an item slot (epoch byte plus at least one byte); otherwise `data_len = 0` | `InvalidSlotTable` |
+| A Locked slot's range starts at byte 0 and has no epoch byte (the kit: `data_len = 32`, R8) | `InvalidSlotTable` |
+| War slots have `data_len = 0` and no token flags ever | `InvalidSlotTable` |
+| Pool slots may have a range (a template with a token half, such as Raid, stamps points) | |
+| `data_offset` is assigned by the program in slot order (not passed): the Locked range first (from byte 0), then item ranges packed after it; total `<= HOOK_DATA_LEN` (64). With the kit, 32 bytes are left for item ranges (R8) | `InvalidSlotTable` |
+| `may_answer_touch` only with `may_write_data` and kind Reward, Defense, Relation or Pool | `InvalidSlotTable` |
+
+Every cutting slot's `equip_vault` is derived and stored here; the holding itself is created by the
+items program when the first item is equipped (04), and `set_slot_item` checks it exists (4.2).
 
 ## 2. Calling slots
 
 ### 2.1 Which slots run
 
-On every transfer, `mint_to` and `burn` of a slot mint, the token program walks `slots[0..slot_count]`
-in index order and calls each slot that is:
+On every transfer and `burn` of a slot mint, and on `mint_to` for the Locked slot only, the token
+program walks `slots[0..slot_count]` in index order and calls each slot that is:
 
-- not empty (`item != default`, or a Locked slot with a program), and
-- not kind Pool (Pool slots run from the launchpad's pool hook, 03), and
-- subscribed to the callback by its `flags`.
+- not empty (an item is equipped, or it is the Locked slot), and
+- not kind War (no callbacks, ever), and
+- subscribed to the callback by its token `flags`.
+
+Pool slots are called here **only** for the token callbacks their `flags` name (the token half of a
+template such as Raid); their pool callbacks are the launchpad's (03).
+
+**No mint callbacks for item slots (R12).** Item slots (every kind but Locked) may not carry
+`BEFORE_MINT` or `AFTER_MINT`, so `mint_to` never calls them. This keeps a companion launch's
+supply `mint_to` inside call depth 5 (section 8).
 
 Every called item sees the **same** pre-state: the original `amount`, the pre-operation balances and
 its own range of each holding's pre-operation hook data. Items do not see each other's answers in
@@ -167,75 +186,77 @@ phase each subscribed item sees the post-state and the total cut.
 ### 2.2 Accounts: one slice per called slot
 
 Upstream passes one optional `hook_program`, one optional `hook_signer` and the hook's extras as
-`remaining_accounts` (`transfer.rs:43-48`, `swap/src/token.rs:11-46`). For a slot mint the two
-named optional accounts are passed as this program's id (absent), and `remaining_accounts` is the
-concatenation, in slot order, of one **slice** per slot that the operation calls:
+`remaining_accounts` (`transfer.rs:43-48`, `programs/bordrless_swap/src/token.rs:11-46`). For a slot
+mint the two named optional accounts are passed as this program's id (absent), and
+`remaining_accounts` is the concatenation, in slot order, of one **slice** per slot the operation
+calls:
 
 ```
-slice(slot i) = [ program_i,            // must equal slots[i].program (WrongHookProgram)
-                  hook_signer_i,        // ["hook-authority", program_i] at slots[i].signer_bump (BadHookSigner)
-                  royalty_holding_i,    // only when slots[i].royalty_bps > 0 and max_cut_bps > 0 (WrongRoyaltyHolding)
-                  extras_i ... ]        // the item's registry list, resolved by the client
+item slot i:   [ program_i,         // must equal slots[i].program (WrongHookProgram)
+                 hook_signer_i,     // ["hook-authority", program_i] at slots[i].signer_bump (BadHookSigner)
+                 extras_i ... ]     // the item's registry list (section 7); includes the equip vault
+                                    // when the slot cuts
+Locked slot:   [ program, hook_signer, extras ... ]   // as upstream
 ```
 
 Each instruction that runs slots gains one argument, `slot_accounts: Vec<u8>`: the number of
 `extras_i` for each called slot, in order. The token program checks that the slices exactly cover
-`remaining_accounts` (`SlotAccountsMismatch`). Slots the operation does not call (empty, Pool, or
-not subscribed) have no slice and no entry. The same pattern exists upstream for the DEX, whose
-instruction arguments say how many accounts each hook slice takes (hooks-v2 "The extra-accounts
-registry", `swap/src/token.rs:11-46`).
+`remaining_accounts` (`SlotAccountsMismatch`). Slots the operation does not call have no slice and
+no entry. The same pattern exists upstream for the DEX, whose instruction arguments say how many
+accounts each hook slice takes (hooks-v2 "The extra-accounts registry").
 
 Two slots may run the same program (two `hookwars_items` items): they get two slices, each with the
-same program and signer accounts (one account lock each in the transaction). Account and byte cost
-per slice is to measure (M1).
+same program and signer accounts. Account and byte cost per slice is to measure (M1).
 
 ### 2.3 Slot flags
 
-Slot `flags` reuse upstream `token_flags` bits (`crates/bordrless-hook/src/lib.rs:48-67`) and add one:
+Token `flags` reuse upstream `token_flags` bits (`crates/bordrless-hook/src/lib.rs:48-67`) and add
+one:
 
 | Bit | Name | Meaning |
 | --- | --- | --- |
 | 0..5 | `BEFORE_TRANSFER` ... `AFTER_BURN` | as upstream |
-| 6 | `TRANSFER_RETURNS_DELTA` | `before_transfer` may answer cuts |
+| 6 | `TRANSFER_RETURNS_DELTA` | `before_transfer` may answer a cut |
 | 7 | `WRITES_HOOK_DATA` | `before_*` and `on_touch` may answer this slot's range |
 | 8 | `ANSWERS_TOUCH` (new) | `on_touch` runs (section 5) |
 
-`slot_flags::ALL = (1 << 9) - 1`. Which flags each kind may carry (`SlotFlagsNotAllowed` otherwise,
-checked at `set_slot_item` and at `create_mint` for a Locked slot):
+`slot_flags::ALL = (1 << 9) - 1`. Allowed per kind (`SlotFlagsNotAllowed` otherwise, checked at
+`set_slot_item`, and at `create_mint` for the Locked slot):
 
-| Kind | Allowed flags |
+| Kind | Allowed token flags |
 | --- | --- |
 | Fee | transfer callbacks, `TRANSFER_RETURNS_DELTA` |
-| Reward | all token callbacks, `TRANSFER_RETURNS_DELTA`, `WRITES_HOOK_DATA` (if `may_write_data`), `ANSWERS_TOUCH` (if `may_answer_touch`) |
-| Defense | all token callbacks, `WRITES_HOOK_DATA` (if `may_write_data`), `ANSWERS_TOUCH` (if `may_answer_touch`); never `TRANSFER_RETURNS_DELTA` |
+| Reward | transfer and burn callbacks, `TRANSFER_RETURNS_DELTA`, `WRITES_HOOK_DATA` (if `may_write_data`), `ANSWERS_TOUCH` (if `may_answer_touch`) |
+| Defense | transfer and burn callbacks, `WRITES_HOOK_DATA` (if `may_write_data`), `ANSWERS_TOUCH` (if `may_answer_touch`); never `TRANSFER_RETURNS_DELTA` |
 | Relation | as Reward |
-| Pool | none at the token level (0) |
-| Locked | `token_flags::ALL` (upstream meaning), never `ANSWERS_TOUCH` |
+| Pool | transfer callbacks, `WRITES_HOOK_DATA` (if `may_write_data`), `ANSWERS_TOUCH` (if `may_answer_touch`); never `TRANSFER_RETURNS_DELTA` (pool-side cuts are 03's, R2) |
+| War | none (0) |
+| Locked | `token_flags::ALL` (upstream meaning, mint callbacks included), never `ANSWERS_TOUCH` |
 
-`TRANSFER_RETURNS_DELTA` additionally needs `bounds.max_cut_bps > 0`; `WRITES_HOOK_DATA` needs
-`bounds.may_write_data`.
+No item slot may carry `BEFORE_MINT` or `AFTER_MINT` (R12). `TRANSFER_RETURNS_DELTA` additionally
+needs `bounds.max_cut_bps > 0`; `WRITES_HOOK_DATA` needs `bounds.may_write_data`.
 
 ### 2.4 Two calling conventions
 
 | Slot | Convention | Arguments | Answer |
 | --- | --- | --- | --- |
-| Locked | **legacy**, upstream unchanged | `TokenHookArgs` (`lib.rs:167-201`), full 64-byte hook data | `HookReturn` (`lib.rs:265-281`) |
-| Fee, Reward, Defense, Relation | **slot** (new) | `TokenSlotArgs` (2.5): only the slot's range | `SlotReturn` (3.1) |
+| Locked | **legacy**, upstream | `TokenHookArgs` (`lib.rs:167-201`) with the **full** 64 bytes of each holding (R8) | `HookReturn` (`lib.rs:265-281`); only the bytes inside the slot's range are applied |
+| Fee, Reward, Defense, Relation, Pool | **slot** (new) | `TokenSlotArgs` (2.5): only the slot's range | `SlotReturn` (3.1) |
 
-The legacy convention exists so the kit, Half-Life and `tax_hook` can sit in a Locked slot without
-being rewritten (00 section 3: "kept"). The callback names are the same in both conventions
-(`before_transfer`, `after_transfer`, `before_mint`, `after_mint`, `before_burn`, `after_burn`, with
-upstream discriminators `lib.rs:100-112`); the slot convention adds `on_touch` (discriminator
-`sha256("global:on_touch")[..8]`, computed into `discriminators::ON_TOUCH` when built). A program
-written for the slot convention (`hookwars_items`, 04) implements those instruction names with
-`TokenSlotArgs`; a legacy program is never put in a non-Locked slot, because its arguments would not
-decode (and `set_slot_item` only accepts programs the armory registered as templates, 02).
+The legacy convention lets the kit (and Half-Life or `tax_hook`, if used locked) sit in a Locked
+slot without being rewritten; the kit's only change is its `init` check (R9, interfaces). The
+callback names are the same in both conventions (`before_transfer`, `after_transfer`,
+`before_mint`, `after_mint`, `before_burn`, `after_burn`, upstream discriminators `lib.rs:100-112`);
+the slot convention adds `on_touch` (`discriminators::ON_TOUCH = sha256("global:on_touch")[..8]`,
+computed when built). A slot-convention program (`hookwars_items`, 04) implements those names with
+`TokenSlotArgs`. A legacy program is never put in a non-Locked slot (`set_slot_item` is signed only
+by the armory, which equips only registered templates, 02).
 
 ### 2.5 `TokenSlotArgs`
 
 ```rust
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TokenSlotOp { Transfer, Mint, Burn, Touch }
+pub enum TokenSlotOp { Transfer, Burn, Touch }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TokenSlotArgs {
@@ -246,15 +267,15 @@ pub struct TokenSlotArgs {
     pub slot: u8,
     pub item: Pubkey,
     pub mint: Pubkey,
-    pub source: Pubkey,               // the mint for a mint; the holding for a touch
+    pub source: Pubkey,               // the holding for a touch
     pub destination: Pubkey,          // the mint for a burn; the holding for a touch
-    pub source_owner: Pubkey,         // default for a mint
+    pub source_owner: Pubkey,
     pub destination_owner: Pubkey,    // default for a burn
-    /// Who signed: the source's owner or delegate; the mint authority; for a touch, the caller.
+    /// Who signed: the source's owner or delegate; for a touch, the caller.
     pub authority: Pubkey,
     pub authority_is_delegate: bool,
     pub amount: u64,                  // 0 for a touch
-    /// This slot's own cuts (After phase; 0 before).
+    /// This slot's own cut (After phase; 0 before).
     pub delta: u64,
     /// All slots' cuts together (After phase; 0 before).
     pub total_delta: u64,
@@ -263,12 +284,12 @@ pub struct TokenSlotArgs {
     pub decimals: u8,
     pub supply: u64,
     /// The source holding's bytes of this slot's range, without the epoch byte (`data_len - 1`
-    /// bytes); all zeros when the range is stale or never stamped (3.4), or for a mint.
+    /// bytes); all zeros when the range is stale or never stamped (3.4).
     pub source_data: Vec<u8>,
     /// The same for the destination; all zeros for a burn.
     pub destination_data: Vec<u8>,
-    /// `touch` only: the caller's context bytes (at most `MAX_HOOK_DATA`, 256, `lib.rs:41`).
-    pub context: Vec<u8>,
+    /// `touch` only: the caller's payload (at most `MAX_HOOK_DATA`, 256, `lib.rs:41`); empty otherwise.
+    pub payload: Vec<u8>,
 }
 ```
 
@@ -279,13 +300,12 @@ pub struct TokenSlotArgs {
 ```rust
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct SlotReturn {
-    /// Cuts from the amount (before_transfer only). Account indices are into this slot's callback
-    /// list (prefix 5, then extras_i). At most MAX_DELTAS, or MAX_DELTAS - 1 when the slot has a
-    /// royalty (3.3).
+    /// At most ONE cut (R1), before_transfer only. Its account index must name this slot's
+    /// `equip_vault` among the slot's extras.
     pub deltas: Vec<Delta>,
-    /// New bytes for this slot's range in the source holding (data_len - 1 bytes).
+    /// New bytes for this slot's range in the source holding (`data_len - 1` bytes).
     pub source_data: Option<Vec<u8>>,
-    /// New bytes for this slot's range in the destination holding (data_len - 1 bytes).
+    /// New bytes for this slot's range in the destination holding (`data_len - 1` bytes).
     pub destination_data: Option<Vec<u8>>,
 }
 ```
@@ -295,98 +315,101 @@ What each callback may answer (others refused, `UnsupportedHookReturn`), the slo
 
 | Callback | deltas | source_data | destination_data |
 | --- | --- | --- | --- |
-| `before_transfer` | with `TRANSFER_RETURNS_DELTA` | with `WRITES_HOOK_DATA` | with `WRITES_HOOK_DATA` |
-| `before_mint` | no | no | with `WRITES_HOOK_DATA` |
+| `before_transfer` | at most 1, with `TRANSFER_RETURNS_DELTA` | with `WRITES_HOOK_DATA` | with `WRITES_HOOK_DATA` |
 | `before_burn` | no | with `WRITES_HOOK_DATA` | no |
 | `on_touch` | no | with `WRITES_HOOK_DATA` (the touched holding) | no |
 | every `after_*` | nothing is read | | |
 
 A data field must be exactly `data_len - 1` bytes (`SlotDataLength`). Return data is read only when
-it is the slot program's own and non-empty, as upstream (`lib.rs:444-460`). Return data is cleared
-before each slot's call, so one item's answer can never be read as the next one's.
+it is the slot program's own and non-empty, as upstream (`lib.rs:444-460`), and is cleared before
+each slot's call, so one item's answer can never be read as the next one's.
 
 ### 3.2 Checks per slot, then across slots
 
-For each called slot `i` in the `Before` phase, with `cut_i = sum(deltas_i)` (checked arithmetic):
+For each called item slot `i` in the `Before` phase, with `cut_i` its delta (0 if none):
 
-1. Upstream answer rules: at most the delta budget (3.3), no zero delta, no index twice
-   (`TooManyDeltas`, `ZeroDelta`, `InvalidDeltaAccount`).
-2. `cut_i <= floor(amount * bounds_i.max_cut_bps / 10_000)` (`SlotCutExceeded`).
-3. Every delta target is an extra of slice `i`, a writable unfrozen holding of the mint, not the
-   source, the destination, or any slice's `royalty_holding` (`InvalidDeltaAccount`; extends
-   `hooks.rs:122-148`). Targets are unique across all slots of the operation, so two slots never
-   credit the same holding in one call to `apply_deltas` (`InvalidDeltaAccount`).
+1. Upstream answer rules (no zero delta) and **at most one delta** (`TooManyDeltas`).
+2. The delta's target is the slot's `equip_vault` (`WrongEquipVault`), a writable, unfrozen
+   holding of the mint (`InvalidDeltaAccount`, extends `hooks.rs:122-148`).
+3. `cut_i <= floor(amount * bounds_i.max_cut_bps / 10_000)` (`SlotCutExceeded`).
 
-Across slots: `sum_i cut_i <= amount` (`DeltaTooLarge`, as upstream `transfer.rs:115`). The
-destination receives `amount - sum_i cut_i`. All checks run before any balance or byte is written
+For the Locked slot (legacy answer): upstream checks (`Allowed::token(op, phase, flags)`, at most 3
+deltas, targets as upstream), then its cut is bound by its `max_cut_bps` like any slot.
+
+Across slots:
+- total deltas of all slots on one transfer `<= MAX_DELTAS` (`TooManyDeltas`), which the static
+  rule of 1.4 already guarantees and the program checks again;
+- `sum cut <= amount` (`DeltaTooLarge`, as upstream `transfer.rs:115`);
+- all delta targets distinct across slots (`InvalidDeltaAccount`).
+
+The destination receives `amount - sum cut`. All checks run before any balance or byte is written
 (upstream "All are checked before any is written", `hooks.rs:118-148`).
 
-### 3.3 Royalty: computed by the token program
+### 3.3 Where an item's cut goes (R1)
 
-Recommendation adopted: the token program computes and pays the royalty itself, from the slot's
-copied `royalty_bps`, so an item can never skip or shrink it, and a trader never pays more than the
-item's cut:
+A cutting item answers at most **one** delta, paid into its slot's **equip vault**
+(`["holding", mint, PDA(["equip", mint, slot], <ITEMS_ID>)]`). The token program does **not**
+compute or pay royalties. `settle_equip` in `hookwars_items` (04, permissionless, with a bounty)
+later pays the royalty to the item's royalty holding (02) and routes the rest to the item's
+destination (burn, war chest, partner, collector). The equip vault belongs to the slot, so a cut
+taken under one item and settled after a re-equip is settled by the items program's own records
+(04, `EquipState`), never by the token program.
 
-```
-royalty_i = floor(cut_i * royalty_bps_i / 10_000)
-```
+Consequences: `MAX_CUTTING_SLOTS <= MAX_DELTAS` (3), less one when the Locked slot may answer
+deltas on the same transfer; a trader never pays more than the cut; royalty logic is entirely off
+the transfer path.
 
-`royalty_i` is taken **out of** slot `i`'s deltas, in delta order: each delta is reduced until the
-royalty is covered; a delta reduced to 0 is dropped. The royalty is credited to
-`royalty_holding_i` (checked: equal to `slots[i].royalty_holding`, a writable holding of the mint,
-else `WrongRoyaltyHolding`). `royalty_bps <= MAX_ROYALTY_BPS` is checked at `set_slot_item`
-(`RoyaltyTooHigh`).
-
-Delta budget consequence: a slot with `royalty_bps > 0` may answer at most `MAX_DELTAS - 1` (2)
-deltas, so that with the royalty credit it never exceeds the upstream `MAX_DELTAS` (3) credits per
-cutting item (00 section 6, `MAX_CUTTING_SLOTS`). A transfer's total credits are therefore at most
-`MAX_DELTAS * MAX_CUTTING_SLOTS`; the account and compute cost of that is to measure (M1).
-
-The royalty is a token-side credit, in the mint being transferred. Bordrless's protocol share on a
-launch pool is taken by the DEX in SOL from the swap's measured cuts (hooks-v2 section 3.1); the
-royalty is part of the measured cut, so the order of the two shares is decision H4, resolved in 03.
+**Protocol payouts skip item slots (R16).** A transfer out of a protocol vault (an equip vault, the
+`PoolCuts` holding, a `RoyaltyOwner` holding, a war chest, a treaty inbox) must not be cut by the
+token's own items, or a Half-Life-style exit fee would tax royalty claims and settlements. Such a
+transfer passes `ProtocolSource { program, seeds }` in its arguments; the token program derives
+`create_program_address(seeds, program)`, checks it equals the source holding's owner and that
+`program` is one of `<ITEMS_ID>`, `<ARMORY_ID>`, `<WAR_ID>`, and then calls **only** the `Locked`
+slot (whose upstream rules, such as the kit's excluded owners, still apply). Any other transfer
+calls every slot. Error `NotProtocolSource`. Its compute cost is to measure (07).
 
 ### 3.4 Hook-data ranges and the epoch byte
 
 - Each slot with `data_len > 0` owns bytes `[data_offset, data_offset + data_len)` of every
   holding's `hook_data`.
-- **Byte `data_offset` is the epoch byte, owned by the token program.** The item sees and answers
-  only the `data_len - 1` bytes after it. The item's own layout tag (00 section 4.4, "byte 0 of each
-  range is a layout tag") is therefore the first byte the item sees.
-- When the token program reads a range for an item: if the epoch byte equals `slots[i].data_epoch`,
-  it passes the bytes; otherwise (0, or an older epoch) it passes zeros: the range is **stale or
-  never stamped**.
+- **Item ranges: byte `data_offset` is the epoch byte, owned by the token program** (00 section 4.4).
+  The item sees and answers only the `data_len - 1` bytes after it; its own layout tag is the first
+  byte it sees.
+- When the token program reads an item range: if the epoch byte equals `slots[i].data_epoch` it
+  passes the bytes, otherwise (0, or an older epoch) it passes zeros: the range is **stale or never
+  stamped**.
 - When it writes an item's answer: all-zero bytes clear the whole range including the epoch byte;
   anything else writes `data_epoch` into the epoch byte and the bytes after it.
-- `set_slot_item` increments `data_epoch` (wrapping 255 to 1). Data a previous item left behind is
-  then stale everywhere at once, without touching any holding.
-- A Locked slot that writes data owns all 64 bytes with **no** epoch byte, exactly as upstream (it
-  is never re-equipped, so there is nothing to tag).
+- `set_slot_item` increments `data_epoch` (wrapping 255 to 1). A previous item's data is then stale
+  in every holding at once, without touching any holding.
+- **Locked range (R8):** no epoch byte, starts at byte 0. The legacy program receives the full 64
+  bytes (as upstream) so its layout is unchanged; the token program writes back **only** the bytes
+  inside `[0, data_len)` of its answer and ignores the rest. The kit's range is bytes 0..32
+  (hooks-v2 4.4), leaving 32 bytes for item ranges.
 
-Known limit: after 255 equips of one slot an old epoch value comes back, and data left by an item
-255 equips ago would read as current. The armory's notice period bounds how often a slot can change
-(`MIN_NOTICE_SECS`); whether a 2-byte epoch is worth one more byte per range is open (section 9).
+Known limit (D-8): after 255 equips of one slot an old epoch value comes back. The armory's vote
+period bounds how often a slot can change; a 2-byte epoch is the fallback.
 
 ### 3.5 Applying
 
-In order: credit every slot's (reduced) deltas, then every royalty; move the balances (source loses
-`amount`, destination gains `amount - sum cut`); write every answered range (source and destination,
-per slot); then the `After` callbacks; then the event. Same order as upstream
-`transfer.rs:104-169`.
+In order: credit every slot's delta (each into its equip vault; the Locked slot's into its own
+targets), move the balances (source loses `amount`, destination gains `amount - sum cut`), write
+every answered range (source and destination, per slot, 3.4), run the `After` callbacks, emit the
+event. Same order as upstream `transfer.rs:104-169`.
 
 ### 3.6 Refusals
 
-An item refuses by failing its callback; the whole transaction fails, nothing moves (upstream
-behaviour of any failing CPI). The token program cannot catch a failed CPI, so `bounds.may_refuse =
-false` is **not enforceable at run time**. It is a declaration that the armory (02) and the template
-tests (04) must check before an item can be equipped in such a slot, and that the site shows. The
-cut bounds, the range bounds and the delta rules are enforced on every operation.
+An item refuses by failing its callback; the whole transaction fails, nothing moves (any failing
+CPI). The token program cannot catch a failed CPI, so `bounds.may_refuse = false` is **not
+enforceable at run time**: the armory (02) and the template tests (04) must check it before an item
+is equipped in such a slot, and the site shows it. Cut bounds, range bounds, the one-delta rule and
+vote locks are enforced on every operation.
 
 ## 4. Instructions
 
 ### 4.1 `create_mint` (changed)
 
-`CreateMintArgs` (`mint.rs:12-37`) gains:
+`CreateMintArgs` (`programs/bordrless_token/src/instructions/mint.rs:12-37`) gains:
 
 ```rust
 pub slot_authority: Option<Pubkey>,
@@ -396,23 +419,25 @@ pub struct SlotInit {
     pub kind: u8,
     pub equip_rule: u8,
     pub bounds: SlotBounds,
-    /// Range length including the epoch byte (Locked: 0 or 64).
+    /// Item slots: range length including the epoch byte, or 0. Locked: the legacy program's range
+    /// length from byte 0 (the kit: 32), or 0.
     pub data_len: u8,
-    /// Locked slots only: the program and its flags (upstream token_flags). Every other slot is
-    /// created empty and filled by the armory through set_slot_item (4.2).
+    /// Locked slot only: the program and its upstream token_flags. Every other slot is created
+    /// empty and equipped by the armory (R12).
     pub locked_program: Option<Pubkey>,
     pub locked_flags: u16,
 }
 ```
 
-Checks: upstream `create_mint` checks (`mint.rs:82-104`), then every rule of 1.4. `data_offset` is
-assigned in slot order; `data_epoch` starts at 1; a Locked slot gets `signer_bump` from
-`Mint::hook_signer(&program)` (`state.rs:61-65`). Non-Locked slots are created **empty**: initial
-items are equipped by the armory right after (02, 03), because only the armory's `SlotAuthority`
-may put an item in a slot. Event `SlotTableCreated` (section 6).
+Checks: upstream `create_mint` checks (`mint.rs:82-104`), then every rule of 1.4. The program
+assigns `data_offset` (Locked first from 0, then item ranges in slot order), derives and stores each
+cutting slot's `equip_vault`, sets `data_epoch = 1`, and for a Locked slot stores `program`,
+`flags = locked_flags` and `signer_bump` from `Mint::hook_signer(&program)` (`state.rs:61-65`).
 
-Consequence for launches (03): every non-Locked slot must be equipped, or deliberately left empty,
-**before** the supply `mint_to`, since `mint_to` runs the slots subscribed to mints.
+**Non-Locked slots start empty (R12).** The launchpad equips launch items through the armory
+before the supply `mint_to` (03); `mint_to` calls only the Locked slot in any case.
+
+Event `SlotsInitialized` (section 6), emitted right after the upstream `MintCreated`.
 
 ### 4.2 `set_slot_item` (new)
 
@@ -420,73 +445,97 @@ Accounts:
 
 | Account | |
 | --- | --- |
-| `slot_authority` | signer: `PDA(["slots", mint], <ARMORY_ID>)`, signing by CPI from the armory; must equal `mint.slot_authority` (`InvalidSlotAuthority`) |
+| `slot_authority` | signer: `PDA(["slots", mint], <ARMORY_ID>)` by CPI from the armory; equal to `mint.slot_authority` (`InvalidSlotAuthority`) |
 | `mint` | writable |
 | `program` | the new item's program (executable), or this program's id to empty the slot |
-| `royalty_holding` | the item's royalty holding of this mint, or this program's id when `royalty_bps` is 0 |
+| `equip_vault` | the slot's equip vault holding when the slot cuts (must exist), else this program's id |
 | event authority, this program | |
 
-Arguments: `slot: u8`, `item: Pubkey` (default to empty), `flags: u16`, `royalty_bps: u16`.
-
-Checks, in order:
+Arguments: `slot: u8`, `item: Pubkey` (default to empty), `flags: u16`, `pool_flags: u16`.
 
 | Check | Error |
 | --- | --- |
 | `slot < slot_count` | `SlotIndexOutOfRange` |
 | `kind != Locked` | `SlotLocked` |
-| emptying: `item` default, `flags` 0, `royalty_bps` 0 | `InvalidSlotItem` |
-| otherwise: `program` executable, not this program, not `<SWAP_ID>`, `<LAUNCH_ID>`, `<BRIDGE_ID>` | `InvalidSlotItem` |
-| `flags` allowed for the kind and bounds (2.3) | `SlotFlagsNotAllowed` |
-| `royalty_bps <= MAX_ROYALTY_BPS`; `royalty_bps > 0` only if `max_cut_bps > 0` | `RoyaltyTooHigh` |
-| `royalty_holding` is `["holding", mint, PDA(["royalty", item], <ARMORY_ID>)]` and exists | `WrongRoyaltyHolding` |
+| emptying: `item` default, both flags 0 | `InvalidSlotItem` |
+| otherwise: `program` executable, not this program, not `<SWAP_ID>`, `<LAUNCH_ID>`, `<BRIDGE_ID>`, `<ARMORY_ID>`, `<WAR_ID>` | `InvalidSlotItem` |
+| `flags` allowed for the kind and bounds (2.3); `pool_flags` 0 unless kind Pool; War: both 0 | `SlotFlagsNotAllowed` |
+| when `flags` has `TRANSFER_RETURNS_DELTA`: `equip_vault` equals `slots[slot].equip_vault` and is an existing holding of the mint | `WrongEquipVault` |
 
-The token program does **not** check the item's manifest against the slot's bounds or that the
-program is a registered template: that is the armory's job (02), which is the only signer. The
-token program enforces the bounds at every operation regardless (3.2), so a wrong manifest can never
-take more than the slot allows.
+The token program does not check that the program is a registered template or that the item's
+manifest fits the bounds: the armory (02) does, and it is the only signer. The bounds are enforced
+at every operation regardless (3.2).
 
-Effects: writes `item`, `program`, `flags`, `royalty_bps`, `royalty_holding`, `signer_bump`
-(`Mint::hook_signer(&program).1`, or the launchpad's signer bump for a Pool slot:
-`hook_signer(&<LAUNCH_ID>, &program).1`, `lib.rs:476-479`), increments `data_epoch`. Event
-`SlotItemSet`. No holding is touched (3.4).
+Effects: writes `item`, `program`, `flags`, `pool_flags`, `signer_bump`
+(`Mint::hook_signer(&program).1`), `launch_signer_bump` for a Pool slot
+(`hook_signer(&<LAUNCH_ID>, &program).1`, `lib.rs:476-479`), increments `data_epoch`. Event
+`SlotEquipped`. No holding is touched (3.4).
 
-The item's extra-accounts registry for this mint is created by the item's program (04) when the
-armory equips it, at the seed in section 7.
+### 4.3 `set_vote_lock` (new, R11)
 
-### 4.3 `transfer`, `mint_to`, `burn` (changed)
+Votes lock tokens in place: no escrow holding, no transfer.
+
+`Holding.reserved: [u8; 16]` (`state.rs:98-99`, always zero upstream) becomes two fields of the same
+total size, so `Holding::LEN` and every upstream offset are unchanged:
+
+```rust
+pub struct Holding {
+    // ... upstream fields through `hook_data: [u8; 64]` ...
+    /// Tokens the armory has locked for a vote; transfers and burns may not take `amount` below it
+    /// while `vote_lock_until` is in the future.
+    pub vote_locked: u64,       // was reserved[0..8], little-endian
+    /// Unix time the lock ends; 0 with no lock.
+    pub vote_lock_until: i64,   // was reserved[8..16], little-endian
+}
+```
+
+Accounts: `slot_authority` (signer, `PDA(["slots", mint], <ARMORY_ID>)`, equal to
+`mint.slot_authority`, `InvalidSlotAuthority`), `mint`, `holding` (writable, of `mint`,
+`MintMismatch`), event authority, this program.
+
+Arguments: `amount: u64`, `until: i64`. The armory computes the lock that should stand (for
+example the largest of the holder's open votes) and sets it; `amount = 0` or a past `until` clears
+it.
+
+Checks: `amount <= holding.amount` (`VoteLockExceedsBalance`); `holding` not frozen (`Frozen`).
+Event `VoteLockSet { mint, holding, owner, amount, until, ts }`.
+
+Enforcement in `transfer` and `burn` (slot mints and legacy mints alike, since the field is zero for
+every holding the armory never touched): when `now < vote_lock_until`,
+`source.amount - amount >= vote_locked`, else `VoteLocked`. Delegates are bound the same way.
+`close_holding` needs `amount == 0`, which a live lock already prevents.
+
+### 4.4 `transfer`, `mint_to`, `burn` (changed)
 
 - New argument `slot_accounts: Vec<u8>` (2.2), appended after `amount`. Empty for a legacy mint.
-- Legacy mint (`hook_program` set): upstream path, unchanged; `slot_accounts` must be empty
-  (`SlotAccountsMismatch`).
-- Slot mint: the named `hook_program` and `hook_signer` accounts are this program's id; slots run as
-  in sections 2 and 3. A Locked slot runs with the legacy convention inside the same walk, its slice
-  being `[program, signer, extras]` and its answer a `HookReturn` checked with
-  `Allowed::token(op, phase, locked_flags)`, and its full-range hook data written as upstream.
-- `mint_to` and `burn` never take cuts (upstream: only `before_transfer` answers deltas,
-  `lib.rs:320-342`).
+- Legacy mint (`hook_program` set): upstream path; `slot_accounts` must be empty
+  (`SlotAccountsMismatch`); the vote lock check of 4.3 applies.
+- Slot mint: the named `hook_program` and `hook_signer` accounts are this program's id; slots run
+  as in sections 2 and 3. The Locked slot runs with the legacy convention inside the same walk.
+- `mint_to` calls only the Locked slot (R12); `mint_to` and `burn` never take cuts (upstream:
+  only `before_transfer` answers deltas, `lib.rs:320-342`).
 - Prefix per slot call: `[slot hook_signer, mint, source, destination, authority]`, as upstream
   (`hooks.rs:66-70`, `mint.rs:175-180`, `transfer.rs:212-217`).
 
-### 4.4 `close_holding` (rule restated)
+### 4.5 `close_holding` (rule restated)
 
 Unchanged in spirit (`holding.rs:167-185`): an empty holding closes unless a hook still keeps data
-in it. For a slot mint, a range "keeps data" only when its epoch byte equals the slot's current
-`data_epoch` and any byte is non-zero; stale ranges do not block (`HookDataNotEmpty`). A Locked
-slot that writes data uses the upstream all-64-bytes-zero rule. On close, the account's bytes go
-away with it, stale ranges included.
+in it. For a slot mint, an item range "keeps data" only when its epoch byte equals the slot's
+current `data_epoch` and any of its bytes is non-zero; stale ranges do not block. The Locked range
+blocks when any byte in `[0, data_len)` is non-zero (`HookDataNotEmpty`).
 
-### 4.5 `write_hook_data` (restricted)
+### 4.6 `write_hook_data` (restricted)
 
-Kept for legacy mints exactly as upstream. For a slot mint it is allowed only for the Locked slot's
-program (the kit's `claim` uses it, `programs/bordrless_kit/src/instructions/claim.rs:119`),
-writing all 64 bytes; for any other slot it is refused (`HookDataNotWritable`). Slot items change
-data only through their answers and `touch`.
+Kept for legacy mints as upstream. For a slot mint it is allowed only for the Locked slot's
+program (the kit's `claim` uses it, `programs/bordrless_kit/src/instructions/claim.rs:119`); the
+token program writes only the bytes inside the Locked range (R8). For any other slot it is refused
+(`HookDataNotWritable`): item slots change data only through their answers and `touch`.
 
-### 4.6 `set_hook` and `set_authority(Hook)`
+### 4.7 `set_hook` and `set_authority(Hook)`
 
 Refused for a slot mint (`MixedHookModes`): its `hook_authority` is `None` by rule 1.4.
 
-## 5. `touch` (new)
+## 5. `touch(holding, slot_index, payload)` (new)
 
 Lets a program (the war program's bounty and quest claims, 05) have one slot's item update one
 holding's range with no transfer.
@@ -495,93 +544,96 @@ Accounts:
 
 | Account | |
 | --- | --- |
-| `caller` | signer: any account; reaches the item as `TokenSlotArgs.authority` and the prefix `authority` |
+| `caller` | signer: any account; reaches the item as `TokenSlotArgs.authority` and as the prefix `authority` |
 | `mint` | read-only |
 | `holding` | writable, of `mint` (`MintMismatch`) |
 | `program`, `hook_signer` | the slot's program and signer, checked as in 2.2 |
 | event authority, this program | |
 | remaining | the slot's `extras` |
 
-Arguments: `slot: u8`, `context: Vec<u8>` (at most `MAX_HOOK_DATA`), `extra_count: u8`.
+Arguments: `slot_index: u8`, `payload: Vec<u8>` (at most `MAX_HOOK_DATA`), `extra_count: u8`.
 
-Checks: slot in range and not empty (`SlotEmpty`), kind not Pool or Locked, slot has
-`ANSWERS_TOUCH` (`TouchNotSupported`), holding not frozen (`Frozen`), extras exactly `extra_count`
-(`SlotAccountsMismatch`).
+| Check | Error |
+| --- | --- |
+| `slot_index < slot_count`, slot not empty | `SlotIndexOutOfRange`, `SlotEmpty` |
+| kind not Locked or War; slot has `ANSWERS_TOUCH` | `TouchNotSupported` |
+| holding not frozen | `Frozen` |
+| `payload.len() <= MAX_HOOK_DATA` | `PayloadTooLong` |
+| extras exactly `extra_count` | `SlotAccountsMismatch` |
 
-Call: `on_touch` with `TokenSlotArgs { op: Touch, phase: Before, slot, item, mint, source: holding,
-destination: holding, source_owner: holding.owner, destination_owner: holding.owner, authority:
-caller, amount: 0, source_balance: holding.amount, destination_balance: holding.amount,
-source_data: range, destination_data: range, context, .. }`.
+Call: `on_touch` with `TokenSlotArgs { op: Touch, phase: Before, slot: slot_index, item, mint,
+source: holding, destination: holding, source_owner: holding.owner, destination_owner:
+holding.owner, authority: caller, amount: 0, source_balance: holding.amount, destination_balance:
+holding.amount, source_data: range, destination_data: range, payload, .. }`.
 
 Answer: `source_data` only (3.1). The item decides whether to act by checking `args.authority`
-(for example: only the war program's PDA may reset raid points) and `args.context`. `args.authority`
-is trustworthy because the token program verified it as a signer and only the token program can
-sign the hook signer the item receives. No `after_touch`.
+(for example: only the war program's signer may reset raid points) and `args.payload`.
+`args.authority` is trustworthy: the token program verified it as a signer, and only the token
+program can sign the hook signer the item receives.
 
-Event `Touched`.
+When the answer writes the range, the token program emits the upstream event `HookDataWritten
+{ mint, holding, owner, data }` (`events.rs:63-70`) with the holding's full 64 bytes after the write.
+No `after_touch`.
 
 ## 6. Events
 
 | Event | Fields | Notes |
 | --- | --- | --- |
-| `Transferred` | upstream fields (`events.rs:47-61`) plus `slot_cuts: Vec<SlotCut>` | `deltas` keeps listing every credit, royalties included, as `DeltaApplied` |
-| `SlotCut` (struct) | `slot: u8, item: Pubkey, cut: u64, royalty: u64` | one per slot that cut |
-| `SlotTableCreated` | `mint, slot_authority, slots: Vec<SlotInfo>` | `SlotInfo` = kind, equip_rule, bounds, data_offset, data_len, locked program |
-| `SlotItemSet` | `mint, slot, old_item, new_item, program, flags, royalty_bps, data_epoch, ts` | |
-| `Touched` | `mint, holding, owner, slot, item, caller, wrote: bool, ts` | hook data is not in events, as upstream |
-| `Minted`, `Burned` | unchanged | |
-
-`MintCreated` is unchanged (its layout stays readable by upstream indexers); the slot table is in
-`SlotTableCreated`, emitted right after it.
+| `Transferred` | upstream fields (`events.rs:47-61`) plus `slot_cuts: Vec<SlotCut>` | `deltas` keeps listing every credit as `DeltaApplied` |
+| `SlotCut` (struct) | `slot: u8, item: Pubkey, cut: u64` | one per slot that cut; `item` default for the Locked slot |
+| `SlotsInitialized` | `mint, slot_authority, slots: Vec<SlotInfo>` | `SlotInfo` = kind, equip_rule, bounds, data_offset, data_len, equip_vault, locked program; emitted after `MintCreated` |
+| `SlotEquipped` | `mint, slot: u8, old_item, new_item, program, flags, pool_flags, data_epoch, ts` | the one name for an item change (empties included) |
+| `VoteLockSet` | `mint, holding, owner, amount, until, ts` | |
+| `HookDataWritten` | upstream (`events.rs:63-70`) | also emitted by `touch` when the item writes |
+| `Minted`, `Burned`, `MintCreated` | unchanged | upstream indexers keep reading them |
 
 ## 7. Registries: one program, many items
 
 Upstream registry: `["bordrless-hook-accounts", mint_or_pool]` under the hook program
-(`lib.rs:490-493`). One program per mint could only publish one list per mint, but `hookwars_items`
-may run several items on the same mint.
-
-Proposed seed for slot items: `["bordrless-hook-accounts", mint, item]` under the item's program
-(`item` = the armory `Item` account key). A Locked slot keeps the upstream two-seed registry. The
-client resolves each called slot's list with the slot prefix (5 accounts) and the owners, as
-upstream `HookAccountList::resolve` (`lib.rs:571-608`). A new helper
-`slot_accounts_address(program, mint, item)` joins `hook_accounts_address`. `write_registry`
-(`lib.rs:612-`) is reused with the three-seed signer.
+(`lib.rs:490-493`). `hookwars_items` may run several items on one mint, so an item slot's registry
+is `["bordrless-hook-accounts", mint, item]` under the item's program (00 section 4.3; `item` = the
+armory `Item` account key). A cutting item's list includes its slot's equip vault holding. The
+Locked slot keeps the upstream two-seed registry. Clients resolve each called slot's list with the
+slot prefix (5 accounts) and the owners, as upstream `HookAccountList::resolve` (`lib.rs:571-608`).
+A new helper `slot_accounts_address(program, mint, item)` joins `hook_accounts_address`;
+`write_registry` (`lib.rs:612-`) is reused with the three-seed signer.
 
 ## 8. Call depth
 
 Invoke height counts the top-level instruction as 1; Solana's limit is 5 (hooks-v2 section 6).
-Items are leaf programs: a slot item must make no CPI (04 must honour this), so a slot call adds
-exactly one level.
+Items are leaf programs: a slot item makes no CPI (04), so a slot call adds exactly one level.
 
-| Path | Height of the deepest item call | Upstream reference | Measured |
+| Path | Deepest call | Upstream reference | Measured |
 | --- | --- | --- | --- |
 | wallet transfer | token 1, item 2 | 2 | to measure |
 | DEX swap delivery | DEX 1, token 2, item 3 | 3 (hooks-v2 6 table) | to measure |
-| launch supply `mint_to` | launch 1, token 2, item 3 | | to measure |
-| graduation top-up | launch 1, DEX 2, token 3, item 4 | 4 | to measure |
-| companion `create_launch` then `mint_to` | companion 1, launch 2, token 3, item 4 | 5 for `create_launch` from a companion (`docs/companions.md:75`) | to measure; must stay at most 5 |
-| armory equip at launch | launch 1, armory 2, token `set_slot_item` 3 (companion: 4) | | to measure |
+| launch supply `mint_to` | launch 1, token 2, Locked kit 3; item slots not called (R12) | | to measure |
+| graduation top-up and reserve burn | launch 1, DEX 2, token 3, item 4 | 4 | to measure |
+| companion `create_launch` then `mint_to` | companion 1, launch 2, token 3, Locked kit 4; items not called (R12) | 5 for `create_launch` from a companion (`docs/companions.md:75`) | to measure; must stay at most 5 |
+| armory equip at launch | launch 1, armory 2, token `set_slot_item` 3 (from a companion: 4) | | to measure |
+| armory vote | armory 1, token `set_vote_lock` 2 | | to measure |
 | war `touch` | war 1, token 2, item 3 | | to measure |
 
-Bytes, account locks, trace entries and compute per extra slice are to measure in M1 and recorded in
-07; `MAX_SLOTS` and `MAX_CUTTING_SLOTS` are set from them.
+Bytes, account locks, trace entries and compute per extra slice are to measure in M1 and recorded
+in 07; `MAX_SLOTS` and `MAX_CUTTING_SLOTS` are set from them.
 
 ## 9. Errors (new)
 
 `InvalidSlotTable`, `InvalidSlotAuthority`, `MixedHookModes`, `TooManyCuttingSlots`,
 `SlotIndexOutOfRange`, `SlotLocked`, `SlotEmpty`, `InvalidSlotItem`, `SlotFlagsNotAllowed`,
-`RoyaltyTooHigh`, `WrongRoyaltyHolding`, `SlotCutExceeded`, `SlotDataLength`,
-`SlotAccountsMismatch`, `TouchNotSupported`. Upstream errors keep their codes; new ones are appended
-after `NotHookAuthority` (`error.rs:61`) so upstream codes do not move.
+`WrongEquipVault`, `SlotCutExceeded`, `SlotDataLength`, `SlotAccountsMismatch`,
+`TouchNotSupported`, `PayloadTooLong`, `VoteLocked`, `VoteLockExceedsBalance`. Upstream errors
+keep their codes; new ones are appended after `NotHookAuthority` (`error.rs:61`). Existing errors
+reused: `TooManyDeltas`, `ZeroDelta`, `InvalidDeltaAccount`, `DeltaTooLarge`,
+`UnsupportedHookReturn`, `WrongHookProgram`, `BadHookSigner`, `HookDataNotEmpty`,
+`HookDataNotWritable`, `Frozen`, `MintMismatch`.
 
-Open at this level:
-- Epoch width: 1 byte (current) or 2 (3.4).
-- Whether a non-slot mint should keep the upstream size (a `version` 2 mint with a separate table)
-  if `MAX_SLOTS * 111` bytes of rent on every mint proves too much (D-1 revisit after M1).
+Open at this level: whether non-slot mints should keep the upstream size (a separate table) if
+`MAX_SLOTS * 112` bytes of rent on every mint proves too much (D-1, revisit after M1).
 
 ## 10. Tests
 
-Upstream suites that must still pass, unchanged except for the added `slot_accounts` argument in
+Upstream suites that must still pass, changed only by the added `slot_accounts` argument in
 builders (legacy mints): `programs/tests/tests/token.rs`, `token_hooks.rs`, `hook_signers.rs`,
 `hook_authority.rs`, `half_life.rs`, `kit.rs`, `kit_money.rs`, `launch.rs`, `launch_rules.rs`,
 `launch_configs.rs`, `launch_money.rs`, `swap.rs`, `swap_hooks.rs`, `bridge.rs`, `companion.rs`,
@@ -589,61 +641,75 @@ builders (legacy mints): `programs/tests/tests/token.rs`, `token_hooks.rs`, `hoo
 
 New LiteSVM tests (M1), with `hook_tester` extended to the slot convention:
 
-- table rules of 1.4, one test per error;
-- two cutting slots: each bound enforced (`SlotCutExceeded`), sum enforced (`DeltaTooLarge`),
-  royalty taken out of the cut, never on top; 3-delta budget with royalty;
-- a slot writing outside its length (`SlotDataLength`); two slots' ranges never overlap after a
-  sequence of transfers; stale data after `set_slot_item` reads as zeros and does not block close;
-- a slot answering a field its flags do not allow (`UnsupportedHookReturn`);
-- `set_slot_item` signed by anything but the armory PDA (`InvalidSlotAuthority`);
+- the table rules of 1.4, one test per error;
+- two cutting slots plus a Locked Half-Life: one delta each into the right equip vault
+  (`WrongEquipVault` otherwise), per-slot bound (`SlotCutExceeded`), total `MAX_DELTAS`
+  (`TooManyDeltas`), sum bound (`DeltaTooLarge`);
+- a slot answering more than one delta (`TooManyDeltas`) or a field its flags do not allow
+  (`UnsupportedHookReturn`);
+- ranges: wrong length (`SlotDataLength`); two item ranges never overlap after a sequence of
+  transfers; stale data after `set_slot_item` reads as zeros and does not block close;
+- the kit in a Locked slot with range 0..32 next to an item range at 32..: the kit's answer bytes
+  outside 0..32 are ignored; `write_hook_data` from the kit writes only 0..32;
+- `mint_to` on a slot mint calls the Locked slot and no item slot;
+- `set_slot_item` and `set_vote_lock` signed by anything but the armory PDA (`InvalidSlotAuthority`);
+- vote locks: a transfer or burn below the locked amount before `until` fails (`VoteLocked`), the
+  same after `until` succeeds; a lock above the balance (`VoteLockExceedsBalance`); a delegate is
+  bound;
 - `touch` by an unexpected caller: the item ignores it; `touch` on a slot without `ANSWERS_TOUCH`;
-- a forged callback (an item called by someone other than the token program's signer) refused by
-  the item (as upstream `half_life.rs` "a forged callback is refused");
-- Locked slot running the kit with the legacy convention next to an item slot;
+  `HookDataWritten` emitted on a write;
+- a Pool slot with a token half stamps a range on transfer and is not called on `mint_to`;
+- a War slot is never called;
+- a forged callback (an item called by anything but the token program's signer) is refused by the
+  item, as upstream `half_life.rs` "a forged callback is refused";
 - measurements: bytes, account locks, trace entries, compute per slice; call depth per path in 8.
 
 ## 11. Interfaces
 
 ### Required from 02 (`hookwars_armory`)
 
-- `SlotAuthority` = `PDA(["slots", mint], <ARMORY_ID>)`; the armory signs `set_slot_item` with it by
-  CPI and is the only program that does.
-- Before calling `set_slot_item` the armory checks: the program is a registered template program
-  (immutable or managed, 00 rule 3), the item's manifest fits the slot's `bounds` and kind (reads
-  `Mint.slots[slot]`), `may_refuse` honoured, the item's data bytes `<= data_len - 1`, and the
-  equip rule (vote, performance, notice).
-- The armory passes, from the `Item` account: `item` (its key), `program`, `flags`, `royalty_bps`.
-- The armory creates the item's royalty holding (`create_holding` of
-  `PDA(["royalty", item], <ARMORY_ID>)` for the mint) before equipping an item with a royalty.
+- `SlotAuthority` = `PDA(["slots", mint], <ARMORY_ID>)`; the armory signs `set_slot_item` and
+  `set_vote_lock` with it by CPI and is the only program that does.
+- Before `set_slot_item` the armory checks: the program is a registered template program
+  (immutable or managed, 00 rule 3), the item's manifest fits the slot's kind and `bounds` (it reads
+  `Mint.slots[slot]`), `may_refuse` honoured, the item's data bytes `<= data_len - 1`, no mint
+  callbacks, and the equip rule (vote, performance, notice). It passes `item`, `program`, `flags`,
+  `pool_flags` from its `Item` and `Template` records.
+- The armory computes each holder's standing vote lock and calls `set_vote_lock(amount, until)`; it
+  clears locks when votes end.
 - The armory triggers the item program's registry creation at `["bordrless-hook-accounts", mint,
-  item]` (section 7) when equipping.
+  item]` when equipping.
 
 ### Required from 03 (launchpad, DEX)
 
-- The launchpad creates a Hookwars mint with `slots` and `slot_authority = PDA(["slots", mint],
-  <ARMORY_ID>)`, `hook_program = None`, `hook_authority = None`, and equips initial items through
-  the armory **before** the supply `mint_to`.
-- The DEX's token side (`swap/src/token.rs:11-46`) carries, for a slot mint, the concatenated slot
-  slices and `slot_accounts` instead of one hook slice; the client builds them per side.
-- The launchpad calls Pool slots itself, reading `Mint.slots` (kind Pool, `program`, `flags`,
-  `signer_bump` computed for the launchpad's signer, `item`); the token program never calls them.
-- The kit's `init` check `mint.hook_program == Some(KIT_ID)`
-  (`programs/bordrless_kit/src/instructions/init.rs:92-96`) must accept a slot mint whose Locked slot
-  runs the kit with the same flags. This is a one-check change to the kit (see conflicts).
+- The launchpad creates a Hookwars mint with `slots` (non-Locked slots empty), `slot_authority =
+  PDA(["slots", mint], <ARMORY_ID>)`, `hook_program = None`, `hook_authority = None`, and equips
+  launch items through the armory **before** the supply `mint_to` (R12).
+- The DEX's token side (`programs/bordrless_swap/src/token.rs:11-46`) carries, for a slot mint, the
+  concatenated slot slices and `slot_accounts` instead of one hook slice; the client builds them
+  per side.
+- The launchpad calls Pool slots' pool halves itself, reading `Mint.slots` (kind Pool, `program`,
+  `pool_flags`, `launch_signer_bump`, `item`); the token program calls only their token halves.
+- Kit change (R9): `init`'s check `mint.hook_program == Some(KIT_ID)`
+  (`programs/bordrless_kit/src/instructions/init.rs:92-96`) accepts a slot mint whose Locked slot
+  runs the kit with the same flags and range 0..32.
 
 ### Required from 04 (`hookwars_items`)
 
-- Implements `before_transfer`, `after_transfer`, `before_mint`, `after_mint`, `before_burn`,
-  `after_burn`, `on_touch` taking `TokenSlotArgs` and answering `SlotReturn` through return data.
+- Implements `before_transfer`, `after_transfer`, `before_burn`, `after_burn`, `on_touch` taking
+  `TokenSlotArgs` and answering `SlotReturn` through return data; never `before_mint` or
+  `after_mint` (R12).
 - Verifies account 0 is the token program's `["hook-authority", <ITEMS_ID>]` signer (canonical bump,
-  as upstream hooks do), and that `args.item` is an item of its own template whose `Item` account it
-  reads, matching `Mint.slots[args.slot].item`.
+  as upstream hooks do) and that `args.item` matches `Mint.slots[args.slot].item`.
 - Makes no CPI from a slot callback.
-- Each template declares its range length as `data_len - 1` visible bytes (the epoch byte is the
-  token program's), its first visible byte being its layout tag.
+- A cutting template answers at most one delta, into its slot's equip vault
+  `["holding", mint, PDA(["equip", mint, slot], <ITEMS_ID>)]`, and creates that holding when the
+  first item is equipped; `settle_equip` pays royalties and destinations from it (R1).
+- Declares each template's range as `data_len - 1` visible bytes, its first visible byte being its
+  layout tag.
 - Publishes its per-(mint, item) registry at `["bordrless-hook-accounts", mint, item]`.
 
 ### Required from 05 (`hookwars_war`)
 
-- Uses `touch` with its own PDA as `caller`; the template's `on_touch` accepts only that caller for
-  point resets.
+- Calls `touch(holding, slot_index, payload)` with its own signer PDA as `caller`; the template's
+  `on_touch` accepts point resets only from that caller.
