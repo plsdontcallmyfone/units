@@ -788,6 +788,7 @@ name = "bordrless-program-tests"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
+ "armory-stub",
  "bordrless-bridge",
  "bordrless-companion",
  "bordrless-core",
@@ -799,6 +800,7 @@ dependencies = [
  "half-life",
  "hook-tester",
  "litesvm",
+ "slot-tester",
  "solana-account",
  "solana-hash",
  "solana-keypair",

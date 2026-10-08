@@ -124,7 +124,9 @@ pub struct Mint {
 }
 ```
 
-Size: `Mint::LEN = 519 + 33 + 1 + 112 * MAX_SLOTS` bytes (upstream `Mint` is 519 bytes including
+Size: `Mint::LEN = 519 + 33 + 1 + 112 * MAX_SLOTS` bytes (M1 built 113 per slot, see M1 notes;
+measured: 1,005 bytes at `MAX_SLOTS` 4, rent 7,885,680 lamports against 4,503,120 upstream,
+`budgets.rs::the_slot_table_size_and_rent`) (upstream `Mint` is 519 bytes including
 the 8-byte discriminator: 511 from the fields of `state.rs:10-50` plus 8; the SDK's integration
 guide `docs/integration/01-the-standard.md` lists the same 519). Every mint pays this size, slots or
 not; the extra rent per mint is to measure once `MAX_SLOTS` is set. A separate `SlotTable` account
@@ -605,8 +607,8 @@ Items are leaf programs: a slot item makes no CPI (04), so a slot call adds exac
 
 | Path | Deepest call | Upstream reference | Measured |
 | --- | --- | --- | --- |
-| wallet transfer | token 1, item 2 | 2 | to measure |
-| DEX swap delivery | DEX 1, token 2, item 3 | 3 (hooks-v2 6 table) | to measure |
+| wallet transfer | token 1, item 2 | 2 | 2 (`budgets.rs`, 1 to 3 slots) |
+| DEX swap delivery | DEX 1, token 2, item 3 | 3 (hooks-v2 6 table) | 3 (`budgets.rs`, buy and sell, 1 to 3 slots, ordinary pool) |
 | launch supply `mint_to` | launch 1, token 2, Locked kit 3; item slots not called (R12) | | to measure |
 | graduation top-up and reserve burn | launch 1, DEX 2, token 3, item 4 | 4 | to measure |
 | companion `create_launch` then `mint_to` | companion 1, launch 2, token 3, Locked kit 4; items not called (R12) | 5 for `create_launch` from a companion (`docs/companions.md:75`) | to measure; must stay at most 5 |
@@ -713,3 +715,78 @@ New LiteSVM tests (M1), with `hook_tester` extended to the slot convention:
 
 - Calls `touch(holding, slot_index, payload)` with its own signer PDA as `caller`; the template's
   `on_touch` accepts point resets only from that caller.
+
+## M1 implementation notes (2026-10-08)
+
+Built in `programs/bordrless_token`, `crates/bordrless-hook`, test-only `programs/slot_tester` and
+`programs/armory_stub`, tests `programs/tests/tests/slots.rs` and `budgets.rs`. Where the build
+differs from the text above, the build is what exists; each difference and why:
+
+1. **No `slot_accounts` argument (2.2, 4.4).** Each `Slot` keeps `extra_count: u8`, the number of
+   extras its item takes, fixed when it is equipped (`set_slot_item` gains `extra_count`; a
+   Locked slot's comes from `SlotInit.locked_extra_count`). The slices are then determined by the
+   mint alone, so `transfer`, `mint_to` and `burn` keep their upstream instruction layout and the
+   DEX, launchpad, kit, bridge and companion call them unchanged (the DEX passes a slot mint's
+   slices as its token-hook extras). `Slot` is 113 bytes. An item whose registry changes length
+   after it is equipped makes its slot's operations fail (`SlotAccountsMismatch`) until the armory
+   re-equips it.
+2. **`create_mint` is unchanged; `create_slot_mint(args, slot_authority, slots)` is new** (4.1),
+   so the four upstream callers of `create_mint` are untouched.
+3. **R16 is its own instruction**, `transfer_from_protocol(amount, program, seeds)`, with the
+   `Transfer` accounts. On a legacy mint it runs the legacy hook as `transfer` does.
+4. **Account names.** `set_slot_item` and `touch` call the item's program account `item_program`:
+   Anchor's `#[event_cpi]` already adds an account named `program`.
+5. **Mint size and the SBF stack.** At 1,005 bytes the `Mint` overflowed two upstream frames at
+   build time (`cargo build-sbf` reported 6,528 bytes in the DEX `CreatePool` accounts and 6,272
+   in the kit `Init` accounts, against 4,096); the runtime symptom was a corrupted `create_pool`
+   argument (`HookDataTooLong`). The DEX `CreatePool` and the kit `Init` now box their `Mint`
+   accounts. No other frame overflows at this size; a larger `MAX_SLOTS` must be rebuilt and
+   checked for the same warning.
+6. **`MAX_SLOTS` = 4 and `MAX_CUTTING_SLOTS` = 3 are the build values** (`constants.rs`) for the
+   measurements below; they remain parameters (00 section 6).
+7. **Answer errors.** Slot answers use their own `SlotAnswerError` (adds `DataLength`, mapped to
+   `SlotDataLength`) so the shared `AnswerError` and the DEX's mapping are unchanged.
+8. **War rule.** A War slot needs `data_len` 0, no cut, no data and no touch; `may_refuse` is not
+   checked (it is declarative).
+9. **Test doubles.** `hook_tester` cannot also take the slot convention (the callback names are
+   the same, the argument types differ), so `slot_tester` is a separate test-only item program.
+   `armory_stub` is declared at `<ARMORY_ID>` and forwards a token instruction signed as
+   `["slots", mint]`; it is never deployed, and the real armory (M2) takes the same id.
+   `hook_tester` stands in for a Locked legacy hook; the kit itself in a Locked slot needs the
+   R9 change to its `init`, which is 03's.
+10. **Not tested, unreachable:** `DeltaTooLarge` across slots, since the table rule caps the sum of
+    `max_cut_bps` at 10,000.
+
+### Measured (M1, `programs/tests/tests/budgets.rs`)
+
+Ordinary DEX pool (no pool hook), each item answering a 1-unit cut, `slot_tester` items (a test
+item that rewrites a 4,000-byte script account on every call, so its compute is an upper bound
+for a leaf item, not a template's figure). "With table" puts every account the instruction
+names in one lookup table. 0 slots is a plain upstream mint.
+
+| Path | Cutting slots | Keys | v0 bytes | With table | Trace | Height | CU |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| transfer | 0 | 7 | 363 | 273 | 3 | 2 | 12,277 |
+| transfer | 1 | 11 | 495 | 281 | 4 | 2 | 30,028 |
+| transfer | 2 | 13 | 563 | 287 | 5 | 2 | 46,363 |
+| transfer | 3 | 15 | 631 | 293 | 6 | 2 | 62,856 |
+| buy | 0 | 14 | 609 | 302 | 7 | 3 | 51,032 |
+| buy | 1 | 18 | 741 | 310 | 8 | 3 | 70,848 |
+| buy | 2 | 20 | 809 | 316 | 9 | 3 | 88,689 |
+| buy | 3 | 22 | 877 | 322 | 10 | 3 | 106,733 |
+| sell | 0 | 14 | 609 | 302 | 7 | 3 | 51,036 |
+| sell | 1 | 18 | 741 | 310 | 8 | 3 | 70,892 |
+| sell | 2 | 20 | 809 | 316 | 9 | 3 | 88,732 |
+| sell | 3 | 22 | 877 | 322 | 10 | 3 | 106,775 |
+
+Each further slot of the same item program adds 2 keys (its script and its equip vault; the
+program and signer repeat), 68 v0 bytes without a table and 6 with one, 1 trace entry, no
+height, and with this test item 16,335 and 16,493 compute units on a transfer (the second and
+third slot) and 17,841 and 18,044 on a buy; the first slot also pays the slot path's fixed cost
+(transfer 12,277 to 30,028).
+
+**Proposal.** `MAX_SLOTS` = 4 and `MAX_CUTTING_SLOTS` = 3 (2 when the Locked slot may cut): three
+cutting slots fit a plain DEX buy at 877 bytes without a table and 322 with one, 10 trace entries
+and height 3. Before either is fixed, M3 must measure the same three slots on a **launch pool**
+swap and on buy-and-graduate, where upstream already uses about 1,200 of 1,232 bytes for a launch
+with one custom hook (`programs/half_life/README.md`).
