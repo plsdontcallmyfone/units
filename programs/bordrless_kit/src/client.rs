@@ -1,4 +1,4 @@
-// Changed by Hookwars: program ids and derived addresses.
+// Changed by Hookwars: program ids and derived addresses; Holding's reserved bytes are now the vote lock (unit test).
 //! Addresses, the hook accounts of a kit mint and instruction builders for calling the kit: used
 //! by the launch program (CPI), the tests and as the reference for the TypeScript SDK. Account
 //! order is that of each `Accounts` struct, with the event authority and the program appended as
@@ -255,7 +255,8 @@ mod tests {
             delegated_amount: 9,
             frozen: false,
             hook_data: [7; 64],
-            reserved: [0; 16],
+            vote_locked: 0,
+            vote_lock_until: 0,
         };
         let mut data = Vec::new();
         holding.try_serialize(&mut data).unwrap();

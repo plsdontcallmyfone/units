@@ -1,3 +1,4 @@
+// Changed by Hookwars: Mint accounts boxed (the Hookwars slot table makes Mint larger than the SBF stack frame allows).
 //! Pool creation, curve finalization and protocol fee collection.
 
 use anchor_lang::prelude::*;
@@ -58,9 +59,9 @@ pub struct CreatePool<'info> {
     /// CHECK: the config's treasury (address-checked).
     #[account(mut, address = config.treasury @ SwapError::WrongHolding)]
     pub treasury: UncheckedAccount<'info>,
-    pub base_mint: Account<'info, TokenMint>,
+    pub base_mint: Box<Account<'info, TokenMint>>,
     #[account(constraint = quote_mint.key() != base_mint.key() @ SwapError::SameMint)]
-    pub quote_mint: Account<'info, TokenMint>,
+    pub quote_mint: Box<Account<'info, TokenMint>>,
     #[account(
         init,
         payer = payer,

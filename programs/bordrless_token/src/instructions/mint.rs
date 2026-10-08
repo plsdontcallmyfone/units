@@ -1,3 +1,4 @@
+// Changed by Hookwars: mint_to on a slot mint calls only the Locked slot (R12); set_hook refused for slot mints.
 //! Mint creation, minting, authorities, hook and metadata.
 
 use anchor_lang::prelude::*;
@@ -7,6 +8,7 @@ use crate::constants::*;
 use crate::error::TokenError;
 use crate::events::*;
 use crate::hooks::HookCall;
+use crate::slots::{self, OpState, SlotOp};
 use crate::state::*;
 
 /// Arguments of `create_mint`.
@@ -102,6 +104,8 @@ pub fn process_create_mint(ctx: Context<CreateMint>, args: CreateMintArgs) -> Re
     mint.creator = ctx.accounts.payer.key();
     mint.hook_signer_bump = hook_signer_bump(args.hook_program);
     mint.reserved = [0; 31];
+    mint.slot_authority = None;
+    mint.slot_count = 0;
     emit_cpi!(MintCreated {
         mint: mint.key(),
         creator: ctx.accounts.payer.key(),
@@ -160,6 +164,69 @@ pub fn process_mint_to<'info>(ctx: Context<'info, MintTo<'info>>, amount: u64) -
         mint.max_supply == 0 || supply_post <= mint.max_supply,
         TokenError::MaxSupplyExceeded
     );
+
+    if mint.uses_slots() {
+        require!(
+            ctx.accounts.hook_program.is_none() && ctx.accounts.hook_signer.is_none(),
+            TokenError::MixedHookModes
+        );
+        let mint_info = mint.to_account_info();
+        let prefix = [
+            mint_info.clone(),
+            mint_info,
+            destination.to_account_info(),
+            ctx.accounts.authority.to_account_info(),
+        ];
+        let called = slots::slices(mint, SlotOp::Mint, prefix, ctx.remaining_accounts)?;
+        let mut state = OpState {
+            op: SlotOp::Mint,
+            mint: mint.key(),
+            source: mint.key(),
+            destination: destination.key(),
+            source_owner: Pubkey::default(),
+            destination_owner: destination.owner,
+            authority: ctx.accounts.authority.key(),
+            authority_is_delegate: false,
+            amount,
+            source_balance: 0,
+            destination_balance: destination.amount,
+            decimals: mint.decimals,
+            supply: mint.supply,
+            source_data: [0; 64],
+            destination_data: destination.hook_data,
+        };
+        let answers = slots::run_before(&state, &called)?;
+        let (_, destination_data) = slots::apply_data(&state, &called, &answers);
+        destination.amount = destination
+            .amount
+            .checked_add(amount)
+            .ok_or(TokenError::MathOverflow)?;
+        mint.supply = supply_post;
+        destination.hook_data = destination_data;
+        if called
+            .iter()
+            .any(|s| s.slot.flags & token_flags::AFTER_MINT != 0)
+        {
+            destination.exit(&crate::ID)?;
+            mint.exit(&crate::ID)?;
+            state.destination_balance = destination.amount;
+            state.supply = supply_post;
+            state.destination_data = destination.hook_data;
+            slots::run_after(&state, &called, &answers, 0)?;
+        }
+        emit_cpi!(Minted {
+            mint: mint.key(),
+            destination: destination.key(),
+            destination_owner: destination.owner,
+            authority: ctx.accounts.authority.key(),
+            amount,
+            destination_post: destination.amount,
+            supply_post,
+            slot: clock.slot,
+            ts: clock.unix_timestamp,
+        });
+        return Ok(());
+    }
 
     let hook = mint.hook();
     let call = HookCall::of(
@@ -305,6 +372,7 @@ pub fn process_set_hook(
         ctx.accounts.authority.key(),
         TokenError::NotAuthorized
     );
+    require!(!mint.uses_slots(), TokenError::MixedHookModes);
     check_hook(hook_program, hook_flags)?;
     mint.hook_program = hook_program;
     mint.hook_flags = hook_flags;

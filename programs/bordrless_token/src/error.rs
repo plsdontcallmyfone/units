@@ -1,3 +1,4 @@
+// Changed by Hookwars: slot errors appended after NotHookAuthority.
 //! Errors of the token standard.
 
 use anchor_lang::prelude::*;
@@ -59,6 +60,55 @@ pub enum TokenError {
     HookDataNotWritable,
     #[msg("the signer is not the hook authority of the mint's hook program")]
     NotHookAuthority,
+    #[msg("the slot table breaks a rule of slot tables")]
+    InvalidSlotTable,
+    #[msg("the slot authority is not the armory's [\"slots\", mint] PDA")]
+    InvalidSlotAuthority,
+    #[msg("a mint has either one hook or a slot table, never both")]
+    MixedHookModes,
+    #[msg("too many slots may cut on one transfer")]
+    TooManyCuttingSlots,
+    #[msg("no such slot")]
+    SlotIndexOutOfRange,
+    #[msg("the slot is locked")]
+    SlotLocked,
+    #[msg("the slot is empty")]
+    SlotEmpty,
+    #[msg("the slot item is not acceptable")]
+    InvalidSlotItem,
+    #[msg("the slot's kind or bounds do not allow these flags")]
+    SlotFlagsNotAllowed,
+    #[msg("a slot's cut must go to its equip vault")]
+    WrongEquipVault,
+    #[msg("the cut exceeds the slot's bound")]
+    SlotCutExceeded,
+    #[msg("a slot's data answer has the wrong length")]
+    SlotDataLength,
+    #[msg("the slot accounts do not match the slots called")]
+    SlotAccountsMismatch,
+    #[msg("the slot does not answer touch")]
+    TouchNotSupported,
+    #[msg("the payload is too long")]
+    PayloadTooLong,
+    #[msg("the holding's tokens are locked for a vote")]
+    VoteLocked,
+    #[msg("the vote lock exceeds the balance")]
+    VoteLockExceedsBalance,
+    #[msg("the source is not a protocol vault")]
+    NotProtocolSource,
+}
+
+/// The token program's error for a slot answer the protocol refuses.
+pub fn slot_answer_error(e: bordrless_hook::SlotAnswerError) -> Error {
+    use bordrless_hook::SlotAnswerError;
+    match e {
+        SlotAnswerError::Malformed => TokenError::InvalidHookReturn,
+        SlotAnswerError::TooManyDeltas => TokenError::TooManyDeltas,
+        SlotAnswerError::ZeroDelta => TokenError::ZeroDelta,
+        SlotAnswerError::Unsupported => TokenError::UnsupportedHookReturn,
+        SlotAnswerError::DataLength => TokenError::SlotDataLength,
+    }
+    .into()
 }
 
 /// The token program's error for an answer the hook protocol refuses.

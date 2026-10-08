@@ -1,3 +1,4 @@
+// Changed by Hookwars: slot protocol (slot flags and kinds, TokenSlotArgs, SlotReturn, on_touch).
 //! The Bordrless hook protocol (v2), shared by the token standard (`bordrless_token`), the DEX
 //! (`bordrless_swap`) and every program that implements a hook.
 //!
@@ -126,6 +127,8 @@ pub mod discriminators {
     pub const BEFORE_SWAP: [u8; 8] = [0xe3, 0x3b, 0xf0, 0x44, 0xa4, 0x09, 0x1d, 0xfe];
     /// `after_swap`.
     pub const AFTER_SWAP: [u8; 8] = [0xeb, 0xd7, 0xe8, 0xb7, 0x98, 0x6d, 0x05, 0x23];
+    /// `on_touch` (Hookwars slot convention).
+    pub const ON_TOUCH: [u8; 8] = [233, 147, 223, 93, 0, 49, 250, 80];
 }
 
 /// What a token hook is being told about.
@@ -1144,4 +1147,254 @@ mod tests {
         assert_eq!(bytes.len(), 364);
         assert_eq!(TokenHookArgs::try_from_slice(&bytes).unwrap(), args);
     }
+}
+
+
+// ---------------------------------------------------------------------------------------------
+// Hookwars: the slot protocol (docs/spec/01-token-slots.md).
+// ---------------------------------------------------------------------------------------------
+
+/// Seed of a mint's slot authority under the armory: `["slots", mint]`.
+pub const SLOTS_SEED: &[u8] = b"slots";
+/// Seed of a slot's equip vault owner under the items program: `["equip", mint, slot]`.
+pub const EQUIP_SEED: &[u8] = b"equip";
+/// Most deltas one slot item may answer (R1).
+pub const MAX_SLOT_DELTAS: usize = 1;
+
+/// Slot kinds (00 section 4.1).
+pub mod slot_kind {
+    /// Fee.
+    pub const FEE: u8 = 0;
+    /// Reward.
+    pub const REWARD: u8 = 1;
+    /// Defense.
+    pub const DEFENSE: u8 = 2;
+    /// Relation.
+    pub const RELATION: u8 = 3;
+    /// Pool.
+    pub const POOL: u8 = 4;
+    /// Locked (a legacy hook program, upstream convention).
+    pub const LOCKED: u8 = 5;
+    /// War (never called).
+    pub const WAR: u8 = 6;
+    /// Number of kinds.
+    pub const COUNT: u8 = 7;
+}
+
+/// Equip rules (00 section 4.2); the token program stores them and never acts on them.
+pub mod equip_rule {
+    /// The launch item stays.
+    pub const LOCKED: u8 = 0;
+    /// Holders vote.
+    pub const VOTE: u8 = 1;
+    /// Performance rule.
+    pub const PERFORMANCE: u8 = 2;
+    /// Number of rules.
+    pub const COUNT: u8 = 3;
+}
+
+/// Slot flags: the upstream token flags (bits 0..7) plus `ANSWERS_TOUCH`.
+pub mod slot_flags {
+    pub use super::token_flags::{
+        AFTER_BURN, AFTER_MINT, AFTER_TRANSFER, BEFORE_BURN, BEFORE_MINT, BEFORE_TRANSFER,
+        TRANSFER_RETURNS_DELTA, WRITES_HOOK_DATA,
+    };
+    /// `on_touch` runs.
+    pub const ANSWERS_TOUCH: u16 = 1 << 8;
+    /// Transfer callbacks.
+    pub const TRANSFER: u16 = BEFORE_TRANSFER | AFTER_TRANSFER;
+    /// Burn callbacks.
+    pub const BURN: u16 = BEFORE_BURN | AFTER_BURN;
+    /// Mint callbacks (Locked slots only).
+    pub const MINT: u16 = BEFORE_MINT | AFTER_MINT;
+    /// Every valid bit.
+    pub const ALL: u16 = (1 << 9) - 1;
+}
+
+/// What a slot item is told about.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TokenSlotOp {
+    /// A transfer.
+    Transfer,
+    /// A burn.
+    Burn,
+    /// A `touch` of one holding.
+    Touch,
+}
+
+/// Arguments of a slot item callback (the slot convention): like [`TokenHookArgs`], but each side's
+/// data is only the slot's own range, without the epoch byte.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct TokenSlotArgs {
+    /// The operation.
+    pub op: TokenSlotOp,
+    /// Before or after it.
+    pub phase: Phase,
+    /// Which slot is calling.
+    pub slot: u8,
+    /// The item equipped in it.
+    pub item: Pubkey,
+    /// The mint.
+    pub mint: Pubkey,
+    /// Source holding (the holding for a touch).
+    pub source: Pubkey,
+    /// Destination holding (the mint for a burn; the holding for a touch).
+    pub destination: Pubkey,
+    /// Source owner.
+    pub source_owner: Pubkey,
+    /// Destination owner (default for a burn).
+    pub destination_owner: Pubkey,
+    /// Who signed (the caller, for a touch).
+    pub authority: Pubkey,
+    /// Whether the signer acted as a delegate.
+    pub authority_is_delegate: bool,
+    /// The amount (0 for a touch).
+    pub amount: u64,
+    /// This slot's own cut (After phase; 0 before).
+    pub delta: u64,
+    /// All slots' cuts together (After phase; 0 before).
+    pub total_delta: u64,
+    /// Source balance.
+    pub source_balance: u64,
+    /// Destination balance.
+    pub destination_balance: u64,
+    /// Decimals.
+    pub decimals: u8,
+    /// Supply.
+    pub supply: u64,
+    /// The source holding's bytes of this slot's range (`data_len - 1` bytes; zeros when stale).
+    pub source_data: Vec<u8>,
+    /// The destination holding's bytes (zeros for a burn).
+    pub destination_data: Vec<u8>,
+    /// `touch` only: the caller's payload.
+    pub payload: Vec<u8>,
+}
+
+/// Why a slot answer is refused.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SlotAnswerError {
+    /// The return data does not decode as a [`SlotReturn`].
+    Malformed,
+    /// More than [`MAX_SLOT_DELTAS`] deltas.
+    TooManyDeltas,
+    /// A delta of zero.
+    ZeroDelta,
+    /// A field the callback or the flags do not allow.
+    Unsupported,
+    /// A data field of the wrong length.
+    DataLength,
+}
+
+/// What a slot item may answer in its return data.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct SlotReturn {
+    /// At most [`MAX_SLOT_DELTAS`] cut, `before_transfer` only, into the slot's equip vault.
+    pub deltas: Vec<Delta>,
+    /// New bytes of the slot's range in the source holding.
+    pub source_data: Option<Vec<u8>>,
+    /// New bytes of the slot's range in the destination holding.
+    pub destination_data: Option<Vec<u8>>,
+}
+
+/// Which fields of a [`SlotReturn`] one slot callback may fill.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SlotAllowed {
+    /// `deltas`.
+    pub deltas: bool,
+    /// `source_data`.
+    pub source_data: bool,
+    /// `destination_data`.
+    pub destination_data: bool,
+}
+
+impl SlotAllowed {
+    /// Whether anything at all may be answered.
+    pub fn any(&self) -> bool {
+        self.deltas || self.source_data || self.destination_data
+    }
+
+    /// What a slot with `flags` may answer for `op` in `phase` (spec 01 section 3.1).
+    pub fn of(op: TokenSlotOp, phase: Phase, flags: u16) -> Self {
+        if phase == Phase::After {
+            return Self::default();
+        }
+        let data = flags & slot_flags::WRITES_HOOK_DATA != 0;
+        match op {
+            TokenSlotOp::Transfer => Self {
+                deltas: flags & slot_flags::TRANSFER_RETURNS_DELTA != 0,
+                source_data: data,
+                destination_data: data,
+            },
+            TokenSlotOp::Burn | TokenSlotOp::Touch => Self {
+                deltas: false,
+                source_data: data,
+                destination_data: false,
+            },
+        }
+    }
+}
+
+impl SlotReturn {
+    /// The rules for a slot answer: no field outside `allowed`, at most one delta, above zero,
+    /// each data field exactly `data_len` bytes. Answers the cut.
+    pub fn check(
+        &self,
+        allowed: SlotAllowed,
+        data_len: usize,
+    ) -> core::result::Result<u64, SlotAnswerError> {
+        if (!self.deltas.is_empty() && !allowed.deltas)
+            || (self.source_data.is_some() && !allowed.source_data)
+            || (self.destination_data.is_some() && !allowed.destination_data)
+        {
+            return Err(SlotAnswerError::Unsupported);
+        }
+        if self.deltas.len() > MAX_SLOT_DELTAS {
+            return Err(SlotAnswerError::TooManyDeltas);
+        }
+        for d in [&self.source_data, &self.destination_data].into_iter().flatten() {
+            if d.len() != data_len {
+                return Err(SlotAnswerError::DataLength);
+            }
+        }
+        match self.deltas.first() {
+            Some(d) if d.amount == 0 => Err(SlotAnswerError::ZeroDelta),
+            Some(d) => Ok(d.amount),
+            None => Ok(0),
+        }
+    }
+}
+
+/// Reads a slot callback's answer, when `allowed` lets it answer anything and the return data is
+/// `program`'s own and non-empty.
+pub fn read_slot_answer(
+    program: &Pubkey,
+    allowed: SlotAllowed,
+    data_len: usize,
+) -> core::result::Result<Option<(SlotReturn, u64)>, SlotAnswerError> {
+    if !allowed.any() {
+        return Ok(None);
+    }
+    match get_return_data() {
+        Some((p, data)) if p == *program && !data.is_empty() => {
+            let answer = SlotReturn::try_from_slice(&data).map_err(|_| SlotAnswerError::Malformed)?;
+            let cut = answer.check(allowed, data_len)?;
+            Ok(Some((answer, cut)))
+        }
+        _ => Ok(None),
+    }
+}
+
+/// The registry of a slot item: `["bordrless-hook-accounts", mint, item]` under its program.
+pub fn slot_accounts_address(program: &Pubkey, mint: &Pubkey, item: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[HOOK_ACCOUNTS_SEED, mint.as_ref(), item.as_ref()], program)
+}
+
+/// The owner of a slot's equip vault: `["equip", mint, slot]` under `items_program`.
+pub fn equip_owner(items_program: &Pubkey, mint: &Pubkey, slot: u8) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[EQUIP_SEED, mint.as_ref(), &[slot]], items_program)
+}
+
+/// A mint's slot authority: `["slots", mint]` under `armory`.
+pub fn slot_authority(armory: &Pubkey, mint: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[SLOTS_SEED, mint.as_ref()], armory)
 }

@@ -1,3 +1,4 @@
+// Changed by Hookwars: slots helpers.
 //! LiteSVM harness for the Bordrless programs. The suites in `tests/` load the `.so` files that
 //! `scripts/solana/programs.sh build` wrote into `<checkout>/target/deploy` (or `SBF_OUT_DIR`), so
 //! they exercise the bytes that would be deployed.
@@ -8,6 +9,7 @@ pub mod fixture;
 pub mod hooks;
 pub mod kit;
 pub mod launch;
+pub mod slots;
 pub mod spl;
 
 pub use env::*;

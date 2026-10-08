@@ -1,3 +1,4 @@
+// Changed by Hookwars: invoke_raw for the slot convention.
 //! Hook CPIs of the token standard, the reading of a hook's answer and the application of its
 //! deltas.
 
@@ -63,6 +64,11 @@ impl<'a, 'info> HookCall<'a, 'info> {
         let mut data = Vec::with_capacity(8 + 364);
         data.extend_from_slice(&discriminator);
         args.serialize(&mut data)?;
+        self.invoke_raw(data)
+    }
+
+    /// Invokes one callback with `data` (discriminator and Borsh arguments already encoded).
+    pub fn invoke_raw(&self, data: Vec<u8>) -> Result<()> {
         let mut metas = Vec::with_capacity(TOKEN_PREFIX_ACCOUNTS + self.extras.len());
         metas.push(AccountMeta::new_readonly(*self.hook_signer.key, true));
         for info in &self.prefix {

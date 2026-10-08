@@ -1,11 +1,14 @@
+// Changed by Hookwars: slot path for slot mints, vote locks, transfer_from_protocol (R16).
 //! Transfers and burns, with hooks.
 
 use anchor_lang::prelude::*;
 use bordrless_hook::{discriminators, token_flags, Allowed, Phase, TokenHookArgs, TokenOp};
 
+use crate::constants::PROTOCOL_SOURCE_PROGRAMS;
 use crate::error::TokenError;
 use crate::events::*;
 use crate::hooks::{apply_deltas, HookCall};
+use crate::slots::{self, OpState, SlotOp};
 use crate::state::*;
 
 /// Checks that `authority` may move `amount` out of `holding` and, for a delegate, spends the
@@ -53,6 +56,34 @@ pub struct Transfer<'info> {
 /// for either side (with `WRITES_HOOK_DATA`), written with the balances. Never a burn. The source
 /// loses `amount`; the destination gains `amount` less the deltas.
 pub fn process_transfer<'info>(ctx: Context<'info, Transfer<'info>>, amount: u64) -> Result<()> {
+    run_transfer(ctx, amount, SlotOp::Transfer)
+}
+
+/// `transfer_from_protocol` (R16): a transfer out of a protocol vault. The source's owner must be
+/// the PDA `seeds` give under `program`, one of `PROTOCOL_SOURCE_PROGRAMS`; on a slot mint only
+/// the Locked slot runs.
+pub fn process_transfer_from_protocol<'info>(
+    ctx: Context<'info, Transfer<'info>>,
+    amount: u64,
+    program: Pubkey,
+    seeds: Vec<Vec<u8>>,
+) -> Result<()> {
+    require!(
+        PROTOCOL_SOURCE_PROGRAMS.contains(&program),
+        TokenError::NotProtocolSource
+    );
+    let refs: Vec<&[u8]> = seeds.iter().map(Vec::as_slice).collect();
+    let pda = Pubkey::create_program_address(&refs, &program)
+        .map_err(|_| TokenError::NotProtocolSource)?;
+    require_keys_eq!(pda, ctx.accounts.source.owner, TokenError::NotProtocolSource);
+    run_transfer(ctx, amount, SlotOp::ProtocolTransfer)
+}
+
+fn run_transfer<'info>(
+    ctx: Context<'info, Transfer<'info>>,
+    amount: u64,
+    op: SlotOp,
+) -> Result<()> {
     require!(amount > 0, TokenError::ZeroAmount);
     let clock = Clock::get()?;
     let mint = &ctx.accounts.mint;
@@ -61,6 +92,100 @@ pub fn process_transfer<'info>(ctx: Context<'info, Transfer<'info>>, amount: u64
     require!(!source.frozen && !destination.frozen, TokenError::Frozen);
     let is_delegate = spend_authority(source, ctx.accounts.authority.key, amount)?;
     require!(source.amount >= amount, TokenError::InsufficientFunds);
+    require!(
+        source.amount - amount >= source.locked_at(clock.unix_timestamp),
+        TokenError::VoteLocked
+    );
+
+    if mint.uses_slots() {
+        require!(
+            ctx.accounts.hook_program.is_none() && ctx.accounts.hook_signer.is_none(),
+            TokenError::MixedHookModes
+        );
+        let prefix = [
+            mint.to_account_info(),
+            source.to_account_info(),
+            destination.to_account_info(),
+            ctx.accounts.authority.to_account_info(),
+        ];
+        let called = slots::slices(mint, op, prefix, ctx.remaining_accounts)?;
+        let mut state = OpState {
+            op,
+            mint: mint.key(),
+            source: source.key(),
+            destination: destination.key(),
+            source_owner: source.owner,
+            destination_owner: destination.owner,
+            authority: ctx.accounts.authority.key(),
+            authority_is_delegate: is_delegate,
+            amount,
+            source_balance: source.amount,
+            destination_balance: destination.amount,
+            decimals: mint.decimals,
+            supply: mint.supply,
+            source_data: source.hook_data,
+            destination_data: destination.hook_data,
+        };
+        let answers = slots::run_before(&state, &called)?;
+        let mut taken = 0u64;
+        let mut deltas: Vec<DeltaApplied> = Vec::new();
+        let mut slot_cuts: Vec<SlotCut> = Vec::new();
+        for a in &answers {
+            if !a.deltas.is_empty() {
+                deltas.extend(apply_deltas(
+                    called[a.slice].call.extras,
+                    &a.deltas,
+                    &mint.key(),
+                    &[source.key(), destination.key()],
+                )?);
+            }
+            if a.cut > 0 {
+                let s = &called[a.slice];
+                slot_cuts.push(SlotCut {
+                    slot: s.index,
+                    item: s.slot.item,
+                    cut: a.cut,
+                });
+            }
+            taken += a.cut;
+        }
+        let (source_data, destination_data) = slots::apply_data(&state, &called, &answers);
+        source.amount -= amount;
+        destination.amount = destination
+            .amount
+            .checked_add(amount - taken)
+            .ok_or(TokenError::MathOverflow)?;
+        source.hook_data = source_data;
+        destination.hook_data = destination_data;
+        if called
+            .iter()
+            .any(|s| s.slot.flags & bordrless_hook::slot_flags::AFTER_TRANSFER != 0)
+        {
+            source.exit(&crate::ID)?;
+            destination.exit(&crate::ID)?;
+            state.source_balance = source.amount;
+            state.destination_balance = destination.amount;
+            state.source_data = source.hook_data;
+            state.destination_data = destination.hook_data;
+            slots::run_after(&state, &called, &answers, taken)?;
+        }
+        emit_cpi!(Transferred {
+            mint: mint.key(),
+            source: source.key(),
+            destination: destination.key(),
+            source_owner: source.owner,
+            destination_owner: destination.owner,
+            authority: ctx.accounts.authority.key(),
+            amount,
+            deltas,
+            source_post: source.amount,
+            destination_post: destination.amount,
+            slot: clock.slot,
+            ts: clock.unix_timestamp,
+            slot_cuts,
+        });
+        return Ok(());
+    }
 
     let hook = mint.hook();
     let call = HookCall::of(
@@ -166,6 +291,7 @@ pub fn process_transfer<'info>(ctx: Context<'info, Transfer<'info>>, amount: u64
         destination_post: destination.amount,
         slot: clock.slot,
         ts: clock.unix_timestamp,
+        slot_cuts: Vec::new(),
     });
     Ok(())
 }
@@ -197,6 +323,73 @@ pub fn process_burn<'info>(ctx: Context<'info, Burn<'info>>, amount: u64) -> Res
     require!(!source.frozen, TokenError::Frozen);
     let is_delegate = spend_authority(source, ctx.accounts.authority.key, amount)?;
     require!(source.amount >= amount, TokenError::InsufficientFunds);
+    require!(
+        source.amount - amount >= source.locked_at(clock.unix_timestamp),
+        TokenError::VoteLocked
+    );
+
+    if mint.uses_slots() {
+        require!(
+            ctx.accounts.hook_program.is_none() && ctx.accounts.hook_signer.is_none(),
+            TokenError::MixedHookModes
+        );
+        let mint_info = mint.to_account_info();
+        let prefix = [
+            mint_info.clone(),
+            source.to_account_info(),
+            mint_info,
+            ctx.accounts.authority.to_account_info(),
+        ];
+        let called = slots::slices(mint, SlotOp::Burn, prefix, ctx.remaining_accounts)?;
+        let mut state = OpState {
+            op: SlotOp::Burn,
+            mint: mint.key(),
+            source: source.key(),
+            destination: mint.key(),
+            source_owner: source.owner,
+            destination_owner: Pubkey::default(),
+            authority: ctx.accounts.authority.key(),
+            authority_is_delegate: is_delegate,
+            amount,
+            source_balance: source.amount,
+            destination_balance: 0,
+            decimals: mint.decimals,
+            supply: mint.supply,
+            source_data: source.hook_data,
+            destination_data: [0; 64],
+        };
+        let answers = slots::run_before(&state, &called)?;
+        let (source_data, _) = slots::apply_data(&state, &called, &answers);
+        source.amount -= amount;
+        mint.supply = mint
+            .supply
+            .checked_sub(amount)
+            .ok_or(TokenError::MathOverflow)?;
+        source.hook_data = source_data;
+        if called
+            .iter()
+            .any(|s| s.slot.flags & bordrless_hook::slot_flags::AFTER_BURN != 0)
+        {
+            source.exit(&crate::ID)?;
+            mint.exit(&crate::ID)?;
+            state.source_balance = source.amount;
+            state.supply = mint.supply;
+            state.source_data = source.hook_data;
+            slots::run_after(&state, &called, &answers, 0)?;
+        }
+        emit_cpi!(Burned {
+            mint: mint.key(),
+            source: source.key(),
+            source_owner: source.owner,
+            authority: ctx.accounts.authority.key(),
+            amount,
+            source_post: source.amount,
+            supply_post: mint.supply,
+            slot: clock.slot,
+            ts: clock.unix_timestamp,
+        });
+        return Ok(());
+    }
 
     let hook = mint.hook();
     let call = HookCall::of(

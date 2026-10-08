@@ -1,3 +1,4 @@
+// Changed by Hookwars: builders for the slot instructions.
 //! Instruction builders for calling this program: used by the other Bordrless programs (CPI) and
 //! by the tests. The account order here is the order of each `Accounts` struct, with the event
 //! authority and the program appended as `#[event_cpi]` does.
@@ -6,7 +7,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::instruction::Instruction;
 use anchor_lang::{system_program, InstructionData};
 
-use crate::instructions::CreateMintArgs;
+use crate::instructions::{CreateMintArgs, SlotInit};
 use crate::state::{AuthorityKind, Holding, Mint};
 
 /// This program's signer of every callback to `hook_program`: `["hook-authority",
@@ -411,4 +412,140 @@ mod tests {
             (a, expected)
         );
     }
+}
+
+
+// ------------------------------------------------------------------------------- Hookwars slots
+
+/// `create_slot_mint`.
+pub fn create_slot_mint(
+    payer: Pubkey,
+    mint: Pubkey,
+    args: CreateMintArgs,
+    slot_authority: Option<Pubkey>,
+    slots: Vec<SlotInit>,
+) -> Instruction {
+    Instruction {
+        program_id: crate::ID,
+        accounts: with_events(vec![
+            AccountMeta::new(payer, true),
+            AccountMeta::new(mint, true),
+            AccountMeta::new_readonly(system_program::ID, false),
+        ]),
+        data: crate::instruction::CreateSlotMint {
+            args,
+            slot_authority,
+            slots,
+        }
+        .data(),
+    }
+}
+
+/// `set_slot_item`, signed by the mint's slot authority (the armory's `["slots", mint]`).
+#[allow(clippy::too_many_arguments)]
+pub fn set_slot_item(
+    slot_authority: Pubkey,
+    mint: Pubkey,
+    program: Pubkey,
+    equip_vault: Option<Pubkey>,
+    slot: u8,
+    item: Pubkey,
+    flags: u16,
+    pool_flags: u16,
+    extra_count: u8,
+) -> Instruction {
+    Instruction {
+        program_id: crate::ID,
+        accounts: with_events(vec![
+            AccountMeta::new_readonly(slot_authority, true),
+            AccountMeta::new(mint, false),
+            AccountMeta::new_readonly(program, false),
+            optional(equip_vault),
+        ]),
+        data: crate::instruction::SetSlotItem {
+            slot,
+            item,
+            flags,
+            pool_flags,
+            extra_count,
+        }
+        .data(),
+    }
+}
+
+/// `set_vote_lock`, signed by the mint's slot authority.
+pub fn set_vote_lock(
+    slot_authority: Pubkey,
+    mint: Pubkey,
+    holding: Pubkey,
+    amount: u64,
+    until: i64,
+) -> Instruction {
+    Instruction {
+        program_id: crate::ID,
+        accounts: with_events(vec![
+            AccountMeta::new_readonly(slot_authority, true),
+            AccountMeta::new_readonly(mint, false),
+            AccountMeta::new(holding, false),
+        ]),
+        data: crate::instruction::SetVoteLock { amount, until }.data(),
+    }
+}
+
+/// `touch` of `holding` by `caller` through slot `slot` (its program; `extras` its accounts).
+pub fn touch(
+    caller: Pubkey,
+    mint: Pubkey,
+    holding: Pubkey,
+    program: Pubkey,
+    slot: u8,
+    payload: Vec<u8>,
+    extras: Vec<AccountMeta>,
+) -> Instruction {
+    let mut accounts = with_events(vec![
+        AccountMeta::new_readonly(caller, true),
+        AccountMeta::new_readonly(mint, false),
+        AccountMeta::new(holding, false),
+        AccountMeta::new_readonly(program, false),
+        AccountMeta::new_readonly(hook_signer(&program), false),
+    ]);
+    accounts.extend(extras);
+    Instruction {
+        program_id: crate::ID,
+        accounts,
+        data: crate::instruction::Touch { slot, payload }.data(),
+    }
+}
+
+/// `transfer_from_protocol` (R16): `extras` are the Locked slot's slice, if it runs.
+#[allow(clippy::too_many_arguments)]
+pub fn transfer_from_protocol(
+    authority: Pubkey,
+    source: Pubkey,
+    destination: Pubkey,
+    mint: Pubkey,
+    extras: Vec<AccountMeta>,
+    amount: u64,
+    program: Pubkey,
+    seeds: Vec<Vec<u8>>,
+) -> Instruction {
+    let mut ix = transfer_with(authority, source, destination, mint, None, extras, amount);
+    ix.data = crate::instruction::TransferFromProtocol {
+        amount,
+        program,
+        seeds,
+    }
+    .data();
+    ix
+}
+
+/// The slice one slot brings to an operation: its program, this program's signer for it, then
+/// `extras`.
+pub fn slot_slice(program: Pubkey, extras: Vec<AccountMeta>) -> Vec<AccountMeta> {
+    let mut v = vec![
+        AccountMeta::new_readonly(program, false),
+        AccountMeta::new_readonly(hook_signer(&program), false),
+    ];
+    v.extend(extras);
+    v
 }

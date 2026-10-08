@@ -1,3 +1,4 @@
+// Changed by Hookwars: slot events; Transferred gains slot_cuts.
 //! Events of the token standard, emitted by self-CPI. Transfers, mints and burns carry the
 //! post-balances of the holdings they touched, so an indexer keeps exact balances.
 
@@ -57,6 +58,66 @@ pub struct Transferred {
     pub source_post: u64,
     pub destination_post: u64,
     pub slot: u64,
+    pub ts: i64,
+    /// Hookwars: one entry per slot that cut (empty for a mint without slots).
+    pub slot_cuts: Vec<SlotCut>,
+}
+
+/// One slot's cut of a transfer.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SlotCut {
+    pub slot: u8,
+    /// The item (default for the Locked slot).
+    pub item: Pubkey,
+    pub cut: u64,
+}
+
+/// What `SlotsInitialized` reports per slot.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SlotInfo {
+    pub kind: u8,
+    pub equip_rule: u8,
+    pub max_cut_bps: u16,
+    pub may_refuse: bool,
+    pub may_write_data: bool,
+    pub may_answer_touch: bool,
+    pub data_offset: u8,
+    pub data_len: u8,
+    pub equip_vault: Pubkey,
+    /// The Locked slot's program (default otherwise).
+    pub locked_program: Pubkey,
+}
+
+/// A mint was created with a slot table (after `MintCreated`).
+#[event]
+pub struct SlotsInitialized {
+    pub mint: Pubkey,
+    pub slot_authority: Option<Pubkey>,
+    pub slots: Vec<SlotInfo>,
+}
+
+/// A slot's item changed (an empty included).
+#[event]
+pub struct SlotEquipped {
+    pub mint: Pubkey,
+    pub slot: u8,
+    pub old_item: Pubkey,
+    pub new_item: Pubkey,
+    pub program: Pubkey,
+    pub flags: u16,
+    pub pool_flags: u16,
+    pub data_epoch: u8,
+    pub ts: i64,
+}
+
+/// The armory set a holding's vote lock.
+#[event]
+pub struct VoteLockSet {
+    pub mint: Pubkey,
+    pub holding: Pubkey,
+    pub owner: Pubkey,
+    pub amount: u64,
+    pub until: i64,
     pub ts: i64,
 }
 

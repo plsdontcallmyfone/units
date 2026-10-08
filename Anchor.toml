@@ -23,6 +23,8 @@ members = [
   "programs/half_life",
   "programs/bordrless_companion",
   "programs/hook_tester",
+  "programs/slot_tester",
+  "programs/armory_stub",
 ]
 
 # One set of program IDs on every cluster (generated 2026-10-07; the keypairs are kept off the repo,
@@ -37,6 +39,8 @@ bordrless_kit = "CLEEZe3v8Sqa45J1VdmfKkjxqFGSj44MxA5prQH3xTLG"
 tax_hook = "q9mMtM6vfJ8YMffnkUNW5XLz7xeVyyeo1HL8SA27AuX"
 half_life = "67nAgW7h9wYmM1jLzrXVNy8UDNxgVFqGTqrTEPamtokh"
 hook_tester = "HCqwefEgryEDQo3hMqxirkmeAvaUhfFQSA8sCULDUdGt"
+slot_tester = "DxNYhg2wiqR27YtzKntfuPfxfRb7T1GaEVPaaQ52NxxP"
+armory_stub = "7xnkyX5B7Ywz86Cu2ofM5T2z2UPmy1qhpgrAuK9Kk5MU"
 bordrless_companion = "HzeAN8e7HbGx8wzgd5SpduF51c7rXCTqkQKcmw44YHkK"
 
 [programs.devnet]

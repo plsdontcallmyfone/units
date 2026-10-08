@@ -1,3 +1,4 @@
+// Changed by Hookwars: vote lock fields; close and write_hook_data rules for slot mints.
 //! Holdings: creation, delegation, freezing, closing.
 
 use anchor_lang::prelude::*;
@@ -54,7 +55,8 @@ pub fn process_create_holding(ctx: Context<CreateHolding>) -> Result<()> {
     holding.delegated_amount = 0;
     holding.frozen = false;
     holding.hook_data = [0; 64];
-    holding.reserved = [0; 16];
+    holding.vote_locked = 0;
+    holding.vote_lock_until = 0;
     emit_cpi!(HoldingCreated {
         mint: ctx.accounts.mint.key(),
         holding: holding.key(),
@@ -171,10 +173,18 @@ pub struct CloseHolding<'info> {
 pub fn process_close_holding(ctx: Context<CloseHolding>) -> Result<()> {
     let holding = &ctx.accounts.holding;
     require!(holding.amount == 0, TokenError::HoldingNotEmpty);
-    require!(
-        !ctx.accounts.mint.hook_writes_data() || holding.hook_data_is_empty(),
-        TokenError::HookDataNotEmpty
-    );
+    let mint = &ctx.accounts.mint;
+    if mint.uses_slots() {
+        require!(
+            !crate::slots::keeps_data(mint, &holding.hook_data),
+            TokenError::HookDataNotEmpty
+        );
+    } else {
+        require!(
+            !mint.hook_writes_data() || holding.hook_data_is_empty(),
+            TokenError::HookDataNotEmpty
+        );
+    }
     emit_cpi!(HoldingClosed {
         mint: holding.mint,
         holding: holding.key(),
@@ -200,8 +210,24 @@ pub struct WriteHookData<'info> {
 /// PDA at its canonical bump. Calls no hook.
 pub fn process_write_hook_data(ctx: Context<WriteHookData>, data: [u8; 64]) -> Result<()> {
     let mint = &ctx.accounts.mint;
-    let program = mint.hook_program.ok_or(TokenError::HookDataNotWritable)?;
-    require!(mint.hook_writes_data(), TokenError::HookDataNotWritable);
+    // A slot mint: only the Locked slot's program, and only inside its range (R8).
+    let locked = if mint.uses_slots() {
+        let (_, slot) = mint.locked_slot().ok_or(TokenError::HookDataNotWritable)?;
+        require!(
+            slot.flags & bordrless_hook::token_flags::WRITES_HOOK_DATA != 0 && slot.data_len > 0,
+            TokenError::HookDataNotWritable
+        );
+        Some(*slot)
+    } else {
+        None
+    };
+    let program = match &locked {
+        Some(slot) => slot.program,
+        None => {
+            require!(mint.hook_writes_data(), TokenError::HookDataNotWritable);
+            mint.hook_program.ok_or(TokenError::HookDataNotWritable)?
+        }
+    };
     let (expected, _) =
         Pubkey::find_program_address(&[bordrless_hook::HOOK_AUTHORITY_SEED], &program);
     require_keys_eq!(
@@ -210,7 +236,11 @@ pub fn process_write_hook_data(ctx: Context<WriteHookData>, data: [u8; 64]) -> R
         TokenError::NotHookAuthority
     );
     let holding = &mut ctx.accounts.holding;
-    holding.hook_data = data;
+    match &locked {
+        Some(slot) => crate::slots::write_locked(&mut holding.hook_data, slot, &data),
+        None => holding.hook_data = data,
+    }
+    let data = holding.hook_data;
     emit_cpi!(HookDataWritten {
         mint: mint.key(),
         holding: holding.key(),

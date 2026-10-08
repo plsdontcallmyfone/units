@@ -1,4 +1,4 @@
-// Changed by Hookwars: program ids and derived addresses.
+// Changed by Hookwars: program ids and derived addresses; slot table instructions (M1).
 //! `bordrless_token`: the Bordrless Token Standard.
 //!
 //! A mint is an account of this program holding supply, authorities, hook settings and metadata.
@@ -27,6 +27,7 @@ pub mod error;
 pub mod events;
 pub mod hooks;
 pub mod instructions;
+pub mod slots;
 pub mod state;
 
 pub use instructions::*;
@@ -117,6 +118,52 @@ pub mod bordrless_token {
         hook_flags: u16,
     ) -> Result<()> {
         mint::process_set_hook(ctx, hook_program, hook_flags)
+    }
+
+    /// Hookwars: creates a mint with a slot table and no single hook.
+    pub fn create_slot_mint(
+        ctx: Context<CreateMint>,
+        args: CreateMintArgs,
+        slot_authority: Option<Pubkey>,
+        slots: Vec<SlotInit>,
+    ) -> Result<()> {
+        slot_table::process_create_slot_mint(ctx, args, slot_authority, slots)
+    }
+
+    /// Hookwars: the armory puts an item in a slot (or empties it).
+    pub fn set_slot_item(
+        ctx: Context<SetSlotItem>,
+        slot: u8,
+        item: Pubkey,
+        flags: u16,
+        pool_flags: u16,
+        extra_count: u8,
+    ) -> Result<()> {
+        slot_table::process_set_slot_item(ctx, slot, item, flags, pool_flags, extra_count)
+    }
+
+    /// Hookwars: the armory locks a holding's tokens in place for a vote.
+    pub fn set_vote_lock(ctx: Context<SetVoteLock>, amount: u64, until: i64) -> Result<()> {
+        slot_table::process_set_vote_lock(ctx, amount, until)
+    }
+
+    /// Hookwars: one slot's item may rewrite one holding's range.
+    pub fn touch<'info>(
+        ctx: Context<'info, Touch<'info>>,
+        slot: u8,
+        payload: Vec<u8>,
+    ) -> Result<()> {
+        slot_table::process_touch(ctx, slot, payload)
+    }
+
+    /// Hookwars (R16): a transfer out of a protocol vault; on a slot mint only the Locked slot runs.
+    pub fn transfer_from_protocol<'info>(
+        ctx: Context<'info, Transfer<'info>>,
+        amount: u64,
+        program: Pubkey,
+        seeds: Vec<Vec<u8>>,
+    ) -> Result<()> {
+        transfer::process_transfer_from_protocol(ctx, amount, program, seeds)
     }
 
     /// Updates the mint's metadata; the metadata authority signs.

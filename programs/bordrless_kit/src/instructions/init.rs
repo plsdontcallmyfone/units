@@ -1,3 +1,4 @@
+// Changed by Hookwars: Mint accounts boxed (the Hookwars slot table makes Mint larger than the SBF stack frame allows).
 //! `init`: installs the kit on a launch's mint (`docs/hooks-v2.md` §4.10). Called by the launch
 //! program inside `create_launch`, signed by its kit-caller PDA for the mint.
 
@@ -26,7 +27,7 @@ pub struct Init<'info> {
     pub payer: Signer<'info>,
     /// The launch's new mint: the kit as hook with the flags of the modules, no hook authority,
     /// no mint authority, the whole supply minted (checked in the handler).
-    pub mint: Account<'info, TokenMint>,
+    pub mint: Box<Account<'info, TokenMint>>,
     /// The launch's holding of the mint, holding the whole supply.
     pub launch_reserve: Account<'info, Holding>,
     #[account(init, payer = payer, space = KitConfig::LEN, seeds = [KIT_SEED, mint.key().as_ref()], bump)]
@@ -36,7 +37,7 @@ pub struct Init<'info> {
     #[account(mut, seeds = [HOOK_ACCOUNTS_SEED, mint.key().as_ref()], bump)]
     pub registry: UncheckedAccount<'info>,
     /// The launch's quote mint: no hook, no hook authority, no freeze authority.
-    pub reward_mint: Account<'info, TokenMint>,
+    pub reward_mint: Box<Account<'info, TokenMint>>,
     /// CHECK: with holder rewards, `holding(reward_mint, kit_config)`, created here through the
     /// token program; absent (the kit's id) otherwise.
     #[account(mut)]
