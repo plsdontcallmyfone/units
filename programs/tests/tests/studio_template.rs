@@ -1,3 +1,4 @@
+// Changed by Hookwars: two tests ignored (see their attributes).
 //! Studio's hook template on a real launch (the monorepo's apps/server/src/studio/starters, built
 //! by the Studio build worker in the verifiable-build image for the fixed test ids below; the
 //! binaries are in programs/tests/fixtures). Every Studio hook has the same `prepare`, which a
@@ -123,6 +124,7 @@ fn prepare_is_the_standard_one_and_once_per_mint() {
 }
 
 #[test]
+#[ignore = "Changed by Hookwars: fixtures/studio_*.so are Bordrless Studio builds with Bordrless's token program id compiled in, and their source is not in this repository; re-enable when Hookwars ships its own Studio template builds"]
 fn a_blank_hook_launches_and_trades_as_a_plain_token() {
     let mut w = world();
     let (_, mint) = launch_with(&mut w, BLANK, token_flags::BEFORE_TRANSFER, "BLNK");
@@ -141,6 +143,7 @@ fn a_blank_hook_launches_and_trades_as_a_plain_token() {
 }
 
 #[test]
+#[ignore = "Changed by Hookwars: fixtures/studio_*.so are Bordrless Studio builds with Bordrless's token program id compiled in, and their source is not in this repository; re-enable when Hookwars ships its own Studio template builds"]
 fn a_sell_tax_hook_takes_three_percent_of_sells_to_its_collector() {
     let mut w = world();
     let flags = token_flags::BEFORE_TRANSFER | token_flags::TRANSFER_RETURNS_DELTA;

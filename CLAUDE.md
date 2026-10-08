@@ -8,6 +8,8 @@ measures or the owner decides it.
 The spec is `docs/spec/`. `00-overview.md` is the contract every other part follows; where a part
 and the overview differ, fix the part.
 
+Build and test on the build server `ssh -i ~/.ssh/hookwars_build root@206.189.99.242` (repo at /root/hookwars, synced with rsync excluding target and keys; keys from ~/.config/hookwars/program-keys on the Mac). M0 passed there 2026-10-08: 9 programs built, 180 tests pass, 2 ignored (Studio fixtures).
+
 Toolchain: upstream pins Linux x86_64 (Agave 4.3.0, platform-tools v1.57, Anchor CLI 1.2.0, host
 rustc >= 1.97.1). This Mac has the machine-wide Agave 3.1.12 that other sessions use: never replace
 `~/.local/share/solana/install/active_release` and never run `agave-install`/`solana-install`.
