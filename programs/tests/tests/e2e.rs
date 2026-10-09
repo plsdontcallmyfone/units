@@ -51,7 +51,10 @@ fn slot(kind: u8, max_cut_bps: u16, data_len: u8, touch: bool, burn: bool) -> Sl
 /// Sends `ixs` as a v0 transaction with one lookup table holding every key (as a client sends slot
 /// launches and their trades, 07 section 3), under a 1.4M compute limit.
 fn send(env: &mut bordrless_program_tests::env::Env, ixs: &[Instruction], payer: &Keypair, signers: &[&Keypair]) -> bordrless_program_tests::env::Tx {
-    let mut all = vec![bordrless_program_tests::env::compute_unit_limit(1_400_000)];
+    let mut all = vec![
+        bordrless_program_tests::env::compute_unit_limit(1_400_000),
+        bordrless_program_tests::env::heap_frame(256 * 1024),
+    ];
     all.extend(ixs.iter().cloned());
     let mut keys: Vec<Pubkey> = Vec::new();
     for i in &all {

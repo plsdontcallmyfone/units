@@ -10,7 +10,9 @@ crate-type = ["cdylib", "lib"]
 name = "bordrless_swap"
 
 [features]
-default = []
+# Changed by Hookwars: the DEX brings its own heap allocator (lib.rs `heap`), so routes can use a
+# requested heap frame.
+default = ["custom-heap"]
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-log-ix-name = []

@@ -431,6 +431,7 @@ export async function protocolTable(conn: Connection): Promise<AddressLookupTabl
   return checkProtocolLookupTable(r.value) === null ? [r.value] : [];
 }
 
+const SWAP_PROGRAM_ID = new PublicKey(PROGRAM_IDS.swap);
 const PACKET = 1_232;
 
 /** Compiles `ixs` as v0 with `tables`, simulating first when `simulate` (units used plus 15%, upstream
@@ -439,7 +440,8 @@ export async function finish(conn: Connection, payer: PublicKey, ixs: Transactio
   const tables = opts.tables ?? [];
   const { blockhash } = await conn.getLatestBlockhash('confirmed');
   const compile = (limit: number) => new VersionedTransaction(new TransactionMessage({
-    payerKey: payer, recentBlockhash: blockhash, instructions: [ComputeBudgetProgram.setComputeUnitLimit({ units: limit }), ...ixs],
+    // The DEX's allocator uses a requested heap frame: a route through slot launches needs more than 32 KiB.
+    payerKey: payer, recentBlockhash: blockhash, instructions: [ComputeBudgetProgram.setComputeUnitLimit({ units: limit }), ...(ixs.some((i) => i.programId.equals(SWAP_PROGRAM_ID)) ? [ComputeBudgetProgram.requestHeapFrame({ bytes: 256 * 1024 })] : []), ...ixs],
   }).compileToV0Message(tables));
   let limit = 1_400_000;
   if (opts.simulate !== false) {

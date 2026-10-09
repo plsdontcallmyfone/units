@@ -1,3 +1,4 @@
+// Changed by Hookwars: heap_frame helper.
 //! The LiteSVM environment: the programs (the six deployed ones and the test-only `hook_tester`),
 //! their upgrade authority, a clock, transactions and account reads.
 
@@ -40,6 +41,18 @@ pub const ASSOCIATED_TOKEN_ID: Pubkey =
 pub const LOOKUP_TABLE_META_SIZE: usize = 56;
 
 /// `SetComputeUnitLimit(units)`.
+/// Changed by Hookwars: `ComputeBudgetInstruction::RequestHeapFrame(bytes)` (a multiple of 1,024,
+/// at most 256 KiB), which the DEX's allocator uses for routes.
+pub fn heap_frame(bytes: u32) -> Instruction {
+    let mut data = vec![1u8];
+    data.extend_from_slice(&bytes.to_le_bytes());
+    Instruction {
+        program_id: COMPUTE_BUDGET_ID,
+        accounts: vec![],
+        data,
+    }
+}
+
 pub fn compute_unit_limit(units: u32) -> Instruction {
     let mut data = vec![2u8];
     data.extend_from_slice(&units.to_le_bytes());

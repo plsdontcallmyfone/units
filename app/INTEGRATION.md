@@ -97,6 +97,18 @@ copied to `idl/` and `packages/sdk/idl/`; `idl-types.gen.ts` regenerated.
   with that table), then `refresh_pool_registry`, `init_war` and `init_raid_ledger`. It needs
   `owner`, `mint`, `name`, `symbol` and `virtualQuote` (lamports, `MIN_VIRTUAL_QUOTE` to
   `MAX_VIRTUAL_QUOTE`).
+- `/v1/launch/prepare` runs in two phases: the default (`phase` "prepare") returns the prepare
+  and the equips; once those land, `phase: "launch"` returns the mint's lookup table, the launch
+  (deposit slices and the pool items' registries read from the chain, so the pool registry is
+  whole at launch) and the war chest stage. The site makes both calls.
+- `/v1/buy/prepare` (fuzz audit 1, finding 1): a buy on a launch pool cut to the exact remainder the
+  curve can still fill (`remainderBuy` in `@hookwars/shared`, within max wallet). Near graduation a
+  round buy is refused and `graduate` waits for the curve to fill, so clients and any crank send the
+  remainder; `CurveFull` (409) says the curve is ready to graduate. There is no graduate crank in
+  this app.
+- Sieges that wait (fuzz audit 1, finding 4): `siege` succeeds with `SiegeWaited`. The indexer keeps
+  each event in its own table, the feed maps `SiegeWaited` to `siege_waited`, the war map reads
+  executed sieges only, and the bots never post `siege_waited`.
 - `/v1/raid/prepare`: a two-hop `swap_route`, rival to SOL on the rival's own launch pool, then SOL
   to the target (the Raid template requires that first pool, security finding M-5).
 - `/v1/settle/prepare`: `settle_equip` with each module's destinations.
