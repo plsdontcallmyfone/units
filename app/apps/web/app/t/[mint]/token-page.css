@@ -1,7 +1,9 @@
 /* The reference's token page (cv3 layout, pn panels, market strip, feed, assets, radar), rules copied
    from the scraped sheets. Our combination: war orders left, chart middle, chest right. */
 @keyframes cxPulse { 0%, to { opacity: 1 } 50% { opacity: .35 } }
-.cv3 { --g: 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--g); }
+.cv3 { --g: 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--g); font-size: 13px; }
+/* The reference's token page runs wider and tighter than the directory: 1760px, 12px gutters. */
+body:has(.cv3) > .shell { max-width: 1760px; padding: var(--g, 12px) clamp(10px, 1.6vw, 24px) var(--s8); }
 .cv3 > * { min-width: 0; }
 .cv3 .scroll { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(236,233,223,.18) transparent; }
 .cv3 .k { display: inline-block; margin-right: 8px; font: 500 10px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
@@ -135,7 +137,7 @@
 .cv3-base .pn-b.flush { padding: 0; overflow-x: auto; }
 .cv3 table td, .cv3 table th { padding-left: var(--g); padding-right: var(--g); font-size: 13px; }
 /* Chart */
-.chart { position: relative; flex: 1 1; min-height: 200px; display: grid; }
+.chart { position: relative; flex: 1 1; min-height: 200px; }
 .chart svg { width: 100%; height: 100%; display: block; }
 .chart .grid-line { stroke: rgba(236,233,223,.08); stroke-width: 1; }
 .chart .axis-label { font: 10px var(--mono); fill: var(--muted); }

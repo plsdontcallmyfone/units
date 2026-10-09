@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { BattleEvent, HookwarsStatus, Page, WarMap } from '@hookwars/shared';
 import { read } from '@/lib/api';
-import { DASH, ago, int, short, sol } from '@/lib/format';
+import { DASH, ago, int, short } from '@/lib/format';
 import { Empty, Panel, ReadFailed } from '@/components/ui';
 
 type LaunchRow = Record<string, unknown>;
@@ -40,7 +40,7 @@ function TokenCard({ c, rank }: { c: Card; rank: number }) {
       <div className="card-body">
         <div className="card-title"><span className="card-name">{c.name}</span><span className="card-symbol">${c.symbol}</span></div>
         <dl className="card-stats">
-          <div><dt>CHEST</dt><dd>{c.chest ? sol(c.chest, 2) : DASH}</dd></div>
+          <div><dt>CHEST SOL</dt><dd>{c.chest ? (Number(c.chest) / 1e9).toLocaleString('en-US', { maximumFractionDigits: 2 }) : DASH}</dd></div>
           <div><dt>RAIDS</dt><dd>{int(c.raids)}</dd></div>
           <div><dt>LAST</dt><dd>{c.lastTs ? ago(c.lastTs) : DASH}</dd></div>
         </dl>

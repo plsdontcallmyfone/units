@@ -98,6 +98,9 @@ importers:
       geist:
         specifier: 1.4.2
         version: 1.4.2(next@15.5.4(react-dom@19.1.1(react@19.1.1))(react@19.1.1))
+      lightweight-charts:
+        specifier: 5.0.8
+        version: 5.0.8
       next:
         specifier: 15.5.4
         version: 15.5.4(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
@@ -131,7 +134,7 @@ importers:
     dependencies:
       '@anchor-lang/core':
         specifier: 1.2.1
-        version: 1.2.1(bufferutil@4.1.0)(typescript@5.9.2)
+        version: 1.2.1(bufferutil@4.1.0)(typescript@5.9.2)(utf-8-validate@6.0.6)
       '@hookwars/shared':
         specifier: workspace:^
         version: link:../shared
@@ -680,6 +683,9 @@ packages:
     resolution: {integrity: sha512-GipyPsXO1anza0AOZdy69Im7hGFCNB7Y/NGjDlZGJ3GJJLtwNSb2vrzYrTYJRrRloVx7pl+bhUaTB8yiccPvFQ==}
     engines: {node: '> 0.1.90'}
 
+  fancy-canvas@2.1.0:
+    resolution: {integrity: sha512-nifxXJ95JNLFR2NgRV4/MxVP45G9909wJTEKz5fg/TZS20JJZA6hfgRVh/bC9bwl2zBtBNcYPjiBE4njQHVBwQ==}
+
   fast-stable-stringify@1.0.0:
     resolution: {integrity: sha512-wpYMUmFu5f00Sm0cj2pfivpmawLZ0NKdviQ4w9zJeR8JVtOpOxHmLaJuj0vxvGqMJQWyP/COUkF75/57OKyRag==}
 
@@ -790,6 +796,9 @@ packages:
   lightningcss@1.33.0:
     resolution: {integrity: sha512-WkUDrojuJs0xkgGf2udWxa3yGBRxPtxUkB79i6aCZLRgc7PM8fZe9TosfPDcvEpQZbuFASnHYmRLBLUbmLOIIA==}
     engines: {node: '>= 12.0.0'}
+
+  lightweight-charts@5.0.8:
+    resolution: {integrity: sha512-dNBK5TlNcG78RUnxYRAZP4XpY5bkp3EE0PPjFFPkdIZ8RvnvL2JLgTb1BLh40trHhgJl51b1bCz8678GpnKvIw==}
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
@@ -1163,15 +1172,15 @@ packages:
 
 snapshots:
 
-  '@anchor-lang/borsh@1.2.1(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.2))':
+  '@anchor-lang/borsh@1.2.1(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.2)(utf-8-validate@6.0.6))':
     dependencies:
       '@solana/web3.js': 1.98.4(bufferutil@4.1.0)(typescript@5.9.2)(utf-8-validate@6.0.6)
       bn.js: 5.2.5
       buffer-layout: 1.2.2
 
-  '@anchor-lang/core@1.2.1(bufferutil@4.1.0)(typescript@5.9.2)':
+  '@anchor-lang/core@1.2.1(bufferutil@4.1.0)(typescript@5.9.2)(utf-8-validate@6.0.6)':
     dependencies:
-      '@anchor-lang/borsh': 1.2.1(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.2))
+      '@anchor-lang/borsh': 1.2.1(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.2)(utf-8-validate@6.0.6))
       '@anchor-lang/errors': 1.2.1
       '@noble/hashes': 1.8.0
       '@solana/web3.js': 1.98.4(bufferutil@4.1.0)(typescript@5.9.2)(utf-8-validate@6.0.6)
@@ -1592,6 +1601,8 @@ snapshots:
 
   eyes@0.1.8: {}
 
+  fancy-canvas@2.1.0: {}
+
   fast-stable-stringify@1.0.0: {}
 
   fdir@6.5.0(picomatch@4.0.7):
@@ -1683,6 +1694,10 @@ snapshots:
       lightningcss-linux-x64-musl: 1.33.0
       lightningcss-win32-arm64-msvc: 1.33.0
       lightningcss-win32-x64-msvc: 1.33.0
+
+  lightweight-charts@5.0.8:
+    dependencies:
+      fancy-canvas: 2.1.0
 
   magic-string@0.30.21:
     dependencies:
