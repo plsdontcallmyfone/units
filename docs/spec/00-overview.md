@@ -43,6 +43,8 @@ Spot only: every effect is a transfer, a cut, a burn, a fee change or a spot swa
 | `06-app.md` | indexer, API types, SDK additions, site pages (war room, map, armory, token page), bots, share cards |
 | `07-budgets-tests.md` | transaction budgets, call-depth table, test plan per milestone, security checklist |
 | `08-arsenal.md` | composite items and the arsenal of templates (ids 10 to 41), compatibility model, presets, build waves |
+| `09-agents.md` | agent identity: passports, soulbound badge (template 42), proof levels, attribution, policy wallets, diplomat bonds |
+| `10-expansion.md` | hooks as assets (market, collections, lineage, rental), social, economy and events packs; templates 43 to 45 |
 
 ## 3. Programs
 
@@ -59,6 +61,9 @@ Spot only: every effect is a transfer, a cut, a burn, a fee change or a spot swa
 | `hookwars_armory` | new | items, royalties, equip rules, loot minting, crafting |
 | `hookwars_items` | new | one program implementing every template; behaviour chosen by the item's template id and parameters |
 | `hookwars_war` | new | war chests, war state, siege, counter-strike, raze, bounties, loot tickets, quests, seasons |
+| `hookwars_agents` | new (09) | agent passports, soulbound badges, proof levels, track record, policy wallets, diplomat bonds |
+| `hookwars_market` | new (10) | item listings and sales, collections, rentals, commissions |
+| `hookwars_social` | new (10) | achievement badges, guild halls, agent leagues |
 
 Crate names stay `bordrless_*` for changed programs until a rename is decided (D-3), so upstream
 diffs stay readable. Every changed file carries a header line: `Changed by Hookwars: <what>`.
@@ -194,6 +199,7 @@ Parts refer to them by name only.
 | `MAX_ITEM_TARGETS`, `SIEGE_UNIT_LAMPORTS` | items per-equip targets; siege threshold unit (04) | O |
 | `ADMIN_TIMELOCK_SECS` | delay on every admin setter of armory and war (D-9) | O |
 | `MAX_MODULES`, `ITEM_DATA_MAX` | modules per composite; composite param storage | M |
+| agents and expansion parameters | every named parameter in 09 and 10 (section 13 of 10 lists 27; 09 lists 17) | O |
 | arsenal parameters | every floor, ceiling and named limit in 08 (e.g. `EMBARGO_MAX_TARGETS`, `LOYALTY_MIN_EPOCH_SECS`, `STREAK_MAX`, `MERC_MAX_POINTS_PER_UNIT`, `COOLDOWN_MAX_SECS`, `DECAY_MIN_SECS`, `DECAY_MAX_SECS`, `CAP_MIN_BPS`) | O |
 
 `PARAM_FIELDS` is at least 11 (the War orders template, 04).
@@ -306,6 +312,17 @@ Where a part disagrees with a ruling, the part is revised. Numbered for referenc
   (Guild Tag, Rank Badge refresh); the item checks the authority is the owner.
 - **R24 Item payouts** (`claim_loyalty`, `settle_referral`, `settle_equip`) leave protocol vaults
   only through `transfer_from_protocol`.
+- **R25 to R30 (agents, 09):** R25 agents never operate a token's rules; R26 attribution through
+  the agents `record` call after each instruction's own effects; R27 the three proof levels
+  (declared, linked, attested) and what each proves; R28 the soulbound badge shape (template 42) and
+  the armory accepting the agents caller for that shape only; R29 diplomat bonds forfeit only on a
+  real rejection and ship only after review 1 H-1, M-1, M-2 are fixed; R30 broker fee is the
+  royalty first, a war chest fee is opt-in. Full text in 09.
+- **R31 to R36 (expansion, 10):** R31 item income belongs to the holder at claim time and claims are
+  refused while an item is listed; R32 rent is a share of the royalty, never on top; R33 seasonal
+  meta applies only to new equips, items and forges; R34 the template author's share comes out of
+  item royalties, never on top; R35 the war-chest marker exclusion replaces R10's refusal if it fits
+  the measured budgets; R36 no outcome transfers between communities. Full text in 10.
 - **R15 Events the app relies on** (06 section 9): every part emits the events 06 lists, with the
   names 06 uses unless the part already named them; 06 adopts the parts' names where they differ.
 
@@ -316,3 +333,6 @@ Open after integration:
 | D-7 | Exempt war chests in the kit so sieges can target holder-reward tokens | Later: needs the rival chest's mint in the kit's accounts; measure first |
 | D-8 | Epoch byte wraps after 255 equips of one slot | Widen to 2 bytes only if a slot can plausibly see 255 equips (vote period bounds it) |
 | D-9 | Timelock on season admin powers (score weights, loot tables) | Yes, the same timelock as the protocol's other admin setters |
+| D-10 | First attestation verifiers (09) | Owner to name; timelocked set |
+| D-11 | Use the Agent Credit rung on chain (09) | Later; indexer-only first |
+| D-12 | Keep the one-time broker fee from war chests (09) | Opt-in per community, as specified |
