@@ -567,7 +567,7 @@
         },
         {
           "name": "dex_event_authority",
-          "address": "9cBz2tsg7FwopSsd6HzvtbiL6b7B46eLG436etkB7cyx"
+          "address": "H9iWcdJusEqJbe48kFTxoi4Txukv6b3k4WMSDBEk5v6q"
         },
         {
           "name": "swap_program",
@@ -801,7 +801,7 @@
         },
         {
           "name": "dex_event_authority",
-          "address": "9cBz2tsg7FwopSsd6HzvtbiL6b7B46eLG436etkB7cyx"
+          "address": "H9iWcdJusEqJbe48kFTxoi4Txukv6b3k4WMSDBEk5v6q"
         },
         {
           "name": "token_program",

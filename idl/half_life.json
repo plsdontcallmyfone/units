@@ -29,7 +29,7 @@
         {
           "name": "hook_signer",
           "signer": true,
-          "address": "FBZPj9PmV9dXL8U4qmRffXdXm11e23KEBnNgEVXxhfhF"
+          "address": "9XyWNU43yubo6Rd1XEADiUMMjRk2Mtd2jGtpoQVfBD85"
         },
         {
           "name": "mint"
@@ -294,7 +294,7 @@
         },
         {
           "name": "hook_signer",
-          "address": "FBZPj9PmV9dXL8U4qmRffXdXm11e23KEBnNgEVXxhfhF"
+          "address": "9XyWNU43yubo6Rd1XEADiUMMjRk2Mtd2jGtpoQVfBD85"
         },
         {
           "name": "token_program",

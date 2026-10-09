@@ -1,0 +1,724 @@
+{
+  "address": "8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv",
+  "metadata": {
+    "name": "hookwars_items",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Hookwars: one program implementing every template (docs/spec/04-templates.md). M2: the entry points the armory calls (validate_params, manifest, combine_params, init_equip, close_equip); the hook callbacks and settle_equip are M3."
+  },
+  "docs": [
+    "Instructions."
+  ],
+  "instructions": [
+    {
+      "name": "close_equip",
+      "docs": [
+        "Empties the slot's `EquipState`; refused while its vaults hold anything unsettled."
+      ],
+      "discriminator": [
+        56,
+        2,
+        244,
+        11,
+        20,
+        110,
+        162,
+        153
+      ],
+      "accounts": [
+        {
+          "name": "armory_signer",
+          "docs": [
+            "The armory's `[\"armory\"]` PDA."
+          ],
+          "signer": true,
+          "address": "2NSNJ4W51G5ZZSc4wVqkjyR8yr5yzuEjquKv7iprzSHP"
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "equip_state",
+          "docs": [
+            "The slot's `EquipState`."
+          ],
+          "writable": true
+        },
+        {
+          "name": "equip_vault",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "slot",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "combine_params",
+      "docs": [
+        "The forged params, as return data."
+      ],
+      "discriminator": [
+        14,
+        103,
+        151,
+        46,
+        238,
+        102,
+        239,
+        27
+      ],
+      "accounts": [
+        {
+          "name": "armory_signer",
+          "docs": [
+            "The armory's `[\"armory\"]` PDA."
+          ],
+          "signer": true,
+          "address": "2NSNJ4W51G5ZZSc4wVqkjyR8yr5yzuEjquKv7iprzSHP"
+        }
+      ],
+      "args": [
+        {
+          "name": "template_id",
+          "type": "u16"
+        },
+        {
+          "name": "field_min",
+          "type": {
+            "array": [
+              "u32",
+              11
+            ]
+          }
+        },
+        {
+          "name": "field_max",
+          "type": {
+            "array": [
+              "u32",
+              11
+            ]
+          }
+        },
+        {
+          "name": "gain_bps",
+          "type": "u16"
+        },
+        {
+          "name": "a",
+          "type": {
+            "array": [
+              "u32",
+              11
+            ]
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "array": [
+              "u32",
+              11
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "init_equip",
+      "docs": [
+        "Creates or resets the slot's `EquipState`, writes the item's registry, creates the equip",
+        "vault for an item that may cut on the token side. Return data: the registry length (`u8`),",
+        "which the armory passes to the token program as the slot's `extra_count`."
+      ],
+      "discriminator": [
+        244,
+        251,
+        246,
+        211,
+        6,
+        225,
+        213,
+        3
+      ],
+      "accounts": [
+        {
+          "name": "armory_signer",
+          "docs": [
+            "The armory's `[\"armory\"]` PDA."
+          ],
+          "signer": true,
+          "address": "2NSNJ4W51G5ZZSc4wVqkjyR8yr5yzuEjquKv7iprzSHP"
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Pays rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "equip_state",
+          "writable": true
+        },
+        {
+          "name": "registry",
+          "writable": true
+        },
+        {
+          "name": "equip_vault",
+          "docs": [
+            "cut on the token side."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_program",
+          "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "slot",
+          "type": "u8"
+        },
+        {
+          "name": "item",
+          "type": "pubkey"
+        },
+        {
+          "name": "template_id",
+          "type": "u16"
+        },
+        {
+          "name": "manifest",
+          "type": {
+            "defined": {
+              "name": "Manifest"
+            }
+          }
+        },
+        {
+          "name": "config",
+          "type": {
+            "defined": {
+              "name": "EquipConfig"
+            }
+          }
+        },
+        {
+          "name": "max_targets",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "manifest",
+      "docs": [
+        "The item's manifest, as return data (16 bytes)."
+      ],
+      "discriminator": [
+        64,
+        185,
+        112,
+        86,
+        80,
+        97,
+        120,
+        179
+      ],
+      "accounts": [
+        {
+          "name": "armory_signer",
+          "docs": [
+            "The armory's `[\"armory\"]` PDA."
+          ],
+          "signer": true,
+          "address": "2NSNJ4W51G5ZZSc4wVqkjyR8yr5yzuEjquKv7iprzSHP"
+        }
+      ],
+      "args": [
+        {
+          "name": "template_id",
+          "type": "u16"
+        },
+        {
+          "name": "params",
+          "type": {
+            "array": [
+              "u32",
+              11
+            ]
+          }
+        },
+        {
+          "name": "max_targets",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "validate_params",
+      "docs": [
+        "Template rules beyond floor and ceiling (also re-checks floor and ceiling)."
+      ],
+      "discriminator": [
+        107,
+        173,
+        134,
+        85,
+        141,
+        25,
+        150,
+        229
+      ],
+      "accounts": [
+        {
+          "name": "armory_signer",
+          "docs": [
+            "The armory's `[\"armory\"]` PDA."
+          ],
+          "signer": true,
+          "address": "2NSNJ4W51G5ZZSc4wVqkjyR8yr5yzuEjquKv7iprzSHP"
+        }
+      ],
+      "args": [
+        {
+          "name": "template_id",
+          "type": "u16"
+        },
+        {
+          "name": "field_min",
+          "type": {
+            "array": [
+              "u32",
+              11
+            ]
+          }
+        },
+        {
+          "name": "field_max",
+          "type": {
+            "array": [
+              "u32",
+              11
+            ]
+          }
+        },
+        {
+          "name": "params",
+          "type": {
+            "array": [
+              "u32",
+              11
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "EquipState",
+      "discriminator": [
+        224,
+        65,
+        82,
+        232,
+        178,
+        33,
+        39,
+        28
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "EquipClosed",
+      "discriminator": [
+        231,
+        87,
+        247,
+        150,
+        174,
+        240,
+        53,
+        44
+      ]
+    },
+    {
+      "name": "EquipInitialized",
+      "discriminator": [
+        141,
+        223,
+        137,
+        171,
+        98,
+        22,
+        194,
+        213
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "BadParams",
+      "msg": "the params break a template rule"
+    },
+    {
+      "code": 6001,
+      "name": "UnknownTemplate",
+      "msg": "unknown template"
+    },
+    {
+      "code": 6002,
+      "name": "NotForgeable",
+      "msg": "the two items cannot be forged together"
+    },
+    {
+      "code": 6003,
+      "name": "BadTargets",
+      "msg": "the targets or role do not fit the template"
+    },
+    {
+      "code": 6004,
+      "name": "VaultNotSettled",
+      "msg": "a vault of the slot still holds something unsettled"
+    },
+    {
+      "code": 6005,
+      "name": "SlotNotEmpty",
+      "msg": "the slot already holds an item"
+    },
+    {
+      "code": 6006,
+      "name": "NotEquipped",
+      "msg": "the slot holds no item"
+    },
+    {
+      "code": 6007,
+      "name": "WrongAccount",
+      "msg": "a wrong account"
+    }
+  ],
+  "types": [
+    {
+      "name": "EquipClosed",
+      "docs": [
+        "Emitted by `close_equip`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "docs": [
+              "The token."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "docs": [
+              "The slot."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "docs": [
+              "The item that left."
+            ],
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EquipConfig",
+      "docs": [
+        "Targets and role chosen by the community that equips an item (04 section 2.3)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "targets",
+            "docs": [
+              "Targets; their meaning is the template's."
+            ],
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "role",
+            "docs": [
+              "0 none; Tribute: 1 Pay, 2 Receive."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EquipInitialized",
+      "docs": [
+        "Emitted by `init_equip` (program log: called only by CPI)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "docs": [
+              "The token."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "docs": [
+              "The slot."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "docs": [
+              "The item."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "config",
+            "docs": [
+              "Targets and role."
+            ],
+            "type": {
+              "defined": {
+                "name": "EquipConfig"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "EquipState",
+      "docs": [
+        "One equip of a mint's slot (04 section 4). Also the owner of the slot's equip vault."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Layout version."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump of `[\"equip\", mint, slot]`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "docs": [
+              "The token."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "docs": [
+              "The slot."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "docs": [
+              "The equipped item (default when empty)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "template_id",
+            "docs": [
+              "Its template."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "config",
+            "docs": [
+              "Targets and role."
+            ],
+            "type": {
+              "defined": {
+                "name": "EquipConfig"
+              }
+            }
+          },
+          {
+            "name": "equipped_at",
+            "docs": [
+              "When equipped."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "runs",
+            "docs": [
+              "Callbacks run (M3)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "collected_token",
+            "docs": [
+              "Token-side cuts taken (M3)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "pool_owed",
+            "docs": [
+              "Pool-side cuts recorded (M3)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "pool_settled",
+            "docs": [
+              "Pool-side cuts settled (M3)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Reserved."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Manifest",
+      "docs": [
+        "What an item may do, computed once from its template and params (04 section 2.7; 16 bytes)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "kind",
+            "docs": [
+              "Slot kind."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "token_flags",
+            "docs": [
+              "Token flags (upstream bits plus `ANSWERS_TOUCH`); 0 without token callbacks."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "pool_flags",
+            "docs": [
+              "Pool flags; 0 without pool callbacks."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "max_cut_buy_bps",
+            "docs": [
+              "Worst-case pool cut on a buy."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "max_cut_sell_bps",
+            "docs": [
+              "Worst-case pool cut on a sell."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "max_cut_transfer_bps",
+            "docs": [
+              "Worst-case token-side cut on a transfer."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "max_discount_bps",
+            "docs": [
+              "Largest creator and holder fee discount."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "may_refuse",
+            "docs": [
+              "Can fail a transfer."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "may_burn",
+            "docs": [
+              "Answers a burn."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "data_bytes",
+            "docs": [
+              "Range bytes used, without the epoch byte."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "reads_other_pools",
+            "docs": [
+              "Foreign accounts it reads."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}
