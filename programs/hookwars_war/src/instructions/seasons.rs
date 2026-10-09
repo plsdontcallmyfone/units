@@ -149,6 +149,9 @@ pub fn process_submit_candidate(ctx: Context<SubmitCandidate>, number: u32) -> R
             beaten: b,
         }),
     }
+    // Integration pass 2 (09 section 21 item 4): optional agent attribution, after the effects.
+    let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.submitter.key(), hookwars_common::agents_record::CRANK, 0)?;
     Ok(())
 }
 
@@ -304,5 +307,8 @@ pub fn process_split_protocol_fees<'info>(
         bounty,
         cranker: ctx.accounts.cranker.key(),
     });
+    // Integration pass 2 (09 section 21 item 4): optional agent attribution, after the effects.
+    let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.cranker.key(), hookwars_common::agents_record::CRANK, rest)?;
     Ok(())
 }

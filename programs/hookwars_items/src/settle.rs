@@ -188,7 +188,8 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
     ] {
         require_keys_eq!(info.key(), pda::holding(m, o), ItemsError::WrongAccount);
     }
-    let rest = ctx.remaining_accounts;
+    // Integration pass 2 (09 section 21 item 5): an optional agent attribution suffix comes last.
+    let (rest, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
     require!(rest.len() >= 2 * modules.len(), ItemsError::WrongAccount);
     let (dests, locked) = rest.split_at(2 * modules.len());
 
@@ -321,5 +322,6 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
         bounty_token: b_t,
         bounty_quote: b_q,
     });
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.cranker.key(), hookwars_common::agents_record::CRANK, total_quote)?;
     Ok(())
 }

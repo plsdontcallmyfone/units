@@ -95,4 +95,8 @@ pub enum ArmoryError {
     RecipientOffCurve,
     #[msg("the proposer holds less than the proposal threshold")]
     BelowProposalThreshold,
+    #[msg("only an agent badge mint may hold a Soulbound item")]
+    NotBadge,
+    #[msg("a bond on this proposal is still posted: resolve it first")]
+    BondStillPosted,
 }

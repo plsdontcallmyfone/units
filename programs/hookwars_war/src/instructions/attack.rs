@@ -306,6 +306,9 @@ pub fn process_siege<'info>(ctx: Context<'info, Siege<'info>>, args: SliceArgs) 
         cranker: ctx.accounts.cranker.key(),
         captured_total,
     });
+    // Integration pass 2 (09 section 21 item 4): optional agent attribution, after the effects.
+    let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.cranker.key(), hookwars_common::agents_record::CRANK, total)?;
     Ok(())
 }
 
@@ -413,9 +416,11 @@ pub fn process_counter_strike<'info>(
     require!(min_out > 0, WarError::NoQuote);
 
     let seeds = chest_seeds(&mint_key, ctx.accounts.war_state.chest_bump);
-    let buy_slice = slice_metas(ctx.remaining_accounts, usize::from(args.first))?;
+    // Integration pass 2: the optional agent attribution suffix is not part of the slices.
+    let (rem, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    let buy_slice = slice_metas(rem, usize::from(args.first))?;
     let burn_slice = slice_metas(
-        &ctx.remaining_accounts[usize::from(args.first)..],
+        &rem[usize::from(args.first)..],
         usize::from(args.second),
     )?;
     ensure_holding(&all, ctx.accounts.cranker.key(), mint_key, chest)?;
@@ -469,6 +474,7 @@ pub fn process_counter_strike<'info>(
         bounty,
         cranker: ctx.accounts.cranker.key(),
     });
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.cranker.key(), hookwars_common::agents_record::CRANK, total)?;
     Ok(())
 }
 
@@ -635,6 +641,9 @@ pub fn process_raze<'info>(ctx: Context<'info, Raze<'info>>, args: SliceArgs) ->
         cranker: ctx.accounts.cranker.key(),
         captured_left: left,
     });
+    // Integration pass 2 (09 section 21 item 4): optional agent attribution, after the effects.
+    let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.cranker.key(), hookwars_common::agents_record::CRANK, got)?;
     Ok(())
 }
 

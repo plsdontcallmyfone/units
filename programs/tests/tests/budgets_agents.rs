@@ -102,6 +102,8 @@ fn agents_budgets() {
         let owner = aw.hw.w.env.funded(10 * SOL);
         let m = aw.hw.slot_mint(&owner, vec![item_slot(slot_kind::RELATION, equip_rule::VOTE, 0, 0, false)]);
         aw.hw.equip_launch(&owner, &m, Hw::entry(0, None, EquipConfig::default())).ok();
+        // Security review 1 M-2: the proposer must hold the proposal threshold.
+        aw.hw.mint_to(&owner, &m, &key.pubkey(), 1_000_000);
         mints.push(m);
     }
     let (_, item, _) = aw.hw.item(template_id::TREATY, params(&[100, 100, 0]), 0);

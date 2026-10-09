@@ -259,6 +259,9 @@ pub fn process_reveal<'info>(ctx: Context<'info, Reveal<'info>>) -> Result<()> {
         params,
         season,
     });
+    // Integration pass 2 (09 section 21 item 4): optional agent attribution, after the effects.
+    let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.revealer.key(), hookwars_common::agents_record::LOOT_REVEAL, 0)?;
     Ok(())
 }
 

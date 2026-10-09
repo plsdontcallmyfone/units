@@ -1,5 +1,5 @@
 // Changed by Hookwars: new file (M2), shared by hookwars_armory and hookwars_items; M3b: raid ledger,
-// war touches, launch reads, arsenal wave A templates, composites; expansion templates 43 to 45 (10); agents (09): AGENTS_ID, AGENTS_SIGNER, template 42 Soulbound; arsenal waves D and E.
+// war touches, launch reads, arsenal wave A templates, composites; expansion templates 43 to 45 (10); agents (09): AGENTS_ID, AGENTS_SIGNER, template 42 Soulbound; arsenal waves D and E. Integration pass 2: agents_record.
 //! Types and pure rules shared by the armory (docs/spec/02-armory.md) and the items program
 //! (docs/spec/04-templates.md): params (R7), the manifest (04 section 2.7), the equip config (04
 //! section 2.3), each template's fields and forge rules (04 section 3), seeds (00 section 4.3), the
@@ -1745,5 +1745,110 @@ pub mod arsenal2 {
             assert_eq!(target_burn(&t, 1_000_000, 900_000_005, 1_000_000_000), 5);
             assert_eq!(target_burn(&t, 1_000_000, 900_000_000, 1_000_000_000), 0);
         }
+    }
+}
+
+/// Integration pass 2 (09 section 21 items 3 to 5, R26): the optional agent attribution call.
+///
+/// A caller appends five accounts at the very end of its remaining accounts:
+/// `[agents program, ["agents-caller"] under the caller, agents event authority, passport (mut),
+/// actor]`. The calling program splits them off with [`agents_record::split`] before reading its
+/// own remaining accounts, finishes its own effects, then calls [`agents_record::record`], which
+/// invokes `hookwars_agents::record(kind, value)` signed by its `["agents-caller"]` PDA. The call
+/// is built by hand so the armory, war and items need not depend on the agents crate.
+pub mod agents_record {
+    use super::*;
+    use anchor_lang::solana_program::hash::hashv;
+    use anchor_lang::solana_program::instruction::{AccountMeta, Instruction};
+    use anchor_lang::solana_program::program::invoke_signed;
+
+    /// Seed of each caller's recorder PDA.
+    pub const CALLER_SEED: &[u8] = b"agents-caller";
+    /// Accounts in the suffix.
+    pub const SUFFIX: usize = 5;
+    /// `hookwars_agents::constants::record_kind`, copied (no crate dependency).
+    pub const ITEMS_AUTHORED: u8 = 0;
+    pub const ITEMS_EQUIPPED: u8 = 1;
+    pub const ITEMS_FORGED: u8 = 2;
+    pub const ROYALTY_CLAIM: u8 = 3;
+    pub const CRANK: u8 = 4;
+    pub const BOUNTY: u8 = 5;
+    pub const LOOT_REVEAL: u8 = 6;
+
+    /// The caller program's recorder PDA.
+    pub fn caller(program: &Pubkey) -> (Pubkey, u8) {
+        Pubkey::find_program_address(&[CALLER_SEED], program)
+    }
+
+    /// The agents program's event authority.
+    pub fn event_authority() -> Pubkey {
+        Pubkey::find_program_address(&[b"__event_authority"], &ids::AGENTS_ID).0
+    }
+
+    /// The five suffix metas a client appends (passport writable).
+    pub fn suffix_metas(program: &Pubkey, passport: &Pubkey, actor: &Pubkey) -> Vec<AccountMeta> {
+        vec![
+            AccountMeta::new_readonly(ids::AGENTS_ID, false),
+            AccountMeta::new_readonly(caller(program).0, false),
+            AccountMeta::new_readonly(event_authority(), false),
+            AccountMeta::new(*passport, false),
+            AccountMeta::new_readonly(*actor, false),
+        ]
+    }
+
+    /// Splits the suffix off when the remaining accounts end with one for `program`.
+    pub fn split<'a, 'info>(
+        rem: &'a [AccountInfo<'info>],
+        program: &Pubkey,
+    ) -> (&'a [AccountInfo<'info>], Option<&'a [AccountInfo<'info>]>) {
+        let n = rem.len();
+        if n >= SUFFIX
+            && rem[n - SUFFIX].key() == ids::AGENTS_ID
+            && rem[n - SUFFIX + 1].key() == caller(program).0
+        {
+            (&rem[..n - SUFFIX], Some(&rem[n - SUFFIX..]))
+        } else {
+            (rem, None)
+        }
+    }
+
+    /// Invokes `record(kind, value)` when a suffix was given and its actor is `expected_actor`.
+    /// Without a suffix this is a no-op, so every caller stays usable without the agents program.
+    pub fn record<'info>(
+        suffix: Option<&[AccountInfo<'info>]>,
+        program: &Pubkey,
+        expected_actor: &Pubkey,
+        kind: u8,
+        value: u64,
+    ) -> Result<()> {
+        let Some(s) = suffix else { return Ok(()) };
+        let (c, bump) = caller(program);
+        if s.len() != SUFFIX
+            || s[1].key() != c
+            || s[2].key() != event_authority()
+            || s[4].key() != *expected_actor
+        {
+            return Err(ProgramError::InvalidArgument.into());
+        }
+        let mut data = hashv(&[b"global:record"]).to_bytes()[..8].to_vec();
+        data.push(kind);
+        data.extend_from_slice(&value.to_le_bytes());
+        let ix = Instruction {
+            program_id: ids::AGENTS_ID,
+            accounts: vec![
+                AccountMeta::new_readonly(c, true),
+                AccountMeta::new(s[3].key(), false),
+                AccountMeta::new_readonly(s[4].key(), false),
+                AccountMeta::new_readonly(s[2].key(), false),
+                AccountMeta::new_readonly(ids::AGENTS_ID, false),
+            ],
+            data,
+        };
+        invoke_signed(
+            &ix,
+            &[s[1].clone(), s[3].clone(), s[4].clone(), s[2].clone(), s[0].clone()],
+            &[&[CALLER_SEED, &[bump]]],
+        )?;
+        Ok(())
     }
 }

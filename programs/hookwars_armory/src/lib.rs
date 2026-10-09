@@ -312,6 +312,13 @@ pub mod hookwars_armory {
             ArmoryError::ProposalNotFinal
         );
         require!(p.voters_open == 0, ArmoryError::VotesOpen);
+        // Integration pass 2 (09 section 21 item 6): a proposal a diplomat bonded stays open until
+        // the bond leaves `Posted`, or the bond's lamports would stay locked.
+        cpi::require_no_posted_bond(
+            &ctx.accounts.proposal.key(),
+            &ctx.accounts.bond_mark.to_account_info(),
+            ctx.accounts.bond.as_ref().map(|b| b.to_account_info()),
+        )?;
         Ok(())
     }
 
@@ -762,6 +769,10 @@ pub struct CloseProposal<'info> {
     pub proposer: UncheckedAccount<'info>,
     #[account(mut, close = proposer)]
     pub proposal: Box<Account<'info, Proposal>>,
+    /// CHECK: `["bond-mark", proposal]` under the agents program (checked in the handler).
+    pub bond_mark: UncheckedAccount<'info>,
+    /// CHECK: the bond the mark names, when a mark exists (checked in the handler).
+    pub bond: Option<UncheckedAccount<'info>>,
 }
 
 #[event_cpi]
@@ -996,7 +1007,12 @@ fn process_create_item(
     royalty_bps: u16,
 ) -> Result<()> {
     let a = &ctx.accounts;
-    require!(a.template.open_authoring, ArmoryError::TemplateClosed);
+    // Integration pass 2 (09 section 21 item 2): the armory admin may create an item of a closed
+    // template (the one Soulbound item).
+    require!(
+        a.template.open_authoring || a.author.key() == a.config.admin,
+        ArmoryError::TemplateClosed
+    );
     require!(
         royalty_bps <= a.config.params.max_royalty_bps,
         ArmoryError::RoyaltyTooHigh
@@ -1053,6 +1069,9 @@ fn process_create_item(
         source: source::AUTHORED,
         ts
     });
+    // Integration pass 2 (09 section 21 item 3): optional agent attribution, after the effects.
+    let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.author.key(), hookwars_common::agents_record::ITEMS_AUTHORED, 0)?;
     Ok(())
 }
 
@@ -1072,9 +1091,11 @@ fn process_create_composite<'info>(
         royalty_bps <= a.config.params.max_royalty_bps,
         ArmoryError::RoyaltyTooHigh
     );
-    require!(ctx.remaining_accounts.len() == modules.len(), ArmoryError::WrongAccount);
+    // Integration pass 2: an optional agent attribution suffix comes after the module templates.
+    let (rem, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    require!(rem.len() == modules.len(), ArmoryError::WrongAccount);
     let mut fields: Vec<(u16, Params, Params)> = Vec::with_capacity(modules.len());
-    for (m, info) in modules.iter().zip(ctx.remaining_accounts.iter()) {
+    for (m, info) in modules.iter().zip(rem.iter()) {
         require_keys_eq!(*info.owner, crate::ID, ArmoryError::WrongAccount);
         require_keys_eq!(info.key(), pda::template(m.template_id).0, ArmoryError::WrongAccount);
         let t = Template::try_deserialize(&mut &info.try_borrow_data()?[..])?;
@@ -1149,6 +1170,7 @@ fn process_create_composite<'info>(
         source: source::AUTHORED,
         ts
     });
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.author.key(), hookwars_common::agents_record::ITEMS_AUTHORED, 0)?;
     Ok(())
 }
 
@@ -1319,6 +1341,9 @@ fn process_claim_royalty<'info>(
         amount,
         ts: now()?
     });
+    let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    let value = if cut_mint == hookwars_common::ids::BRIDGED_SOL_MINT { amount } else { 0 };
+    hookwars_common::agents_record::record(rec, &crate::ID, &claimant, hookwars_common::agents_record::ROYALTY_CLAIM, value)?;
     Ok(())
 }
 
@@ -1438,12 +1463,19 @@ impl<'info> EquipCtx<'info> {
 
 fn process_equip_launch(ctx: Context<EquipLaunch>, entry: LaunchEquip) -> Result<()> {
     let mint_key = ctx.accounts.equip.token_mint.key();
-    require_keys_eq!(
-        ctx.accounts.launch_caller.key(),
-        pda::armory_caller(&mint_key).0,
-        ArmoryError::NotLaunchCaller
-    );
     let mint = read_mint(&ctx.accounts.equip.token_mint.to_account_info())?;
+    let caller = ctx.accounts.launch_caller.key();
+    if caller != pda::armory_caller(&mint_key).0 {
+        // Integration pass 2 (09 section 21 item 1, R28): the agents program equips a badge, and
+        // only a badge: one Locked Defense slot, the agents signer freezing, a Soulbound item.
+        require_keys_eq!(caller, cpi::agents_armory_caller(&mint_key), ArmoryError::NotLaunchCaller);
+        require!(cpi::is_badge(&mint) && entry.slot == 0, ArmoryError::NotBadge);
+        let item = ctx.accounts.equip.new_item.as_deref().ok_or(ArmoryError::NotBadge)?;
+        require!(
+            entry.item == Some(item.key()) && item.template_id == hookwars_common::template_id::SOULBOUND,
+            ArmoryError::NotBadge
+        );
+    }
     require!(entry.slot < mint.slot_count, ArmoryError::SlotIndexOutOfRange);
     let s = mint.slots[usize::from(entry.slot)];
     require!(
@@ -1508,6 +1540,12 @@ fn process_equip_launch(ctx: Context<EquipLaunch>, entry: LaunchEquip) -> Result
             ts: now()?
         });
     }
+    let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    if let Some(author) = ctx.accounts.equip.new_item.as_ref().map(|i| i.author) {
+        if author != ctx.accounts.equip.payer.key() {
+            hookwars_common::agents_record::record(rec, &crate::ID, &author, hookwars_common::agents_record::ITEMS_EQUIPPED, 0)?;
+        }
+    }
     Ok(())
 }
 
@@ -1541,6 +1579,11 @@ fn check_proposed(
     require_keys_eq!(i.key(), k, ArmoryError::WrongAccount);
     let t = template.ok_or(ArmoryError::WrongAccount)?;
     require_keys_eq!(t.key(), pda::template(i.template_id).0, ArmoryError::WrongAccount);
+    // Integration pass 2 (09 section 21 item 2): Soulbound lives only on agent badges.
+    require!(
+        i.template_id != hookwars_common::template_id::SOULBOUND || cpi::is_badge(mint),
+        ArmoryError::NotBadge
+    );
     require!(
         config.targets.len() <= usize::from(t.max_targets),
         ArmoryError::OverBounds
@@ -1916,7 +1959,8 @@ fn process_execute<'info>(ctx: Context<'info, Execute<'info>>) -> Result<()> {
         .accounts
         .equip
         .equip_to(&params, slot, item, &config, false, false)?;
-    refresh_after_equip(&ctx.accounts.equip, slot, ctx.remaining_accounts)?;
+    let (rem, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    refresh_after_equip(&ctx.accounts.equip, slot, rem)?;
     ctx.accounts.proposal.status = proposal_status::EXECUTED;
     ctx.accounts.slot_state.open_proposal = None;
     emit_cpi!(EquipApplied {
@@ -1927,6 +1971,12 @@ fn process_execute<'info>(ctx: Context<'info, Execute<'info>>) -> Result<()> {
         by: equip_by::VOTE,
         ts
     });
+    // The equipped item's author is credited when someone else proposed it.
+    if let Some(author) = ctx.accounts.equip.new_item.as_ref().map(|i| i.author) {
+        if author != ctx.accounts.proposal.proposer {
+            hookwars_common::agents_record::record(rec, &crate::ID, &author, hookwars_common::agents_record::ITEMS_EQUIPPED, 0)?;
+        }
+    }
     Ok(())
 }
 
@@ -2233,6 +2283,8 @@ fn process_forge(ctx: Context<Forge>) -> Result<()> {
         forger,
         ts
     });
+    let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.forger.key(), hookwars_common::agents_record::ITEMS_FORGED, 0)?;
     Ok(())
 }
 

@@ -263,6 +263,46 @@ pub fn read_mint(info: &AccountInfo) -> Result<Mint> {
     bordrless_token::client::read_mint(info)
 }
 
+/// Integration pass 2 (09 section 21 item 1, R28): an agent badge mint. One slot, kind Defense,
+/// equip rule Locked, and the agents signer as freeze authority.
+pub fn is_badge(mint: &Mint) -> bool {
+    mint.slot_count == 1
+        && mint.slots[0].kind == hookwars_common::kind::DEFENSE
+        && mint.slots[0].equip_rule == bordrless_hook::equip_rule::LOCKED
+        && mint.freeze_authority == Some(hookwars_common::ids::AGENTS_SIGNER)
+}
+
+/// Integration pass 2 (09 section 21 item 6): refuses while `["bond-mark", proposal]` under the
+/// agents program exists and its bond is `Posted` (bond status byte 0). Layouts: `BondMark` =
+/// discriminator, bond (32), bump; `Bond` = discriminator, six keys, amount, posted_at,
+/// ratified_at, status.
+pub fn require_no_posted_bond(proposal: &Pubkey, mark: &AccountInfo, bond: Option<AccountInfo>) -> Result<()> {
+    let agents = hookwars_common::ids::AGENTS_ID;
+    let expect = Pubkey::find_program_address(&[b"bond-mark", proposal.as_ref()], &agents).0;
+    require_keys_eq!(mark.key(), expect, crate::error::ArmoryError::WrongAccount);
+    if mark.owner != &agents || mark.data_is_empty() {
+        return Ok(());
+    }
+    let d = mark.try_borrow_data()?;
+    require!(d.len() >= 40, crate::error::ArmoryError::WrongAccount);
+    let bond_key = Pubkey::try_from(&d[8..40]).map_err(|_| error!(crate::error::ArmoryError::WrongAccount))?;
+    let b = bond.ok_or(crate::error::ArmoryError::BondStillPosted)?;
+    require_keys_eq!(b.key(), bond_key, crate::error::ArmoryError::WrongAccount);
+    if b.owner != &agents || b.data_is_empty() {
+        return Ok(());
+    }
+    let bd = b.try_borrow_data()?;
+    const STATUS: usize = 8 + 32 * 6 + 8 * 3;
+    require!(bd.len() > STATUS, crate::error::ArmoryError::WrongAccount);
+    require!(bd[STATUS] != 0, crate::error::ArmoryError::BondStillPosted);
+    Ok(())
+}
+
+/// `["armory-caller", mint]` under the agents program: the signer of a badge's `equip_launch`.
+pub fn agents_armory_caller(mint: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(&[b"armory-caller", mint.as_ref()], &hookwars_common::ids::AGENTS_ID).0
+}
+
 /// The compatibility check (02 section 6.1). `launch`: the `equip_launch` path (fills a slot whose
 /// rule is `Locked` once). `revert`: a performance revert (staleness allowed, 02 section 3.3).
 #[allow(clippy::too_many_arguments)]
