@@ -1,4 +1,6 @@
-# Hookwars (working name)
+# Hookwars (placeholder name)
+
+The name is a placeholder (owner, 2026-10-09): the final name should be modern, gamey and Google-esque, about unity (communities banding together). Rejected so far: Concord, Accord, Covenant, Commonwealth, Ralli, Bando, Unio, Allyo, Hivvo, Squadoo, Pakko, Kinzo. Keep the name out of program ids and crate names so a rename stays cheap.
 
 A fork of Bordrless (github.com/BordrlessDex/bordrless-programs, Apache-2.0), remote `upstream`.
 No remote of our own yet: never push. Spot only. No em dashes anywhere. Never invent numbers:
