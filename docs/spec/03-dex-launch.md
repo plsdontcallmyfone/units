@@ -649,3 +649,110 @@ launch-pool hops (the Raid case) before the value is fixed, and keeps 2 if three
 `MIN_TWAP_SECS` = 300 with room for one wrap of the window; a longer `MIN_TWAP_SECS` (the owner's
 decision, section 3.1) needs `OBS_RING_LEN * OBS_SPACING_SECS` above it, paid in pool rent at
 48 bytes per entry.
+
+## M3b launch implementation notes (2026-10-09, branch m3bl)
+
+Built in `programs/bordrless_launch` (`instructions/slot_launch.rs` new; `launch.rs`, `hooks.rs`,
+`graduate.rs`, `state.rs`, `constants.rs`, `error.rs`, `events.rs`, `client.rs`, `lib.rs`), the
+test-only `programs/pool_item_stub`, and `programs/tests` (`src/slot_launch.rs`,
+`tests/slot_launch.rs`, `tests/budgets_launch.rs`). Upstream single-hook launches (plain, kit,
+custom hook, Half-Life config, companion) are unchanged: same accounts, same events, and every
+upstream test passes. Where the build differs from sections 4 and 5:
+
+1. **Four steps, not three.** `prepare_launch` makes the slot mint and `PreparedLaunch` only;
+   launch items are equipped by `equip_prepared(data)`, **one slot per transaction** (the armory's
+   `equip_launch` takes one slot per call, 02 M2 note 6, and its accounts do not fit beside the
+   mint's creation). `equip_prepared` forwards only the armory's `equip_launch`
+   (`NotEquipLaunch`), only for the creator who prepared the mint (`WrongCreator`), only before it
+   launches (`NotPrepared`), signing as `["armory-caller", mint]`. Then `create_prepared_launch`,
+   then `refresh_pool_registry`, then `init_war` (05).
+2. **Mint authority is the launch PDA** (`["launch", mint]`), not a new `["launch-mint", mint]`:
+   only `create_prepared_launch` can sign for it, it mints the supply once and revokes the
+   authority, so no new PDA is needed.
+3. **`create_prepared_launch` is a new instruction** with upstream's `CreateLaunch` accounts plus
+   remaining `[PreparedLaunch, pool_cuts_owner, pool_cuts_holding, the mint's transfer slices]`,
+   so upstream's `create_launch` keeps its accounts (its custom-hook launch stays at 1,200 of
+   1,232 bytes). The arguments' rules and creator fee must equal the prepared ones
+   (`PreparedMismatch`). Prepared launches take inline rules; a `LaunchConfig` with slots is not
+   built (configs keep the upstream single-hook path).
+4. **Slots in args, the kit prepended.** `PrepareLaunchArgs.slots` are item slots only (no
+   `Locked`, `InvalidSlots`); when the rules install a kit module, `prepare_launch` puts the kit in
+   slot 0 (`kit_slot(modules)`: the kit's flags, `kit_data_len`, two extras, R8/R9). `Launch`
+   gains `slot_launch` (one byte from `reserved`, `Launch::LEN` unchanged).
+5. **No per-slot pool cut bound in the launchpad.** The token program refuses `max_cut_bps` on a
+   `Pool` slot (only Fee, Reward and Relation slots may cut token-side, M1), and the per-item pool
+   ceiling is the armory's `max_pool_item_cut_bps`, checked against the item's manifest at every
+   equip (02 M2 note 4). The launchpad checks what it can see: each item's `cut + burn` is at most
+   what is left of the side (`ItemCutOutOfBounds`); `L`'s cuts plus the items' cuts plus burns stay
+   below the side (the DEX's `DeltaTooLarge`). No `MAX_POOL_ITEM_CUT_BPS` constant in the
+   launchpad, and no `PoolCutsTooHigh`.
+6. **No `CutNotRecorded` check.** The launchpad does not read `EquipState`; recording the cut is
+   the items program's (admin-registered templates only, 02). `ForeignAnswer` is checked: the
+   return data must be the slot's program's.
+7. **Forwarding.** Which slots are forwarded is read from the mint (`base_mint` in the prefix):
+   a filled `Pool` or `Relation` slot whose `pool_flags` has bit 0 (`pool_before_swap`) or bit 1
+   (`pool_after_swap`) (`hookwars_common::pool_flags`). The callee is the slot's program, signed as
+   `["hook-authority", program]` under the launchpad with the slot's `launch_signer_bump`; the
+   remaining accounts are the `PoolCuts` holding (index 9, `WrongPoolCuts` if not the items
+   program's for this mint), then per forwarded slot `[program, signer, extra_count extras]`
+   (`ItemAccountsMissing`, `WrongItemProgram`, `StaleRegistry`). `ItemPoolContext.launch_fee_bps`
+   is the launch's creator plus holder rate on a quote side (0 on a base side), `launch_cut` what
+   `L` takes on the side, `side_amount` what is left of it.
+8. **`PoolItemCuts` is a log (`emit!`), not a self-CPI**, so a swap's trace grows only by the
+   items' own calls (upstream's every-module path is at 45 of 64 entries). No `ObservationsCreated`
+   (M3a), no `LaunchPrepared` fields beyond `slot_count` and `kit_slot` (the table is the mint's),
+   `LaunchCreated` unchanged (no `slots`, `war_chest`, `war_bps` fields, to keep upstream's event).
+9. **Graduation of a dust curve (new rule).** `graduate` is also ready when what is left on the
+   curve is worth less than one lamport (`curve_is_dust`: `(x + vb) / (y + vq + 1) >= base_reserve`).
+   Token-side items that cut a buy's delivery make the DEX set their protocol share aside from the
+   quote reserve, so the quote can end a few lamports short of the threshold with a few base units
+   left that the DEX refuses to pay out (`InsufficientLiquidity`); upstream's `base_reserve == 0`
+   then never happens. Found by `buy_and_graduate_with_the_most_slots`.
+10. **`refresh_pool_registry`** reads each forwarded slot's item registry
+    (`["bordrless-hook-accounts", mint, item]` under the slot's program, owned by it, length equal
+    to the slot's `extra_count`) and rewrites the pool registry, growing it with the payer's
+    lamports. The armory does not call it yet (02 M2 note 12): a client calls it after an equip.
+11. **Companion launches with slots are not built**: the companion still calls upstream's
+    `create_launch` (single hook). Its call depth with slots is not measured.
+12. **Test doubles.** `pool_item_stub` (its own id, `BGeLKiiaGRyz7WTWh1Zf9CHgo7v92rmikCP3BARzv4HT`)
+    answers scripted `ItemPoolAnswer`s and records what it was told; forwarding tests equip it with
+    `armory_stub` signing as the slot authority. `equip_prepared` is tested against the real armory
+    and items programs (War orders in a War slot, an empty Vote pool slot).
+
+### Measured (M3b, `budgets_launch.rs`)
+
+See 07 section 3, "Measured in M3b". Every path fits with a lookup table (largest
+`create_prepared_launch` with the kit and three pool items, 545 of 1,232 bytes, 44 trace entries,
+height 4, 359,908 CU). **Without** a table, `create_prepared_launch` (1,276 to 1,472 bytes), the
+two-hop route into a launch pool with pool items (1,233 and 1,303), buy and graduate with three
+items (1,391) and a buy with two token items and one pool item (1,255) exceed 1,232: slot launches
+need the protocol table plus a per-mint table (06).
+
+**Proposed (build values, parameters stay "to set" in 00 section 6):**
+- `MAX_SLOTS` = 4 (the kit plus three items): every launch-pool buy, sell, buy and graduate, route
+  and launch with four slots fits with a table at height 3 or 4 and at most 44 trace entries.
+- `MAX_CUTTING_SLOTS` = 3 token-side (2 when the Locked slot may cut, M1): a launch buy with the
+  kit and three token items is 1,224 bytes without a table and 390 with one.
+- `MAX_ROUTE_HOPS` = 3 stays (M3a): a two-hop route ending in a launch pool with the kit and three
+  pool items is 34 keys, 407 bytes with a table, 29 trace entries, height 3, 332,413 CU. Three hops
+  into a launch pool were not measured.
+
+### For the items worker (M3b integration)
+
+- Pool callbacks are named `pool_before_swap` and `pool_after_swap`, take `(PoolHookArgs,
+  ItemPoolContext)` (crates/bordrless-hook `pool_item`), return `ItemPoolAnswer` as return data, and
+  receive `[signer, pool, base_mint, quote_mint, actor, the item's registry extras]`; the signer is
+  `PDA(["hook-authority", ITEMS_ID], LAUNCH_ID)`.
+- The item's pool-side extras are the same `extra_count` extras its token-side registry lists.
+- A cut is allowed only on a quote side (a buy's before, a sell's after) and a burn only on a base
+  side of a slot with `may_burn`; `cut + burn <= ctx.side_amount`.
+- **Token-side items must exempt the launch PDA and its pool's vault** (as Half-Life does, 04):
+  a cut on the launch's deposit or on the graduation top-up moves the curve.
+- Item cuts on a buy's delivery reduce the quote reserve by their protocol share; graduation
+  handles the resulting dust (note 9).
+
+### Not changed, noted for integration
+
+- The DEX's `swap::run_hop` frame is reported by `cargo build-sbf` at 4,288 bytes, over the 4,096
+  SBF limit ("may cause undefined behavior"), when the launchpad builds with the DEX as a library
+  (M3a code); the suites pass, but the DEX should box its large locals.

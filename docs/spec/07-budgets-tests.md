@@ -98,6 +98,24 @@ with a table), 13 trace, height 3, 105,903 CU; 3 hops 24 keys, 960 bytes (343), 
 3, 154,746 CU; 2 hops delivering a 3-cutting-slot mint 27 keys, 1,055 bytes (345), 16 trace,
 height 3, 161,616 CU; pool account with a 32-entry ring 2,043 bytes, rent 15,110,160 lamports.
 
+Measured in M3b (`budgets_launch.rs`, launch pools of slot launches with the kit Locked in slot 0
+and holder rewards plus max wallet on; "table" puts every account in one lookup table; pool items
+are the test-only `pool_item_stub`, token items `slot_tester`):
+
+| Path | Keys | v0 bytes | With table | Trace | Height | CU |
+| --- | --- | --- | --- | --- | --- | --- |
+| buy, kit only | 24 | 956 | 370 | 15 | 3 | 148,171 |
+| buy, kit + 1 / 2 / 3 pool items | 27 / 28 / 29 | 1,055 / 1,090 / 1,125 | 376 / 380 / 384 | 19 / 21 / 23 | 3 | 204,284 / 225,013 / 259,388 |
+| sell, kit + 1 / 2 / 3 pool items | 26 / 27 / 28 | 1,005 / 1,040 / 1,075 | 326 / 330 / 334 | 18 / 20 / 22 | 3 | 205,769 / 223,498 / 259,373 |
+| buy, kit + 1 / 2 / 3 token items | 28 / 30 / 32 | 1,088 / 1,156 / 1,224 | 378 / 384 / 390 | 16 / 17 / 18 | 3 | 167,368 / 189,816 / 230,475 |
+| buy, kit + 1 token + 2 pool items | 32 | 1,222 | 388 | 22 | 3 | 247,264 |
+| buy, kit + 2 token + 1 pool item | 33 | 1,255 | 390 | 21 | 3 | 237,004 |
+| buy and graduate, kit + 3 pool items | 36 | 1,391 | 464 | 37 | 4 | 388,884 |
+| graduate on a dust curve, kit + 3 token items | 32 | 1,190 | 325 | 18 | 4 | 186,358 |
+| route, 2 hops into a launch pool, kit + 0 / 1 / 3 pool items | 29 / 32 / 34 | 1,134 / 1,233 / 1,303 | 393 / 399 / 407 | 21 / 25 / 29 | 3 | 210,733 / 245,829 / 332,413 |
+| `prepare_launch`, no kit, 4 slots / kit + 3 slots | 10 | 690 / 677 | 538 / 525 | 8 | 3 | 60,981 / 52,327 |
+| `create_prepared_launch`, no kit, 4 pool items / kit + 3 pool items | 29 / 35 | 1,276 / 1,472 | 535 / 545 | 36 / 44 | 4 | 274,171 / 359,908 |
+
 These measurements set `MAX_SLOTS`, `MAX_CUTTING_SLOTS`, `MAX_ROUTE_HOPS`, `OBS_RING_LEN`,
 `PARAM_FIELDS`, `MAX_CAPTURED`, `RAID_TABLE_LEN` and `LOOT_TABLE_LEN` (00 section 6, set by M).
 
