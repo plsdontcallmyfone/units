@@ -8,7 +8,7 @@ publish.workspace = true
 # Host-only: no cdylib target, so cargo build-sbf never builds this crate.
 [dependencies]
 anchor-lang.workspace = true
-litesvm.workspace = true
+litesvm = { workspace = true, features = ["precompiles"] }
 bordrless-core = { path = "../../crates/bordrless-core" }
 bordrless-hook = { path = "../../crates/bordrless-hook" }
 bordrless-token = { path = "../bordrless_token", features = ["no-entrypoint"] }
@@ -39,6 +39,9 @@ items-stub = { path = "../items_stub", features = ["no-entrypoint"] }
 # Hookwars expansion (10): market and social.
 hookwars-market = { path = "../hookwars_market", features = ["no-entrypoint"] }
 hookwars-social = { path = "../hookwars_social", features = ["no-entrypoint"] }
+# units agents (09): the agents program and its test-only recorder.
+hookwars-agents = { path = "../hookwars_agents", features = ["no-entrypoint"] }
+agents-caller-stub = { path = "../agents_caller_stub", features = ["no-entrypoint"] }
 solana-account = "=4.7.0"
 solana-hash.workspace = true
 solana-keypair.workspace = true

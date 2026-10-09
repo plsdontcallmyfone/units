@@ -191,3 +191,10 @@ through the test stand-in 17,278 to 29,738 CU; a raid delivery that stamps point
 composite of 3 on a pool callback 23,182 CU and on a transfer 54,929 CU; `settle_equip` of a
 composite of 3 208,107 CU (height 3, 22 trace entries). Full table in 04, "M3b items implementation
 notes", item 14.
+
+**Agents paths, measured (09, `budgets_agents.rs::agents_budgets`, branch agents, 2026-10-09):**
+register_passport 14 keys, 711 v0 bytes (435 with a table), trace 11, height 3, 72,243 CU;
+issue_badge 551 bytes, height 3, 66,092 CU; link_social with its ed25519 instruction 731 bytes, height
+2, 31,511 CU; submit_attestation 639 bytes, 21,124 CU; endorse_attestation 419 bytes, 27,675 CU;
+record from a recorder 406 bytes, height 3, 13,389 CU; spend (one token transfer) 575 bytes, height 3,
+31,790 CU; post_bond 551 bytes, height 2, 40,906 CU. Full table in 09 section 20.1.

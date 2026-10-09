@@ -1,5 +1,5 @@
 // Changed by Hookwars: new file (M2), shared by hookwars_armory and hookwars_items; M3b: raid ledger,
-// war touches, launch reads, arsenal wave A templates, composites; expansion templates 43 to 45 (10).
+// war touches, launch reads, arsenal wave A templates, composites; expansion templates 43 to 45 (10); agents (09): AGENTS_ID, AGENTS_SIGNER, template 42 Soulbound.
 //! Types and pure rules shared by the armory (docs/spec/02-armory.md) and the items program
 //! (docs/spec/04-templates.md): params (R7), the manifest (04 section 2.7), the equip config (04
 //! section 2.3), each template's fields and forge rules (04 section 3), seeds (00 section 4.3), the
@@ -53,6 +53,13 @@ pub mod ids {
     /// `<PROTOCOL_AUTHORITY>`.
     pub const PROTOCOL_AUTHORITY: Pubkey =
         Pubkey::from_str_const("CFi9xajnSxM1WMSndVoyQHmfm6DuEdzFodfjRfhTuzxa");
+    /// `hookwars_agents` (09).
+    pub const AGENTS_ID: Pubkey =
+        Pubkey::from_str_const("GUTwa3zv83CKoq3TNYL9W1bJeUSEBVxR3MkGdxiXnZJ9");
+    /// `["agents-signer"]` under `hookwars_agents`: the mint, freeze and metadata authority of
+    /// every agent badge (09 section 4.2).
+    pub const AGENTS_SIGNER: Pubkey =
+        Pubkey::from_str_const("79bZmFwi3tKQxa6dWnaigz29sVKCpPQ8fPufijxBiKdo");
     /// Who may upgrade a template program (00 rule 3; upstream `HOOK_UPGRADE_AUTHORITIES`).
     pub const HOOK_UPGRADE_AUTHORITIES: [Pubkey; 2] = [MANAGED_HOOK_KEY, PROTOCOL_AUTHORITY];
     /// The upgradeable loader.
@@ -252,6 +259,8 @@ pub mod template_id {
     pub const SELL_BURN: u16 = 32;
     /// Composite (08 2).
     pub const COMPOSITE: u16 = 41;
+    /// Soulbound (09 section 4.3): the agent badge's Defense item.
+    pub const SOULBOUND: u16 = 42;
     /// Coalition (10 section 8): a Relation config item naming a coalition id; no callbacks.
     pub const COALITION: u16 = 43;
     /// Boss (10 section 11.1): the boss token's Pool item marking inbound raid volume per source.
@@ -272,6 +281,7 @@ pub fn composable(id: u16) -> bool {
             | template_id::COALITION
             | template_id::BOSS
             | template_id::RIVALRY
+            | template_id::SOULBOUND
     ) && shape(id).is_some()
 }
 
@@ -431,6 +441,7 @@ pub fn shape(id: u16) -> Option<TemplateShape> {
         template_id::COALITION => (kind::RELATION, &[Keep, Keep], false),
         template_id::BOSS => (kind::POOL, &[Keep], false),
         template_id::RIVALRY => (kind::RELATION, &[Keep, Keep, Keep], false),
+        template_id::SOULBOUND => (kind::DEFENSE, &[], false),
         _ => return None,
     };
     rules[..used.len()].copy_from_slice(used);
@@ -593,6 +604,10 @@ pub fn manifest(id: u16, p: &Params, max_targets: u8) -> core::result::Result<Ma
         // Boss marks inbound raid volume; it never cuts, discounts or burns.
         template_id::BOSS => {
             m.pool_flags = pool_flags::AFTER_SWAP | pool_flags::MARKS;
+        }
+        template_id::SOULBOUND => {
+            m.token_flags = BEFORE_TRANSFER;
+            m.may_refuse = true;
         }
         _ => {}
     }

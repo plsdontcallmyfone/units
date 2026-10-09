@@ -37,6 +37,8 @@ members = [
   "programs/war_armory_stub",
   "programs/randomness_stub",
   "programs/pool_item_stub",
+  "programs/hookwars_agents",
+  "programs/agents_caller_stub",
 ]
 
 # One set of program IDs on every cluster (generated 2026-10-07; the keypairs are kept off the repo,
@@ -66,6 +68,8 @@ bordrless_companion = "HzeAN8e7HbGx8wzgd5SpduF51c7rXCTqkQKcmw44YHkK"
 hookwars_war = "5vJnBvr33jpsfYxMY2pvNf6tF9tkj8eaZ6goFtByUWA2"
 hookwars_market = "FikEwNXoXqRWteX4kpCT8dJ34o8hWQ8w49whhZiqS2vv"
 hookwars_social = "CKf4SjuiYxy4C2eSjk6oSQb2AnqC3ADoDTm8d323jWAx"
+hookwars_agents = "GUTwa3zv83CKoq3TNYL9W1bJeUSEBVxR3MkGdxiXnZJ9"
+agents_caller_stub = "5vJnBvr33jpsfYxMY2pvNf6tF9tkj8eaZ6goFtByUWA2"
 
 [programs.devnet]
 bordrless_token = "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
@@ -79,6 +83,7 @@ bordrless_companion = "HzeAN8e7HbGx8wzgd5SpduF51c7rXCTqkQKcmw44YHkK"
 hookwars_war = "5vJnBvr33jpsfYxMY2pvNf6tF9tkj8eaZ6goFtByUWA2"
 hookwars_market = "FikEwNXoXqRWteX4kpCT8dJ34o8hWQ8w49whhZiqS2vv"
 hookwars_social = "CKf4SjuiYxy4C2eSjk6oSQb2AnqC3ADoDTm8d323jWAx"
+hookwars_agents = "GUTwa3zv83CKoq3TNYL9W1bJeUSEBVxR3MkGdxiXnZJ9"
 
 [programs.mainnet]
 bordrless_token = "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
@@ -92,6 +97,7 @@ bordrless_companion = "HzeAN8e7HbGx8wzgd5SpduF51c7rXCTqkQKcmw44YHkK"
 hookwars_war = "5vJnBvr33jpsfYxMY2pvNf6tF9tkj8eaZ6goFtByUWA2"
 hookwars_market = "FikEwNXoXqRWteX4kpCT8dJ34o8hWQ8w49whhZiqS2vv"
 hookwars_social = "CKf4SjuiYxy4C2eSjk6oSQb2AnqC3ADoDTm8d323jWAx"
+hookwars_agents = "GUTwa3zv83CKoq3TNYL9W1bJeUSEBVxR3MkGdxiXnZJ9"
 
 [provider]
 cluster = "localnet"
