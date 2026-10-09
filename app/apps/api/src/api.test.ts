@@ -19,6 +19,7 @@ const conn = {
   getSlot: async () => 123,
   getAccountInfo: async () => null,
   getMultipleAccountsInfo: async (keys: unknown[]) => keys.map(() => null),
+  getProgramAccounts: async () => [],
 } as never;
 
 beforeAll(async () => {
@@ -57,6 +58,11 @@ withDb('reads with an empty database', () => {
     expect((await get('/v1/prize-vault')).body).toMatchObject({ lamports: null, lastWinner: null });
     expect((await get(`/v1/wallet/${M}/war`)).body).toEqual({ holdings: [], items: [], rolls: [] });
     expect((await get('/v1/cards/abc/0.png')).status).toBe(404);
+    // Agents, market and social (app v2): empty lists, and null for a missing account.
+    expect((await get('/v1/agents')).body).toMatchObject({ sort: 'itemsAuthored', items: [] });
+    for (const p of ['/v1/market/listings', '/v1/market/leases', '/v1/market/collections', '/v1/commissions', '/v1/guilds']) expect((await get(p)).body, p).toEqual({ items: [] });
+    expect((await get('/v1/badges')).body).toEqual({ items: [], recent: [] });
+    for (const p of [`/v1/agents/${M}`, `/v1/market/items/${M}`, `/v1/commissions/${M}`, '/v1/guilds/0']) expect((await get(p)), p).toEqual({ status: 200, body: null });
     const quests = (await get('/v1/quests')).body as { sentence: string }[];
     expect(quests).toHaveLength(2);
     for (const q of quests) expect(findBannedWords(q.sentence)).toEqual([]);

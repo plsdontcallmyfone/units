@@ -40,14 +40,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <a href="/" className="nav-logo" aria-label="units home">units</a>
             <Nav />
             <div className="nav-end">
-              {MOCK ? <span className="chip warn" title="MOCK_DATA=1: the site shows invented tokens and events, not the chain">mock data</span> : null}
+              {MOCK ? <span className="chip warn" title="MOCK_DATA=1: the site shows invented tokens and events, not the chain">Demo data</span> : null}
               <ClusterBadge />
               <a className="btn sm primary" href="/launch">Launch</a>
             </div>
           </div>
           <NavSheet />
         </header>
-        <main className="wrap shell">{children}</main>
+        <main className="wrap shell">{MOCK ? <p className="demo-banner" role="note">Demo data: tokens, items and events on this site are invented for display, not read from the chain.</p> : null}{children}</main>
         <footer className="foot">
           <div className="wrap foot-grid">
             <div className="foot-brand">

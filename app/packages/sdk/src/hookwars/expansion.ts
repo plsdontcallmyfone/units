@@ -5,11 +5,12 @@
 import { PublicKey, type TransactionInstruction } from '@solana/web3.js';
 import { FIXED_ADDRESSES } from '@hookwars/shared';
 import { idlIx } from './from-idl.ts';
+import { equipLaunch } from './slot-launch.ts';
 import {
   ITEMS_ID, TOKEN_ID, agentsConfigAddress, collectionAddress, agentVaultAddress, armoryConfigAddress, badgeMintAddress, badgeMinterAddress, commissionAddress,
   commissionVaultAddress, equipStateAddress, firstBloodAddress, guildActionAddress, guildAddress, guildTreasuryAddress, holdingAddr,
   leaseAddress, leaseEscrowAddress, listingAddress, loyaltyClaimAddress, loyaltyPotAddress, marketEscrowAddress, passportAddress,
-  referralVaultOwner, referredAddress, submissionAddress, treatyInboxAddress, agentsSignerAddress, agentBadgeMintAddress, compositeAddress, launchAddr,
+  AGENTS_ID, armoryCallerAddress, referralVaultOwner, referredAddress, submissionAddress, treatyInboxAddress, agentsSignerAddress, agentBadgeMintAddress, compositeAddress, launchAddr,
 } from './addresses.ts';
 
 const TOKEN_EVENT_AUTHORITY = new PublicKey(FIXED_ADDRESSES.tokenEventAuthority);
@@ -122,6 +123,23 @@ export function agentsFreezePolicy(operator: PublicKey, passport: PublicKey, fro
 /** `withdraw(amount, mint)`: the operator takes SOL or a tracked token out of the agent vault. */
 export function agentsWithdraw(operator: PublicKey, passport: PublicKey, amount: bigint, mint: PublicKey | null): TransactionInstruction {
   return idlIx('agents', 'withdraw', { operator, passport, vault: agentVaultAddress(passport), token: TOKEN_ID }, { amount, mint });
+}
+/** The badge's `["armory-caller", badge_mint]` under the agents program (09 section 21 note 1). */
+export const agentsArmoryCaller = (badgeMint: PublicKey): PublicKey => PublicKey.findProgramAddressSync([Buffer.from('armory-caller'), badgeMint.toBuffer()], AGENTS_ID)[0];
+/** `equip_badge`: forwards the armory's `equip_launch` of the shared Soulbound item (template 42)
+ * into the badge's slot 0, signed by CPI as the agents caller. The armory's accounts follow as
+ * remaining accounts, the caller not a transaction signer. */
+export function agentsEquipBadge(payer: PublicKey, passport: PublicKey, badgeMint: PublicKey, soulboundItem: PublicKey): TransactionInstruction {
+  const caller = agentsArmoryCaller(badgeMint);
+  const inner = equipLaunch(payer, badgeMint, QUOTE, { slot: 0, item: soulboundItem, config: { targets: [], role: 0 }, noticeSecs: 0, rule: null },
+    { item: soulboundItem, templateId: 42, tokenCuts: false, poolCuts: false, composite: false });
+  const launchCaller = armoryCallerAddress(badgeMint);
+  const keys = inner.keys.map((k) => (k.pubkey.equals(launchCaller) ? { pubkey: caller, isSigner: false, isWritable: false } : k));
+  return idlIx('agents', 'equip_badge', { passport, badgeMint, caller }, {}, keys);
+}
+/** `issue_badge`: mints the one badge to the agent key's holding once slot 0 holds the Soulbound item. */
+export function agentsIssueBadge(payer: PublicKey, passport: PublicKey, agentKey: PublicKey, badgeMint: PublicKey): TransactionInstruction {
+  return idlIx('agents', 'issue_badge', { payer, passport, agentKey, badgeMint, badgeHolding: holdingAddr(badgeMint, agentKey), signer: agentsSignerAddress() });
 }
 /** `post_bond`: the agent key bonds two treaty proposals (one on each side). */
 export function agentsPostBond(agentKey: PublicKey, passport: PublicKey, proposalA: PublicKey, proposalB: PublicKey, treatyItem: PublicKey): TransactionInstruction {

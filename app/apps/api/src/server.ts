@@ -127,16 +127,17 @@ export function handler(deps: Deps) {
         return json(res, 200, { season: t.season, eta: Number(t.eta), entries: t.entries.filter((e) => e.weight > 0).map((e) => ({ templateId: e.templateId, templateName: String(e.templateId), weight: e.weight, ranges: e.ranges })) });
       }
       // Agents, market and social (09, 10): chain state read directly, history from the indexer when it is up.
+      // A missing account reads as null (the page says what is missing), as /war does.
       if (p === '/v1/agents') return json(res, 200, await cached(`agents:${q.get('sort') ?? ''}`, 15_000, () => xreads.agentsLeague(deps.conn, q.get('sort'))));
-      if ((m = /^\/v1\/agents\/(\w{32,44})$/.exec(p))) { const a = await xreads.agent(deps.conn, m[1]!); return a ? json(res, 200, a) : json(res, 404, { error: 'No such passport.' }); }
+      if ((m = /^\/v1\/agents\/(\w{32,44})$/.exec(p))) { const a = await xreads.agent(deps.conn, m[1]!); return json(res, 200, a); }
       if (p === '/v1/market/listings') return json(res, 200, await cached('listings', 10_000, () => xreads.listings(deps.conn, db)));
-      if ((m = /^\/v1\/market\/items\/(\w{32,44})$/.exec(p))) { const it = await xreads.marketItem(deps.conn, db, m[1]!); return it ? json(res, 200, it) : json(res, 404, { error: 'No such item.' }); }
+      if ((m = /^\/v1\/market\/items\/(\w{32,44})$/.exec(p))) { const it = await xreads.marketItem(deps.conn, db, m[1]!); return json(res, 200, it); }
       if (p === '/v1/market/leases') return json(res, 200, await cached('leases', 10_000, () => xreads.leases(deps.conn)));
       if (p === '/v1/market/collections') return json(res, 200, await cached('collections', 30_000, () => xreads.collections(deps.conn)));
       if (p === '/v1/commissions') return json(res, 200, await cached('commissions', 10_000, () => xreads.commissions(deps.conn)));
-      if ((m = /^\/v1\/commissions\/(\w{32,44})$/.exec(p))) { const c = await xreads.commission(deps.conn, m[1]!); return c ? json(res, 200, c) : json(res, 404, { error: 'No such commission.' }); }
+      if ((m = /^\/v1\/commissions\/(\w{32,44})$/.exec(p))) { const c = await xreads.commission(deps.conn, m[1]!); return json(res, 200, c); }
       if (p === '/v1/guilds') return json(res, 200, await cached('guilds', 15_000, () => xreads.guilds(deps.conn)));
-      if ((m = /^\/v1\/guilds\/(\d+)$/.exec(p))) { const g = await xreads.guild(deps.conn, intParam(m[1], 'guild', 0, 4_294_967_295)); return g ? json(res, 200, g) : json(res, 404, { error: 'No such guild.' }); }
+      if ((m = /^\/v1\/guilds\/(\d+)$/.exec(p))) { const g = await xreads.guild(deps.conn, intParam(m[1], 'guild', 0, 4_294_967_295)); return json(res, 200, g); }
       if (p === '/v1/badges') return json(res, 200, await cached('badges', 15_000, () => xreads.badges(deps.conn, db)));
       if (!db) return json(res, 503, { error: 'The database is not reachable.', code: 'NoDatabase' });
       if (p === '/v1/templates') return json(res, 200, await reads.templates(db));

@@ -133,6 +133,22 @@ export const EXPANSION_PREPARES: Record<string, PrepareDef> = {
     const p = await account(conn, passport, (d) => hookwars.passportCodec.decode(d), 'No such passport.');
     return [hookwars.agentsUpdateProfile(pk(b, 'owner'), passport, p.badgeMint, profile(b))];
   }),
+  // The badge after register_passport (09 section 21 note 1): equip the shared Soulbound item into
+  // the badge's slot 0, then issue the one badge to the agent key. Anyone may pay for either.
+  'agents/badge/equip/prepare': one('Equip the agent badge', ['agents', 'armory', 'items', 'token'], async (b, conn) => {
+    const passport = pk(b, 'passport');
+    const p = await account(conn, passport, (d) => hookwars.passportCodec.decode(d), 'No passport at this address.');
+    const cfg = await account(conn, hookwars.agentsConfigAddress(), (d) => hookwars.agentsConfigCodec.decode(d), 'Agents has no config on this cluster yet.');
+    if (cfg.soulboundItem.equals(PublicKey.default)) throw new PrepareError(409, 'NoSoulboundItem', 'The agents config names no Soulbound item yet, so badges cannot be equipped.');
+    if (p.badgeIssued) throw new PrepareError(409, 'BadgeIssued', 'This passport\'s badge is already issued.');
+    return [hookwars.agentsEquipBadge(pk(b, 'owner'), passport, p.badgeMint, cfg.soulboundItem)];
+  }),
+  'agents/badge/issue/prepare': one('Issue the agent badge', ['agents', 'token'], async (b, conn) => {
+    const passport = pk(b, 'passport');
+    const p = await account(conn, passport, (d) => hookwars.passportCodec.decode(d), 'No passport at this address.');
+    if (p.badgeIssued) throw new PrepareError(409, 'BadgeIssued', 'This passport\'s badge is already issued.');
+    return [hookwars.agentsIssueBadge(pk(b, 'owner'), passport, p.agentKey, p.badgeMint)];
+  }),
   'agents/policy/init/prepare': one('Set up an agent wallet', ['agents'], async (b) => [hookwars.agentsInitPolicy(pk(b, 'owner'), pk(b, 'owner'), pk(b, 'passport'), limits(b))]),
   'agents/policy/limits/prepare': one('Change agent wallet limits', ['agents'], async (b) => [hookwars.agentsSetLimits(pk(b, 'owner'), pk(b, 'passport'), limits(b))]),
   'agents/policy/freeze/prepare': one('Freeze or unfreeze an agent wallet', ['agents'], async (b) => [hookwars.agentsFreezePolicy(pk(b, 'owner'), pk(b, 'passport'), bool(b, 'frozen'))]),

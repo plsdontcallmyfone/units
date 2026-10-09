@@ -226,3 +226,22 @@ a.row:hover { background: var(--bg-3); }
 @media (max-width: 800px) { .card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 800px) { .directory { grid-template-columns: 1fr; gap: var(--s4); } .rail { position: static; max-height: none; display: flex; overflow-x: auto; gap: var(--s2); padding: var(--s2); scrollbar-width: thin; } .rail-title { display: none; } .rail-item { flex: none; border: 1px solid var(--line); } .rail-item.on { border-color: var(--ink); } }
 @media (max-width: 560px) { .hero-box { padding: var(--s5) var(--s4); } .hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .hero-stats > div { border-bottom: 1px solid var(--line); } .card-grid { grid-template-columns: 1fr; } }
+
+/* Changed by Hookwars: action forms (components/action.tsx), lineage tree, price history (app v2). */
+.act-grid { display: grid; gap: var(--s4); grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); align-items: start; }
+.action { display: grid; gap: var(--s3); padding: var(--s4); border: 1px solid var(--line); background: var(--glass-2); min-width: 0; }
+.action-head b { font-size: 14px; }
+.action-head p { margin: 4px 0 0; font-size: 13px; }
+.action-fields { display: grid; gap: var(--s3); grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.action-row { display: flex; gap: var(--s3); align-items: center; flex-wrap: wrap; }
+.action p.bad { color: var(--bad); margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.action p.muted { margin: 0; font-size: 13px; }
+.action-sigs { margin: 0; padding-left: 18px; font-size: 13px; }
+.tree { list-style: none; margin: 0; padding-left: var(--s4); border-left: 1px solid var(--line); display: grid; gap: 6px; }
+.tree > li { font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
+.spark { width: 100%; height: 120px; display: block; }
+.spark path { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+.spark circle { fill: var(--ink); }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+td.r, th.r { text-align: right; }
+.demo-banner { margin: 0 0 var(--s4); padding: var(--s2) var(--s3); border: 1px solid rgba(245, 217, 122, 0.4); color: var(--warn); font-size: 13px; }
