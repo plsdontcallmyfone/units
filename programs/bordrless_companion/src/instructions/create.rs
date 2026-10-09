@@ -1,4 +1,4 @@
-// Changed by Hookwars: war_bps checked at create.
+// Changed by Hookwars: war_bps checked at create; slot launches through `launch_slots`.
 //! `create` and `launch`: a companion made for a mint that does not exist yet, then the launch
 //! created through it, with the companion's creator address as the launch's creator.
 
@@ -166,22 +166,7 @@ pub fn process_launch<'info>(
 ) -> Result<()> {
     let c = &ctx.accounts.companion;
     require!(!c.launched, CompanionError::AlreadyLaunched);
-    // The companion's vesting replaces the kit's creator wallet lock, which would lock its creator
-    // address (the dev bag) instead of a person; holders can only be paid with holder rewards on.
-    require!(
-        args.rules.creator_lock_secs == 0,
-        CompanionError::CreatorLockUnsupported
-    );
-    if c.split.holders_bps > 0 {
-        require!(args.rules.rewards_on(), CompanionError::HolderRewardsOff);
-    }
-    // With holder rewards the kit lets only wallets hold the token: the dev bag must have one to go to.
-    if args.rules.rewards_on() {
-        require!(
-            c.beneficiary.is_on_curve(),
-            CompanionError::BeneficiaryNotAWallet
-        );
-    }
+    check_rules(c, &args.rules)?;
     let remaining = ctx.remaining_accounts;
     require!(remaining.len() > LAUNCH_AT, CompanionError::MissingAccount);
     require_keys_eq!(
@@ -208,7 +193,31 @@ pub fn process_launch<'info>(
     available.push(ctx.accounts.launch_program.to_account_info());
     available.push(ctx.accounts.creator.to_account_info());
     invoke_built(&ix, &available, &[&seeds.seeds()])?;
+    after_launch(&mut ctx.accounts.companion, creator, remaining)
+}
 
+/// The rules a companion launch may have (upstream `launch`, unchanged).
+fn check_rules(c: &Companion, rules: &bordrless_launch::state::LaunchRules) -> Result<()> {
+    // The companion's vesting replaces the kit's creator wallet lock, which would lock its creator
+    // address (the dev bag) instead of a person; holders can only be paid with holder rewards on.
+    require!(rules.creator_lock_secs == 0, CompanionError::CreatorLockUnsupported);
+    if c.split.holders_bps > 0 {
+        require!(rules.rewards_on(), CompanionError::HolderRewardsOff);
+    }
+    // With holder rewards the kit lets only wallets hold the token: the dev bag must have one to go to.
+    if rules.rewards_on() {
+        require!(c.beneficiary.is_on_curve(), CompanionError::BeneficiaryNotAWallet);
+    }
+    Ok(())
+}
+
+/// After the launch exists: its creator is this companion's, it has no custom hook and pays no
+/// config author; the buyback's reference price is the opening price.
+fn after_launch<'info>(
+    companion: &mut Box<Account<'info, Companion>>,
+    creator: Pubkey,
+    remaining: &[AccountInfo<'info>],
+) -> Result<()> {
     // The launch as created: its creator this companion's, no custom hook (not supported yet), no
     // config author paid (their claims would pay the companion outside its steps).
     let launch = Account::<Launch>::try_from(&remaining[LAUNCH_AT])?;
@@ -235,7 +244,7 @@ pub fn process_launch<'info>(
     )
     .ok_or(CompanionError::NoQuote)?;
     let now = Clock::get()?.unix_timestamp;
-    let c = &mut ctx.accounts.companion;
+    let c = companion;
     c.launched = true;
     c.launched_at = now;
     c.reference_price = reference;
@@ -245,5 +254,65 @@ pub fn process_launch<'info>(
         mint: c.mint,
         ts: now
     });
+    Ok(())
+}
+
+/// Hookwars: a slot launch through the companion (03 section 4.3, M3b's four steps). `data` is one
+/// launchpad instruction's data: `prepare_launch`, `equip_prepared` or `create_prepared_launch`,
+/// nothing else. The remaining accounts are that instruction's, in its order; the creator address
+/// signs as the launch's creator. The rules are checked as `launch` checks them, and after
+/// `create_prepared_launch` the launch is recorded as `launch` records it.
+pub fn process_launch_slots<'info>(
+    ctx: Context<'info, LaunchIt<'info>>,
+    data: Vec<u8>,
+) -> Result<()> {
+    use bordrless_launch::instruction as li;
+    use bordrless_launch::instructions::PrepareLaunchArgs;
+    use anchor_lang::Discriminator;
+    let c = &ctx.accounts.companion;
+    require!(!c.launched, CompanionError::AlreadyLaunched);
+    require!(data.len() >= 8, CompanionError::NotALaunchStep);
+    let (disc, body) = data.split_at(8);
+    // Where each step names its creator and mint.
+    let (mint_at, final_step) = if disc == li::PrepareLaunch::DISCRIMINATOR {
+        let args = PrepareLaunchArgs::deserialize(&mut &body[..])
+            .map_err(|_| error!(CompanionError::NotALaunchStep))?;
+        check_rules(c, &args.rules)?;
+        (2usize, false)
+    } else if disc == li::EquipPrepared::DISCRIMINATOR {
+        (2usize, false)
+    } else if disc == li::CreatePreparedLaunch::DISCRIMINATOR {
+        let args = CreateLaunchArgs::deserialize(&mut &body[..])
+            .map_err(|_| error!(CompanionError::NotALaunchStep))?;
+        check_rules(c, &args.rules)?;
+        (MINT_AT, true)
+    } else {
+        return err!(CompanionError::NotALaunchStep);
+    };
+    let remaining = ctx.remaining_accounts;
+    require!(remaining.len() > mint_at.max(if final_step { LAUNCH_AT } else { 0 }), CompanionError::MissingAccount);
+    let creator = ctx.accounts.creator.key();
+    require_keys_eq!(*remaining[CREATOR_AT].key, creator, CompanionError::WrongCreator);
+    require_keys_eq!(*remaining[mint_at].key, c.mint, CompanionError::WrongMint);
+    let ix = Instruction {
+        program_id: LAUNCH_ID,
+        accounts: remaining
+            .iter()
+            .map(|a| AccountMeta {
+                pubkey: *a.key,
+                is_signer: a.is_signer || *a.key == creator,
+                is_writable: a.is_writable,
+            })
+            .collect(),
+        data,
+    };
+    let seeds = CreatorSeeds::new(c.mint, c.creator_bump);
+    let mut available = remaining.to_vec();
+    available.push(ctx.accounts.launch_program.to_account_info());
+    available.push(ctx.accounts.creator.to_account_info());
+    invoke_built(&ix, &available, &[&seeds.seeds()])?;
+    if final_step {
+        after_launch(&mut ctx.accounts.companion, creator, remaining)?;
+    }
     Ok(())
 }

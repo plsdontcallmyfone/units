@@ -48,6 +48,23 @@ fn slot(kind: u8, max_cut_bps: u16, data_len: u8, touch: bool, burn: bool) -> Sl
     }
 }
 
+/// Sends `ixs` as a v0 transaction with one lookup table holding every key (as a client sends slot
+/// launches and their trades, 07 section 3), under a 1.4M compute limit.
+fn send(env: &mut bordrless_program_tests::env::Env, ixs: &[Instruction], payer: &Keypair, signers: &[&Keypair]) -> bordrless_program_tests::env::Tx {
+    let mut all = vec![bordrless_program_tests::env::compute_unit_limit(1_400_000)];
+    all.extend(ixs.iter().cloned());
+    let mut keys: Vec<Pubkey> = Vec::new();
+    for i in &all {
+        for m in &i.accounts {
+            if !keys.contains(&m.pubkey) {
+                keys.push(m.pubkey);
+            }
+        }
+    }
+    let table = env.put_lookup_table(Pubkey::new_unique(), &keys);
+    env.send_v0(&all, payer, signers, &[table])
+}
+
 /// The armory world with every program real: the launchpad and the war program replace the
 /// stand-ins the armory suites load at their ids; the war program is configured with the war
 /// suites' TEST parameters.
@@ -143,7 +160,7 @@ fn launch_token(hw: &mut Hw, creator: &Keypair, slots: Vec<SlotInit>, equips: Ve
             rule: None,
         };
         let ix = sl::equip_prepared(c, mint, equip_launch_ix(hw, &c, &mint, entry));
-        hw.w.env.send_paid_by(&[ix], creator, &[]).ok();
+        send(&mut hw.w.env, &[ix], creator, &[]).ok();
     }
     let args = bordrless_program_tests::fixture::World::launch_args("E2E", 100, VQ, LaunchRules::NONE);
     let ix = sl::create_prepared_launch(
@@ -155,12 +172,11 @@ fn launch_token(hw: &mut Hw, creator: &Keypair, slots: Vec<SlotInit>, equips: Ve
         args,
         items_extras(hw, &mint, SlotOp::Transfer),
     );
-    hw.w.env.send_paid_by(&[ix], creator, &[&mint_kp]).ok();
+    send(&mut hw.w.env, &[ix], creator, &[&mint_kp]).ok();
     let regs = pool_registries(hw, &mint);
     let ix = sl::refresh_pool_registry(c, mint, hw.w.sol, policy::LP_FEE_BPS, regs);
-    hw.w.env.send_paid_by(&[ix], creator, &[]).ok();
-    hw.w.env
-        .send_paid_by(&[hookwars_war::client::init_war(c, mint)], creator, &[])
+    send(&mut hw.w.env, &[ix], creator, &[]).ok();
+    send(&mut hw.w.env, &[hookwars_war::client::init_war(c, mint)], creator, &[])
         .ok();
     init_ledger(hw, creator, &mint).ok();
     mint
@@ -189,13 +205,13 @@ fn swap_ix(hw: &Hw, trader: &Pubkey, mint: &Pubkey, direction: u8, amount_in: u6
 fn buy(hw: &mut Hw, trader: &Keypair, mint: &Pubkey, lamports: u64) -> bordrless_program_tests::env::Tx {
     let t = trader.pubkey();
     let ixs = [token::create_holding(t, *mint, t), swap_ix(hw, &t, mint, 1, lamports)];
-    hw.w.env.send_paid_by(&ixs, trader, &[])
+    send(&mut hw.w.env, &ixs, trader, &[])
 }
 
 fn sell(hw: &mut Hw, trader: &Keypair, mint: &Pubkey, amount: u64) -> bordrless_program_tests::env::Tx {
     let t = trader.pubkey();
     let ix = swap_ix(hw, &t, mint, 0, amount);
-    hw.w.env.send_paid_by(&[ix], trader, &[])
+    send(&mut hw.w.env, &[ix], trader, &[])
 }
 
 /// One hop of a launch pool for `swap_route`.
@@ -359,7 +375,7 @@ fn a_slot_launch_trades_through_the_real_items_and_settles() {
             let n = if it.template_id == T::COMPOSITE { 2 } else { 1 };
             let dests: Vec<(Pubkey, Pubkey)> = (0..n).map(|_| (ids::ITEMS_ID, chest_quote)).collect();
             let ix = settle_ix(&hw, &cranker.pubkey(), &mint, s, &dests);
-            hw.w.env.send_paid_by(&[ix], &cranker, &[]).ok();
+            send(&mut hw.w.env, &[ix], &cranker, &[]).ok();
             let after = equip_state(&hw, &mint, s);
             assert_eq!(after.pool_owed, after.pool_settled, "slot {s} fully settled");
         }
@@ -394,7 +410,7 @@ fn a_raid_through_the_rivals_pool_counts_and_a_forged_first_hop_does_not() {
             vec![],
         ),
     ];
-    hw.w.env.send_paid_by(&ixs, &raider, &[]).ok();
+    send(&mut hw.w.env, &ixs, &raider, &[]).ok();
     let l = ledger(&hw, &t.target);
     assert_eq!(l.inbound[0].rival_mint, t.rival);
     let raided = l.inbound[0].volume;
@@ -437,7 +453,7 @@ fn a_raid_through_the_rivals_pool_counts_and_a_forged_first_hop_does_not() {
         },
         rival_extras.clone(),
     );
-    hw.w.env.send_paid_by(&[create], &attacker, &[]).ok();
+    send(&mut hw.w.env, &[create], &attacker, &[]).ok();
     let fake_pool = swap::pool_address(&t.rival, &sol, 30, None);
     let fake_hop = swap::RouteHop {
         keys: swap::SwapKeys {
@@ -461,7 +477,7 @@ fn a_raid_through_the_rivals_pool_counts_and_a_forged_first_hop_does_not() {
         token::create_holding(a, t.target, a),
         swap::swap_route(a, ax / 8, 0, vec![fake_hop, launch_hop(&hw, &a, &t.target, 1)], vec![]),
     ];
-    hw.w.env.send_paid_by(&ixs, &attacker, &[]).ok();
+    send(&mut hw.w.env, &ixs, &attacker, &[]).ok();
     let l = ledger(&hw, &t.target);
     assert_eq!(l.inbound[0].volume, raided, "a forged first hop adds no raid volume");
     assert_eq!(equip_state(&hw, &t.target, 0).pool_owed, owed_before, "and pays no Raid toll");
@@ -511,4 +527,109 @@ fn the_launchs_own_deposit_is_never_cut_by_token_items() {
             pda::equip_state(&mint, 0).0,
         ],
     );
+}
+
+#[test]
+fn a_companion_makes_a_slot_launch_through_launch_slots() {
+    use bordrless_companion::client as companion;
+    use bordrless_companion::instructions::CreateArgs;
+    use bordrless_companion::state::Split;
+    let mut hw = world();
+    let launcher = hw.w.env.funded(1_000 * SOL);
+    let tiers = hw.item(T::SIZE_TIERS, params(&[1_000_000, 100_000_000, 50, 100, 200]), 0).1;
+    let mint_kp = Keypair::new();
+    let mint = mint_kp.pubkey();
+    let l = launcher.pubkey();
+    let args = CreateArgs {
+        split: Split { buyback_bps: 0, holders_bps: 0, beneficiary_bps: 10_000, war_bps: 0 },
+        bounty_bps: 50,
+        max_buyback: SOL,
+        buyback_interval: 60,
+        vest_secs: 0,
+        fund: 2 * SOL,
+    };
+    send(&mut hw.w.env, &[companion::create(l, l, mint, args)], &launcher, &[&mint_kp])
+        .ok();
+    let creator = companion::creator_address(&mint);
+
+    // Step 1: prepare, the creator address signing through the companion.
+    let prep = sl::prepare_launch(
+        creator,
+        mint,
+        bordrless_program_tests::fixture::World::prepare_args(
+            "COMP",
+            100,
+            LaunchRules::NONE,
+            vec![slot(slot_kind::POOL, 0, 0, false, false)],
+        ),
+    );
+    send(&mut hw.w.env, &[companion::launch_slots(l, mint, &prep)], &launcher, &[&mint_kp])
+        .ok();
+    // Step 2: equip the launch item through the armory.
+    let entry = hookwars_armory::LaunchEquip {
+        slot: 0,
+        item: Some(tiers),
+        config: EquipConfig::default(),
+        notice_secs: 600,
+        rule: None,
+    };
+    let equip = sl::equip_prepared(creator, mint, equip_launch_ix(&hw, &creator, &mint, entry));
+    send(&mut hw.w.env, &[companion::launch_slots(l, mint, &equip)], &launcher, &[])
+        .ok();
+    // Anything else is refused.
+    let other = token::create_holding(creator, mint, creator);
+    let mut bad = companion::launch_slots(l, mint, &prep);
+    bad.data = anchor_lang::InstructionData::data(&bordrless_companion::instruction::LaunchSlots {
+        data: other.data.clone(),
+    });
+    send(&mut hw.w.env, &[bad], &launcher, &[&mint_kp])
+        .expect_code(u32::from(bordrless_companion::error::CompanionError::NotALaunchStep));
+    // Step 3: the launch.
+    let cargs = bordrless_program_tests::fixture::World::launch_args("COMP", 100, VQ, LaunchRules::NONE);
+    let create = sl::create_prepared_launch(
+        creator,
+        mint,
+        hw.w.env.treasury.pubkey(),
+        hw.w.sol,
+        policy::LP_FEE_BPS,
+        cargs,
+        items_extras(&hw, &mint, SlotOp::Transfer),
+    );
+    let ixs = vec![
+        bordrless_program_tests::env::compute_unit_limit(1_400_000),
+        companion::launch_slots(l, mint, &create),
+    ];
+    let mut keys: Vec<Pubkey> = Vec::new();
+    for i in &ixs {
+        for m in &i.accounts {
+            if !keys.contains(&m.pubkey) {
+                keys.push(m.pubkey);
+            }
+        }
+    }
+    let table = hw.w.env.put_lookup_table(Pubkey::new_unique(), &keys);
+    let tx = hw.w.env.send_v0(&ixs, &launcher, &[&mint_kp], &[table]);
+    tx.ok();
+    println!(
+        "budget | companion slot launch, create_prepared_launch, 1 pool item | keys {} | v0 bytes with table {} | trace {} | height {} | CU {}",
+        tx.keys.len(),
+        tx.size,
+        tx.trace_len(),
+        tx.max_height(),
+        tx.cu()
+    );
+    assert!(tx.max_height() <= 5);
+    let c: bordrless_companion::state::Companion = hw.w.env.read(&companion::companion_address(&mint));
+    assert!(c.launched);
+    let lr: bordrless_launch::state::Launch = hw.w.env.read(&launch::launch_address(&mint));
+    assert_eq!(lr.creator, creator);
+    assert!(lr.is_slot_launch());
+    let regs = pool_registries(&hw, &mint);
+    let ix = sl::refresh_pool_registry(l, mint, hw.w.sol, policy::LP_FEE_BPS, regs);
+    send(&mut hw.w.env, &[ix], &launcher, &[]).ok();
+    let trader = hw.w.env.funded(100 * SOL);
+    hw.w.wrap_sol(&trader, 10 * SOL).ok();
+    buy(&mut hw, &trader, &mint, SOL).ok();
+    assert!(equip_state(&hw, &mint, 0).pool_owed > 0, "the item cut the companion launch's buy");
+    assert_pool_cuts(&hw, &mint);
 }

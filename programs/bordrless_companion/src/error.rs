@@ -1,4 +1,4 @@
-// Changed by Hookwars: WarShareTooHigh.
+// Changed by Hookwars: WarShareTooHigh; NotALaunchStep.
 use anchor_lang::prelude::*;
 
 #[error_code]
@@ -51,4 +51,6 @@ pub enum CompanionError {
     NoQuote,
     #[msg("the war chest's share is above WAR_BPS_MAX")]
     WarShareTooHigh,
+    #[msg("only the launchpad's prepare_launch, equip_prepared and create_prepared_launch go through launch_slots")]
+    NotALaunchStep,
 }

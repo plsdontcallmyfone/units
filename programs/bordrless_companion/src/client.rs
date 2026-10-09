@@ -1,4 +1,4 @@
-// Changed by Hookwars: claim_fees passes the war chest accounts.
+// Changed by Hookwars: claim_fees passes the war chest accounts; launch_slots.
 //! Builders for the companion's instructions, as the tests and the SDK build them. Each step's
 //! remaining accounts are the accounts of the instructions it invokes, built with the callees'
 //! own clients exactly as the program builds them on chain; the program looks them up by key. The
@@ -119,6 +119,36 @@ pub fn launch(
         })
         .collect();
     build(named, inner, crate::instruction::Launch { args }.data())
+}
+
+/// Hookwars: `launch_slots` forwarding one slot-launch step (`inner`: the launchpad's
+/// `prepare_launch`, `equip_prepared` or `create_prepared_launch`, built with the creator address
+/// as its creator). Only the mint keeps its signature (the companion signs for the creator).
+pub fn launch_slots(launcher: Pubkey, mint: Pubkey, inner: &Instruction) -> Instruction {
+    let named = vec![
+        AccountMeta::new_readonly(launcher, true),
+        AccountMeta::new(companion_address(&mint), false),
+        AccountMeta::new(creator_address(&mint), false),
+        AccountMeta::new_readonly(LAUNCH_ID, false),
+    ];
+    let creator = creator_address(&mint);
+    let accounts: Vec<AccountMeta> = inner
+        .accounts
+        .iter()
+        .map(|m| AccountMeta {
+            pubkey: m.pubkey,
+            is_signer: m.is_signer && m.pubkey != creator,
+            is_writable: m.is_writable,
+        })
+        .collect();
+    build(
+        named,
+        accounts,
+        crate::instruction::LaunchSlots {
+            data: inner.data.clone(),
+        }
+        .data(),
+    )
 }
 
 fn step(cranker: Pubkey, mint: Pubkey) -> Vec<AccountMeta> {
