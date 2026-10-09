@@ -37,3 +37,4 @@ Program keypairs live outside the repo (`keys/` is git-ignored); back them up be
 | Claude (M6 app builder (app/: sdk, indexer, api, web, bots), fork of session d79dfc8e) | branch app, worktree ~/hookwars-app, server /root/hw-app, server ports 9960 to 9969 | 2026-10-09 | done, merged into main: 147 tests, next build passes; see app/INTEGRATION.md |
 
 Branch workflow (2026-10-09): parallel workers commit on their own branch in their own worktree; only the spec lead merges into main.
+| Claude (M3b items builder, fork of session d79dfc8e) | branch m3bi, worktree ~/hookwars-m3bi, server /root/hw-m3bi: programs/hookwars_items, crates/hookwars-common, armory (composites, settle bounty, Performance ring reader, sparse template ids), war integration, token (Pool slots may cut), tests | 2026-10-09 | done: 331 passed, 0 failed, 2 ignored on branch; notes at the end of docs/spec/04 |
