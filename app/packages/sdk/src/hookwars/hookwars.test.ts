@@ -158,3 +158,22 @@ describe('instructions', () => {
     expect(() => hookwarsIx('war', 'nope', {}, [])).toThrow();
   });
 });
+
+describe('transaction events', () => {
+  it('decodes self-CPI and item log events in one sequence', async () => {
+    const { decodeTransactionEvents } = await import('./tx.ts');
+    const { eventAuthority } = await import('../addresses.ts');
+    const bs58 = (await import('bs58')).default;
+    const war = WAR_ID.toBase58();
+    const ea = eventAuthority(WAR_ID).toBase58();
+    const body = encodeEventBody('war', 'WarFunded', { mint: k(), amount: 5n, balance: 5n, fundedTotal: 5n });
+    const tx = {
+      accountKeys: ['payer', war, ea],
+      inner: [{ programIdIndex: 1, accounts: [2], data: bs58.encode(Buffer.concat([EVENT_IX_TAG, body])) }, { programIdIndex: 1, accounts: [0], data: bs58.encode(Buffer.concat([EVENT_IX_TAG, body])) }],
+      logs: [],
+    };
+    const out = decodeTransactionEvents(tx);
+    expect(out.events.map((e) => [e.ordinal, e.name, e.via])).toEqual([[0, 'WarFunded', 'cpi']]);
+    expect(out.events[0]!.data.amount).toBe('5');
+  });
+});

@@ -4,3 +4,4 @@ export * from './addresses.ts';
 export * from './events.ts';
 export * from './instructions.ts';
 export * from './slices.ts';
+export * from './tx.ts';

@@ -8,13 +8,14 @@
  * Token events follow the M1 Rust (`programs/bordrless_token/src/events.rs`). Every other new
  * event follows its spec table, in table order (INTEGRATION.md section 2).
  */
-import { createHash } from 'node:crypto';
 import { PublicKey } from '@solana/web3.js';
+import { EVENT_IX_TAG as UPSTREAM_EVENT_IX_TAG } from '../events.ts';
 import { eventCodec, type EventCodec, type Field, type Ty } from './codec.ts';
 import { EQUIP_CONFIG, MANIFEST, PARAM_FIELDS, SCORE_WEIGHTS, SLOT_BOUNDS } from './accounts.ts';
 import { ARMORY_ID, ITEMS_ID, LAUNCH_ID, SWAP_ID, TOKEN_ID, WAR_ID, COMPANION_ID } from './addresses.ts';
 
-export const EVENT_IX_TAG = createHash('sha256').update('anchor:event').digest().subarray(0, 8);
+/** `sha256("anchor:event")[..8]` as Anchor writes it (little-endian u64), upstream's constant. */
+export const EVENT_IX_TAG = UPSTREAM_EVENT_IX_TAG;
 
 const params = (): Ty => ({ array: ['u32', PARAM_FIELDS] });
 const slotAmount: Ty = { struct: [['slot', 'u8'], ['item', 'pubkey'], ['amount', 'u64']] };

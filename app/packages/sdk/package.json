@@ -33,7 +33,8 @@
     "@anchor-lang/core": "1.2.1",
     "@hookwars/shared": "workspace:^",
     "@solana/web3.js": "1.98.4",
-    "bn.js": "5.2.5"
+    "bn.js": "5.2.5",
+    "bs58": "6.0.0"
   },
   "devDependencies": {
     "@types/bn.js": "5.2.0",
