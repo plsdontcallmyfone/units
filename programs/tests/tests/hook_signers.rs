@@ -1,3 +1,4 @@
+// Changed by Hookwars: PoolHookArgs carries a route.
 //! Who may call a hook (the review fixes of `docs/hooks-v2.md`, implementation notes). The token
 //! program and the DEX sign every callback with a PDA of the hook program they call,
 //! `["hook-authority", hook_program]`: a callback gets that signer as a signer and could pass it on
@@ -286,6 +287,7 @@ fn a_pool_hook_cannot_pass_its_signer_on_to_the_launch() {
         created_at: 0,
         lp_amount: 0,
         hook_data: vec![],
+        route: bordrless_hook::RouteContext::single(w.sol, mint, victim_pool, u64::MAX / 4),
     };
     let data = bordrless_launch::instruction::BeforeSwap { args }.data();
     let extras = vec![

@@ -1,14 +1,17 @@
+// Changed by Hookwars: observations written at the start and end of each liquidity change; pool
+// callbacks carry an empty route (hop_count 0).
 //! Adding and removing liquidity.
 
 use anchor_lang::prelude::*;
 use bordrless_core::{initial_lp, lp_for_deposit, mul_div_floor, withdraw_for_lp};
 use bordrless_hook::{
-    discriminators, pool_flags, Allowed, Phase, PoolHookArgs, PoolOp, MAX_HOOK_DATA,
+    discriminators, pool_flags, Allowed, Phase, PoolHookArgs, PoolOp, RouteContext, MAX_HOOK_DATA,
 };
 
 use crate::constants::*;
 use crate::error::SwapError;
 use crate::events::*;
+use crate::obs;
 use crate::hooks::{split_extras, PoolHookCall};
 use crate::instructions::pool::PoolSeeds;
 use crate::state::*;
@@ -188,6 +191,7 @@ fn hook_args(
         created_at: pool.created_at,
         lp_amount: lp,
         hook_data,
+        route: RouteContext::default(),
     }
 }
 
@@ -197,6 +201,11 @@ pub fn process_add_liquidity<'info>(
     args: AddLiquidityArgs,
 ) -> Result<()> {
     let clock = Clock::get()?;
+    obs::begin(
+        &ctx.accounts.pool.to_account_info(),
+        &ctx.accounts.pool,
+        clock.unix_timestamp,
+    )?;
     require!(
         args.base_desired > 0 && args.quote_desired > 0,
         SwapError::ZeroAmount
@@ -351,6 +360,7 @@ pub fn process_add_liquidity<'info>(
         }
     }
     let pool = &ctx.accounts.pool;
+    obs::end(&ctx.accounts.pool.to_account_info(), &ctx.accounts.pool)?;
     emit_cpi!(LiquidityAdded {
         pool: pool_key,
         provider: ctx.accounts.provider.key(),
@@ -372,6 +382,11 @@ pub fn process_remove_liquidity<'info>(
     args: RemoveLiquidityArgs,
 ) -> Result<()> {
     let clock = Clock::get()?;
+    obs::begin(
+        &ctx.accounts.pool.to_account_info(),
+        &ctx.accounts.pool,
+        clock.unix_timestamp,
+    )?;
     require!(args.lp_amount > 0, SwapError::ZeroAmount);
     let p = prepare(
         &ctx,
@@ -478,6 +493,7 @@ pub fn process_remove_liquidity<'info>(
         }
     }
     let pool = &ctx.accounts.pool;
+    obs::end(&ctx.accounts.pool.to_account_info(), &ctx.accounts.pool)?;
     emit_cpi!(LiquidityRemoved {
         pool: pool_key,
         provider: ctx.accounts.provider.key(),

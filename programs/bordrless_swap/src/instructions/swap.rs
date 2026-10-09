@@ -1,3 +1,6 @@
+// Changed by Hookwars: observations written at the start and end of each swap; the swap body is
+// one hop (`run_hop`) shared by `swap` and the new multi-hop `swap_route`; pool callbacks carry the
+// DEX-filled route (spec 03 sections 3.1 to 3.3).
 //! Swaps (hook protocol v2, `docs/hooks-v2.md` §3.1).
 //!
 //! A buy (quote in, base out): the `before_swap` answer's deltas, then its burn, leave the trader's
@@ -31,12 +34,13 @@
 use anchor_lang::prelude::*;
 use bordrless_core::{output_share, protocol_share, swap_amounts, swap_amounts_shared, Reserves};
 use bordrless_hook::{
-    discriminators, pool_flags, Allowed, Phase, PoolHookArgs, PoolOp, MAX_HOOK_DATA,
+    discriminators, pool_flags, Allowed, Phase, PoolHookArgs, PoolOp, RouteContext, MAX_HOOK_DATA,
 };
 
 use crate::constants::*;
 use crate::error::{swap_failure, SwapError};
 use crate::events::*;
+use crate::obs;
 use crate::hooks::{split_extras, Cut, PoolHookCall};
 use crate::instructions::pool::PoolSeeds;
 use crate::state::*;
@@ -103,6 +107,53 @@ pub struct Swap<'info> {
     pub token_event_authority: UncheckedAccount<'info>,
 }
 
+
+/// One pool of a swap: the accounts upstream's `swap` takes, as account infos, so `swap` and each
+/// hop of `swap_route` run the same code.
+pub struct HopAccounts<'a, 'info> {
+    /// The trader.
+    pub trader: AccountInfo<'info>,
+    /// The pool.
+    pub pool: &'a mut Account<'info, Pool>,
+    /// Base mint.
+    pub base_mint: AccountInfo<'info>,
+    /// Quote mint.
+    pub quote_mint: AccountInfo<'info>,
+    /// The pool's base vault.
+    pub base_vault: AccountInfo<'info>,
+    /// The pool's quote vault.
+    pub quote_vault: AccountInfo<'info>,
+    /// The trader's base holding (or, on a buy, any holding of the base mint to deliver to).
+    pub trader_base: AccountInfo<'info>,
+    /// The trader's quote holding (or, on a sell, any holding of the quote mint to deliver to).
+    pub trader_quote: AccountInfo<'info>,
+    /// The pool's hook program, when passed.
+    pub hook_program: Option<AccountInfo<'info>>,
+    /// This program's signer of its callbacks, when passed.
+    pub hook_signer: Option<AccountInfo<'info>>,
+    /// The input mint's token-hook slice.
+    pub in_extras: &'a [AccountInfo<'info>],
+    /// The output mint's token-hook slice.
+    pub out_extras: &'a [AccountInfo<'info>],
+    /// The pool hook's extras.
+    pub pool_extras: &'a [AccountInfo<'info>],
+}
+
+/// What one hop is asked to do.
+pub struct HopParams {
+    /// 0 sell, 1 buy.
+    pub direction: u8,
+    /// Exact input.
+    pub amount_in: u64,
+    /// The least the recipient's holding must gain.
+    pub min_amount_out: u64,
+    /// Opaque data for the pool hook.
+    pub hook_data: Vec<u8>,
+    /// The route this hop belongs to; its `route_input_mint`, `route_output_mint`, `first_pool`
+    /// and `route_amount_in` are filled by [`run_hop`] for a plain swap (`hop_count` 0 in).
+    pub route: RouteContext,
+}
+
 /// `swap`.
 pub fn process_swap<'info>(ctx: Context<'info, Swap<'info>>, args: SwapArgs) -> Result<()> {
     let clock = Clock::get()?;
@@ -115,10 +166,6 @@ pub fn process_swap<'info>(ctx: Context<'info, Swap<'info>>, args: SwapArgs) -> 
         hook_data,
     } = args;
     require!(!ctx.accounts.config.paused, SwapError::Paused);
-    require!(amount_in > 0, SwapError::ZeroAmount);
-    require!(direction <= 1, SwapError::InvalidDirection);
-    require!(hook_data.len() <= MAX_HOOK_DATA, SwapError::HookDataTooLong);
-    let buy = direction == 1;
     let token = TokenAccounts {
         program: ctx.accounts.token_program.to_account_info(),
         event_authority: ctx.accounts.token_event_authority.to_account_info(),
@@ -126,29 +173,101 @@ pub fn process_swap<'info>(ctx: Context<'info, Swap<'info>>, args: SwapArgs) -> 
     token.check()?;
     let (in_extras, out_extras, pool_extras) =
         split_extras(ctx.remaining_accounts, in_hook_accounts, out_hook_accounts)?;
+    let accounts = &mut *ctx.accounts;
+    let hop = HopAccounts {
+        trader: accounts.trader.to_account_info(),
+        base_mint: accounts.base_mint.to_account_info(),
+        quote_mint: accounts.quote_mint.to_account_info(),
+        base_vault: accounts.base_vault.to_account_info(),
+        quote_vault: accounts.quote_vault.to_account_info(),
+        trader_base: accounts.trader_base.to_account_info(),
+        trader_quote: accounts.trader_quote.to_account_info(),
+        hook_program: accounts.hook_program.as_ref().map(|a| a.to_account_info()),
+        hook_signer: accounts.hook_signer.as_ref().map(|a| a.to_account_info()),
+        pool: &mut accounts.pool,
+        in_extras,
+        out_extras,
+        pool_extras,
+    };
+    let (event, _) = run_hop(
+        &token,
+        hop,
+        HopParams {
+            direction,
+            amount_in,
+            min_amount_out,
+            hook_data,
+            route: RouteContext::default(),
+        },
+        &clock,
+    )?;
+    emit_cpi!(event);
+    Ok(())
+}
+
+/// One hop: upstream's swap, steps 1 to 7, with the observation ring written before the reserves
+/// move and after, and the route in every pool callback. Answers the `Swapped` event and what the
+/// recipient's holding gained.
+pub fn run_hop<'a, 'info>(
+    token: &TokenAccounts<'info>,
+    hop: HopAccounts<'a, 'info>,
+    params: HopParams,
+    clock: &Clock,
+) -> Result<(Swapped, u64)> {
+    let HopParams {
+        direction,
+        amount_in,
+        min_amount_out,
+        hook_data,
+        mut route,
+    } = params;
+    require!(amount_in > 0, SwapError::ZeroAmount);
+    require!(direction <= 1, SwapError::InvalidDirection);
+    require!(hook_data.len() <= MAX_HOOK_DATA, SwapError::HookDataTooLong);
+    let buy = direction == 1;
+    let HopAccounts {
+        trader,
+        pool: pool_account,
+        base_mint,
+        quote_mint,
+        base_vault,
+        quote_vault,
+        trader_base,
+        trader_quote,
+        hook_program,
+        hook_signer,
+        in_extras,
+        out_extras,
+        pool_extras,
+    } = hop;
+    let pool_key = pool_account.key();
+
+    // Hookwars: the ring accrues the price the previous instruction left, before anything moves.
+    obs::begin(&pool_account.to_account_info(), pool_account, clock.unix_timestamp)?;
 
     // The sides.
-    let base_mint = ctx.accounts.base_mint.to_account_info();
-    let quote_mint = ctx.accounts.quote_mint.to_account_info();
     let (in_mint, out_mint, vault_in, vault_out, trader_in, trader_out) = if buy {
         (
             quote_mint.clone(),
             base_mint.clone(),
-            ctx.accounts.quote_vault.to_account_info(),
-            ctx.accounts.base_vault.to_account_info(),
-            ctx.accounts.trader_quote.to_account_info(),
-            ctx.accounts.trader_base.to_account_info(),
+            quote_vault.clone(),
+            base_vault.clone(),
+            trader_quote.clone(),
+            trader_base.clone(),
         )
     } else {
         (
             base_mint.clone(),
             quote_mint.clone(),
-            ctx.accounts.base_vault.to_account_info(),
-            ctx.accounts.quote_vault.to_account_info(),
-            ctx.accounts.trader_base.to_account_info(),
-            ctx.accounts.trader_quote.to_account_info(),
+            base_vault.clone(),
+            quote_vault.clone(),
+            trader_base.clone(),
+            trader_quote.clone(),
         )
     };
+    if route.hop_count == 0 {
+        route = RouteContext::single(*in_mint.key, *out_mint.key, pool_key, amount_in);
+    }
     let in_hook = bordrless_token::client::read_mint(&in_mint)?.hook_program;
     let out_hook = bordrless_token::client::read_mint(&out_mint)?.hook_program;
     let recipient = read_holding(&trader_out)?.owner;
@@ -160,57 +279,53 @@ pub fn process_swap<'info>(ctx: Context<'info, Swap<'info>>, args: SwapArgs) -> 
         *trader_out.key,
     ];
 
-    let pool_key = ctx.accounts.pool.key();
     let call = PoolHookCall::of(
-        ctx.accounts.pool.hook_program,
-        ctx.accounts.pool.hook_signer_bump,
-        ctx.accounts
-            .hook_program
-            .as_ref()
-            .map(|a| a.to_account_info()),
-        ctx.accounts
-            .hook_signer
-            .as_ref()
-            .map(|a| a.to_account_info()),
+        pool_account.hook_program,
+        pool_account.hook_signer_bump,
+        hook_program,
+        hook_signer,
         [
-            ctx.accounts.pool.to_account_info(),
-            base_mint,
-            quote_mint,
-            ctx.accounts.trader.to_account_info(),
+            pool_account.to_account_info(),
+            base_mint.clone(),
+            quote_mint.clone(),
+            trader.clone(),
         ],
         pool_extras,
     )?;
-    let pool = &ctx.accounts.pool;
-    let flags = pool.hook_flags;
-    let mut hook_args = PoolHookArgs {
-        op: PoolOp::Swap,
-        phase: Phase::Before,
-        pool: pool_key,
-        base_mint: pool.base_mint,
-        quote_mint: pool.quote_mint,
-        actor: ctx.accounts.trader.key(),
-        recipient,
-        direction,
-        amount_in,
-        amount_out: 0,
-        base_reserve: pool.base_reserve,
-        quote_reserve: pool.quote_reserve,
-        virtual_base: pool.virtual_base,
-        virtual_quote: pool.virtual_quote,
-        lp_fee_bps: pool.lp_fee_bps,
-        protocol_fee_bps: pool.protocol_fee_bps,
-        swap_count: pool.swap_count,
-        created_at: pool.created_at,
-        lp_amount: 0,
-        hook_data,
+    let flags = pool_account.hook_flags;
+    let mut hook_args = {
+        let pool = &*pool_account;
+        PoolHookArgs {
+            op: PoolOp::Swap,
+            phase: Phase::Before,
+            pool: pool_key,
+            base_mint: pool.base_mint,
+            quote_mint: pool.quote_mint,
+            actor: trader.key(),
+            recipient,
+            direction,
+            amount_in,
+            amount_out: 0,
+            base_reserve: pool.base_reserve,
+            quote_reserve: pool.quote_reserve,
+            virtual_base: pool.virtual_base,
+            virtual_quote: pool.virtual_quote,
+            lp_fee_bps: pool.lp_fee_bps,
+            protocol_fee_bps: pool.protocol_fee_bps,
+            swap_count: pool.swap_count,
+            created_at: pool.created_at,
+            lp_amount: 0,
+            hook_data,
+            route,
+        }
     };
 
     // 1. Before: the hook may set the LP fee and cut the input (deltas and a burn), as the pool's
     //    flags allow; the answer is checked before anything moves.
-    let mut lp_fee_bps = pool.lp_fee_bps;
+    let mut lp_fee_bps = pool_account.lp_fee_bps;
     let mut cut_in = Cut::none();
     if let Some(call) = &call {
-        if pool.runs(pool_flags::BEFORE_SWAP) {
+        if pool_account.runs(pool_flags::BEFORE_SWAP) {
             let allowed = Allowed::pool(PoolOp::Swap, Phase::Before, flags);
             if let Some((ret, taken)) =
                 call.invoke(discriminators::BEFORE_SWAP, &hook_args, allowed)?
@@ -226,18 +341,9 @@ pub fn process_swap<'info>(ctx: Context<'info, Swap<'info>>, args: SwapArgs) -> 
 
     // 2. The input: the cut from the trader's holding (each delta, then the burn), then the rest
     //    to the vault, measured there.
-    let trader = ctx.accounts.trader.to_account_info();
     let in_side = TokenSide::of(in_extras, in_hook.is_some());
     for (holding, amount) in &cut_in.deltas {
-        token.transfer(
-            &trader,
-            &trader_in,
-            holding,
-            &in_mint,
-            &in_side,
-            *amount,
-            &[],
-        )?;
+        token.transfer(&trader, &trader_in, holding, &in_mint, &in_side, *amount, &[])?;
     }
     if cut_in.burn > 0 {
         token.burn(&trader, &trader_in, &in_mint, &in_side, cut_in.burn, &[])?;
@@ -263,32 +369,30 @@ pub fn process_swap<'info>(ctx: Context<'info, Swap<'info>>, args: SwapArgs) -> 
         .and_then(|rest| rest.checked_sub(received))
         .ok_or(SwapError::MathOverflow)?;
 
-    // 3. The fees and the curve; the protocol fee is in quote. Flat model: the LP fee on the input,
-    //    and a rate of the input of a buy or of the curve's output of a sell. Share model: the LP
-    //    fee (Bordrless's, in quote: a buy's from the input, a sell's from the curve's output) plus
-    //    the pool's share of `cuts_in` (a buy's quote cut before the curve; a sell's base cut valued
-    //    at the swap's price, from the curve's output before the hook is told).
-    let reserves = Reserves {
-        base_reserve: pool.base_reserve,
-        quote_reserve: pool.quote_reserve,
-        virtual_base: pool.virtual_base,
-        virtual_quote: pool.virtual_quote,
+    // 3. The fees and the curve; the protocol fee is in quote (upstream comments, unchanged).
+    let (amounts, shared, share_bps) = {
+        let pool = &*pool_account;
+        let reserves = Reserves {
+            base_reserve: pool.base_reserve,
+            quote_reserve: pool.quote_reserve,
+            virtual_base: pool.virtual_base,
+            virtual_quote: pool.virtual_quote,
+        };
+        let shared = pool.shares_cuts();
+        let share_bps = pool.protocol_share_bps;
+        let amounts = if shared {
+            swap_amounts_shared(buy, received, lp_fee_bps, share_bps, cuts_in, &reserves)
+        } else {
+            swap_amounts(buy, received, lp_fee_bps, pool.protocol_fee_bps, &reserves)
+        }
+        .map_err(swap_failure)?;
+        (amounts, shared, share_bps)
     };
-    let shared = pool.shares_cuts();
-    let share_bps = pool.protocol_share_bps;
-    let amounts = if shared {
-        swap_amounts_shared(buy, received, lp_fee_bps, share_bps, cuts_in, &reserves)
-    } else {
-        swap_amounts(buy, received, lp_fee_bps, pool.protocol_fee_bps, &reserves)
-    }
-    .map_err(swap_failure)?;
 
-    // 4. Reserves: `to_reserve_in` enters the input reserve (`received` less a buy's protocol fee,
-    //    and less the LP fee too under the share model); the curve's
-    //    whole output leaves the output reserve (the hook's cut, the sell's protocol fee and the
-    //    delivery all come out of it); the protocol fee is set aside in the quote vault.
+    // 4. Reserves: `to_reserve_in` enters the input reserve; the curve's whole output leaves the
+    //    output reserve; the protocol fee is set aside in the quote vault.
     {
-        let pool = &mut ctx.accounts.pool;
+        let pool = &mut **pool_account;
         if buy {
             pool.quote_reserve = pool
                 .quote_reserve
@@ -339,9 +443,9 @@ pub fn process_swap<'info>(ctx: Context<'info, Swap<'info>>, args: SwapArgs) -> 
     //    output it is told: the curve's output, less a sell's protocol fee.
     let mut cut_out = Cut::none();
     if let Some(call) = &call {
-        if ctx.accounts.pool.runs(pool_flags::AFTER_SWAP) {
-            ctx.accounts.pool.exit(&crate::ID)?;
-            let pool = &ctx.accounts.pool;
+        if pool_account.runs(pool_flags::AFTER_SWAP) {
+            pool_account.exit(&crate::ID)?;
+            let pool = &*pool_account;
             hook_args.phase = Phase::After;
             hook_args.amount_in = received;
             hook_args.amount_out = amounts.amount_out;
@@ -372,8 +476,8 @@ pub fn process_swap<'info>(ctx: Context<'info, Swap<'info>>, args: SwapArgs) -> 
         .and_then(|rest| rest.checked_sub(held_back))
         .filter(|rest| *rest > 0)
         .ok_or(SwapError::FeeExceedsOutput)?;
-    let pool_info = ctx.accounts.pool.to_account_info();
-    let seeds = PoolSeeds::of(&ctx.accounts.pool);
+    let pool_info = pool_account.to_account_info();
+    let seeds = PoolSeeds::of(pool_account);
     let pool_seeds = seeds.seeds();
     let out_side = TokenSide::of(out_extras, out_hook.is_some());
     for (holding, amount) in &cut_out.deltas {
@@ -419,10 +523,7 @@ pub fn process_swap<'info>(ctx: Context<'info, Swap<'info>>, args: SwapArgs) -> 
         .and_then(|rest| rest.checked_sub(delivered))
         .ok_or(SwapError::MathOverflow)?;
 
-    // 7. Share model: the pool's share of the output side's cuts (a buy's base cut valued at the
-    //    swap's price). What the delivery held back is already in the vault; the rest (a buy's
-    //    whole share, a sell's share of a quote hook's own cut on the delivery) is set aside from
-    //    the quote reserve, the only quote the pool holds once the swap has run.
+    // 7. Share model: the pool's share of the output side's cuts (upstream comments, unchanged).
     let protocol_out = if shared {
         output_share(buy, share_bps, cuts_out, amounts.net_in, amounts.out_gross)
             .ok_or(SwapError::MathOverflow)?
@@ -433,7 +534,7 @@ pub fn process_swap<'info>(ctx: Context<'info, Swap<'info>>, args: SwapArgs) -> 
         .checked_sub(held_back)
         .ok_or(SwapError::MathOverflow)?;
     {
-        let pool = &mut ctx.accounts.pool;
+        let pool = &mut **pool_account;
         pool.quote_reserve = pool
             .quote_reserve
             .checked_sub(from_reserve)
@@ -448,10 +549,15 @@ pub fn process_swap<'info>(ctx: Context<'info, Swap<'info>>, args: SwapArgs) -> 
         .checked_add(protocol_out)
         .ok_or(SwapError::MathOverflow)?;
 
-    let pool = &ctx.accounts.pool;
-    emit_cpi!(Swapped {
+    // Hookwars: the price this swap left, for the next accrual.
+    obs::end(&pool_info, pool_account)?;
+    // Written now, so a later hop or the caller reads the pool as it stands.
+    pool_account.exit(&crate::ID)?;
+
+    let pool = &*pool_account;
+    let event = Swapped {
         pool: pool_key,
-        trader: ctx.accounts.trader.key(),
+        trader: trader.key(),
         recipient,
         direction,
         amount_in,
@@ -472,6 +578,190 @@ pub fn process_swap<'info>(ctx: Context<'info, Swap<'info>>, args: SwapArgs) -> 
         virtual_base: pool.virtual_base,
         virtual_quote: pool.virtual_quote,
         swap_count: pool.swap_count,
+        slot: clock.slot,
+        ts: clock.unix_timestamp,
+        route,
+    };
+    Ok((event, delivered))
+}
+
+/// Hookwars: arguments of `swap_route` (spec 03 section 3.3).
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
+pub struct SwapRouteArgs {
+    /// Exact input of the first hop.
+    pub amount_in: u64,
+    /// The least the trader's final holding must gain.
+    pub min_amount_out: u64,
+    /// Per hop, in order; 1 ..= `MAX_ROUTE_HOPS`.
+    pub hops: Vec<HopArgs>,
+    /// Opaque data for every hop's pool hook (never read for the route).
+    pub hook_data: Vec<u8>,
+}
+
+/// One hop of a route.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug)]
+pub struct HopArgs {
+    /// 0 sell (base in), 1 buy (quote in), of this hop's pool.
+    pub direction: u8,
+    /// Remaining accounts this hop takes, the fixed ten included (`HOP_FIXED_ACCOUNTS`).
+    pub accounts: u8,
+    /// Of those, the input mint's token-hook slice.
+    pub in_hook_accounts: u8,
+    /// And the output mint's.
+    pub out_hook_accounts: u8,
+}
+
+/// Accounts every hop group starts with: pool (its observation ring inside), base mint, quote
+/// mint, base vault, quote vault, trader base holding, trader quote holding, hook program (this
+/// program's id for none), hook signer (likewise). Then the input mint's token-hook slice, the
+/// output mint's, and the pool hook's extras.
+pub const HOP_FIXED_ACCOUNTS: usize = 9;
+
+/// Accounts of `swap_route`; the hop groups are the remaining accounts.
+#[event_cpi]
+#[derive(Accounts)]
+pub struct SwapRoute<'info> {
+    /// The trader: owner (or delegate) of every input holding.
+    pub trader: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    /// CHECK: the token program.
+    pub token_program: UncheckedAccount<'info>,
+    /// CHECK: the token program's event authority.
+    pub token_event_authority: UncheckedAccount<'info>,
+}
+
+fn optional_info<'info>(info: &AccountInfo<'info>) -> Option<AccountInfo<'info>> {
+    if *info.key == crate::ID {
+        None
+    } else {
+        Some(info.clone())
+    }
+}
+
+/// `swap_route`: hops run one after another inside this instruction (not as CPIs), so a route is
+/// no deeper than a swap. Each hop's input is what the previous hop delivered, measured on the
+/// holding; no pool appears twice; only the last hop checks `min_amount_out`.
+pub fn process_swap_route<'info>(
+    ctx: Context<'info, SwapRoute<'info>>,
+    args: SwapRouteArgs,
+) -> Result<()> {
+    let clock = Clock::get()?;
+    require!(!ctx.accounts.config.paused, SwapError::Paused);
+    require!(!args.hops.is_empty(), SwapError::EmptyRoute);
+    require!(args.hops.len() <= MAX_ROUTE_HOPS, SwapError::RouteTooLong);
+    require!(args.hook_data.len() <= MAX_HOOK_DATA, SwapError::HookDataTooLong);
+    let token = TokenAccounts {
+        program: ctx.accounts.token_program.to_account_info(),
+        event_authority: ctx.accounts.token_event_authority.to_account_info(),
+    };
+    token.check()?;
+    let trader = ctx.accounts.trader.to_account_info();
+    let remaining: &'info [AccountInfo<'info>] = ctx.remaining_accounts;
+
+    // The groups, and the route's shape, checked before anything moves.
+    let mut groups: Vec<&'info [AccountInfo<'info>]> = Vec::with_capacity(args.hops.len());
+    let mut at = 0usize;
+    for hop in &args.hops {
+        let n = usize::from(hop.accounts);
+        require!(hop.direction <= 1, SwapError::InvalidDirection);
+        require!(
+            n >= HOP_FIXED_ACCOUNTS
+                + usize::from(hop.in_hook_accounts)
+                + usize::from(hop.out_hook_accounts),
+            SwapError::AccountCounts
+        );
+        require!(remaining.len() >= at + n, SwapError::AccountCounts);
+        groups.push(&remaining[at..at + n]);
+        at += n;
+    }
+    require!(at == remaining.len(), SwapError::AccountCounts);
+    // (in mint, out mint, trader in holding, trader out holding) per hop.
+    let sides: Vec<(Pubkey, Pubkey, Pubkey, Pubkey)> = groups
+        .iter()
+        .zip(&args.hops)
+        .map(|(g, hop)| {
+            let (base, quote, tb, tq) = (*g[1].key, *g[2].key, *g[5].key, *g[6].key);
+            if hop.direction == 1 {
+                (quote, base, tq, tb)
+            } else {
+                (base, quote, tb, tq)
+            }
+        })
+        .collect();
+    for i in 0..groups.len() {
+        for j in (i + 1)..groups.len() {
+            require_keys_neq!(*groups[i][0].key, *groups[j][0].key, SwapError::RoutePoolRepeated);
+        }
+        if i + 1 < groups.len() {
+            require_keys_eq!(sides[i].1, sides[i + 1].0, SwapError::RouteBroken);
+            require_keys_eq!(sides[i].3, sides[i + 1].2, SwapError::RouteBroken);
+        }
+    }
+    let hop_count = u8::try_from(groups.len()).map_err(|_| SwapError::RouteTooLong)?;
+    let route_input_mint = sides[0].0;
+    let route_output_mint = sides[groups.len() - 1].1;
+    let first_pool = *groups[0][0].key;
+
+    let mut amount = args.amount_in;
+    let mut pools = Vec::with_capacity(groups.len());
+    for (i, (group, hop)) in groups.iter().zip(&args.hops).enumerate() {
+        let mut pool: Account<'info, Pool> = Account::try_from(&group[0])?;
+        require_keys_eq!(*group[1].key, pool.base_mint, SwapError::WrongHolding);
+        require_keys_eq!(*group[2].key, pool.quote_mint, SwapError::WrongHolding);
+        require_keys_eq!(*group[3].key, pool.base_vault, SwapError::WrongVault);
+        require_keys_eq!(*group[4].key, pool.quote_vault, SwapError::WrongVault);
+        let (in_n, out_n) = (
+            usize::from(hop.in_hook_accounts),
+            usize::from(hop.out_hook_accounts),
+        );
+        let slices = &group[HOP_FIXED_ACCOUNTS..];
+        let last = i + 1 == groups.len();
+        let hop_accounts = HopAccounts {
+            trader: trader.clone(),
+            base_mint: group[1].clone(),
+            quote_mint: group[2].clone(),
+            base_vault: group[3].clone(),
+            quote_vault: group[4].clone(),
+            trader_base: group[5].clone(),
+            trader_quote: group[6].clone(),
+            hook_program: optional_info(&group[7]),
+            hook_signer: optional_info(&group[8]),
+            pool: &mut pool,
+            in_extras: &slices[..in_n],
+            out_extras: &slices[in_n..in_n + out_n],
+            pool_extras: &slices[in_n + out_n..],
+        };
+        let (event, delivered) = run_hop(
+            &token,
+            hop_accounts,
+            HopParams {
+                direction: hop.direction,
+                amount_in: amount,
+                min_amount_out: if last { args.min_amount_out } else { 0 },
+                hook_data: args.hook_data.clone(),
+                route: RouteContext {
+                    route_input_mint,
+                    route_output_mint,
+                    first_pool,
+                    route_amount_in: args.amount_in,
+                    hop_index: i as u8,
+                    hop_count,
+                },
+            },
+            &clock,
+        )?;
+        emit_cpi!(event);
+        pools.push(pool.key());
+        amount = delivered;
+    }
+    emit_cpi!(RouteSwapped {
+        trader: trader.key(),
+        route_input_mint,
+        route_output_mint,
+        amount_in: args.amount_in,
+        amount_out: amount,
+        pools,
         slot: clock.slot,
         ts: clock.unix_timestamp,
     });

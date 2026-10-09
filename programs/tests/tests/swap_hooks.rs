@@ -1,3 +1,4 @@
+// Changed by Hookwars: the hook is told the one-hop route.
 //! The DEX under hook protocol v2 (`docs/hooks-v2.md` §3), with the test-only `hook_tester` as the
 //! pool hook (its answers scripted per callback) and `tax_hook` on a mint: deltas and burns on
 //! both sides of buys and sells, the protocol fee always in the quote token, every rule a swap
@@ -409,6 +410,7 @@ fn a_pool_hook_cuts_both_sides_of_buys_and_sells() {
         created_at: p0.created_at,
         lp_amount: 0,
         hook_data: vec![],
+        route: bordrless_hook::RouteContext::single(b, a, pool, amount_in),
     };
     assert_eq!(s.told_pool(callback::BEFORE_SWAP).unwrap(), told);
     told.phase = Phase::After;
