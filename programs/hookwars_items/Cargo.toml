@@ -1,6 +1,6 @@
 [package]
 name = "hookwars-items"
-description = "Hookwars: one program implementing every template (docs/spec/04-templates.md). M2: the entry points the armory calls (validate_params, manifest, combine_params, init_equip, close_equip); the hook callbacks and settle_equip are M3."
+description = "Hookwars: one program implementing every template (docs/spec/04-templates.md, 08-arsenal.md): the armory-facing entry points (M2), the token and pool callbacks, composites, the raid ledger and settle_equip (M3b)."
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
@@ -14,7 +14,7 @@ default = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-log-ix-name = []
-idl-build = ["anchor-lang/idl-build", "bordrless-hook/idl-build", "bordrless-token/idl-build", "hookwars-common/idl-build"]
+idl-build = ["anchor-lang/idl-build", "bordrless-hook/idl-build", "bordrless-token/idl-build", "bordrless-swap/idl-build", "hookwars-common/idl-build", "hookwars-armory/idl-build", "hookwars-war/idl-build"]
 anchor-debug = []
 custom-heap = []
 custom-panic = []
@@ -25,6 +25,10 @@ solana-security-txt = { workspace = true }
 bordrless-hook = { path = "../../crates/bordrless-hook" }
 bordrless-token = { path = "../bordrless_token", features = ["no-entrypoint"] }
 hookwars-common = { path = "../../crates/hookwars-common" }
+bordrless-core = { path = "../../crates/bordrless-core" }
+bordrless-swap = { path = "../bordrless_swap", features = ["no-entrypoint"] }
+hookwars-armory = { path = "../hookwars_armory", features = ["no-entrypoint"] }
+hookwars-war = { path = "../hookwars_war", features = ["no-entrypoint"] }
 
 [lints]
 workspace = true

@@ -10,7 +10,7 @@ use bordrless_token::error::TokenError;
 use bordrless_token::state::Holding;
 use hookwars_armory::error::ArmoryError as E;
 use hookwars_armory::state::{proposal_status as S, Item, Proposal, SlotState};
-use hookwars_common::{ids, obs_layout, pda, template_id as T, EquipConfig, PerformanceRule};
+use hookwars_common::{ids, pda, template_id as T, EquipConfig, PerformanceRule};
 use hookwars_items::EquipState;
 use solana_account::Account;
 use solana_keypair::Keypair;
@@ -258,29 +258,17 @@ fn fake_market(hw: &mut Hw, mint: &Pubkey, entries: &[(i64, u64)], swaps_now: u6
             rent_epoch: 0,
         },
     );
-    let ring = entries.len().max(1);
-    let mut obs = vec![0u8; obs_layout::ENTRIES + ring * obs_layout::ENTRY];
-    obs[obs_layout::LAST_TS..obs_layout::LAST_TS + 8]
-        .copy_from_slice(&entries.last().map_or(0, |e| e.0).to_le_bytes());
-    obs[obs_layout::INDEX..obs_layout::INDEX + 2].copy_from_slice(&0u16.to_le_bytes());
-    obs[obs_layout::FILLED..obs_layout::FILLED + 2]
-        .copy_from_slice(&(entries.len() as u16).to_le_bytes());
-    for (i, (ts, swaps)) in entries.iter().enumerate() {
-        let o = obs_layout::ENTRIES + i * obs_layout::ENTRY;
-        obs[o..o + 8].copy_from_slice(&ts.to_le_bytes());
-        obs[o + 40..o + 48].copy_from_slice(&swaps.to_le_bytes());
-    }
-    let rent = hw.w.env.rent(obs.len());
-    hw.w.env.put(
-        pda::observations(&pool).0,
-        Account {
-            lamports: rent,
-            data: obs,
-            owner: ids::SWAP_ID,
-            executable: false,
-            rent_epoch: 0,
-        },
+    // Hookwars M3b: the ring lives in the pool's tail (03 M3a notes).
+    let e: Vec<bordrless_program_tests::ring::RingEntry> =
+        entries.iter().map(|(t, sc)| (*t, 0, 0, *sc)).collect();
+    let last_ts = entries.last().map_or(0, |e| e.0);
+    let mut account = hw.w.env.account(&pool).expect("pool");
+    account.data = bordrless_program_tests::ring::with_ring(
+        account.data,
+        &bordrless_program_tests::ring::ring(&pool, 0, last_ts, &e),
     );
+    account.lamports = hw.w.env.rent(account.data.len());
+    hw.w.env.put(pool, account);
 }
 
 #[test]
@@ -335,7 +323,6 @@ fn a_performance_slot_reverts_to_its_launch_item() {
                 slot_state: pda::slot_state(&mint, 3).0,
                 launch,
                 pool,
-                observations: pda::observations(&pool).0,
                 open_proposal: None,
                 equip,
                 event_authority: armory_events(),
@@ -377,19 +364,23 @@ fn a_rate_that_recovers_clears_the_condition() {
     };
     // Built directly from the reader: 20 swaps in the last minute against 100 over ten (rate 1/3
     // against 1/6 per second) is not "below".
-    let mut obs = vec![0u8; obs_layout::ENTRIES + 2 * obs_layout::ENTRY];
     let now = 10_000i64;
-    obs[obs_layout::LAST_TS..obs_layout::LAST_TS + 8].copy_from_slice(&now.to_le_bytes());
-    obs[obs_layout::FILLED..obs_layout::FILLED + 2].copy_from_slice(&2u16.to_le_bytes());
-    for (i, (ts, s)) in [(now - 600, 0u64), (now - 60, 80)].iter().enumerate() {
-        let o = obs_layout::ENTRIES + i * obs_layout::ENTRY;
-        obs[o..o + 8].copy_from_slice(&ts.to_le_bytes());
-        obs[o + 40..o + 48].copy_from_slice(&s.to_le_bytes());
-    }
-    let short = hookwars_common::window_read(&obs, 0, 100, now, 60);
-    let base = hookwars_common::window_read(&obs, 0, 100, now, 600);
+    let pool = Pubkey::new_unique();
+    let r = bordrless_program_tests::ring::ring(&pool, 0, now, &[(now - 600, 0, 0, 0), (now - 60, 0, 0, 80)]);
+    let read = |w: i64| {
+        bordrless_core::observations::window_read(&r, &bordrless_swap::obs::OBSERVATIONS_DISCRIMINATOR, now, w, 1, 0, 100)
+            .ok()
+            .map(|x| hookwars_common::WindowRead {
+                twap_q64: x.twap_q64,
+                quote_volume: x.quote_volume,
+                swaps: x.swaps,
+                seconds: x.span_secs,
+            })
+    };
+    let short = read(60);
+    let base = read(600);
     assert!(!rule.holds(short, base));
     // Too short a history is no signal.
-    assert!(hookwars_common::window_read(&obs, 0, 100, now, 3_600).is_none());
+    assert!(read(3_600).is_none());
     assert!(!rule.holds(None, base));
 }

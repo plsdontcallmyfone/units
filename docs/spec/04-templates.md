@@ -773,3 +773,89 @@ level); top-level instructions use `emit_cpi!` as upstream.
   floor and ceiling in section 3. `PARAM_FIELDS` is at least 11 (War orders).
 - **C7** Events from callbacks are program logs (`emit!`); 06's indexer must decode logs as well as
   self-CPI events.
+
+## M3b items implementation notes (branch m3bi, 2026-10-09)
+
+Built in `programs/hookwars_items` (`engine.rs`, `equip.rs`, `settle.rs`, `templates/<name>.rs`),
+`crates/hookwars-common` (raid ledger, war touch, composites, wave A shapes), the armory (composites,
+`settle_bounty_bps`, the Performance reader) and the war program (integration). Where the build
+differs from the text above:
+
+1. **Accounts of a callback.** Token callbacks: the token prefix (signer, mint, source,
+   destination, authority), then the registry extras. Pool callbacks: the launchpad's items signer
+   (`["hook-authority", items]` under the launchpad), pool, base mint (the token), quote mint,
+   actor, then **the same registry extras**. Registry: `Item`, `EquipState`, the equip vault when
+   the item cuts on the token side, the `CompositeItem` for a composite, then each module's own
+   extras (`templates::extras`). One registry serves both sides.
+2. **Own extras per template, as built.** Raid: `RaidLedger` (w), `WarConfig`, our `Launch`, each
+   target's `Launch`. Shield: `RaidLedger` (w), `WarConfig`, our `WarState`, our `Launch`, each
+   target's `Launch`. Wall: our `WarState`. Spy: per target its `Launch` and its launch pool (the
+   pool address derived with the policy LP fee and checked against the `Launch`; the ring is in
+   the pool, 03 M3a notes). Treaty and Tribute: per target its `Mint` and its four `EquipState`s
+   (the partner's slot is found in its slot table). Half-Life, Transfer Fee, Launch Decay, Max
+   Transaction, Dust Guard: our `Launch`. Size Tiers, Side Skew, Sell Burn, War orders: none.
+3. **Shield reads no holding from the pool side.** Its token half writes a `SellMark` (clock slot,
+   seller, a bit per slot) into the `RaidLedger` on the seller's transfer into the pool, and
+   `pool_after_swap` cuts from it. Shield writes the raid mark as Raid does but never counts
+   inbound volume, so a swap is never counted twice; Shield alone does not feed siege volume.
+4. **`RaidLedger` gains `sell_mark`** before `reserved`; its type lives in
+   `hookwars_common::raid` (the war program reads the same type).
+5. **Points and tickets parameters.** `POINT_UNIT_LAMPORTS` and `LOOT_MIN_RAID_LAMPORTS` are war
+   parameters (`WarParams.point_unit_lamports`, `loot_min_raid_lamports`), read by the Raid item from
+   `WarConfig` with `current_season` and `raid_window_secs`. Without a `WarConfig`: season 0, no
+   points, no tickets.
+6. **Quote-side fee templates subscribe to both pool callbacks.** Size Tiers, Side Skew and Launch
+   Decay cut on a buy's `pool_before_swap` and a sell's `pool_after_swap` (the launchpad's side
+   rule, 03 section 5.2); 08 names `pool_before_swap` only.
+7. **Sell Burn answers in `pool_before_swap` on a sell** (base side), not `pool_after_swap`.
+8. **Destinations at settlement.** Token side: Half-Life burns, Transfer Fee pays its collector.
+   Pool side: Raid, Shield, Spy, Size Tiers, Side Skew, Launch Decay pay our war chest's bridged-SOL
+   holding; Treaty and Tribute the partner's treaty inbox. Destination holdings must exist (the
+   settler creates only its own); the bounty rate is the armory's `settle_bounty_bps`.
+9. **`EquipState` v2** keeps unsettled cuts per module (`token_unsettled`, `pool_unsettled`,
+   `MAX_MODULES` each); `pool_owed` and `pool_settled` stay cumulative.
+10. **`init_raid_ledger` is a permissionless instruction**; `init_equip` does not create the ledger
+    (its accounts come from the armory). A launch of a token with a marking item should send it.
+11. **Composites (R19).** Authored with the armory's `create_composite(modules, royalty_bps)` from
+    open templates (each module's `Template` passed in order); validation and the combined manifest
+    are `hookwars_common::composite::validate_modules` (08 2.10, with `ITEM_DATA_MAX` 63). Not built
+    yet: `fuse` (burning component items), presets, forging composites (the Composite template is
+    not forgeable), `reads_module` reads (validated, no template reads another module's bytes yet).
+12. **Not built in M3b:** the Treaty equip check that the partner runs the kit with holder rewards
+    (the partner's inbox streams through the kit's `share`), the Shield `only_under_siege` read uses
+    our `WarState` only; holder touches (R23) answer nothing (no wave A template takes them).
+13. **War integration.** `hookwars_war::foreign` now re-exports the armory's `Item`, `Template`,
+    `ForgeCounter` and the shared `RaidLedger`; TWAPs read the pool account's ring
+    (`siege`, `counter_strike` lost their observations account). The war suites still run their CPI
+    targets on `war_items_stub` and `war_armory_stub`, with accounts written in the real layouts.
+14. **Measured** (`programs/tests/tests/budgets_items.rs::items_budgets`, LiteSVM, legacy
+    transactions without lookup tables; a transfer row also carries an idempotent
+    `create_holding`; pool rows are called through the test-only `launch_stub`, which adds its own
+    call level and compute, so the launchpad's real path is measured by the launchpad branch):
+
+    | Path | Keys | Bytes | Trace | Height | CU |
+    | --- | --- | --- | --- | --- | --- |
+    | transfer, Half-Life | 15 | 643 | 5 | 2 | 45,712 |
+    | transfer, Transfer Fee | 15 | 643 | 5 | 2 | 48,568 |
+    | transfer, Max Transaction | 14 | 610 | 5 | 2 | 49,885 |
+    | transfer, Dust Guard | 14 | 610 | 5 | 2 | 46,621 |
+    | `pool_before_swap` buy, Side Skew | 11 | 896 | 3 | 2 | 17,927 |
+    | `pool_before_swap` buy, Size Tiers | 11 | 896 | 3 | 2 | 19,434 |
+    | `pool_before_swap` buy, Launch Decay | 12 | 929 | 3 | 2 | 17,278 |
+    | `pool_before_swap` raid buy, Raid | 15 | 1,028 | 3 | 2 | 19,596 |
+    | `pool_after_swap` raid buy (mark, inbound), Raid | 15 | 1,028 | 3 | 2 | 29,738 |
+    | delivery transfer stamping raid points, Raid | 17 | 709 | 5 | 2 | 62,586 |
+    | `create_composite`, 3 modules | 17 | 841 | 15 | 3 | 123,389 |
+    | `pool_before_swap` buy, composite of 3 | 14 | 995 | 3 | 2 | 23,182 |
+    | transfer, composite of 3 (Half-Life module cuts) | 16 | 676 | 5 | 2 | 54,929 |
+    | `settle_equip`, composite of 3 (2 quote payouts, 1 burn) | 21 | 820 | 22 | 3 | 208,107 |
+
+    `MAX_MODULES` is provisionally 4 (`hookwars_common::MAX_MODULES`); the composite of 3 adds about
+    5,000 CU on a pool callback over one module, so 4 fits with room; to confirm on the launchpad's
+    real path.
+15. **Token program changes (M3b):** a Pool slot may cut on the token side (`kind_may_cut` and
+    `allowed_flags` include Pool, so composites with Fee modules fit a Pool slot, 08 2.8).
+16. **Armory changes (M3b):** template ids may be sparse (any known template id, registered once);
+    `EquipCtx.new_composite`; `create_composite`; `ArmoryParams.settle_bounty_bps` (the config's
+    `reserved` shrinks by 2); `CheckPerformance` reads the ring from the pool account and lost its
+    `observations` account.

@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M2).
+// Changed by Hookwars: new file (M2); M3b: settle_bounty_bps, CompositeItem.
 //! Accounts of the armory (docs/spec/02-armory.md section 2).
 
 use anchor_lang::prelude::*;
@@ -32,6 +32,9 @@ pub struct ArmoryParams {
     pub max_item_reads: u8,
     /// `ADMIN_TIMELOCK_SECS`: delay on every admin change, this one included.
     pub admin_timelock_secs: u32,
+    /// Hookwars M3b: the bounty `settle_equip` pays its sender, of what it settles
+    /// (`MAX_CRANK_BOUNTY_BPS` at most; 04 section 2.5).
+    pub settle_bounty_bps: u16,
 }
 
 /// `ArmoryConfig` at `["config"]` (02 section 2.1).
@@ -51,7 +54,19 @@ pub struct ArmoryConfig {
     pub templates: u16,
     /// The numbers.
     pub params: ArmoryParams,
-    pub reserved: [u8; 64],
+    pub reserved: [u8; 62],
+}
+
+/// Hookwars M3b: a composite's module list at `["composite", item]` (08 section 2.2; the same
+/// layout as `hookwars_common::composite::CompositeItem`).
+#[account]
+#[derive(Debug)]
+pub struct CompositeItem {
+    pub version: u8,
+    pub bump: u8,
+    pub item: Pubkey,
+    pub modules: Vec<hookwars_common::composite::Module>,
+    pub provenance: Vec<Pubkey>,
 }
 
 /// Params waiting out the timelock at `["pending-params"]`.

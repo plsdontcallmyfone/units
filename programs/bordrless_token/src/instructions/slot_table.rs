@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file, slot-table instructions (create_slot_mint, set_slot_item,; R21 may_burn only on Pool slots.
+// Changed by Hookwars: new file, slot-table instructions (create_slot_mint, set_slot_item,; R21 may_burn only on Pool slots. M3b: Pool slots may cut.
 // set_vote_lock, touch); M2: Fee items may write data, Relation items may carry pool flags.
 //! The slot table (docs/spec/01-token-slots.md sections 1, 4 and 5).
 
@@ -39,9 +39,11 @@ pub struct SlotInit {
 }
 
 fn kind_may_cut(kind: u8) -> bool {
+    // Hookwars M3b: a Pool slot hosts Fee modules of composites (08 section 2.8), so it may cut on
+    // the token side too.
     matches!(
         kind,
-        slot_kind::FEE | slot_kind::REWARD | slot_kind::RELATION
+        slot_kind::FEE | slot_kind::REWARD | slot_kind::RELATION | slot_kind::POOL
     )
 }
 
@@ -286,8 +288,13 @@ fn allowed_flags(kind: u8, bounds: &SlotBounds) -> u16 {
                 | slot_flags::WRITES_HOOK_DATA
                 | slot_flags::ANSWERS_TOUCH
         }
+        // Hookwars M3b: a Pool slot hosts Fee modules of composites (08 section 2.8), so it may
+        // answer a token-side cut too.
         slot_kind::POOL => {
-            slot_flags::TRANSFER | slot_flags::WRITES_HOOK_DATA | slot_flags::ANSWERS_TOUCH
+            slot_flags::TRANSFER
+                | slot_flags::TRANSFER_RETURNS_DELTA
+                | slot_flags::WRITES_HOOK_DATA
+                | slot_flags::ANSWERS_TOUCH
         }
         _ => 0,
     };

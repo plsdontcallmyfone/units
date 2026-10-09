@@ -13,6 +13,7 @@ use bordrless_token::state::{Mint, Slot};
 
 use crate::constants::*;
 use crate::error::WarError;
+use crate::foreign::Foreign;
 use crate::foreign::{Item, Template};
 use crate::state::WarOrders;
 
@@ -233,7 +234,7 @@ pub fn war_orders(mint: &Mint, item: &AccountInfo, template: &AccountInfo) -> Re
     let it = Item::read(item)?;
     require_keys_eq!(
         *template.key,
-        Template::address(it.template_id),
+        crate::foreign::template_address(it.template_id),
         WarError::WrongWarOrders
     );
     let t = Template::read(template)?;
@@ -288,14 +289,9 @@ impl RaidRange {
     }
 }
 
-/// The touch payloads the Raid item accepts from the war signer (04 section 2.10).
-/// REPLACE with the items program's `WarTouch` at integration.
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum WarTouch {
-    SpendRaidPoints { amount: u32 },
-    SpendTicket,
-    AddTicket { amount: u16 },
-}
+/// The touch payloads the Raid item accepts from the war signer (04 section 2.10): the shared
+/// type the items program decodes (M3b integration).
+pub use hookwars_common::raid::WarTouch;
 
 /// The slot at `index` if it is a Raid slot this program can touch: the items program's, answering
 /// touch, with a Raid-sized range.

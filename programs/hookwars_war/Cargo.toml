@@ -14,7 +14,7 @@ default = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-log-ix-name = []
-idl-build = ["anchor-lang/idl-build", "bordrless-token/idl-build", "bordrless-swap/idl-build", "bordrless-kit/idl-build", "bordrless-launch/idl-build", "bordrless-bridge/idl-build", "bordrless-companion/idl-build", "bordrless-hook/idl-build"]
+idl-build = ["anchor-lang/idl-build", "bordrless-token/idl-build", "bordrless-swap/idl-build", "bordrless-kit/idl-build", "bordrless-launch/idl-build", "bordrless-bridge/idl-build", "bordrless-companion/idl-build", "bordrless-hook/idl-build", "hookwars-common/idl-build", "hookwars-armory/idl-build"]
 anchor-debug = []
 custom-heap = []
 custom-panic = []
@@ -30,6 +30,8 @@ bordrless-kit = { path = "../bordrless_kit", features = ["no-entrypoint"] }
 bordrless-launch = { path = "../bordrless_launch", features = ["no-entrypoint"] }
 bordrless-bridge = { path = "../bordrless_bridge", features = ["no-entrypoint"] }
 bordrless-companion = { path = "../bordrless_companion", features = ["no-entrypoint"] }
+hookwars-common = { path = "../../crates/hookwars-common" }
+hookwars-armory = { path = "../hookwars_armory", features = ["no-entrypoint"] }
 
 [lints]
 workspace = true

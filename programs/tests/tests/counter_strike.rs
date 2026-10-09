@@ -132,7 +132,7 @@ fn a_token_with_holder_rewards_cannot_counter_strike() {
     ww.w.env.send(&[war::init_war(payer.pubkey(), mint)], &[]).ok();
     let orders = war::Orders {
         item,
-        template: hookwars_war::foreign::Template::address(WAR_ORDERS_TEMPLATE),
+        template: hookwars_war::foreign::template_address(WAR_ORDERS_TEMPLATE),
     };
     let pool = ww.w.launch_pool_key(&mint);
     let kit = bordrless_kit::client::kit_config_address(&mint);

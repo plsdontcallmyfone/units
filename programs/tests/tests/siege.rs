@@ -245,7 +245,7 @@ fn peace_returns_captured_tokens_under_a_treaty_both_equip() {
     let mut params = [0u32; hookwars_war::foreign::PARAM_FIELDS];
     params[2] = 1; // returns_captured
     let treaty = ww.put_item(TREATY_TEMPLATE, params);
-    let treaty_template = hookwars_war::foreign::Template::address(TREATY_TEMPLATE);
+    let treaty_template = hookwars_war::foreign::template_address(TREATY_TEMPLATE);
     let peace = |ww: &WarWorld, c: &anchor_lang::prelude::Pubkey| {
         let chest = WarWorld::chest(&t.mint);
         let rival_chest = WarWorld::chest(&rival);
@@ -289,7 +289,7 @@ fn peace_needs_a_treaty_that_returns_captured_holdings() {
     let treaty = ww.put_item(TREATY_TEMPLATE, params);
     ww.add_slot(&t.mint, WarWorld::named_slot(slot_kind::RELATION, treaty));
     ww.add_slot(&rival, WarWorld::named_slot(slot_kind::RELATION, treaty));
-    let template = hookwars_war::foreign::Template::address(TREATY_TEMPLATE);
+    let template = hookwars_war::foreign::template_address(TREATY_TEMPLATE);
     let (tx, _) = ww.crank(|c, _| war::return_captured(*c, t.mint, rival, treaty, template, vec![], &[]));
     tx.expect_code(war_code(WarError::PeaceReturnsOff));
 }

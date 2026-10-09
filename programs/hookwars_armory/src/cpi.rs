@@ -358,6 +358,8 @@ pub struct NewEquip<'a, 'info> {
     pub manifest: Manifest,
     pub max_targets: u8,
     pub config: EquipConfig,
+    /// Hookwars M3b: the module list of a composite.
+    pub composite: Option<&'a AccountInfo<'info>>,
 }
 
 /// Accounts `apply_equip` uses, all already checked by the caller's context.
@@ -480,7 +482,7 @@ pub fn apply_equip<'info>(
         new.max_targets,
     )
         .serialize(&mut data)?;
-    let metas = vec![
+    let mut metas = vec![
         AccountMeta::new_readonly(ARMORY_SIGNER, true),
         AccountMeta::new(e.payer.key(), true),
         AccountMeta::new_readonly(mint_key, false),
@@ -507,6 +509,17 @@ pub fn apply_equip<'info>(
     ];
     if let Some(v) = vault {
         infos.push(v.clone());
+    }
+    // Hookwars M3b: a composite's module list follows as `init_equip`'s first remaining account.
+    if new.template_id == hookwars_common::template_id::COMPOSITE {
+        let c = new.composite.ok_or(ArmoryError::WrongAccount)?;
+        require_keys_eq!(
+            c.key(),
+            hookwars_common::composite::CompositeItem::address(&item_key).0,
+            ArmoryError::WrongAccount
+        );
+        metas.push(AccountMeta::new_readonly(c.key(), false));
+        infos.push(c.clone());
     }
     items_call(data, metas, &infos)?;
     let ret = items_return()?;
