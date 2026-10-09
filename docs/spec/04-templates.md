@@ -859,3 +859,36 @@ differs from the text above:
     `EquipCtx.new_composite`; `create_composite`; `ArmoryParams.settle_bounty_bps` (the config's
     `reserved` shrinks by 2); `CheckPerformance` reads the ring from the pool account and lost its
     `observations` account.
+
+## Integration notes (branch integ, 2026-10-09)
+
+Changed by Hookwars: what the integration worker changed in the items program and the shared
+crate, with the security review 2 findings each change answers.
+
+- **Pool answers are always set** (H-A). `engine::pool` sets return data for every answer, the
+  default too. The launchpad also reads no return data, or empty data from the item's program, as
+  the default answer, and still refuses data from any other program.
+- **Launch accounts are exempt token-side** (task 3). `token_before` answers nothing (no cut, no
+  refusal, no stamp) when the source owner is the off-curve launch PDA of the mint: the deposit and
+  the graduation top-up.
+- **Stray vault tokens are burned at settlement** (M-A). `settle_equip` burns what the equip vault
+  holds beyond the recorded `token_unsettled`, whenever the vault is passed. A donation can no
+  longer keep `close_equip` from passing.
+- **A missing destination holding is skipped** (L-C). That module keeps its counters (and its
+  royalty and bounty stay unpaid), the other modules settle. Anyone can create the holding and
+  settle again.
+- **Raid season volume is net** (M-B). A raid buy counts in whole point units
+  (`amount_in / point_unit_lamports * point_unit_lamports`). When raid points leave holders (sold
+  back into the pool, or dropped when a holder empties into a non-holder), their volume
+  (`points * point_unit_lamports / points_per_unit`) comes out of `outbound_volume_season`. A raid
+  bought and sold back counts nothing. The inbound windows (`add_inbound`) stay gross. The war
+  program reads `season_volume` unchanged, so it needs no code change; the score is now net raid
+  volume. A Raid item with `points_per_unit` 0 stamps no points and cannot be netted, so the
+  template's floor for that field should be at least 1 (owner decision).
+- **Spy reads over at least `MIN_TWAP_SECS`** (L-A). Spy's extras gain the armory config (last);
+  both window reads use `max(window_secs, min_twap_secs)` with `min_twap_secs` as the floor.
+- **Shield** (L-B). The sell mark names who signed the sell (`authority`: the owner, or a delegate
+  selling the owner's tokens), which is the swap's actor. The raid origin travels with tokens to
+  every destination except the launch's own accounts, off-curve owners included.
+- **Sell Burn's rate is in the manifest** (L-E). `max_cut_sell_bps` is the burn rate, so the
+  armory's `max_pool_item_cut_bps` caps it at every equip, alone and summed in composites.

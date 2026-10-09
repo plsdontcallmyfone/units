@@ -756,3 +756,32 @@ need the protocol table plus a per-mint table (06).
 - The DEX's `swap::run_hop` frame is reported by `cargo build-sbf` at 4,288 bytes, over the 4,096
   SBF limit ("may cause undefined behavior"), when the launchpad builds with the DEX as a library
   (M3a code); the suites pass, but the DEX should box its large locals.
+
+## Integration notes (branch integ, 2026-10-09)
+
+Changed by Hookwars: the integration worker's changes to the launchpad, the DEX and the companion.
+
+- **Silent pool items** (security review 2 H-A). `forward_items` treats no return data, or empty
+  data from the item's program, as `ItemPoolAnswer::default()`; data from another program is still
+  `ForeignAnswer`. The runtime resets return data to `(callee, [])` at every invocation, so
+  nothing stale can be read.
+- **The whole pool registry at launch** (L-D). `create_prepared_launch` takes one item registry
+  per forwarded slot after the `PoolCuts` holding (`[prepared, pool_cuts_owner,
+  pool_cuts_holding, item registries, transfer slices]`) and writes the full registry, so swaps
+  work right after the launch. `refresh_pool_registry` shares the same builder
+  (`slot_launch::append_pool_items`) and is still needed after a later equip (the armory side,
+  security-fix branch).
+- **Stack frames** (L-F). `swap::run_hop` reads the mint's hook program in an `#[inline(never)]`
+  helper; `process_graduate` reads the pool, its reserves and the mint supply in `#[inline(never)]`
+  helpers. `programs.sh build` now fails on any "overflows the maximum allowed frame space" line.
+- **Companion slot launches** (task 5). `launch_slots(data)` uses the `LaunchIt` accounts and
+  forwards only `prepare_launch`, `equip_prepared` and `create_prepared_launch` of the launchpad
+  (`NotALaunchStep` otherwise), checking the rules with `check_rules` as `launch` does; after the
+  create it records the launch as `launch` does and emits `CompanionLaunched`. The height is
+  asserted at most 5 in `e2e.rs`.
+- **`LaunchConfig` with slots is not built.** It is possible within the call-depth limit (a config
+  is read, not invoked), but it changes the `LaunchConfig` account layout (configs exist on devnet)
+  and adds a slot comparison to `prepare_launch`; it was left out for time, not for a limit.
+  Prepared launches take inline slots.
+- **Raid volume forgery** (review 1 M-5) has its regression test in `e2e.rs`
+  (`a_raid_through_the_rivals_pool_counts_and_a_forged_first_hop_does_not`).
