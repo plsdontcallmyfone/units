@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@hookwars/shared": "workspace:^",
+    "@solana/web3.js": "1.98.4",
     "geist": "1.4.2",
     "next": "15.5.27",
     "react": "19.1.1",

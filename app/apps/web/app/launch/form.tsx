@@ -1,6 +1,10 @@
 'use client';
+// Changed by Hookwars: the form now makes the mint key, sends the mint and the virtual quote, and
+// signs and sends the staged launch through the API (app/INTEGRATION.md, app audit A-2).
 import { useEffect, useMemo, useState } from 'react';
-import { PARAMS, TEMPLATES, type EquipRule, type SlotKind } from '@hookwars/shared';
+import { Keypair, type VersionedTransaction } from '@solana/web3.js';
+import { MAX_VIRTUAL_QUOTE, MIN_VIRTUAL_QUOTE, PARAMS, TEMPLATES, type EquipRule, type PreparedTx, type SlotKind } from '@hookwars/shared';
+import { signAndSend } from '@/lib/sign';
 
 type SlotDraft = { kind: SlotKind; rule: EquipRule; maxCutBps: number; noticeSecs: number; templateId: number | null; launchItem: string };
 
@@ -10,12 +14,23 @@ const KINDS: SlotKind[] = ['fee', 'reward', 'defense', 'relation', 'pool', 'war'
 const RULES: EquipRule[] = ['locked', 'vote', 'performance'];
 const STEPS = ['Token', 'Rules', 'Slots', 'Review'];
 
-declare global { interface Window { solana?: { isPhantom?: boolean; publicKey?: { toBase58(): string }; connect(): Promise<{ publicKey: { toBase58(): string } }> } } }
+declare global { interface Window { solana?: { isPhantom?: boolean; publicKey?: { toBase58(): string }; connect(): Promise<{ publicKey: { toBase58(): string } }>; signAllTransactions?<T extends VersionedTransaction>(txs: T[]): Promise<T[]> } } }
+
+const LAMPORTS = 1_000_000_000n;
+/** SOL as typed (up to 9 decimals) to lamports; null when it is not a number. */
+function toLamports(s: string): bigint | null {
+  const m = /^(\d+)(?:\.(\d{1,9}))?$/.exec(s.trim());
+  return m ? BigInt(m[1]!) * LAMPORTS + BigInt((m[2] ?? '').padEnd(9, '0')) : null;
+}
+const sol = (l: bigint) => `${l / LAMPORTS}`;
 
 export function LaunchForm() {
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
   const [symbol, setSymbol] = useState('');
+  const [virtualSol, setVirtualSol] = useState('');
+  const [prepared, setPrepared] = useState<{ txs: PreparedTx[]; mint: Keypair } | null>(null);
+  const [sent, setSent] = useState<string[]>([]);
   const [kit, setKit] = useState(false);
   const [slots, setSlots] = useState<SlotDraft[]>([]);
   const [wallet, setWallet] = useState<string | null>(null);
@@ -35,7 +50,9 @@ export function LaunchForm() {
   if (bytesUsed > bytesFree) problems.push(`The items need ${bytesUsed} bytes of holder data; ${bytesFree} are left (HookDataOverflow).`);
   if (cutting > MAX_CUTTING - (kit ? 1 : 0)) problems.push(`Too many token-side cutting slots (TooManyCuttingSlots).`);
   if (slots.filter((s) => s.kind === 'war').length > 1) problems.push('One War slot at most.');
-  const tokenOk = name.trim().length > 0 && name.length <= 32 && /^[^\s]{1,10}$/.test(symbol);
+  const virtualQuote = toLamports(virtualSol);
+  const quoteOk = virtualQuote !== null && virtualQuote >= MIN_VIRTUAL_QUOTE && virtualQuote <= MAX_VIRTUAL_QUOTE;
+  const tokenOk = name.trim().length > 0 && name.length <= 32 && /^[^\s]{1,10}$/.test(symbol) && quoteOk;
 
   const addSlot = () => setSlots([...slots, { kind: 'pool', rule: 'vote', maxCutBps: 0, noticeSecs: 0, templateId: null, launchItem: '' }]);
   const upd = (i: number, p: Partial<SlotDraft>) => setSlots(slots.map((s, j) => (j === i ? { ...s, ...p } : s)));
@@ -48,11 +65,26 @@ export function LaunchForm() {
 
   async function prepare() {
     if (!wallet) return;
-    setBusy(true); setResult(null);
+    setBusy(true); setResult(null); setPrepared(null); setSent([]);
     try {
-      const r = await fetch('/api/v1/launch/prepare', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ owner: wallet, name, symbol, kit, slots }) });
-      const b = await r.json() as { error?: string; transactions?: unknown[] };
-      setResult(r.ok ? `Prepared ${b.transactions?.length ?? 0} transactions.` : b.error ?? `HTTP ${r.status}`);
+      // A fresh mint for every prepare; its key stays in this page and signs the stages that need it.
+      const mint = Keypair.generate();
+      const r = await fetch('/api/v1/launch/prepare', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ owner: wallet, mint: mint.publicKey.toBase58(), name, symbol, virtualQuote: virtualQuote?.toString(), kit, slots }) });
+      const b = await r.json() as { error?: string; transactions?: PreparedTx[] };
+      if (r.ok && b.transactions) { setPrepared({ txs: b.transactions, mint }); setResult(`Prepared ${b.transactions.length} transactions for ${mint.publicKey.toBase58()}.`); }
+      else setResult(b.error ?? `HTTP ${r.status}`);
+    } catch (e) {
+      setResult(e instanceof Error ? e.message : String(e));
+    } finally { setBusy(false); }
+  }
+
+  async function launch() {
+    const w = window.solana;
+    if (!prepared || !w?.signAllTransactions) { setResult('This wallet cannot sign several transactions at once.'); return; }
+    setBusy(true);
+    try {
+      const sigs = await signAndSend({ signAllTransactions: (txs) => w.signAllTransactions!(txs) }, prepared.txs, { mint: prepared.mint }, (i, s) => setSent((x) => [...x.slice(0, i), s]));
+      setResult(`Launched ${prepared.mint.publicKey.toBase58()} in ${sigs.length} transactions.`); setPrepared(null);
     } catch (e) {
       setResult(e instanceof Error ? e.message : String(e));
     } finally { setBusy(false); }
@@ -70,6 +102,7 @@ export function LaunchForm() {
             <>
               <label className="field">Name<input value={name} maxLength={32} onChange={(e) => setName(e.target.value)} placeholder="Shown on the board and the token page" /></label>
               <label className="field">Ticker<input value={symbol} maxLength={10} onChange={(e) => setSymbol(e.target.value.replace(/\s/g, ''))} placeholder="1 to 10 characters, no spaces" /></label>
+              <label className="field">Virtual SOL reserve<input value={virtualSol} inputMode="decimal" onChange={(e) => setVirtualSol(e.target.value)} placeholder={`${sol(MIN_VIRTUAL_QUOTE)} to ${sol(MAX_VIRTUAL_QUOTE)} SOL: sets the opening price`} /></label>
             </>
           )}
           {step === 1 && (
@@ -102,14 +135,15 @@ export function LaunchForm() {
             <>
               <dl className="kv">
                 <dt>Token</dt><dd>{name || '-'} ({symbol || '-'})</dd>
+                <dt>Virtual reserve</dt><dd>{virtualSol || '-'} SOL</dd>
                 <dt>Kit</dt><dd>{kit ? 'slot 0, locked, 32 bytes' : 'none'}</dd>
                 <dt>Item slots</dt><dd>{slots.length ? slots.map((s, i) => <div key={i}>{s.kind}, {s.rule}, up to {s.maxCutBps / 100}%{s.templateId ? `, ${TEMPLATES.find((t) => t.id === s.templateId)?.name}` : ''}</div>) : 'none'}</dd>
                 <dt>Fixed at launch</dt><dd className="muted">Kinds, bounds, equip rules, notices and data ranges. The creator can't change these.</dd>
               </dl>
               <div className="sep" />
               <div className="steps">
-                {['prepare_launch: the mint with its slots, launch items equipped', 'create_launch: supply, pool, registry', 'init_war: the war chest, when there is a War slot', "The mint's lookup table", 'Your first buy, if any'].map((t, i) => (
-                  <div className="step" key={t}><span className="n">{i + 1}</span><span>{t}</span><span className="faint">waiting</span></div>
+                {(prepared ? prepared.txs.map((t) => t.label) : ['prepare_launch: the mint with its slots', 'equip_prepared: one per launch item', "The mint's lookup table", 'create_prepared_launch: supply, pool, registry', 'refresh_pool_registry, init_war, init_raid_ledger']).map((t, i) => (
+                  <div className="step" key={`${i}${t}`}><span className="n">{i + 1}</span><span>{t}</span><span className="faint">{sent[i] ? `sent ${sent[i]!.slice(0, 8)}` : 'waiting'}</span></div>
                 ))}
               </div>
             </>
@@ -120,11 +154,12 @@ export function LaunchForm() {
             {step < 3 ? (
               <span className="right">
                 <button className="btn primary" type="button" disabled={step === 0 && !tokenOk} onClick={() => setStep(step + 1)}>Next</button>
-                {step === 0 && !tokenOk ? <div className="reason">Name 1 to 32 characters, ticker 1 to 10 without spaces.</div> : null}
+                {step === 0 && !tokenOk ? <div className="reason">Name 1 to 32 characters, ticker 1 to 10 without spaces, virtual reserve {sol(MIN_VIRTUAL_QUOTE)} to {sol(MAX_VIRTUAL_QUOTE)} SOL.</div> : null}
               </span>
             ) : (
               <span className="right">
-                {wallet ? <button className="btn primary" type="button" disabled={busy || problems.length > 0} onClick={prepare}>{busy ? 'Preparing' : 'Prepare the launch'}</button>
+                {wallet && prepared ? <button className="btn primary" type="button" disabled={busy} onClick={launch}>{busy ? 'Sending' : `Sign and send ${prepared.txs.length} transactions`}</button>
+                  : wallet ? <button className="btn primary" type="button" disabled={busy || problems.length > 0} onClick={prepare}>{busy ? 'Preparing' : 'Prepare the launch'}</button>
                   : <button className="btn primary" type="button" onClick={connect} disabled={hasWallet === false}>Connect a wallet</button>}
                 {!wallet && hasWallet === false ? <div className="reason">No Solana wallet in this browser: install one, then reload.</div> : null}
               </span>

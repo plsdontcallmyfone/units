@@ -65,7 +65,7 @@ export const rollAddress = (holding: PublicKey, nonce: bigint | number) => pda([
 export const questMarkAddress = (season: number, mint: PublicKey, owner: PublicKey) => pda([s('quest'), u32(season), mint.toBuffer(), owner.toBuffer()], WAR_ID);
 export const prizeVaultAddress = () => pda([s('prize-vault')], WAR_ID);
 // DEX and launch (03)
-export const observationsAddress = (pool: PublicKey) => pda([s('obs'), pool.toBuffer()], SWAP_ID);
+// Changed by Hookwars: the observations ring lives in the pool account (M3a), so there is no separate observations address.
 export const preparedLaunchAddress = (mint: PublicKey) => pda([s('prepared'), mint.toBuffer()], LAUNCH_ID);
 export const armoryCallerAddress = (mint: PublicKey) => pda([s('armory-caller'), mint.toBuffer()], LAUNCH_ID);
 export const launchMintAuthority = (mint: PublicKey) => pda([s('launch-mint'), mint.toBuffer()], LAUNCH_ID);

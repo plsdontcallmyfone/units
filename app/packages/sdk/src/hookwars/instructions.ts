@@ -13,7 +13,7 @@ import { PublicKey, TransactionInstruction, type AccountMeta } from '@solana/web
 import { idlIx } from './from-idl.ts';
 import {
   ITEMS_EVENT_AUTHORITY, ITEMS_ID, LAUNCH_ID, SWAP_ID, TOKEN_ID, TOKEN_ITEMS_SIGNER, WAR_ID,
-  equipStateAddress, forgeCounterAddress, holdingAddr, itemAddress, itemMintAddress, launchAddr, lootTableAddress, observationsAddress,
+  equipStateAddress, forgeCounterAddress, holdingAddr, itemAddress, itemMintAddress, launchAddr, lootTableAddress,
   poolCutsAddress, proposalAddress, questMarkAddress, raidLedgerAddress, rollAddress, royaltyOwner, seasonAddress, slotAuthority, slotStateAddress,
   templateAddress, tokenHookSigner, treatyInboxAddress, voteAddress, warChestAddress, warStateAddress,
 } from './addresses.ts';
@@ -152,7 +152,7 @@ export function recordFunding(mint: PublicKey): TransactionInstruction {
 export function siege(cranker: PublicKey, mint: PublicKey, orders: Orders, rivalMint: PublicKey, rivalPool: PublicKey, rivalHasWar: boolean, rivalKitConfig: PublicKey | null, slice: AccountMeta[], inner: TransactionInstruction[]): TransactionInstruction {
   return idlIx('war', 'siege', {
     cranker, mint, warState: warStateAddress(mint), warChest: warChestAddress(mint), ordersItem: orders.item, ordersTemplate: orders.template, raidLedger: raidLedgerAddress(mint), rivalMint,
-    rivalLaunch: launchAddr(rivalMint), rivalPool, rivalObservations: observationsAddress(rivalPool),
+    rivalLaunch: launchAddr(rivalMint), rivalPool,
     rivalWarState: rivalHasWar ? warStateAddress(rivalMint) : null, rivalKitConfig,
   }, { args: { first: slice.length, second: 0 } }, [...slice, ...accountsOf(inner)]);
 }
@@ -160,7 +160,7 @@ export function siege(cranker: PublicKey, mint: PublicKey, orders: Orders, rival
 /** `counter_strike`: `buySlice` for the delivery, `burnSlice` for the burn. */
 export function counterStrike(cranker: PublicKey, mint: PublicKey, orders: Orders, pool: PublicKey, kitConfig: PublicKey | null, buySlice: AccountMeta[], burnSlice: AccountMeta[], inner: TransactionInstruction[]): TransactionInstruction {
   return idlIx('war', 'counter_strike', {
-    cranker, mint, warState: warStateAddress(mint), warChest: warChestAddress(mint), ordersItem: orders.item, ordersTemplate: orders.template, launch: launchAddr(mint), pool, observations: observationsAddress(pool), kitConfig,
+    cranker, mint, warState: warStateAddress(mint), warChest: warChestAddress(mint), ordersItem: orders.item, ordersTemplate: orders.template, launch: launchAddr(mint), pool, kitConfig,
   }, { args: { first: buySlice.length, second: burnSlice.length } }, [...buySlice, ...burnSlice, ...accountsOf(inner)]);
 }
 

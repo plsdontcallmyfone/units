@@ -11,6 +11,7 @@ import { hookwars } from '@hookwars/sdk';
 import { findBannedWords, PARAMS, type PrizeVaultInfo, type SeasonInfo } from '@hookwars/shared';
 import * as reads from './reads.ts';
 import { prepare, PrepareError } from './prepares.ts';
+import { submit } from './submit.ts';
 import { clientKey, clusterName, HttpError, intParam, RateLimiter, readJsonBody } from './guard.ts';
 
 export interface Deps { db: Pool | null; conn: Connection; rpcUrl: string }
@@ -99,6 +100,11 @@ export function handler(deps: Deps) {
       if (req.method === 'POST' && p.startsWith('/v1/') && p.endsWith('/prepare')) {
         if (!prepareLimit.take(client)) return json(res, 429, { error: 'Too many requests; wait a little.', code: 'RateLimited' });
         return json(res, 200, await prepare(deps.conn, p.slice(4), await readJsonBody(req)));
+      }
+      // Changed by Hookwars: wallet-signed transactions go out through the API (A-2), limited as prepares are.
+      if (req.method === 'POST' && p === '/v1/submit') {
+        if (!prepareLimit.take(client)) return json(res, 429, { error: 'Too many requests; wait a little.', code: 'RateLimited' });
+        return json(res, 200, await submit(deps.conn, await readJsonBody(req)));
       }
       if (!readLimit.take(client)) return json(res, 429, { error: 'Too many requests; wait a little.', code: 'RateLimited' });
       if (req.method !== 'GET') return json(res, 405, { error: 'Method not allowed.' });
