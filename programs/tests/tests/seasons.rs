@@ -111,7 +111,7 @@ fn king_of_the_hill_takes_strictly_higher_scores_in_its_window() {
 /// Security review 2, M-B: a community that washes raid volume with self-raid loops ("sell rival X on
 /// X's pool, buy ours, sell ours, buy back X": every loop adds its whole buy to our raid volume for
 /// only the fees) gains score only up to `raid_volume_per_funded` times what its chest received in
-/// the season. The ledger below stands for those loops: one honest raid of 800 for `b`, and 200
+/// the season. The ledger below stands for those loops: honest raids of 5,000 for `b`, and 200
 /// loops of 1,000 for `a`.
 #[test]
 fn washed_raid_volume_scores_only_up_to_the_seasons_funding() {
@@ -122,7 +122,7 @@ fn washed_raid_volume_scores_only_up_to_the_seasons_funding() {
     let n = s.number;
     let loops: u64 = 200;
     ww.put_ledger(&a.mint, n, loops * 1_000, &[]);
-    ww.put_ledger(&b.mint, n, 800, &[]);
+    ww.put_ledger(&b.mint, n, 5_000, &[]);
     // The washer's chest received 1 lamport this season, the honest token's enough for its raids.
     ww.fund_chest(&a.mint, 1);
     ww.fund_chest(&b.mint, SOL);
@@ -136,7 +136,7 @@ fn washed_raid_volume_scores_only_up_to_the_seasons_funding() {
     // 200,000 of raid volume, scored at 1 lamport of funding times the TEST 1,000.
     assert_eq!(e.score, i128::from(TEST_PARAMS.raid_volume_per_funded));
     let e = submit(&mut ww, b.mint).event::<CandidateChallenged>();
-    assert_eq!((e.score, e.beaten), (800, a.mint));
+    assert_eq!((e.score, e.beaten), (5_000, a.mint));
     // Funding recorded before the season opened does not count for it.
     let mut ww = WarWorld::new();
     let c = ww.war_token("EARLY", OrdersSpec::default());
