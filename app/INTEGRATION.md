@@ -1,81 +1,85 @@
 # Integration checklist (app/ against the programs)
 
-The app was built on branch `app` while the programs were being built on other branches (m2 armory
-and items, m3a DEX, m4 war, kitcomp kit and companion). Everything below that says "spec layout"
-was written from docs/spec and must be checked against the generated IDL or the Rust once those
-branches merge. Each item names the file to change and how to verify it.
+The app was first built on branch `app` from the spec while the programs were built on other
+branches. Round 1 of integration (branch `appint`, 2026-10-09) switched everything whose program is
+on main to the programs' generated IDLs. This file says what is done and what remains, each item
+naming the file to change and how to verify it.
 
-## 1. Constants
+## 1. Done in round 1
 
-| Id | What | Where | Check |
-| --- | --- | --- | --- |
-| A1 | `PARAM_FIELDS` is 11 (the smallest the spec allows, 04: War orders has 11 fields) | `packages/shared/src/hookwars/params.ts` `PARAM_FIELDS_MIN`; `packages/sdk/src/hookwars/accounts.ts` `PARAM_FIELDS` (call `setParamFields`) | equal to the armory build's constant |
-| A2 | `MAX_SLOTS = 4` | `packages/sdk/src/hookwars/accounts.ts` | equal to `bordrless_token/src/constants.rs` (it is, at M1) |
-| A3 | Every parameter in `PARAMS` is `null` except `MAX_SLOTS` and `MAX_CUTTING_SLOTS` | `packages/shared/src/hookwars/params.ts` | fill from `ArmoryConfig`, `WarConfig`, the DEX and launch configs and the program constants; never by hand |
-| A4 | `LAUNCH_ITEMS_SIGNER` derived as `["hook-authority", ITEMS_ID]` under the launchpad | `packages/shared/src/programs.ts` `HOOK_SIGNERS.launchForItems` | equal to the launchpad's signer of Pool-item callbacks (03 5.5) |
-| A5 | Protocol lookup table: 22 upstream entries plus 11 Hookwars entries | `packages/shared/src/programs.ts` | equal to what `pnpm admin init` writes when the table is created; until then no table exists on devnet and prepares compile without one |
+### IDLs
 
-## 2. Account and event layouts written from the spec
+`anchor idl build` of every deployed program (scripts/solana/programs.sh idl) on the build server,
+copied to `idl/` (repo root) and `app/packages/sdk/idl/`. To refresh after a program change: run
+the same command, copy the JSON files again, then `node packages/sdk/scripts/gen-idl-types.mjs`
+(writes `packages/sdk/src/hookwars/idl-types.gen.ts`).
 
-Replace each codec with the generated IDL coder (or keep it and add a round-trip test against bytes
-the program wrote in LiteSVM). Exact today: token `Mint` with the slot table, `Holding` with the vote
-lock and the token events `Transferred`, `SlotsInitialized`, `SlotEquipped`, `VoteLockSet`,
-`HookDataWritten` (all from the M1 Rust on main).
+The armory and items IDLs needed one source change to build: the `Params` type alias
+(`[u32; PARAM_FIELDS]` from `hookwars-common`) is not an IDL type, so instruction arguments, account
+fields and events of `hookwars_armory` and `hookwars_items` now spell `[u32; PARAM_FIELDS]`. The type
+is the same, so the programs' behaviour and bytes are unchanged.
 
-| Program | Accounts (spec section) | Events (spec section) |
+### SDK (`packages/sdk/src/hookwars/`)
+
+| Module | What it is now |
+| --- | --- |
+| `idl.ts` | A coder for Anchor 1.x IDLs: accounts, events, instruction accounts in IDL order with PDAs derived from the IDL seeds (constants, other accounts, arguments), the event authority and the program filled in, optional accounts left out passed as the program id |
+| `from-idl.ts` | The IDLs of token, armory, items, war, kit and companion; their account codecs, event schemas and argument schemas as `codec.ts` schemas; `idlIx` |
+| `idl-types.gen.ts` | Generated TypeScript types, one namespace per program |
+| `accounts.ts` | Token `Mint`, `Holding`; armory `ArmoryConfig`, `PendingParams`, `Template`, `Item`, `SlotState`, `Proposal`, `VoteLock`, `ForgeCounter`; items `EquipState`; war `WarConfig`, `WarState`, `Season`, `LootTable`, `RollRequest`, `QuestMark`: all from the IDLs. `PARAM_FIELDS` and `MAX_SLOTS` are read from the IDL arrays |
+| `events.ts` | Every event of token, armory, items, war and companion from the IDLs |
+| `instructions.ts` | Token `touch`; armory `create_item`, `vote`, `propose`, `finalize`, `execute`, `cancel`, `close_vote`, `close_proposal`, `claim_royalty`, `forge`; war `init_war`, `record_funding`, `siege`, `counter_strike`, `raze`, `return_captured`, `share_treaty_inflow`, `accrue_treaty_time`, `claim_bounty`, `roll`, `reveal`, `cancel_roll`, `claim_quest`, `close_quest_mark`, `open_season`, `submit_candidate`, `finalize_season`, `split_protocol_fees`: all through `idlIx`. Remaining accounts follow the programs' Rust clients (`hookwars_war::client`) |
+| `war-context.ts` | Reads the War orders and the Raid slot from a mint's slot table and the armory `Item`s, and resolves the Raid slot's touch extras as the token program resolves them for `touch` (`[signer, mint, holding, holding, caller]`) |
+
+Accounts whose seeds use a field of another account's data (for example `war_state` seeded by
+`war_state.mint`) cannot be derived from the IDL alone; the builders pass them explicitly.
+
+### Pinned to the Rust
+
+- `programs/tests/tests/app_vectors.rs` renders `programs/tests/vectors/hookwars-math.json` (copied
+  to `packages/shared/vectors/`) from the Rust the programs run, and fails and rewrites the file when
+  the Rust changes:
+  - `hookwars_common::{shape, combine, manifest, window_read, PerformanceRule::holds}`;
+  - `hookwars_war` `Season::score`, `loot::draw`, `bps_of`;
+  - 22 instructions built by `hookwars_war::client` and `bordrless_token::client::touch`.
+- `packages/shared/src/hookwars/exact.ts` is the exact TypeScript port; `exact.test.ts` runs every
+  case. `packages/sdk/src/hookwars/instructions.vectors.test.ts` requires each IDL builder to equal
+  the Rust client's instruction (program, every key with its signer and writable flags, data).
+
+### Spec mismatches settled by the merged code
+
+| Was | Settled |
+| --- | --- |
+| `RaidLedger.season_id` / `outbound_volume_season` (04) against `season` / `season_volume` (05) | 04's names; the war program's reader (`foreign.rs`) uses them |
+| War orders `peace_returns` | Not a War orders field: the Treaty item's `returns_captured` (field 2) gates peace returns. `WarOrdersInfo.peaceReturns` removed; `exact.WAR_ORDERS` and `exact.TREATY_RETURNS_CAPTURED` give the field indices |
+| `Season` without `version` and `bump` | The IDL has both |
+| Type of `change` in `ConfigProposed`, `ConfigApplied`, `PendingCancelled` | From the IDL |
+| `PARAM_FIELDS` | 11, read from the IDL |
+| Transfer Fee's `max_wallet_bps` forge rule | `floorWhenBothOn` (0 means off), as `hookwars_common::shape` says |
+
+### API prepares
+
+Built now (each first checks the programs are deployed): votes, proposals, finalize, cancel, close
+vote, royalties, forge (reads `items_minted`, refuses mixed templates and equipped items), bounties,
+quests, rolls (reads the randomness program from `WarConfig`), war init, record funding, treaty
+time, season submit, finalize and open, prize split. `apps/api/src/prepares.test.ts` builds them
+against a mocked chain holding accounts encoded with the IDL codecs.
+
+### Other
+
+- `app/pnpm-lock.yaml` is committed (it was missing from main).
+- `Cargo.lock` regenerated: main's lockfile lacked the m4 merge's packages (`hookwars-war`, the war
+  stubs), so `cargo test --locked` refused it.
+
+## 2. Remaining
+
+| Area | Waits for | What to do |
 | --- | --- | --- |
-| armory | `ArmoryConfig` 2.1, `Template` 2.3, `Item` 2.4, `SlotState` 2.7, `Proposal` 2.8, `VoteLock` 2.9, `ForgeCounter` 2.10 | 02 section 13 |
-| DEX | `Observations` 03 3.1 (ring length read from the data) | `RouteSwapped`, `ObservationsCreated` 03 section 9; the extended `Swapped.route` is decoded by the upstream IDL today, so `route` is missing until the IDL is regenerated |
-| launch | | `PoolItemCuts`, `LaunchPrepared`, `PoolRegistryRefreshed` 03 section 9; extended `LaunchCreated` needs the regenerated IDL |
-| companion | | `CompanionWarFunded` 03 section 9 |
-| items | `EquipState` 04 section 4, `RaidLedger` 04 2.9 (table length read from the data) | 04 section 5; callbacks emit program logs (R18) |
-| war | `WarConfig` 05 2.1 up to `last_winner` (the spec does not fix `PendingConfig`), `WarState` 05 2.4 (captured length read from the data), `Season` 10.2, `LootTable` 8.3, `RollRequest` 8.2, `QuestMark` 9 | 05 section 12 |
-
-Known spec gaps to settle with the program authors:
-
-- `Season` has no `version`/`bump` in the spec table; the codec has none.
-- 04 2.9 names `RaidLedger.season_id` and `outbound_volume_season`; 05 2.5 calls them `season` and
-  `season_volume`. The codec uses 04's names.
-- 04's War orders field list (11 fields) has no `peace_returns`; 05 6.0 reads one. `WarOrdersInfo.peaceReturns` is `null` until settled.
-- `ConfigProposed` / `ConfigApplied` / `PendingCancelled` carry `change` as a `u8` here; the spec
-  does not fix its type.
-- `ObservationsCreated.len` is a `u16` here.
-
-## 3. Instruction builders written from the spec
-
-`packages/sdk/src/hookwars/instructions.ts`: argument schemas follow the spec sections in the file;
-account lists follow the spec where it lists them (`claim_bounty` 05 7, `roll` 05 8.2, `claim_quest`
-05 9) and are best effort elsewhere (`vote`, `propose`, `settle_equip`, `claim_royalty`, `forge`,
-`init_war`). Check each against the IDL's account order. `touch` follows the M1 code.
-
-Prepares that throw a one-sentence refusal until their programs and builders exist:
-`/v1/forge/prepare`, `/v1/raid/prepare` (needs `swap_route` hop groups), `/v1/launch/prepare` (needs
-`prepare_launch`, `create_launch`, `init_war`, the lookup table), and the crank prepares of 06 3.3
-not listed in `apps/api/src/prepares.ts`. Every prepare first checks its programs are deployed and
-says which are missing.
-
-## 4. Math to pin with fixture vectors
-
-`packages/shared/src/hookwars/math.ts`: `forgeField` (04 2.7), `settleSplit` and `royaltyPosition`
-(04 2.5), `windowRead` (03 3.1), `raidWindowAdd` and `rollingRaidVolume` (04 2.9, 05 2.5),
-`bounty` (05 7), `warSpend` and `counterStrikeDue` (05 6.2, 6.3), `seasonScore` and `beatsLeader`
-(05 10.2, 10.3), `mergeSlotCuts` (01 3.2). Each has unit tests from the spec formulas; add
-`vectors/*.json` written by the Rust tests and a test that reads them, as upstream pins
-`launch-fees.json`.
-
-## 5. Indexer
-
-- Event ordinals: self-CPI events are numbered in instruction order, then item log events; 06 2.1
-  wants one sequence in execution order. Interleave by matching invoke depth when the programs
-  exist.
-- After a transaction with truncated logs, re-read the `EquipState` and `RaidLedger` accounts it
-  touched (06 2.1); the flag is stored in `transactions.logs_truncated`, the re-read is not built.
-- Account snapshots (`war_state_snapshots`, `raid_ledger_snapshots`) and the upstream kept tables
-  (launches, pools, swaps, holders, candles) are not built; the API reads `LaunchCreated` events for
-  the board.
-
-## 6. Site
-
-- Wallet: the launch form connects an injected Solana wallet and prepares; signing and submitting
-  the prepared transactions waits for a submit route.
-- Pages read the API; every figure the API cannot read renders as a dash or an empty state.
+| DEX `Observations`, `swap_route`, `RouteContext`, `RouteSwapped`, `ObservationsCreated` | M3a merge | Regenerate the swap IDL; drop the spec `Observations` codec and the `swap` entries of `SPEC_ONLY` in `events.ts`; build `swap_route` with `idlIx`; check `OBS_LAYOUT` in `exact.ts` against the real account (the M2 raw reader `hookwars_common::obs_layout` is what the armory and war read today) |
+| Launchpad: `prepare_launch`, `create_launch` with slots, pool-item forwarding, `PoolItemCuts`, `LaunchPrepared`, `PoolRegistryRefreshed` | M3b | Regenerate the launch IDL; replace the `launch` spec entries; un-refuse `/v1/launch/prepare` |
+| Items callbacks, `settle_equip`, `init_raid_ledger`, `RaidLedger`, `RaidMarked`, `ShieldTaken`, `ItemCut`, `EquipSettled` | M3b | Regenerate the items IDL; replace `decodeRaidLedger` and the `items` spec events; build `settle_equip` with `idlIx` |
+| Composites and the arsenal templates (08) | Arsenal waves | Add each template's site sentence and fields to `packages/shared/src/hookwars/templates.ts` and its shape to `exact.ts`, pinned by `app_vectors.rs` |
+| Raid prepare (`/v1/raid/prepare`) | M3a and M3b | A two-hop `swap_route` from the rival through bridged SOL |
+| Indexer: execution-order ordinals, re-read after truncated logs, account snapshots, upstream kept tables | none | As before (06 2.1, 2.3) |
+| Wallet signing and a submit route on the site | none | The launch form and every prepare return unsigned v0 transactions today |
+| Per-mint address lookup tables | devnet | `pnpm admin init` equivalent for units; prepares compile without tables until then |

@@ -66,23 +66,98 @@ export const PREPARES: Record<string, PrepareDef> = {
   },
   'bounties/prepare': {
     programs: ['war', 'token', 'items'], label: 'Claim bounty', payer: (b) => pk(b, 'owner'),
-    build: async (b) => [hookwars.claimBounty(pk(b, 'owner'), pk(b, 'mint'), pk(b, 'warOrdersItem'), pk(b, 'warOrdersTemplate'), [])],
+    build: async (b, conn) => {
+      const owner = pk(b, 'owner'); const mint = pk(b, 'mint');
+      const { orders, raid, extras } = await raidContext(conn, mint, owner);
+      if (!orders) throw new PrepareError(409, 'NoWarOrders', 'This token has no War orders equipped, so its chest pays no bounties.');
+      return [hookwars.claimBounty(owner, mint, orders, raid.slot, extras)];
+    },
   },
   'quests/prepare': {
     programs: ['war', 'token', 'items'], label: 'Claim quest', payer: (b) => pk(b, 'owner'),
-    build: async (b) => [hookwars.claimQuest(pk(b, 'owner'), pk(b, 'mint'), n(b, 'season'), n(b, 'questId') === 2 ? 2 : 1, n(b, 'period'), [])],
+    build: async (b, conn) => {
+      const owner = pk(b, 'owner'); const mint = pk(b, 'mint');
+      const { raid, extras } = await raidContext(conn, mint, owner);
+      return [hookwars.claimQuest(owner, mint, n(b, 'season'), n(b, 'questId') === 2 ? 2 : 1, n(b, 'period'), raid.slot, extras)];
+    },
   },
   'rolls/prepare': {
     programs: ['war', 'token', 'items'], label: 'Roll', payer: (b) => pk(b, 'owner'),
-    build: async (b) => [hookwars.roll(pk(b, 'owner'), pk(b, 'mint'), big(b, 'nonce'), [], [])],
+    build: async (b, conn) => {
+      const owner = pk(b, 'owner'); const mint = pk(b, 'mint');
+      const cfgInfo = await conn.getAccountInfo(hookwars.WAR_CONFIG, 'confirmed');
+      if (!cfgInfo) throw new PrepareError(409, 'NoWarConfig', 'The war program has no config on this cluster yet.');
+      const cfg = hookwars.warConfigCodec.decode(cfgInfo.data);
+      const { raid, extras } = await raidContext(conn, mint, owner);
+      return [hookwars.roll(owner, mint, big(b, 'nonce'), raid.slot, { program: cfg.randomnessProgram, account: pk(b, 'oracleAccount') }, extras)];
+    },
   },
   'war/init/prepare': {
     programs: ['war'], label: 'Open the war chest', payer: (b) => pk(b, 'owner'),
-    build: async (b) => [hookwars.initWar(pk(b, 'owner'), pk(b, 'mint'), hookwars.launchAddr(pk(b, 'mint')))],
+    build: async (b) => [hookwars.initWar(pk(b, 'owner'), pk(b, 'mint'))],
   },
   'forge/prepare': {
     programs: ['armory', 'items', 'token'], label: 'Forge', payer: (b) => pk(b, 'owner'),
-    build: async () => { throw new PrepareError(409, 'ForgeNeedsArmory', 'Forging needs the armory on this cluster to assign the new item mint.'); },
+    build: async (b, conn) => {
+      const owner = pk(b, 'owner');
+      const [ai, bi, cfg] = await conn.getMultipleAccountsInfo([pk(b, 'itemA'), pk(b, 'itemB'), hookwars.armoryConfigAddress()], 'confirmed');
+      if (!ai || !bi) throw new PrepareError(404, 'NoSuchItem', 'One of the two items does not exist.');
+      if (!cfg) throw new PrepareError(409, 'NoArmoryConfig', 'The armory has no config on this cluster yet.');
+      const a = hookwars.itemCodec().decode(ai.data); const c = hookwars.itemCodec().decode(bi.data);
+      if (a.templateId !== c.templateId) throw new PrepareError(409, 'NotForgeable', 'Only two items of the same template can be forged.');
+      if (a.equippedCount > 0 || c.equippedCount > 0) throw new PrepareError(409, 'ItemEquipped', 'Unequip both items before forging them.');
+      const itemsMinted = hookwars.armoryConfigCodec.decode(cfg.data).itemsMinted;
+      return [hookwars.forge(owner, { item: pk(b, 'itemA'), itemMint: a.itemMint }, { item: pk(b, 'itemB'), itemMint: c.itemMint }, a.templateId, itemsMinted)];
+    },
+  },
+  'proposals/finalize/prepare': {
+    programs: ['armory'], label: 'Count the vote', payer: (b) => pk(b, 'owner'),
+    build: async (b) => [hookwars.finalize(pk(b, 'mint'), n(b, 'slot'), big(b, 'nonce'))],
+  },
+  'proposals/cancel/prepare': {
+    programs: ['armory'], label: 'Cancel the proposal', payer: (b) => pk(b, 'owner'),
+    build: async (b) => [hookwars.cancelProposal(pk(b, 'owner'), pk(b, 'mint'), n(b, 'slot'), big(b, 'nonce'))],
+  },
+  'votes/close/prepare': {
+    programs: ['armory'], label: 'Close the vote', payer: (b) => pk(b, 'owner'),
+    build: async (b) => [hookwars.closeVote(pk(b, 'owner'), pk(b, 'mint'), n(b, 'slot'), big(b, 'nonce'))],
+  },
+  'war/funding/prepare': {
+    programs: ['war'], label: 'Record funding', payer: (b) => pk(b, 'owner'),
+    build: async (b) => [hookwars.recordFunding(pk(b, 'mint'))],
+  },
+  'war/treaty-time/prepare': {
+    programs: ['war'], label: 'Accrue treaty time', payer: (b) => pk(b, 'owner'),
+    build: async (b) => {
+      const pairs = Array.isArray(b.pairs) ? (b.pairs as [string, string][]).map(([i, p]) => [new PublicKey(i), new PublicKey(p)] as [PublicKey, PublicKey]) : [];
+      return [hookwars.accrueTreatyTime(pk(b, 'mint'), n(b, 'season'), pairs)];
+    },
+  },
+  'seasons/submit/prepare': {
+    programs: ['war'], label: 'Submit a candidate', payer: (b) => pk(b, 'owner'),
+    build: async (b) => [hookwars.submitCandidate(pk(b, 'owner'), n(b, 'season'), pk(b, 'mint'), Boolean(b.withLedger))],
+  },
+  'seasons/finalize/prepare': {
+    programs: ['war'], label: 'Finalize the season', payer: (b) => pk(b, 'owner'),
+    build: async (b) => [hookwars.finalizeSeason(n(b, 'season'))],
+  },
+  'seasons/open/prepare': {
+    programs: ['war'], label: 'Open the next season', payer: (b) => pk(b, 'owner'),
+    build: async (b, conn) => {
+      const cfgInfo = await conn.getAccountInfo(hookwars.WAR_CONFIG, 'confirmed');
+      if (!cfgInfo) throw new PrepareError(409, 'NoWarConfig', 'The war program has no config on this cluster yet.');
+      return [hookwars.openSeason(hookwars.warConfigCodec.decode(cfgInfo.data).currentSeason)];
+    },
+  },
+  'prize/split/prepare': {
+    programs: ['war'], label: 'Split the prize vault', payer: (b) => pk(b, 'owner'),
+    build: async (b, conn) => {
+      const cfgInfo = await conn.getAccountInfo(hookwars.WAR_CONFIG, 'confirmed');
+      if (!cfgInfo) throw new PrepareError(409, 'NoWarConfig', 'The war program has no config on this cluster yet.');
+      const cfg = hookwars.warConfigCodec.decode(cfgInfo.data);
+      const winner = cfg.lastWinner ? { mint: cfg.lastWinner, season: cfg.lastWinnerSeason } : null;
+      return [hookwars.splitProtocolFees(pk(b, 'owner'), cfg.protocolTreasury, winner)];
+    },
   },
   'raid/prepare': {
     programs: ['swap', 'launch', 'items', 'token'], label: 'Join the raid', payer: (b) => pk(b, 'owner'),
@@ -90,9 +165,19 @@ export const PREPARES: Record<string, PrepareDef> = {
   },
   'launch/prepare': {
     programs: ['launch', 'armory', 'items', 'token', 'swap'], label: 'Launch', payer: (b) => pk(b, 'owner'),
-    build: async () => { throw new PrepareError(409, 'LaunchNeedsPrograms', 'A launch is prepare_launch, create_launch and init_war; it needs the launchpad, armory and items on this cluster.'); },
+    build: async () => { throw new PrepareError(409, 'LaunchNeedsPrograms', 'A launch is prepare_launch, create_launch and init_war; it needs the launchpad with slot launches on this cluster.'); },
   },
 };
+
+/** The War orders, the Raid slot and its touch extras for `owner` (a war step that spends raid points). */
+async function raidContext(conn: Connection, mint: PublicKey, owner: PublicKey) {
+  const ctx = await hookwars.fetchWarContext(conn, mint).catch(() => null);
+  if (!ctx) throw new PrepareError(404, 'NoSuchToken', 'This is not a token on this cluster.');
+  if (!ctx.raid) throw new PrepareError(409, 'NoRaidItem', 'This token has no Raid item equipped, so its holdings keep no raid points.');
+  const slot = await hookwars.fetchSlot(conn, mint, ctx.raid.slot);
+  const extras = await hookwars.fetchTouchExtras(conn, mint, slot, owner);
+  return { orders: ctx.orders, raid: ctx.raid, extras };
+}
 
 export async function deployed(conn: Connection, names: (keyof typeof PROGRAM_IDS)[]): Promise<string[]> {
   const keys = names.map((x) => new PublicKey(PROGRAM_IDS[x]));
