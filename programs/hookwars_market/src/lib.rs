@@ -88,15 +88,13 @@ fn upgrade_authority(program_data: &AccountInfo) -> Result<Option<Pubkey>> {
 /// The slot `slot` of the units slot mint `info`.
 fn read_slot(info: &AccountInfo, slot: u8) -> Result<bordrless_token::state::Slot> {
     let m = Box::new(bordrless_token::client::read_mint(info)?);
+    require!(slot < m.slot_count, MarketError::NoSuchSlot);
     let s = m
         .slots
         .get(usize::from(slot))
         .copied()
         .ok_or(MarketError::NoSuchSlot)?;
-    require!(
-        s.kind != bordrless_hook::slot_kind::LOCKED && usize::from(slot) < m.slots.len(),
-        MarketError::NoSuchSlot
-    );
+    require!(s.kind != bordrless_hook::slot_kind::LOCKED, MarketError::NoSuchSlot);
     Ok(s)
 }
 

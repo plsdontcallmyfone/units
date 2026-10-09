@@ -542,3 +542,123 @@ listings; the armory reads template 42 to 45 kinds). Wave 3 waits for wave 2's a
 (coalition and rivalry items equip through it). Each lane follows the house rules: build and test
 on the build server under `/root/build.lock`, own worktree and branch, no em dashes, no invented
 numbers, every parameter to set.
+
+## 16. Expansion implementation notes (branch expand, 2026-10-09)
+
+Built: `programs/hookwars_market` (id `FikEwNXoXqRWteX4kpCT8dJ34o8hWQ8w49whhZiqS2vv`),
+`programs/hookwars_social` (id `CKf4SjuiYxy4C2eSjk6oSQb2AnqC3ADoDTm8d323jWAx`), templates 43
+Coalition, 44 Boss, 45 Rivalry in `programs/hookwars_items/src/templates/{coalition,boss,rivalry}.rs`
+with their shapes, rules and manifests in `crates/hookwars-common` and their dispatch lines in
+`templates/mod.rs`. Tests: `tests/market.rs` (10), `tests/social.rs` (5),
+`tests/templates_expansion.rs` (4), `tests/budgets_expansion.rs` (2), all on server B with the full
+suite green.
+
+Where the build differs from the text above:
+
+1. **Market parameters** live in `MarketConfig.params` (`MarketParams`), set at `init` by the
+   program's upgrade authority and changed only by `propose_params` then `apply_params` after
+   `admin_timelock_secs` (also a field). The treasury is changed the same way.
+2. **Item tokens leave the escrows by an ordinary `transfer` signed by the escrow PDA**, not
+   `transfer_from_protocol`: item mints are plain units mints (no hook, 02 2.5), so no slot runs
+   and R16 does not apply. The same holds for guild token spends of hookless mints; a guild
+   treasury spend of a slot mint runs that mint's slots like any transfer (see request I-1).
+3. **Commissions have no `nominate`.** Holders propose the submitted item through the armory's own
+   `propose` (02 6). `pay_commission` checks the outcome on chain instead: after `closes_at`, the
+   commission's slot in the token's `Mint` holds the submitted item and it is not the item that was
+   there when the commission opened (`Commission.incumbent`). It pays the vault's whole balance
+   (the bounty, plus anything sent to the vault), so nothing is stranded. "Fits the slot" is the
+   slot kind equal to the item's manifest kind; the armory's full `check_fits` still runs at
+   equip.
+4. **`end_lease` only returns the item.** Reverting the slot (if the item is still equipped there)
+   needs the armory (request I-3). Until then a token keeps running an item whose lease ended; the
+   lessor receives future royalties again because the royalty follows the holder (R31).
+5. **Collections** take their template accounts as remaining accounts and check each is an active
+   armory `Template`; ids come from `MarketConfig.collections`.
+6. **Badges are frozen holdings until template 42 lands.** A badge mint is a plain units mint
+   whose mint and freeze authority is `["badge-minter"]`; `claim_badge` mints 1 and freezes the
+   holding in the same instruction, so the token program refuses every transfer and burn of it
+   (`Frozen`). 10 3.5's "burning a badge works" therefore does not hold yet (request I-2).
+7. **Badge criteria built:** `FirstSiege { mint }` (war chest has `spent_siege > 0`; awarded to the
+   token's war chest), `RaidPoints { mint, min }` (a plain Raid item's range in the wallet's
+   holding, epoch byte checked, this season per `WarConfig`), `ForgeLevel { min_level }` (the
+   wallet holds an item of that level). `Streak`, `ItemsAuthored` and `RoyaltiesClaimed` need
+   counters or templates not built yet (requests I-4, I-5). A new badge's claims open
+   `admin_timelock_secs` after `create_badge`, so it is public before anyone can earn it.
+8. **Guild actions** are one account type, `GuildAction { SpendSol | SpendToken | SetOfficers }`,
+   each executable after `guild_timelock_secs` with the threshold of approvals; an officer change
+   bumps `officers_version` and voids pending actions (`StaleAction`). The proposer's approval is
+   counted.
+9. **Agent leagues** have no on-chain part: 10 section 7's default is a site table with no prize.
+10. **Boss** counts per source mint in the boss token's `RaidLedger` inbound table with the item's
+    window (`params[0]`, set to the season length) and adds every counted buy to the ledger's
+    season total. The table holds `RAID_TABLE_LEN` sources per window; a ninth live source is not
+    recorded (request I-6). A source counts only when the route's first pool is the source mint's
+    canonical launch pool (a PDA of the mint), so no attacker-made pool can stand in (review 1 M-5).
+11. **Coalition and Rivalry** are config items with no callbacks; `coalition::read` and
+    `rivalry::{read, live}` are what war will call. They are not composable.
+12. Events use `emit_cpi!` (self-CPI) like the other non-item programs.
+
+Measured (`budgets_expansion.rs`, LiteSVM, one lookup table holding every account):
+
+| Path | Keys | v0 bytes | With table | Trace | Height | CU |
+| --- | --- | --- | --- | --- | --- | --- |
+| market list | 13 | 567 | 291 | 9 | 3 | 60,588 |
+| market buy | 16 | 659 | 290 | 11 | 3 | 61,249 |
+| market offer_lease | 15 | 664 | 326 | 9 | 3 | 70,436 |
+| market accept_lease | 7 | 353 | 263 | 4 | 2 | 9,597 |
+| market end_lease | 13 | 551 | 275 | 6 | 3 | 54,353 |
+| market open_commission | 9 | 473 | 321 | 5 | 2 | 24,484 |
+| market submit | 11 | 485 | 271 | 4 | 2 | 26,031 |
+| market pay_commission | 10 | 451 | 268 | 4 | 2 | 17,031 |
+| social create_badge | 10 | 463 | 280 | 7 | 3 | 36,927 |
+| social claim_badge (forge level) | 14 | 621 | 314 | 11 | 3 | 77,444 |
+| social create_guild | 7 | 365 | 275 | 4 | 2 | 17,791 |
+| social deposit_sol | 7 | 361 | 271 | 4 | 2 | 9,804 |
+| social propose_action | 8 | 427 | 306 | 4 | 2 | 20,376 |
+| social execute_action (SOL) | 11 | 484 | 270 | 4 | 2 | 15,154 |
+
+## 17. Integration requests (from branch expand)
+
+Changes the expansion needs in programs this branch does not own, written so the owning lane can
+apply them as stated.
+
+- **I-1 token: add `<MARKET_ID>` and `<SOCIAL_ID>` to `PROTOCOL_SOURCE_PROGRAMS`**
+  (`programs/bordrless_token/src/constants.rs`), so a guild treasury (`["guild-treasury", id]`)
+  can pay out a slot mint without its own items cutting the spend (R16, R24). Then switch
+  `hookwars_social::execute_action`'s `SpendToken` to `transfer_from_protocol` with seeds
+  `["guild-treasury", id le, bump]`.
+- **I-2 items/agents: template 42 Soulbound.** When it lands, `create_badge` creates the badge mint
+  with `create_slot_mint` and a Locked Soulbound slot instead of a frozen-holding mint; keep the
+  freeze until then. Badges then burn as 10 3.5 says.
+- **I-3 armory: `revert_for_lease_end(token_mint, slot)`**, callable by `hookwars_market` signing
+  as `["lease-escrow", item_mint]` (or a dedicated `["market-caller"]` PDA under `<MARKET_ID>`):
+  settle the slot, then revert it to its launch item or empty, exactly like a performance revert.
+  `end_lease` then CPIs it before returning the token. **Equip gate:** `propose` and `execute`
+  refuse an item whose token sits in `["lease-escrow", item_mint]` under `<MARKET_ID>` unless the
+  item's `["lease", item]` (owner `<MARKET_ID>`) is `Active` and names this `(token_mint, slot)`
+  (`ItemLeasedElsewhere`). Read `Lease` with `hookwars_market::state::Lease`.
+- **I-4 armory: R31 claim refusal while listed.** `claim_royalty` refuses (`ItemListed`) when the
+  item's holder holding owner is `["escrow", item_mint]` under `<MARKET_ID>`
+  (`hookwars_market::state::escrow_address`).
+- **I-5 armory: counters for badges.** `AuthorCounter` at `["authored", wallet]` (bumped by
+  `create_item`) and `ClaimCounter` at `["claimed", wallet]` (lamports per cut mint, bumped by
+  `claim_royalty`); social then adds `ItemsAuthored` and `RoyaltiesClaimed` criteria. `Streak`
+  waits for template 26.
+- **I-6 items: a boss ledger** if the boss must count more than `RAID_TABLE_LEN` sources per
+  season: a `BossLedger` at `["boss-ledger", mint]` under items with a larger table, created by a
+  permissionless `init_boss_ledger`; Boss's extras then name it instead of the `RaidLedger`.
+- **I-7 items settle: lease rent.** `settle_equip` reads `["lease", item]` under `<MARKET_ID>`
+  (derived extra, R22) when the item's token sits in its lease escrow and pays
+  `floor(royalty * rent_bps / 10_000)` of the royalty to `Lease.lessor` (R32), the rest as usual.
+- **I-8 items settle: template author share** (R34) once the armory stores
+  `template_author_bps` on submitted templates.
+- **I-9 war: coalitions, boss pool, rivalry budgets** (10 sections 8, 11.1, 11.3) reading items
+  43 to 45 with `hookwars_items::templates::{coalition, rivalry}` and the boss's `RaidLedger`
+  (`inbound` per source, `outbound_volume_season` total, season `season_id`); `claim_boss_share`
+  pays each source's war chest `boss_pool * source_volume / total_volume`, once per source per
+  season.
+- **I-10 armory: seasonal meta (11.2), lineage (2), Hook Lab submissions (11.5), `expire_treaty`
+  (9)** as specified; none needs market or social changes.
+- **I-11 kit: R35 chest markers (12.2)** as specified.
+- **I-12 app:** IDLs of `hookwars_market` and `hookwars_social` (`programs.sh idl`), decoders for
+  their accounts and events, and prepares for every instruction above.
