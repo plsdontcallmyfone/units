@@ -248,6 +248,7 @@ fn armory_execute_and_forge() {
     hw.give_item(&other, &b_mint, &forger.pubkey());
     let (ix, _) = hw.forge_ix(&forger.pubkey(), &a, &b);
     measure(&mut hw.w, "forge, two Raid items", &forger, ix);
+}
 
 /// Hookwars M3a: what a multi-hop route costs (`swap_route`, spec 03 section 3.3): 2 and 3 hops of
 /// plain pools, and 2 hops whose last delivery is a slot mint with 3 cutting items. Also the
