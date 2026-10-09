@@ -222,7 +222,9 @@ fn after_launch<'info>(
 ) -> Result<(Pubkey, Pubkey, i64)> {
     // The launch as created: its creator this companion's, no custom hook (not supported yet), no
     // config author paid (their claims would pay the companion outside its steps).
-    let launch = Account::<Launch>::try_from(&remaining[LAUNCH_AT])?;
+    let info = &remaining[LAUNCH_AT];
+    require_keys_eq!(*info.owner, bordrless_launch::ID, ErrorCode::AccountOwnedByWrongProgram);
+    let launch = Launch::try_deserialize(&mut &info.try_borrow_data()?[..])?;
     require_keys_eq!(launch.creator, creator, CompanionError::WrongCreator);
     require!(
         launch.custom_hook.is_none(),

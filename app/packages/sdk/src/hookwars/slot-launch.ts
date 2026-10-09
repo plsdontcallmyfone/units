@@ -106,10 +106,12 @@ export function equipPrepared(creator: PublicKey, mint: PublicKey, armoryIx: Tra
 
 /** Step 3, `create_prepared_launch`: upstream `create_launch`'s accounts, then the prepared launch,
  * the `PoolCuts` owner and holding, then `slices` (the mint's transfer slices, for the deposit). */
-export function createPreparedLaunch(creator: PublicKey, mint: PublicKey, treasury: PublicKey, quoteMint: PublicKey, lpFeeBps: number, args: CreateLaunchArgs, slices: AccountMeta[]): TransactionInstruction {
+// Changed by Hookwars (security review 2 L-D): the forwarded slots' item registries follow the
+// PoolCuts holding, so the launch writes the whole pool registry itself.
+export function createPreparedLaunch(creator: PublicKey, mint: PublicKey, treasury: PublicKey, quoteMint: PublicKey, lpFeeBps: number, args: CreateLaunchArgs, itemRegistries: PublicKey[], slices: AccountMeta[]): TransactionInstruction {
   const base = upLaunch.createLaunch(creator, mint, treasury, quoteMint, lpFeeBps, args);
   const pc = poolCutsAddress(mint);
-  const keys = [...base.keys, rw(preparedLaunchAddress(mint)), ro(pc), rw(holdingAddr(quoteMint, pc)), ...slices];
+  const keys = [...base.keys, rw(preparedLaunchAddress(mint)), ro(pc), rw(holdingAddr(quoteMint, pc)), ...itemRegistries.map(ro), ...slices];
   const step = idlIx('launch', 'create_prepared_launch', {}, { args }).data;
   return new TransactionInstruction({ programId: LAUNCH_ID, keys, data: step });
 }

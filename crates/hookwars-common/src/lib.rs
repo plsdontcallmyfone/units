@@ -564,6 +564,9 @@ pub fn manifest(id: u16, p: &Params, max_targets: u8) -> core::result::Result<Ma
         template_id::SELL_BURN => {
             m.pool_flags = pool_flags::BEFORE_SWAP;
             m.may_burn = true;
+            // Changed by Hookwars (security review 2 L-E): the burn rate counts as the sell-side
+            // worst case, so the armory's `max_pool_item_cut_bps` caps it at every equip.
+            m.max_cut_sell_bps = bps(p[0]);
         }
         _ => {}
     }

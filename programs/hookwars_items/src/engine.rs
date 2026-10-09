@@ -293,11 +293,11 @@ pub fn pool<'info>(
     l.state.pool_owed = l.state.pool_owed.checked_add(answer.cut).ok_or(ItemsError::Overflow)?;
     l.state.runs = l.state.runs.saturating_add(1);
     l.save()?;
-    if answer != ItemPoolAnswer::default() {
-        let mut v = Vec::new();
-        answer.serialize(&mut v)?;
-        set_return_data(&v);
-    }
+    // Changed by Hookwars: always answer, the default too (security review 2 H-A): the runtime
+    // resets return data at every invocation, so a silent callback left the launchpad nothing.
+    let mut v = Vec::new();
+    answer.serialize(&mut v)?;
+    set_return_data(&v);
     Ok(())
 }
 

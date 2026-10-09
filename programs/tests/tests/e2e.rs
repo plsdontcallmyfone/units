@@ -170,6 +170,7 @@ fn launch_token(hw: &mut Hw, creator: &Keypair, slots: Vec<SlotInit>, equips: Ve
         hw.w.sol,
         policy::LP_FEE_BPS,
         args,
+        pool_registries(hw, &mint),
         items_extras(hw, &mint, SlotOp::Transfer),
     );
     send(&mut hw.w.env, &[ix], creator, &[&mint_kp]).ok();
@@ -289,7 +290,7 @@ fn two_launches(hw: &mut Hw, creator: &Keypair) -> Tokens {
         creator,
         vec![
             module(T::SIZE_TIERS, params(&tiers_p), 0, 0),
-            module(T::SELL_BURN, params(&[250]), 0, 0),
+            module(T::SELL_BURN, params(&[100]), 0, 0),
         ],
         500,
     );
@@ -303,7 +304,7 @@ fn two_launches(hw: &mut Hw, creator: &Keypair) -> Tokens {
     let raid = hw.item(T::RAID, params(&[2_000, 100, 3]), 1_000).1;
     let shield = hw.item(T::SHIELD, params(&[300, 3_600, 0]), 0).1;
     let tiers = hw.item(T::SIZE_TIERS, params(&tiers_p), 0).1;
-    let burn = hw.item(T::SELL_BURN, params(&[250]), 0).1;
+    let burn = hw.item(T::SELL_BURN, params(&[100]), 0).1;
     let target = launch_token(
         hw,
         creator,
@@ -593,6 +594,7 @@ fn a_companion_makes_a_slot_launch_through_launch_slots() {
         hw.w.sol,
         policy::LP_FEE_BPS,
         cargs,
+        pool_registries(&hw, &mint),
         items_extras(&hw, &mint, SlotOp::Transfer),
     );
     let ixs = vec![
@@ -632,4 +634,146 @@ fn a_companion_makes_a_slot_launch_through_launch_slots() {
     buy(&mut hw, &trader, &mint, SOL).ok();
     assert!(equip_state(&hw, &mint, 0).pool_owed > 0, "the item cut the companion launch's buy");
     assert_pool_cuts(&hw, &mint);
+}
+
+// ---- security review 2 regressions on the real programs (Changed by Hookwars)
+
+/// The raid of `two_launches`: `raider` sells a quarter of its rival tokens on the rival's own
+/// launch pool and buys the target in one route.
+fn raid(hw: &mut Hw, t: &Tokens, raider: &Keypair) {
+    let me = raider.pubkey();
+    buy(hw, raider, &t.rival, 2 * SOL).ok();
+    let x = hw.w.env.holding(&t.rival, &me);
+    let ixs = [
+        token::create_holding(me, t.target, me),
+        swap::swap_route(
+            me,
+            x / 4,
+            0,
+            vec![launch_hop(hw, &me, &t.rival, 0), launch_hop(hw, &me, &t.target, 1)],
+            vec![],
+        ),
+    ];
+    send(&mut hw.w.env, &ixs, raider, &[]).ok();
+}
+
+#[test]
+fn h_a_a_token_with_raid_and_shield_items_trades_both_ways() {
+    // Raid and Shield answer the default on a plain buy and a plain sell (review 2 H-A).
+    let mut hw = world();
+    let creator = hw.w.env.funded(1_000 * SOL);
+    let t = two_launches(&mut hw, &creator);
+    let trader = hw.w.env.funded(100 * SOL);
+    hw.w.wrap_sol(&trader, 10 * SOL).ok();
+    buy(&mut hw, &trader, &t.target, SOL / 2).ok();
+    let got = hw.w.env.holding(&t.target, &trader.pubkey());
+    assert!(got > 0);
+    sell(&mut hw, &trader, &t.target, got).ok();
+    assert_eq!(equip_state(&hw, &t.target, 0).pool_owed, 0, "no raid, no Raid toll");
+    assert_eq!(equip_state(&hw, &t.target, 1).pool_owed, 0, "no raided tokens, no Shield cut");
+    assert_pool_cuts(&hw, &t.target);
+}
+
+#[test]
+fn m_b_a_raid_sold_back_nets_out_of_the_season_volume() {
+    let mut hw = world();
+    let creator = hw.w.env.funded(1_000 * SOL);
+    let t = two_launches(&mut hw, &creator);
+    let raider = hw.w.env.funded(100 * SOL);
+    hw.w.wrap_sol(&raider, 50 * SOL).ok();
+    raid(&mut hw, &t, &raider);
+    let counted = ledger(&hw, &t.target).outbound_volume_season;
+    assert!(counted > 0, "the raid counted");
+    assert!(raid_range(&hw, &t.target, &raider.pubkey(), 0).raid_points > 0);
+    // The wash: sell everything the raid bought back into the target's pool.
+    let held = hw.w.env.holding(&t.target, &raider.pubkey());
+    sell(&mut hw, &raider, &t.target, held).ok();
+    assert_eq!(ledger(&hw, &t.target).outbound_volume_season, 0, "a round trip counts nothing");
+    // A second raid that is kept counts again.
+    raid(&mut hw, &t, &raider);
+    assert!(ledger(&hw, &t.target).outbound_volume_season > 0);
+    assert_pool_cuts(&hw, &t.target);
+}
+
+#[test]
+fn l_b_the_raid_origin_follows_tokens_to_an_off_curve_owner() {
+    let mut hw = world();
+    let creator = hw.w.env.funded(1_000 * SOL);
+    let t = two_launches(&mut hw, &creator);
+    let raider = hw.w.env.funded(100 * SOL);
+    hw.w.wrap_sol(&raider, 50 * SOL).ok();
+    raid(&mut hw, &t, &raider);
+    let held = hw.w.env.holding(&t.target, &raider.pubkey());
+    let vault_owner = Pubkey::find_program_address(&[b"review2"], &ids::ITEMS_ID).0;
+    assert!(!vault_owner.is_on_curve());
+    transfer(&mut hw, &raider, &t.target, &vault_owner, held / 2).ok();
+    let h: Holding = hw.w.env.read(&pda::holding(&t.target, &vault_owner));
+    let m: Mint = hw.w.env.read(&t.target);
+    let range = read_range(&h.hook_data, &m.slots[1]);
+    assert_eq!(range[0], 0x02, "the Shield range was written");
+    assert_eq!(range[1], 1, "with the raid's origin (target 0)");
+}
+
+#[test]
+fn m_a_and_l_c_stray_tokens_and_a_missing_destination_do_not_freeze_a_slot() {
+    // Transfer Fee (10%) to the creator. A stranger sends tokens straight to the slot's equip
+    // vault; settling burns what no module recorded (M-A). The creator's holding does not exist at
+    // first, so that module stays owed and the rest settles (L-C); once it exists, all settles and
+    // the vault is empty, which is what `close_equip` requires.
+    let mut hw = world();
+    let creator = hw.w.env.funded(1_000 * SOL);
+    let fee = hw.item(T::TRANSFER_FEE, params(&[1_000, 0]), 0).1;
+    let mint = launch_token(
+        &mut hw,
+        &creator,
+        vec![slot(slot_kind::FEE, 5_000, 0, false, false)],
+        vec![(0, fee, vec![creator.pubkey()])],
+    );
+    let trader = hw.w.env.funded(100 * SOL);
+    hw.w.wrap_sol(&trader, 10 * SOL).ok();
+    buy(&mut hw, &trader, &mint, SOL).ok();
+    let got = hw.w.env.holding(&mint, &trader.pubkey());
+    let friend = hw.w.env.funded(SOL);
+    transfer(&mut hw, &trader, &mint, &friend.pubkey(), got / 2).ok();
+    let state = pda::equip_state(&mint, 0).0;
+    let recorded = equip_state(&hw, &mint, 0).token_unsettled[0];
+    assert!(recorded > 0);
+    let vault = pda::holding(&mint, &state);
+    let before = hw.w.env.holding(&mint, &state);
+    assert_eq!(before, recorded);
+    // The donation: a raw transfer into the vault.
+    let donate = token::transfer_with(
+        friend.pubkey(),
+        token::holding_address(&mint, &friend.pubkey()),
+        vault,
+        mint,
+        None,
+        items_extras(&hw, &mint, SlotOp::Transfer),
+        1_000,
+    );
+    hw.w.env.send_paid_by(&[donate], &friend, &[]).ok();
+    let recorded = equip_state(&hw, &mint, 0).token_unsettled[0];
+    let stray = hw.w.env.holding(&mint, &state) - recorded;
+    assert!(stray > 0, "the donation sits unrecorded in the vault");
+    let supply0 = {
+        let m: Mint = hw.w.env.read(&mint);
+        m.supply
+    };
+    let cranker = hw.w.env.funded(SOL);
+    let dests = [(pda::holding(&mint, &creator.pubkey()), ids::ITEMS_ID)];
+    let ix = settle_ix(&hw, &cranker.pubkey(), &mint, 0, &dests);
+    send(&mut hw.w.env, &[ix], &cranker, &[]).ok();
+    let m: Mint = hw.w.env.read(&mint);
+    assert_eq!(m.supply, supply0 - stray, "the stray tokens were burned");
+    assert_eq!(equip_state(&hw, &mint, 0).token_unsettled[0], recorded, "no destination yet: still owed");
+    assert_eq!(hw.w.env.holding(&mint, &state), recorded);
+    // The destination appears; the next settle pays it and empties the vault.
+    hw.w.env
+        .send_paid_by(&[token::create_holding(cranker.pubkey(), mint, creator.pubkey())], &cranker, &[])
+        .ok();
+    let ix = settle_ix(&hw, &cranker.pubkey(), &mint, 0, &dests);
+    send(&mut hw.w.env, &[ix], &cranker, &[]).ok();
+    assert_eq!(equip_state(&hw, &mint, 0).token_unsettled[0], 0);
+    assert_eq!(hw.w.env.holding(&mint, &state), 0, "the vault is empty: the slot can close");
+    assert!(hw.w.env.holding(&mint, &creator.pubkey()) > 0);
 }

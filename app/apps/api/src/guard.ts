@@ -57,7 +57,12 @@ export async function readJsonBody(req: IncomingMessage, max = MAX_BODY_BYTES): 
  * (RATE_PREPARE_CAPACITY and friends), not protocol parameters. */
 export class RateLimiter {
   private readonly buckets = new Map<string, { tokens: number; at: number }>();
-  constructor(readonly capacity: number, readonly perSecond: number, private readonly now: () => number = Date.now) {}
+  readonly capacity: number;
+  readonly perSecond: number;
+  private readonly now: () => number;
+  constructor(capacity: number, perSecond: number, now: () => number = Date.now) {
+    this.capacity = capacity; this.perSecond = perSecond; this.now = now;
+  }
   take(key: string): boolean {
     const t = this.now();
     const b = this.buckets.get(key) ?? { tokens: this.capacity, at: t };

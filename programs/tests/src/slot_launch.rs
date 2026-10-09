@@ -1,4 +1,5 @@
-// Changed by Hookwars: new file, slot launch helpers (M3b).
+// Changed by Hookwars: new file, slot launch helpers (M3b); security review 2 L-D: the stub's item
+// registry is written at equip, and `create_prepared_launch` takes the forwarded slots' registries.
 //! Slot launches in the LiteSVM suites (spec 03 section 4.3): `prepare_launch`, equipping (by
 //! `armory_stub` signing as the mint's slot authority for test pool items, or the real armory
 //! through `equip_prepared`), `create_prepared_launch`, swaps that carry the pool items' accounts,
@@ -109,6 +110,23 @@ pub fn pool_items_of(w: &World, mint: &Pubkey) -> Vec<AccountMeta> {
     v
 }
 
+/// The item registries of a mint's forwarded slots, in slot order (`create_prepared_launch` and
+/// `refresh_pool_registry` take them).
+pub fn item_registries(w: &World, mint: &Pubkey) -> Vec<Pubkey> {
+    let m: Mint = w.env.read(mint);
+    m.active_slots()
+        .iter()
+        .filter(|s| bordrless_launch::instructions::forwards(s))
+        .map(|s| {
+            Pubkey::find_program_address(
+                &[bordrless_hook::HOOK_ACCOUNTS_SEED, mint.as_ref(), s.item.as_ref()],
+                &s.program,
+            )
+            .0
+        })
+        .collect()
+}
+
 impl World {
     /// A world with the slot test programs (`slot_tester`, `armory_stub`) and `pool_item_stub`.
     pub fn with_slot_launches() -> Self {
@@ -171,6 +189,7 @@ impl World {
             self.sol,
             policy::LP_FEE_BPS,
             args,
+            item_registries(self, mint),
             self.prepared_slices(mint),
         )
     }
@@ -258,6 +277,29 @@ impl World {
         item: &Pubkey,
         pool_flags: u16,
     ) -> Tx {
+        // The stub keeps no registry; the real items program writes one at `init_equip`, so the
+        // stub's (its one extra, the script) is written here.
+        let (registry, _) = Pubkey::find_program_address(
+            &[bordrless_hook::HOOK_ACCOUNTS_SEED, mint.as_ref(), item.as_ref()],
+            &pool_item_stub::ID,
+        );
+        let list = bordrless_hook::HookAccountList::new(vec![bordrless_hook::ExtraAccount {
+            writable: true,
+            source: bordrless_hook::AccountSource::Key(pool_item_stub::script_address(item)),
+        }]);
+        self.env
+            .svm
+            .set_account(
+                registry,
+                solana_account::Account {
+                    lamports: 10_000_000,
+                    data: list.encode(),
+                    owner: pool_item_stub::ID,
+                    executable: false,
+                    rent_epoch: 0,
+                },
+            )
+            .unwrap();
         let ix = token::set_slot_item(
             authority_of(mint),
             *mint,

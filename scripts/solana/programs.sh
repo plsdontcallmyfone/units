@@ -54,9 +54,18 @@ cmd_build() {
     [[ -d "$ROOT/programs/$program" ]] || die "no such program: $program"
     echo "==> cargo build-sbf $program"
     rm -f "$DEPLOY_DIR/$program.so"
+    # Changed by Hookwars (security review 2 L-F): a stack frame over 4,096 bytes fails the build.
+    local log status=0
+    log="$(mktemp)"
     cargo build-sbf --tools-version "$TOOLS_VERSION" --arch "$SBF_ARCH" \
       --manifest-path "$ROOT/programs/$program/Cargo.toml" \
-      --sbf-out-dir "$DEPLOY_DIR" -- --locked
+      --sbf-out-dir "$DEPLOY_DIR" -- --locked 2>&1 | tee "$log" || status=$?
+    if grep -q "overflows the maximum allowed frame space" "$log"; then
+      rm -f "$log"
+      die "$program: a function overflows the 4,096-byte stack frame (see the build output)"
+    fi
+    rm -f "$log"
+    [[ "$status" == 0 ]] || die "$program: cargo build-sbf failed"
     ls -la "$DEPLOY_DIR/$program.so"
   done
 }

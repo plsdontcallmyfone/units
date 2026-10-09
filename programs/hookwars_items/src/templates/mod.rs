@@ -94,6 +94,8 @@ pub fn extras(template: u16, mint: &Pubkey, targets: &[Pubkey]) -> Vec<(Pubkey, 
                 v.push(launch(r));
                 v.push((launch_pool_address(r), false));
             }
+            // Changed by Hookwars (security review 2 L-A): the armory config, for `min_twap_secs`.
+            v.push((pda::config().0, false));
         }
         t::TREATY | t::TRIBUTE => {
             for p in targets {
@@ -117,7 +119,7 @@ pub fn extra_count(template: u16, targets: usize) -> usize {
         t::RAID => 3 + targets,
         t::SHIELD => 4 + targets,
         t::WALL => 1,
-        t::SPY => 2 * targets,
+        t::SPY => 2 * targets + 1,
         t::TREATY | t::TRIBUTE => targets * (1 + bordrless_token::constants::MAX_SLOTS),
         t::HALF_LIFE | t::TRANSFER_FEE | t::LAUNCH_DECAY | t::MAX_TRANSACTION | t::DUST_GUARD => 1,
         _ => 0,

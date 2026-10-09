@@ -295,19 +295,44 @@ pub fn process_refresh_pool_registry<'info>(
     let pool_cuts =
         bordrless_token::client::holding_address(&launch.quote_mint, &pool_cuts_owner);
     let mut list = slot_registry_list(launch.holder_vault, launch.kit_config, pool_cuts);
+    let items = append_pool_items(&mut list, &mint, &launch.mint, ctx.remaining_accounts)?;
+    rewrite_registry(
+        &ctx.accounts.payer.to_account_info(),
+        &ctx.accounts.registry.to_account_info(),
+        &ctx.accounts.system_program.to_account_info(),
+        &list,
+        bump,
+    )?;
+    emit_cpi!(PoolRegistryRefreshed {
+        mint: launch.mint,
+        pool: launch.pool,
+        items,
+        accounts: list.accounts.len() as u16,
+        ts: Clock::get()?.unix_timestamp,
+    });
+    Ok(())
+}
+
+/// Changed by Hookwars (security review 2 L-D): the forwarded slots' part of a slot launch's pool
+/// registry, shared by `refresh_pool_registry` and `create_prepared_launch` (which now writes the
+/// full registry, so no swap reverts between the launch and a refresh). `infos` are the items'
+/// registries, one per forwarded slot in slot order, and nothing else.
+pub fn append_pool_items(
+    list: &mut HookAccountList,
+    mint: &bordrless_token::state::Mint,
+    launch_mint: &Pubkey,
+    infos: &[AccountInfo],
+) -> Result<Vec<Pubkey>> {
     let mut items = Vec::new();
     let mut r = 0usize;
     for s in mint.active_slots() {
         if !forwards(s) {
             continue;
         }
-        let info = ctx
-            .remaining_accounts
-            .get(r)
-            .ok_or(LaunchError::ItemAccountsMissing)?;
+        let info = infos.get(r).ok_or(LaunchError::ItemAccountsMissing)?;
         r += 1;
         let (expected, _) = Pubkey::find_program_address(
-            &[HOOK_ACCOUNTS_SEED, launch.mint.as_ref(), s.item.as_ref()],
+            &[HOOK_ACCOUNTS_SEED, launch_mint.as_ref(), s.item.as_ref()],
             &s.program,
         );
         require_keys_eq!(*info.key, expected, LaunchError::StaleRegistry);
@@ -331,25 +356,13 @@ pub fn process_refresh_pool_registry<'info>(
         list.accounts.extend(item_list.accounts);
         items.push(s.item);
     }
-    require!(
-        r == ctx.remaining_accounts.len(),
-        LaunchError::StaleRegistry
-    );
-    rewrite_registry(
-        &ctx.accounts.payer.to_account_info(),
-        &ctx.accounts.registry.to_account_info(),
-        &ctx.accounts.system_program.to_account_info(),
-        &list,
-        bump,
-    )?;
-    emit_cpi!(PoolRegistryRefreshed {
-        mint: launch.mint,
-        pool: launch.pool,
-        items,
-        accounts: list.accounts.len() as u16,
-        ts: Clock::get()?.unix_timestamp,
-    });
-    Ok(())
+    require!(r == infos.len(), LaunchError::StaleRegistry);
+    Ok(items)
+}
+
+/// How many slots of `mint` the launch pool forwards to (one item registry each).
+pub fn forwarded_count(mint: &bordrless_token::state::Mint) -> usize {
+    mint.active_slots().iter().filter(|s| forwards(s)).count()
 }
 
 /// Rewrites a registry this program owns with `list`, growing or shrinking it (the payer pays the

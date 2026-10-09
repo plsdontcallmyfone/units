@@ -89,7 +89,7 @@ export const PREPARES: Record<string, PrepareDef> = {
       const state = hookwars.equipStateCodec.decode(st.data) as { item: PublicKey; config: { targets: PublicKey[] } };
       const itemInfo = await conn.getAccountInfo(state.item, 'confirmed');
       if (!itemInfo) throw new PrepareError(409, 'NoItem', 'The equipped item no longer exists.');
-      const item = hookwars.itemCodec.decode(itemInfo.data) as { templateId: number; manifest: { tokenFlags: number } };
+      const item = hookwars.itemCodec().decode(itemInfo.data) as { templateId: number; manifest: { tokenFlags: number } };
       const composite = item.templateId === 41;
       const modules: { templateId: number; targets: PublicKey[] }[] = composite
         ? (await compositeModules(conn, state.item)).map((m) => ({ templateId: m.templateId, targets: state.config.targets.slice(m.targetStart, m.targetStart + m.targetCount) }))
@@ -229,16 +229,6 @@ async function raidContext(conn: Connection, mint: PublicKey, owner: PublicKey) 
   return { orders: ctx.orders, raid: ctx.raid, extras };
 }
 
-/** The War orders, the Raid slot and its touch extras for `owner` (a war step that spends raid points). */
-async function raidContext(conn: Connection, mint: PublicKey, owner: PublicKey) {
-  const ctx = await hookwars.fetchWarContext(conn, mint).catch(() => null);
-  if (!ctx) throw new PrepareError(404, 'NoSuchToken', 'This is not a token on this cluster.');
-  if (!ctx.raid) throw new PrepareError(409, 'NoRaidItem', 'This token has no Raid item equipped, so its holdings keep no raid points.');
-  const slot = await hookwars.fetchSlot(conn, mint, ctx.raid.slot);
-  const extras = await hookwars.fetchTouchExtras(conn, mint, slot, owner);
-  return { orders: ctx.orders, raid: ctx.raid, extras };
-}
-
 /** A composite's modules (`["composite", item]` under the armory). */
 async function compositeModules(conn: Connection, item: PublicKey): Promise<{ templateId: number; targetStart: number; targetCount: number }[]> {
   const key = PublicKey.findProgramAddressSync([Buffer.from('composite'), item.toBuffer()], new PublicKey(PROGRAM_IDS.armory))[0];
@@ -316,10 +306,14 @@ async function launchStages(b: Body, conn: Connection): Promise<Stage[]> {
     };
   });
   const uri = String(b.uri ?? '');
+  // Changed by Hookwars: two phases. The launch's deposit slices and the pool items' registries
+  // exist only once the equips have landed, so `phase: "launch"` is a second call made after the
+  // first phase's transactions confirm (the site does this; security review 2 L-D).
+  if (b.phase === 'launch') return launchPhase(conn, owner, mint, { name, symbol, uri, creatorFeeBps, virtualQuote, rules }, req);
+  if (b.phase !== undefined && b.phase !== 'prepare') throw new PrepareError(400, 'BadRequest', '"phase" is "prepare" or "launch".');
   const stages: Stage[] = [];
   stages.push({ label: 'Prepare the launch', ixs: [hookwars.prepareLaunch(owner, mint, { name, symbol, uri, creatorFeeBps, rules, slots })], extraSigners: ['mint'], simulate: true, tables: [] });
   const armory = new PublicKey(PROGRAM_IDS.armory);
-  let raids = false;
   for (let i = 0; i < req.length; i++) {
     const r = req[i]!;
     if (!r.launchItem) continue;
@@ -327,20 +321,40 @@ async function launchStages(b: Body, conn: Connection): Promise<Stage[]> {
     try { item = new PublicKey(r.launchItem); } catch { throw new PrepareError(400, 'BadRequest', `slot ${i}: the launch item is not an address.`); }
     const info = await conn.getAccountInfo(item, 'confirmed');
     if (!info || !info.owner.equals(armory)) throw new PrepareError(409, 'NoItem', `slot ${i}: no such item on this cluster.`);
-    const it = hookwars.itemCodec.decode(info.data) as { templateId: number; manifest: { tokenFlags: number; poolFlags: number } };
-    if (it.templateId === 1 || it.templateId === 2) raids = true;
+    const it = hookwars.itemCodec().decode(info.data) as { templateId: number; manifest: { tokenFlags: number; poolFlags: number } };
     const targets = (r.targets ?? []).slice(0, MAX_TARGETS).map((x) => new PublicKey(x));
     const entry = { slot: i, item, config: { targets, role: 0 }, noticeSecs: Number.isInteger(r.noticeSecs) && r.noticeSecs >= 0 ? r.noticeSecs : 0, rule: null };
     const tokenCuts = (it.manifest.tokenFlags & 64) !== 0; const poolCuts = it.manifest.poolFlags !== 0;
     const eq = hookwars.equipLaunch(owner, mint, QUOTE, entry, { item, templateId: it.templateId, tokenCuts, poolCuts, composite: it.templateId === 41 });
     stages.push({ label: `Equip slot ${i}`, ixs: [hookwars.equipPrepared(owner, mint, eq)], extraSigners: [], simulate: false, tables: [] });
   }
-  // The launch: its accounts are too many for one legacy transaction, so it goes through a lookup
-  // table of its own, made and extended in the stages before it (audit A-6).
+  return stages;
+}
+
+/** The forwarded pool slots' item registries of a prepared mint, in slot order. */
+function poolItemRegistries(m: hookwars.SlotMintData, mint: PublicKey): PublicKey[] {
+  return hookwars.activeSlots(m)
+    .filter((s) => (s.kind === 4 || s.kind === 3) && (s.poolFlags & 3) !== 0 && !s.item.equals(PublicKey.default))
+    .map((s) => hookwars.slotRegistryAddress(s, mint));
+}
+
+/** The second phase: the mint's lookup table, the launch (deposit slices and pool registries read
+ * from the chain), then war state and raid ledger. */
+async function launchPhase(conn: Connection, owner: PublicKey, mint: PublicKey, args: { name: string; symbol: string; uri: string; creatorFeeBps: number; virtualQuote: bigint; rules: ReturnType<typeof launchRulesFromInput> }, req: SlotRequest[]): Promise<Stage[]> {
+  const mintInfo = await conn.getAccountInfo(mint, 'confirmed');
+  if (!mintInfo) throw new PrepareError(409, 'NotPrepared', 'Prepare the launch first: this mint does not exist yet.');
+  const m = hookwars.decodeSlotMint(mintInfo.data);
   const cfg = await conn.getAccountInfo(LAUNCH_CONFIG, 'confirmed');
   if (!cfg) throw new PrepareError(409, 'NoLaunchConfig', 'The launchpad has no config on this cluster yet.');
   const treasury = decodeLaunchConfig(cfg.data).treasury;
-  const create = hookwars.createPreparedLaunch(owner, mint, treasury, QUOTE, LP_FEE_BPS, { name, symbol, uri, creatorFeeBps, virtualQuote, rules }, []);
+  const pool = launchPoolAddress(mint, QUOTE, LP_FEE_BPS);
+  const launch = hookwars.launchAddr(mint);
+  const s = await hookwars.fetchTokenHookSlices(conn, { mint, source: holding(mint, launch), destination: holding(mint, pool), authority: launch, sourceOwner: launch, destinationOwner: pool });
+  if (!s) throw new PrepareError(409, 'NotPrepared', 'This mint is not a prepared slot launch.');
+  const create = hookwars.createPreparedLaunch(owner, mint, treasury, QUOTE, LP_FEE_BPS, args, poolItemRegistries(m, mint), hookwars.sliceAccounts(s));
+  const stages: Stage[] = [];
+  // The launch: its accounts are too many for one legacy transaction, so it goes through a lookup
+  // table of its own, made and extended in the stages before it (audit A-6).
   const recentSlot = await conn.getSlot('finalized');
   const [createTable, table] = AddressLookupTableProgram.createLookupTable({ authority: owner, payer: owner, recentSlot });
   const addrs: PublicKey[] = [];
@@ -353,10 +367,11 @@ async function launchStages(b: Body, conn: Connection): Promise<Stage[]> {
     extraSigners: [], simulate: false, tables: [],
   }));
   const local = new AddressLookupTableAccount({ key: table, state: { deactivationSlot: BigInt('18446744073709551615'), lastExtendedSlot: 0, lastExtendedSlotStartIndex: 0, authority: owner, addresses: addrs } });
-  stages.push({ label: 'Launch', ixs: [create], extraSigners: ['mint'], simulate: false, tables: [local] });
-  const after: TransactionInstruction[] = [hookwars.refreshPoolRegistry(owner, mint, QUOTE, LP_FEE_BPS, []), hookwars.initWar(owner, mint)];
+  stages.push({ label: 'Launch', ixs: [create], extraSigners: create.keys.some((k) => k.isSigner && k.pubkey.equals(mint)) ? ['mint'] : [], simulate: false, tables: [local] });
+  const raids = req.some((r) => r.templateId === 1 || r.templateId === 2);
+  const after: TransactionInstruction[] = [hookwars.initWar(owner, mint)];
   if (raids) after.push(hookwars.initRaidLedger(owner, mint));
-  stages.push({ label: 'Registry and war chest', ixs: after, extraSigners: [], simulate: false, tables: [] });
+  stages.push({ label: 'War chest', ixs: after, extraSigners: [], simulate: false, tables: [] });
   return stages;
 }
 
