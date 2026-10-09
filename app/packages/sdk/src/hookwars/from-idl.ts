@@ -14,6 +14,8 @@ import itemsIdl from '../../idl/hookwars_items.json' with { type: 'json' };
 import warIdl from '../../idl/hookwars_war.json' with { type: 'json' };
 import kitIdl from '../../idl/bordrless_kit.json' with { type: 'json' };
 import companionIdl from '../../idl/bordrless_companion.json' with { type: 'json' };
+import launchIdl from '../../idl/bordrless_launch.json' with { type: 'json' };
+import swapIdl from '../../idl/bordrless_swap.json' with { type: 'json' };
 
 /** The IDLs of the programs whose interfaces are final on main, by the program names the app uses. */
 export const IDLS: Record<string, Idl> = {
@@ -23,10 +25,12 @@ export const IDLS: Record<string, Idl> = {
   war: warIdl as unknown as Idl,
   kit: kitIdl as unknown as Idl,
   companion: companionIdl as unknown as Idl,
+  launch: launchIdl as unknown as Idl,
+  swap: swapIdl as unknown as Idl,
 };
 
 const coders = new Map<string, IdlCoder>();
-/** The IDL coder of a program (`token`, `armory`, `items`, `war`, `kit`, `companion`). */
+/** The IDL coder of a program (`token`, `armory`, `items`, `war`, `kit`, `companion`, `launch`, `swap`). */
 export function coderOf(program: string): IdlCoder {
   let c = coders.get(program);
   if (!c) {

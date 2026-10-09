@@ -9,3 +9,4 @@ export * from './idl.ts';
 export * from './from-idl.ts';
 export type * from './idl-types.gen.ts';
 export * from './war-context.ts';
+export * from './slot-launch.ts';

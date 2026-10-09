@@ -6,12 +6,10 @@
  *   IDL's seeds. Remaining accounts follow the programs' own Rust clients
  *   (`programs/hookwars_war/src/client.rs`: slices first, then the token program and its event
  *   authority, then the accounts of inner instructions).
- * - `swap_route`, `prepare_launch`, `refresh_pool_registry` (M3a, M3b) and the items program's
- *   `settle_equip` and `init_raid_ledger` (M3b) are not on main yet: their argument schemas follow
- *   the spec and are listed in INTEGRATION.md section 3.
+ * - Slot launches, `swap_route`, `settle_equip` and `init_raid_ledger` are in `slot-launch.ts`, from
+ *   the launchpad's, the DEX's and the items program's IDLs.
  */
 import { PublicKey, TransactionInstruction, type AccountMeta } from '@solana/web3.js';
-import { discriminator, encode, type Field, type Ty } from './codec.ts';
 import { idlIx } from './from-idl.ts';
 import {
   ITEMS_EVENT_AUTHORITY, ITEMS_ID, LAUNCH_ID, SWAP_ID, TOKEN_ID, TOKEN_ITEMS_SIGNER, WAR_ID,
@@ -35,48 +33,6 @@ export function accountsOf(ixs: TransactionInstruction[]): AccountMeta[] {
     out.push(ro(ix.programId));
   }
   return out;
-}
-
-// ---------------------------------------------------------------- spec-layout instructions (not on main) --
-
-const SLOT_BOUNDS: Ty = { struct: [['maxCutBps', 'u16'], ['mayRefuse', 'bool'], ['mayWriteData', 'bool'], ['mayAnswerTouch', 'bool']] };
-
-/** Argument schemas of the instructions still built from the spec (03 3.3, 4.3; 04 2.5, 2.9). */
-export const ARGS: Record<string, Record<string, Field[]>> = {
-  items: {
-    settle_equip: [['slot', 'u8']], // 04 2.5
-    init_raid_ledger: [], // 04 2.9
-  },
-  swap: {
-    swap_route: [['amountIn', 'u64'], ['minAmountOut', 'u64'], ['hops', { vec: { struct: [['direction', 'u8'], ['accounts', 'u8'], ['inHookAccounts', 'u8'], ['outHookAccounts', 'u8']] } }]],
-  },
-  launch: {
-    prepare_launch: [['name', 'string'], ['symbol', 'string'], ['uri', 'string'], ['slots', { vec: { struct: [
-      ['kind', 'u8'], ['equipRule', 'u8'], ['bounds', SLOT_BOUNDS], ['noticeSecs', 'u32'], ['dataLen', 'u8'], ['launchItem', { option: 'pubkey' }], ['ruleData', { vec: 'u8' }],
-    ] } }]],
-    refresh_pool_registry: [],
-  },
-};
-
-export const PROGRAMS: Record<string, PublicKey> = { items: ITEMS_ID, swap: SWAP_ID, launch: LAUNCH_ID };
-
-/** Builds a spec-layout `program::name(args)` with the given accounts (INTEGRATION.md section 3). */
-export function hookwarsIx(program: string, name: string, args: Record<string, unknown>, keys: AccountMeta[]): TransactionInstruction {
-  const fields = ARGS[program]?.[name];
-  const pid = PROGRAMS[program];
-  if (!fields || !pid) throw new Error(`unknown spec instruction ${program}::${name}`);
-  const data = Buffer.concat([discriminator('global', name), encode({ struct: fields }, args)]);
-  return new TransactionInstruction({ programId: pid, keys, data });
-}
-
-/** 04 2.5: `settle_equip(slot)`, permissionless with a bounty (spec layout until M3b). */
-export function settleEquip(cranker: PublicKey, mint: PublicKey, slot: number, item: PublicKey, extra: AccountMeta[] = []): TransactionInstruction {
-  const equip = equipStateAddress(mint, slot);
-  const w = (pubkey: PublicKey, isSigner = false): AccountMeta => ({ pubkey, isSigner, isWritable: true });
-  return hookwarsIx('items', 'settle_equip', { slot }, [
-    w(cranker, true), ro(mint), w(equip), w(holdingAddr(mint, equip)), ro(poolCutsAddress(mint)), ro(item), w(royaltyOwner(item)),
-    ro(TOKEN_ID), ...extra, ro(ITEMS_EVENT_AUTHORITY), ro(ITEMS_ID),
-  ]);
 }
 
 // ---------------------------------------------------------------- token (IDL) --
