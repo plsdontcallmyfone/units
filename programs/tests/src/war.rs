@@ -1,23 +1,22 @@
-// Changed by Hookwars: new file, the war program's harness.
+// Changed by Hookwars: new file, the war program's harness; M3b: the armory's and the shared types,
+// the observation ring in the pool account.
 //! The war suites' world: the upstream world plus `hookwars_war` and its test-only stand-ins at the
 //! items and armory ids (`war_items_stub`, `war_armory_stub`) and a randomness adapter
-//! (`randomness_stub`). Accounts of programs not in this branch (the War orders `Item` and its
-//! `Template`, the `RaidLedger`, a pool's `Observations`) are written with `put`, in the stubs' own
-//! Anchor layouts, and a launch's mint gets its slot table written the same way (the slot-aware
-//! launchpad is not in this branch).
+//! (`randomness_stub`). Foreign accounts (the War orders `Item` and its `Template`, the
+//! `RaidLedger`, a pool's observation ring) are written with `put` in their owners' layouts (M3b),
+//! and a launch's mint gets its slot table written the same way (the slot-aware launchpad is the
+//! launchpad branch's).
 
 use anchor_lang::prelude::{AccountMeta, Pubkey};
 use anchor_lang::solana_program::instruction::Instruction;
-use anchor_lang::{AccountDeserialize, AccountSerialize, AnchorSerialize};
+use anchor_lang::{AccountDeserialize, AccountSerialize};
 use bordrless_hook::{slot_flags, slot_kind};
 use bordrless_launch::client as launch;
 use bordrless_launch::state::LaunchRules;
 use bordrless_token::client as token;
 use bordrless_token::state::{Holding, Mint, Slot, SlotBounds};
 use hookwars_war::client as war;
-use hookwars_war::foreign::{
-    disc, spot_q64, Observation, ObservationHeader, Observations, RaidLedger, Template, PARAM_FIELDS,
-};
+use hookwars_war::foreign::{raid_ledger_address, spot_q64, template_address, PARAM_FIELDS};
 use hookwars_war::instructions::ConfigArgs;
 use hookwars_war::state::*;
 use solana_account::Account;
@@ -50,6 +49,8 @@ pub const TEST_PARAMS: WarParams = WarParams {
     season_secs: 7 * 86_400,
     challenge_secs: 86_400,
     season_prize_share_bps: 2_000,
+    point_unit_lamports: 1_000_000,
+    loot_min_raid_lamports: 10_000_000,
 };
 
 /// TEST template ids (the armory numbers its templates densely; these are the suites').
@@ -204,7 +205,7 @@ impl WarWorld {
             weights,
             penalize_besieged: false,
         };
-        let templates = [Template::address(RAID_TEMPLATE), Template::address(WAR_ORDERS_TEMPLATE)];
+        let templates = [template_address(RAID_TEMPLATE), template_address(WAR_ORDERS_TEMPLATE)];
         let ixs = [
             war::propose_season(admin.pubkey(), args),
             war::propose_loot_table(admin.pubkey(), number, Self::loot_entries(), &templates),
@@ -261,7 +262,7 @@ impl WarWorld {
         );
     }
 
-    /// Writes a `Template` (02 section 2.3) in the armory stub's layout.
+    /// Writes a `Template` (02 section 2.3) in the armory's own layout.
     pub fn put_template(
         &mut self,
         id: u16,
@@ -271,7 +272,7 @@ impl WarWorld {
         field_max: [u32; PARAM_FIELDS],
         loot_enabled: bool,
     ) {
-        let t = war_armory_stub::Template {
+        let t = hookwars_armory::state::Template {
             version: 1,
             bump: 0,
             id,
@@ -287,25 +288,26 @@ impl WarWorld {
             forge_enabled: false,
             max_level: 1,
             loot_royalty_bps: 0,
+            max_targets: 0,
             status: 0,
             name: format!("TEST template {id}"),
             registered_by: Pubkey::default(),
             created_at: 0,
             reserved: [0; 32],
         };
-        self.put_anchor(Template::address(id), war_armory_stub::ID, &t, 0);
+        self.put_anchor(template_address(id), war_armory_stub::ID, &t, 0);
     }
 
     /// Writes an `Item` (02 section 2.4) of `template_id` with `params` at a fresh key.
     pub fn put_item(&mut self, template_id: u16, params: [u32; PARAM_FIELDS]) -> Pubkey {
         let key = Pubkey::new_unique();
-        let it = war_armory_stub::Item {
+        let it = hookwars_armory::state::Item {
             version: 1,
             bump: 0,
             item_mint: Pubkey::new_unique(),
             template_id,
             params,
-            manifest: war_armory_stub::Manifest::default(),
+            manifest: hookwars_common::Manifest::default(),
             author: Pubkey::default(),
             royalty_bps: 0,
             level: 1,
@@ -321,20 +323,20 @@ impl WarWorld {
 
     /// Writes the armory's `ForgeCounter` of `wallet`.
     pub fn put_forge_counter(&mut self, wallet: Pubkey, count: u64) {
-        let c = war_armory_stub::ForgeCounter {
+        let c = hookwars_armory::state::ForgeCounter {
             wallet,
             count,
             bump: 0,
         };
         self.put_anchor(
-            hookwars_war::foreign::ForgeCounter::address(&wallet),
+            hookwars_war::foreign::forge_counter_address(&wallet),
             war_armory_stub::ID,
             &c,
             0,
         );
     }
 
-    /// Writes `mint`'s `RaidLedger` (04 section 2.9).
+    /// Writes `mint`'s `RaidLedger` (04 section 2.9) in the shared layout.
     pub fn put_ledger(
         &mut self,
         mint: &Pubkey,
@@ -342,63 +344,49 @@ impl WarWorld {
         season_volume: u64,
         windows: &[(Pubkey, i64, u64, u64)],
     ) {
-        let mut inbound = [war_items_stub::RaidWindow::default(); war_items_stub::RAID_TABLE_LEN];
+        use hookwars_common::raid::{RaidLedger, RaidWindow, RAID_TABLE_LEN};
+        let mut inbound = [RaidWindow::default(); RAID_TABLE_LEN];
         for (i, (rival, start, volume, prev)) in windows.iter().enumerate() {
-            inbound[i] = war_items_stub::RaidWindow {
+            inbound[i] = RaidWindow {
                 rival_mint: *rival,
                 window_start: *start,
                 volume: *volume,
                 prev_volume: *prev,
             };
         }
-        let l = war_items_stub::RaidLedger {
+        let l = RaidLedger {
             version: 1,
             bump: 0,
             mint: *mint,
             season_id,
             outbound_volume_season: season_volume,
             inbound,
-            mark: war_items_stub::Mark::default(),
-            reserved: [0; 32],
+            ..Default::default()
         };
-        self.put_anchor(RaidLedger::address(mint), war_items_stub::ID, &l, 0);
-    }
-
-    /// Writes `pool`'s `Observations` (03 section 3.1): `entries` as `(ts, price_cumulative)`,
-    /// the header's last price and time.
-    pub fn put_observations(&mut self, pool: &Pubkey, last_price: u128, last_ts: i64, entries: &[(i64, u128)]) {
-        let header = ObservationHeader {
-            version: 1,
-            bump: 0,
-            pool: *pool,
-            last_price_q64: last_price,
-            last_ts,
-            index: (entries.len() % entries.len().max(1)) as u16,
-            filled: entries.len() as u16,
-        };
-        let mut data = disc::OBSERVATIONS.to_vec();
-        header.serialize(&mut data).unwrap();
-        for (ts, cum) in entries {
-            Observation {
-                ts: *ts,
-                price_cumulative: *cum,
-                quote_volume: 0,
-                swap_count: 0,
-            }
-            .serialize(&mut data)
-            .unwrap();
-        }
+        let mut data = vec![0u8; RaidLedger::LEN];
+        l.encode(&mut data).unwrap();
         let lamports = self.w.env.rent(data.len());
         self.w.env.put(
-            Observations::address(pool),
+            raid_ledger_address(mint),
             Account {
                 lamports,
                 data,
-                owner: bordrless_swap::ID,
+                owner: war_items_stub::ID,
                 executable: false,
                 rent_epoch: 0,
             },
         );
+    }
+
+    /// Writes `pool`'s observation ring (03 section 3.1, M3a: in the pool account's tail, layout
+    /// `bordrless_core::observations`): `entries` as `(ts, price_cumulative)`, the header's last
+    /// price and time, its cumulative the newest entry's.
+    pub fn put_observations(&mut self, pool: &Pubkey, last_price: u128, last_ts: i64, entries: &[(i64, u128)]) {
+        let mut account = self.w.env.account(pool).expect("pool");
+        let e: Vec<crate::ring::RingEntry> = entries.iter().map(|(t, c)| (*t, *c, 0, 0)).collect();
+        account.data = crate::ring::with_ring(account.data, &crate::ring::ring(pool, last_price, last_ts, &e));
+        account.lamports = account.lamports.max(self.w.env.rent(account.data.len()));
+        self.w.env.put(*pool, account);
     }
 
     /// The pool's spot price (Q64.64).
@@ -516,7 +504,7 @@ impl WarWorld {
             mint,
             orders: war::Orders {
                 item,
-                template: Template::address(WAR_ORDERS_TEMPLATE),
+                template: template_address(WAR_ORDERS_TEMPLATE),
             },
             pool: self.w.launch_pool_key(&mint),
             raid_item,

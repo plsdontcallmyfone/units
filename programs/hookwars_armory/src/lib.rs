@@ -1,4 +1,5 @@
-// Changed by Hookwars: new file (M2), the armory.
+// Changed by Hookwars: new file (M2), the armory; M3b: composites (create_composite, the module
+// list passed to init_equip), the Performance reader on the pool's ring, settle_bounty_bps.
 //! `hookwars_armory` (docs/spec/02-armory.md): templates, items as supply-1 tokens on the token
 //! standard, royalties and their claims, equip rules (holder vote with notice, performance revert,
 //! locked), equipping at launch (signed by the launchpad), loot minting (signed by the war program),
@@ -11,7 +12,7 @@
 use anchor_lang::prelude::*;
 use bordrless_token::state::Mint;
 use hookwars_common::{
-    ids, pda, seeds, shape, window_read, EquipConfig, Params, PerformanceRule, PARAM_FIELDS,
+    ids, pda, seeds, shape, EquipConfig, Params, PerformanceRule, PARAM_FIELDS,
 };
 
 pub mod cpi;
@@ -71,6 +72,7 @@ fn check_params(p: &ArmoryParams) -> Result<()> {
             && p.forge_gain_bps <= 10_000
             && p.max_pool_item_cut_bps <= 10_000
             && p.max_pool_item_discount_bps <= 10_000
+            && p.settle_bounty_bps <= 10_000
             && p.vote_period_secs > 0
             && p.min_twap_secs > 0
             && p.min_notice_secs <= p.max_notice_secs,
@@ -128,7 +130,7 @@ pub mod hookwars_armory {
         c.items_minted = 0;
         c.templates = 0;
         c.params = params;
-        c.reserved = [0; 64];
+        c.reserved = [0; 62];
         Ok(())
     }
 
@@ -210,6 +212,16 @@ pub mod hookwars_armory {
         royalty_bps: u16,
     ) -> Result<()> {
         process_create_item(ctx, template_id, params, royalty_bps)
+    }
+
+    /// Hookwars M3b: anyone authors a composite item (08 section 2) from open templates. The
+    /// remaining accounts are each module's `Template`, in module order.
+    pub fn create_composite<'info>(
+        ctx: Context<'info, CreateComposite<'info>>,
+        modules: Vec<hookwars_common::composite::Module>,
+        royalty_bps: u16,
+    ) -> Result<()> {
+        process_create_composite(ctx, modules, royalty_bps)
     }
 
     /// The war program mints a loot item (02 section 4.3).
@@ -465,6 +477,36 @@ pub struct CreateItem<'info> {
     pub system_program: Program<'info, System>,
 }
 
+/// Accounts of `create_composite` (M3b).
+#[event_cpi]
+#[derive(Accounts)]
+pub struct CreateComposite<'info> {
+    #[account(mut)]
+    pub author: Signer<'info>,
+    #[account(mut, seeds = [seeds::CONFIG], bump = config.bump)]
+    pub config: Box<Account<'info, ArmoryConfig>>,
+    /// The Composite template (id 41).
+    #[account(seeds = [seeds::TEMPLATE, &hookwars_common::template_id::COMPOSITE.to_le_bytes()], bump = template.bump)]
+    pub template: Box<Account<'info, Template>>,
+    /// CHECK: `["minter"]`.
+    #[account(address = MINTER)]
+    pub minter: UncheckedAccount<'info>,
+    /// CHECK: `["item-mint", items_minted]`, created here.
+    #[account(mut, seeds = [seeds::ITEM_MINT, &config.items_minted.to_le_bytes()], bump)]
+    pub item_mint: UncheckedAccount<'info>,
+    #[account(init, payer = author, space = 8 + Item::INIT_SPACE,
+        seeds = [seeds::ITEM, item_mint.key().as_ref()], bump)]
+    pub item: Box<Account<'info, Item>>,
+    #[account(init, payer = author, space = hookwars_common::composite::CompositeItem::SPACE,
+        seeds = [hookwars_common::composite::SEED, item.key().as_ref()], bump)]
+    pub composite: Box<Account<'info, CompositeItem>>,
+    /// CHECK: the author's holding of the item mint, created here.
+    #[account(mut)]
+    pub recipient_holding: UncheckedAccount<'info>,
+    pub token: TokenAccounts<'info>,
+    pub system_program: Program<'info, System>,
+}
+
 #[event_cpi]
 #[derive(Accounts)]
 #[instruction(template_id: u16)]
@@ -564,6 +606,9 @@ pub struct EquipCtx<'info> {
     /// CHECK: the royalty owner's holding of bridged SOL.
     #[account(mut)]
     pub royalty_holding_quote: Option<UncheckedAccount<'info>>,
+    /// CHECK: Hookwars M3b: the new item's module list (`["composite", new_item]`) when it is a
+    /// composite; read by the items program's `init_equip`.
+    pub new_composite: Option<UncheckedAccount<'info>>,
     /// CHECK: `["armory"]`.
     #[account(address = ARMORY_SIGNER)]
     pub armory_signer: UncheckedAccount<'info>,
@@ -728,10 +773,8 @@ pub struct CheckPerformance<'info> {
     pub slot_state: Box<Account<'info, SlotState>>,
     /// CHECK: `["launch", mint]` under the launchpad (read raw: pool at offset 74).
     pub launch: UncheckedAccount<'info>,
-    /// The launch pool.
+    /// The launch pool (its observation ring is in its tail, 03 M3a notes).
     pub pool: Box<Account<'info, bordrless_swap::state::Pool>>,
-    /// CHECK: `["obs", pool]` under the DEX (read raw, 03 section 3.1).
-    pub observations: UncheckedAccount<'info>,
     /// The slot's open proposal, cancelled by a revert.
     #[account(mut)]
     pub open_proposal: Option<Box<Account<'info, Proposal>>>,
@@ -795,8 +838,10 @@ fn process_register_template(
     args: RegisterTemplateArgs,
 ) -> Result<()> {
     let config = &mut ctx.accounts.config;
+    // Hookwars M3b: ids follow the template list (04, 08 section 6), so they may be sparse; each id
+    // is registered once (its `Template` account is created here) and must be a known template.
     require!(
-        args.id == config.templates.checked_add(1).ok_or(ArmoryError::InvalidSchema)?,
+        args.id >= 1 && hookwars_common::shape(args.id).is_some(),
         ArmoryError::InvalidSchema
     );
     let program = ctx.accounts.template_program.to_account_info();
@@ -983,6 +1028,102 @@ fn process_create_item(
         source::AUTHORED,
         ts,
     );
+    ctx.accounts.config.items_minted = n + 1;
+    emit_cpi!(ItemCreated {
+        item: item_key,
+        item_mint,
+        template_id,
+        params,
+        manifest,
+        author,
+        royalty_bps,
+        level: 1,
+        source: source::AUTHORED,
+        ts
+    });
+    Ok(())
+}
+
+/// Hookwars M3b: `create_composite` (08 sections 2.9 and 2.10).
+fn process_create_composite<'info>(
+    ctx: Context<'info, CreateComposite<'info>>,
+    modules: Vec<hookwars_common::composite::Module>,
+    royalty_bps: u16,
+) -> Result<()> {
+    use hookwars_common::composite::{validate_modules, CompositeError};
+    let a = &ctx.accounts;
+    require!(
+        a.template.status == template_status::ACTIVE && a.template.open_authoring,
+        ArmoryError::TemplateClosed
+    );
+    require!(
+        royalty_bps <= a.config.params.max_royalty_bps,
+        ArmoryError::RoyaltyTooHigh
+    );
+    require!(ctx.remaining_accounts.len() == modules.len(), ArmoryError::WrongAccount);
+    let mut fields: Vec<(u16, Params, Params)> = Vec::with_capacity(modules.len());
+    for (m, info) in modules.iter().zip(ctx.remaining_accounts.iter()) {
+        require_keys_eq!(*info.owner, crate::ID, ArmoryError::WrongAccount);
+        require_keys_eq!(info.key(), pda::template(m.template_id).0, ArmoryError::WrongAccount);
+        let t = Template::try_deserialize(&mut &info.try_borrow_data()?[..])?;
+        require!(
+            t.status == template_status::ACTIVE && t.open_authoring,
+            ArmoryError::TemplateClosed
+        );
+        fields.push((t.id, t.field_min, t.field_max));
+    }
+    let lookup = |id: u16| fields.iter().find(|f| f.0 == id).map(|f| (f.1, f.2));
+    let manifest = validate_modules(&modules, lookup, a.template.max_targets, 63).map_err(|e| match e {
+        CompositeError::BadParams => error!(ArmoryError::ParamOutOfRange),
+        CompositeError::KindMismatch => error!(ArmoryError::KindMismatch),
+        _ => error!(ArmoryError::InvalidSchema),
+    })?;
+    let (tp, ea, sp) = a.token.infos();
+    let t = TokenInfos {
+        token_program: &tp,
+        event_authority: &ea,
+        system_program: &sp,
+    };
+    let n = a.config.items_minted;
+    mint_item(
+        &t,
+        &a.author.to_account_info(),
+        &a.minter.to_account_info(),
+        &a.item_mint.to_account_info(),
+        ctx.bumps.item_mint,
+        n,
+        &a.author.to_account_info(),
+        &a.recipient_holding.to_account_info(),
+        &a.template.name,
+    )?;
+    let ts = now()?;
+    let item_key = ctx.accounts.item.key();
+    let item_mint = ctx.accounts.item_mint.key();
+    let author = ctx.accounts.author.key();
+    let mut params = [0u32; PARAM_FIELDS];
+    params[0] = modules.len() as u32;
+    params[1] = 1;
+    let template_id = hookwars_common::template_id::COMPOSITE;
+    write_item(
+        &mut ctx.accounts.item,
+        item_key,
+        ctx.bumps.item,
+        item_mint,
+        template_id,
+        params,
+        manifest,
+        author,
+        royalty_bps,
+        1,
+        source::AUTHORED,
+        ts,
+    );
+    let c = &mut ctx.accounts.composite;
+    c.version = VERSION;
+    c.bump = ctx.bumps.composite;
+    c.item = item_key;
+    c.modules = modules;
+    c.provenance = Vec::new();
     ctx.accounts.config.items_minted = n + 1;
     emit_cpi!(ItemCreated {
         item: item_key,
@@ -1224,6 +1365,7 @@ impl<'info> EquipCtx<'info> {
         let signer = self.armory_signer.to_account_info();
         let items = self.items_program.to_account_info();
         let new_item_info = self.new_item.as_ref().map(|a| a.to_account_info());
+        let composite_info = self.new_composite.as_ref().map(|a| a.to_account_info());
         let e = EquipInfos {
             payer: &payer,
             mint: &mint_info,
@@ -1252,6 +1394,7 @@ impl<'info> EquipCtx<'info> {
                 manifest,
                 max_targets,
                 config: config.clone(),
+                composite: composite_info.as_ref(),
             }),
             _ => None,
         };
@@ -1677,20 +1820,19 @@ fn process_check_performance(ctx: Context<CheckPerformance>) -> Result<()> {
     let pool_key = hookwars_common::launch_pool(&launch.try_borrow_data()?, &mint_key)
         .ok_or(ArmoryError::WrongAccount)?;
     require_keys_eq!(ctx.accounts.pool.key(), pool_key, ArmoryError::WrongAccount);
-    let obs = &ctx.accounts.observations;
-    require_keys_eq!(
-        obs.key(),
-        pda::observations(&pool_key).0,
-        ArmoryError::WrongAccount
-    );
-    require_keys_eq!(*obs.owner, ids::SWAP_ID, ArmoryError::WrongAccount);
-    let (qv, sc) = (ctx.accounts.pool.quote_volume, ctx.accounts.pool.swap_count);
-    let holds = {
-        let data = obs.try_borrow_data()?;
-        let short = window_read(&data, qv, sc, ts, i64::from(rule.window_secs));
-        let base = window_read(&data, qv, sc, ts, i64::from(rule.base_window_secs));
-        rule.holds(short, base)
+    // Hookwars M3b: the ring lives in the pool account (03 M3a notes).
+    let pool_info = ctx.accounts.pool.to_account_info();
+    let read = |w: u32| {
+        bordrless_swap::obs::window_read(&pool_info, ts, i64::from(w), 1)
+            .ok()
+            .map(|r| hookwars_common::WindowRead {
+                twap_q64: r.twap_q64,
+                quote_volume: r.quote_volume,
+                swaps: r.swaps,
+                seconds: r.span_secs,
+            })
     };
+    let holds = rule.holds(read(rule.window_secs), read(rule.base_window_secs));
     let slot = st.slot;
     let launch_item = st.launch_item;
     let mint = read_mint(&ctx.accounts.equip.token_mint.to_account_info())?;

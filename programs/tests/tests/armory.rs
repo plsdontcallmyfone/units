@@ -1,5 +1,6 @@
 // Changed by Hookwars: new file (M2), the armory: init, params timelock, templates, items, loot,
 // equip at launch (docs/spec/02-armory.md, 07 M2 row).
+// M3b: Raid's registry gained our own launch (extra_count 6).
 
 use anchor_lang::prelude::{AccountMeta, Pubkey};
 use bordrless_hook::{equip_rule, slot_kind};
@@ -34,8 +35,10 @@ fn templates_register_in_order_and_refuse_what_rule_3_forbids() {
     let mut hw = Hw::bare();
     hw.init().ok();
     let admin = hw.admin.insecure_clone();
-    // Ids are dense from 1.
-    hw.register_with(&admin, ids::ITEMS_ID, Hw::template_args(2))
+    // Changed by Hookwars M3b: ids may be sparse (the template list), but must be known.
+    let mut unknown = Hw::template_args(2);
+    unknown.id = 13;
+    hw.register_with(&admin, ids::ITEMS_ID, unknown)
         .expect_code(armory_code(E::InvalidSchema));
     // Only the admin.
     let stranger = hw.w.env.funded(1_000_000_000);
@@ -283,14 +286,15 @@ fn the_launchpad_equips_a_fresh_mint_once() {
     let st: EquipState = hw.w.env.read(&pda::equip_state(&mint, 1).0);
     assert_eq!((st.item, st.template_id), (raid, T::RAID));
     assert_eq!(st.config, cfg);
-    // The registry: the Item, the EquipState, then Raid's extras (ledger, war config, a launch).
+    // The registry: the Item, the EquipState, then Raid's extras (ledger, war config, our launch,
+    // the target's launch). Changed by Hookwars M3b: our own launch joined Raid's extras.
     let reg = Pubkey::find_program_address(
         &[bordrless_hook::HOOK_ACCOUNTS_SEED, mint.as_ref(), raid.as_ref()],
         &ids::ITEMS_ID,
     )
     .0;
     assert!(hw.w.env.account(&reg).is_some());
-    assert_eq!(m.slots[1].extra_count, 5);
+    assert_eq!(m.slots[1].extra_count, 6);
     // A pool cut: the royalty owner's bridged-SOL holding exists.
     let owner_r = pda::royalty_owner(&raid).0;
     let h: Holding = hw.w.env.read(&pda::holding(&hw.w.sol, &owner_r));

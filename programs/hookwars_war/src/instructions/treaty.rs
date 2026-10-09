@@ -9,6 +9,7 @@ use crate::common::*;
 use crate::constants::*;
 use crate::error::WarError;
 use crate::events::*;
+use crate::foreign::Foreign;
 use crate::foreign::Item;
 use crate::instructions::admin::read_own;
 use crate::state::*;

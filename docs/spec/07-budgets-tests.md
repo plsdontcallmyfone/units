@@ -166,3 +166,10 @@ a machine-wide Agave 3.1.12 used by other sessions and limited free disk. The su
 
 Option 1 is recommended (reproducible builds match upstream's `solana-verify` image). Owner
 decision before M0.
+
+**Items paths, measured (M3b, `budgets_items.rs::items_budgets`):** transfers through Half-Life
+45,712 CU, Transfer Fee 48,568, Max Transaction 49,885, Dust Guard 46,621 (height 2); pool callbacks
+through the test stand-in 17,278 to 29,738 CU; a raid delivery that stamps points 62,586 CU; a
+composite of 3 on a pool callback 23,182 CU and on a transfer 54,929 CU; `settle_equip` of a
+composite of 3 208,107 CU (height 3, 22 trace entries). Full table in 04, "M3b items implementation
+notes", item 14.

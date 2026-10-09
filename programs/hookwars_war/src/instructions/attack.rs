@@ -19,7 +19,8 @@ use crate::common::*;
 use crate::constants::*;
 use crate::error::WarError;
 use crate::events::*;
-use crate::foreign::{spot_q64, Item, Observations, RaidLedger, Template};
+use crate::foreign::Foreign;
+use crate::foreign::{pool_twap, spot_q64, Item, RaidLedger, Template};
 use crate::instructions::admin::read_own;
 use crate::instructions::setup::{chest_balance, note_funding};
 use crate::state::*;
@@ -103,7 +104,7 @@ pub struct Siege<'info> {
     /// CHECK: its `Template` (address- and kind-checked).
     pub orders_template: UncheckedAccount<'info>,
     /// CHECK: `["raid-ledger", mint]` under the items program (address-checked, decoded).
-    #[account(address = RaidLedger::address(&mint.key()) @ WarError::WrongAccount)]
+    #[account(address = crate::foreign::raid_ledger_address(&mint.key()) @ WarError::WrongAccount)]
     pub raid_ledger: UncheckedAccount<'info>,
     /// CHECK: the rival's mint (read by hand: the swap may write it).
     pub rival_mint: UncheckedAccount<'info>,
@@ -113,8 +114,6 @@ pub struct Siege<'info> {
     /// CHECK: the rival's launch pool (read by hand).
     #[account(mut)]
     pub rival_pool: UncheckedAccount<'info>,
-    /// CHECK: `["obs", rival_pool]` under the DEX (address-checked when decoded).
-    pub rival_observations: UncheckedAccount<'info>,
     /// The rival's war state, when it has one: marked besieged.
     #[account(mut)]
     pub rival_war_state: Option<Box<Account<'info, WarState>>>,
@@ -183,8 +182,8 @@ pub fn process_siege<'info>(ctx: Context<'info, Siege<'info>>, args: SliceArgs) 
     )
     .ok_or(WarError::NoQuote)?;
     let window = i64::from(orders.get(orders::SIEGE_TWAP_SECS)).max(params.min_twap_secs);
-    let obs = Observations::read(&ctx.accounts.rival_observations, &rival_launch.pool)?;
-    let twap = obs.twap(now, window).ok_or(WarError::NoObservations)?;
+    // Hookwars M3b: the ring is in the rival pool's own account (03 M3a notes).
+    let twap = pool_twap(&ctx.accounts.rival_pool, now, window).ok_or(WarError::NoObservations)?;
     let ceiling = twap
         .checked_mul(u128::from(BPS + u64::from(params.siege_max_premium_bps)))
         .ok_or(WarError::MathOverflow)?
@@ -327,8 +326,6 @@ pub struct CounterStrike<'info> {
     /// CHECK: the launch pool (read by hand).
     #[account(mut)]
     pub pool: UncheckedAccount<'info>,
-    /// CHECK: `["obs", pool]` (checked when decoded).
-    pub observations: UncheckedAccount<'info>,
     /// CHECK: the mint's `KitConfig`, when it runs the kit.
     pub kit_config: Option<UncheckedAccount<'info>>,
     pub system_program: Program<'info, System>,
@@ -360,9 +357,8 @@ pub fn process_counter_strike<'info>(
     let short = i64::from(orders.get(orders::COUNTER_SHORT_SECS)).max(params.min_twap_secs);
     let long = i64::from(orders.get(orders::COUNTER_LONG_SECS)).max(params.min_twap_secs);
     require!(short < long, WarError::CounterNotDue);
-    let obs = Observations::read(&ctx.accounts.observations, &launch.pool)?;
-    let twap_short = obs.twap(now, short).ok_or(WarError::NoObservations)?;
-    let twap_long = obs.twap(now, long).ok_or(WarError::NoObservations)?;
+    let twap_short = pool_twap(&ctx.accounts.pool, now, short).ok_or(WarError::NoObservations)?;
+    let twap_long = pool_twap(&ctx.accounts.pool, now, long).ok_or(WarError::NoObservations)?;
     let drop = u64::from(orders.get(orders::COUNTER_DROP_BPS)).min(BPS);
     let lhs = twap_short.checked_mul(u128::from(BPS)).ok_or(WarError::MathOverflow)?;
     let rhs = twap_long
@@ -651,7 +647,7 @@ pub fn process_return_captured<'info>(
     require!(item.template_id == treaty_id, WarError::NoTreaty);
     require_keys_eq!(
         ctx.accounts.treaty_template.key(),
-        Template::address(treaty_id),
+        crate::foreign::template_address(treaty_id),
         WarError::NoTreaty
     );
     let template = Template::read(&ctx.accounts.treaty_template)?;

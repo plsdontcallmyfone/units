@@ -1,4 +1,5 @@
-// Changed by Hookwars: new file (M2), shared by hookwars_armory and hookwars_items.
+// Changed by Hookwars: new file (M2), shared by hookwars_armory and hookwars_items; M3b: raid ledger,
+// war touches, launch reads, arsenal wave A templates, composites.
 //! Types and pure rules shared by the armory (docs/spec/02-armory.md) and the items program
 //! (docs/spec/04-templates.md): params (R7), the manifest (04 section 2.7), the equip config (04
 //! section 2.3), each template's fields and forge rules (04 section 3), seeds (00 section 4.3), the
@@ -237,7 +238,30 @@ pub mod template_id {
     pub const TRANSFER_FEE: u16 = 8;
     /// War orders.
     pub const WAR_ORDERS: u16 = 9;
+    /// Size Tiers (08 4.1).
+    pub const SIZE_TIERS: u16 = 10;
+    /// Side Skew (08 4.1).
+    pub const SIDE_SKEW: u16 = 11;
+    /// Launch Decay (08 4.1).
+    pub const LAUNCH_DECAY: u16 = 12;
+    /// Max Transaction (08 4.2).
+    pub const MAX_TRANSACTION: u16 = 19;
+    /// Dust Guard (08 4.2).
+    pub const DUST_GUARD: u16 = 22;
+    /// Sell Burn (08 4.6).
+    pub const SELL_BURN: u16 = 32;
+    /// Composite (08 2).
+    pub const COMPOSITE: u16 = 41;
 }
+
+/// Whether template `id` may be a module of a composite (08 2.7): every known template but War
+/// orders and Composite itself.
+pub fn composable(id: u16) -> bool {
+    id != template_id::WAR_ORDERS && id != template_id::COMPOSITE && shape(id).is_some()
+}
+
+/// Most modules a composite holds (`MAX_MODULES`, 08 2.2; provisional, to measure).
+pub const MAX_MODULES: usize = 4;
 
 /// Slot kinds (00 section 4.1; the same values as `bordrless_hook::slot_kind`).
 pub mod kind {
@@ -377,6 +401,17 @@ pub fn shape(id: u16) -> Option<TemplateShape> {
         template_id::HALF_LIFE => (kind::FEE, &[TowardCeiling, TowardCeiling, TowardCeiling], true),
         template_id::TRANSFER_FEE => (kind::FEE, &[TowardCeiling, FloorWhenBothOn], true),
         template_id::WAR_ORDERS => (kind::WAR, &[Keep; 11], false),
+        template_id::SIZE_TIERS => (
+            kind::POOL,
+            &[Keep, Keep, TowardCeiling, TowardCeiling, TowardCeiling],
+            true,
+        ),
+        template_id::SIDE_SKEW => (kind::POOL, &[TowardCeiling, TowardCeiling], true),
+        template_id::LAUNCH_DECAY => (kind::POOL, &[TowardCeiling, Keep, TowardCeiling], true),
+        template_id::MAX_TRANSACTION => (kind::DEFENSE, &[TowardFloor], true),
+        template_id::DUST_GUARD => (kind::DEFENSE, &[Keep], true),
+        template_id::SELL_BURN => (kind::POOL, &[TowardCeiling], true),
+        template_id::COMPOSITE => (kind::POOL, &[Keep, Keep], false),
         _ => return None,
     };
     rules[..used.len()].copy_from_slice(used);
@@ -433,6 +468,12 @@ pub fn validate(id: u16, p: &Params) -> core::result::Result<(), ParamsError> {
         template_id::TREATY if p[2] > 1 => Err(ParamsError::BadParams),
         template_id::HALF_LIFE if p[1] == 0 || p[2] == 0 => Err(ParamsError::BadParams),
         template_id::WAR_ORDERS if p[4] >= p[5] || p[8] > 1 => Err(ParamsError::BadParams),
+        template_id::SIZE_TIERS if p[0] >= p[1] => Err(ParamsError::BadParams),
+        template_id::LAUNCH_DECAY if p[1] > p[0] || p[2] == 0 => Err(ParamsError::BadParams),
+        template_id::MAX_TRANSACTION if p[0] == 0 => Err(ParamsError::BadParams),
+        template_id::COMPOSITE if p[0] == 0 || p[0] as usize > MAX_MODULES => {
+            Err(ParamsError::BadParams)
+        }
         _ => Ok(()),
     }
 }
@@ -499,6 +540,30 @@ pub fn manifest(id: u16, p: &Params, max_targets: u8) -> core::result::Result<Ma
             m.token_flags = BEFORE_TRANSFER | TRANSFER_RETURNS_DELTA;
             m.max_cut_transfer_bps = bps(p[0]);
             m.may_refuse = p[1] > 0;
+        }
+        template_id::SIZE_TIERS => {
+            m.pool_flags = pool_flags::BEFORE_SWAP | pool_flags::AFTER_SWAP;
+            let worst = bps(p[2].max(p[3]).max(p[4]));
+            m.max_cut_buy_bps = worst;
+            m.max_cut_sell_bps = worst;
+        }
+        template_id::SIDE_SKEW => {
+            m.pool_flags = pool_flags::BEFORE_SWAP | pool_flags::AFTER_SWAP;
+            m.max_cut_buy_bps = bps(p[0]);
+            m.max_cut_sell_bps = bps(p[1]);
+        }
+        template_id::LAUNCH_DECAY => {
+            m.pool_flags = pool_flags::BEFORE_SWAP | pool_flags::AFTER_SWAP;
+            m.max_cut_buy_bps = bps(p[0]);
+            m.max_cut_sell_bps = bps(p[0]);
+        }
+        template_id::MAX_TRANSACTION | template_id::DUST_GUARD => {
+            m.token_flags = BEFORE_TRANSFER;
+            m.may_refuse = true;
+        }
+        template_id::SELL_BURN => {
+            m.pool_flags = pool_flags::BEFORE_SWAP;
+            m.may_burn = true;
         }
         _ => {}
     }
@@ -659,37 +724,8 @@ pub fn launch_pool(data: &[u8], mint: &Pubkey) -> Option<Pubkey> {
     Some(Pubkey::new_from_array(data[74..106].try_into().unwrap()))
 }
 
-/// Byte offsets of an `Observations` account (03 section 3.1): an 8-byte discriminator, the
-/// Borsh header (62 bytes), then 48-byte entries.
-pub mod obs_layout {
-    /// `last_price_q64: u128`.
-    pub const LAST_PRICE: usize = 42;
-    /// `last_ts: i64`.
-    pub const LAST_TS: usize = 58;
-    /// `index: u16`.
-    pub const INDEX: usize = 66;
-    /// `filled: u16`.
-    pub const FILLED: usize = 68;
-    /// First entry.
-    pub const ENTRIES: usize = 70;
-    /// Entry size.
-    pub const ENTRY: usize = 48;
-}
-
-/// One observation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Observation {
-    /// Time.
-    pub ts: i64,
-    /// Price accumulator (wrapping).
-    pub price_cumulative: u128,
-    /// The pool's `quote_volume` then.
-    pub quote_volume: u128,
-    /// The pool's `swap_count` then.
-    pub swap_count: u64,
-}
-
-/// What a window read gives (03 section 3.1 `window_read`).
+/// What a window read gives (03 section 3.1 `window_read`; built by `bordrless_swap::obs::window_read`
+/// on the pool account since M3a).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WindowRead {
     /// Time-weighted price over the window, Q64.64.
@@ -700,73 +736,6 @@ pub struct WindowRead {
     pub swaps: u64,
     /// Seconds actually covered (from the entry used to now).
     pub seconds: i64,
-}
-
-fn entry(data: &[u8], i: usize) -> Option<Observation> {
-    let o = obs_layout::ENTRIES + i * obs_layout::ENTRY;
-    let e = data.get(o..o + obs_layout::ENTRY)?;
-    Some(Observation {
-        ts: i64::from_le_bytes(e[0..8].try_into().unwrap()),
-        price_cumulative: u128::from_le_bytes(e[8..24].try_into().unwrap()),
-        quote_volume: u128::from_le_bytes(e[24..40].try_into().unwrap()),
-        swap_count: u64::from_le_bytes(e[40..48].try_into().unwrap()),
-    })
-}
-
-/// `window_read` over the raw `Observations` bytes: the newest entry at or before `now - window`,
-/// or `None` (no signal) when the ring is too short. `pool_quote_volume` and `pool_swap_count` are
-/// the pool's current counters.
-pub fn window_read(
-    data: &[u8],
-    pool_quote_volume: u128,
-    pool_swap_count: u64,
-    now: i64,
-    window: i64,
-) -> Option<WindowRead> {
-    if window <= 0 || data.len() < obs_layout::ENTRIES {
-        return None;
-    }
-    let ring = (data.len() - obs_layout::ENTRIES) / obs_layout::ENTRY;
-    let filled = usize::from(u16::from_le_bytes(
-        data[obs_layout::FILLED..obs_layout::FILLED + 2].try_into().ok()?,
-    ))
-    .min(ring);
-    if filled == 0 {
-        return None;
-    }
-    let index = usize::from(u16::from_le_bytes(
-        data[obs_layout::INDEX..obs_layout::INDEX + 2].try_into().ok()?,
-    )) % ring.max(1);
-    let last_price = u128::from_le_bytes(
-        data[obs_layout::LAST_PRICE..obs_layout::LAST_PRICE + 16]
-            .try_into()
-            .ok()?,
-    );
-    let last_ts = i64::from_le_bytes(data[obs_layout::LAST_TS..obs_layout::LAST_TS + 8].try_into().ok()?);
-    let newest = entry(data, (index + ring - 1) % ring)?;
-    let dt_tail = u128::try_from(now.saturating_sub(last_ts).max(0)).ok()?;
-    let cum_now = newest
-        .price_cumulative
-        .wrapping_add(last_price.wrapping_mul(dt_tail));
-    let target = now.checked_sub(window)?;
-    let mut best: Option<Observation> = None;
-    for i in 0..filled {
-        let e = entry(data, i)?;
-        if e.ts <= target && best.is_none_or(|b| e.ts > b.ts) {
-            best = Some(e);
-        }
-    }
-    let e = best?;
-    let secs = now - e.ts;
-    if secs <= 0 {
-        return None;
-    }
-    Some(WindowRead {
-        twap_q64: cum_now.wrapping_sub(e.price_cumulative) / secs as u128,
-        quote_volume: pool_quote_volume.saturating_sub(e.quote_volume),
-        swaps: pool_swap_count.saturating_sub(e.swap_count),
-        seconds: secs,
-    })
 }
 
 /// The `Performance` rule (02 section 6.7, 16 bytes).
@@ -822,6 +791,450 @@ impl PerformanceRule {
     }
 }
 
+/// `Launch.created_at` (upstream layout: fixed fields only before it).
+pub const LAUNCH_CREATED_AT_OFFSET: usize = 289;
+
+/// The creation time a `Launch` account records, with the same checks as [`launch_pool`].
+pub fn launch_created_at(data: &[u8], mint: &Pubkey) -> Option<i64> {
+    launch_pool(data, mint)?;
+    let o = LAUNCH_CREATED_AT_OFFSET;
+    Some(i64::from_le_bytes(data.get(o..o + 8)?.try_into().ok()?))
+}
+
+/// Raid state shared by the items program (which writes it) and the war program (which reads it):
+/// `RaidLedger` at `["raid-ledger", mint]` under items (04 section 2.9).
+pub mod raid {
+    use anchor_lang::prelude::*;
+
+    /// Windows a ledger keeps (`RAID_TABLE_LEN`, 04 section 2.9; layout constant).
+    pub const RAID_TABLE_LEN: usize = 8;
+    /// Layout version.
+    pub const VERSION: u8 = 1;
+    /// `sha256("account:RaidLedger")[..8]`.
+    pub const DISCRIMINATOR: [u8; 8] = [0x6e, 0x7e, 0x93, 0x3e, 0xca, 0x11, 0x7f, 0xcb];
+
+    /// One rival's inbound raid volume (04 section 2.9).
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct RaidWindow {
+        /// The rival whose holders raided us.
+        pub rival_mint: Pubkey,
+        /// Start of the current window.
+        pub window_start: i64,
+        /// Volume in the current window.
+        pub volume: u64,
+        /// Volume in the previous window.
+        pub prev_volume: u64,
+    }
+
+    /// The raid mark (R4).
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct Mark {
+        /// `Clock::slot` when written; 0 none.
+        pub clock_slot: u64,
+        /// Who receives the raid buy.
+        pub recipient: Pubkey,
+        /// The rival sold.
+        pub rival: Pubkey,
+        /// Quote of the raid buy.
+        pub quote_volume: u64,
+        /// Bit i set once slot i's token half stamped it.
+        pub stamped_slots: u8,
+    }
+
+    /// `RaidLedger` (04 section 2.9).
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, Default, PartialEq, Eq)]
+    pub struct RaidLedger {
+        /// Layout version.
+        pub version: u8,
+        /// Bump.
+        pub bump: u8,
+        /// The token.
+        pub mint: Pubkey,
+        /// `WarConfig.current_season` when last rolled.
+        pub season_id: u32,
+        /// Raid volume our raids brought into us this season.
+        pub outbound_volume_season: u64,
+        /// Per rival.
+        pub inbound: [RaidWindow; RAID_TABLE_LEN],
+        /// The last raid buy.
+        pub mark: Mark,
+        /// Hookwars M3b: the Shield sell mark (who sells, in which clock slot, with which origin):
+        /// the token half writes it on the seller's transfer into the pool, `pool_after_swap`
+        /// reads it (04 M3b notes).
+        pub sell_mark: SellMark,
+        /// Reserved.
+        pub reserved: [u8; 32],
+    }
+
+    /// A Shield sell mark (M3b): written by Shield's token half on a sell's input transfer.
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct SellMark {
+        /// `Clock::slot`; 0 none.
+        pub clock_slot: u64,
+        /// The seller.
+        pub seller: Pubkey,
+        /// Bit i set when slot i's Shield found the seller marked.
+        pub marked_slots: u8,
+    }
+
+    impl RaidLedger {
+        /// Account size (discriminator included).
+        pub const LEN: usize = 8 + 1 + 1 + 32 + 4 + 8 + RAID_TABLE_LEN * 56 + (8 + 32 + 32 + 8 + 1) + (8 + 32 + 1) + 32;
+
+        /// Decodes an account's data (discriminator checked).
+        pub fn decode(data: &[u8]) -> Option<Self> {
+            if data.len() < 8 || data[..8] != DISCRIMINATOR {
+                return None;
+            }
+            Self::deserialize(&mut &data[8..]).ok()
+        }
+
+        /// Encodes into `data` (discriminator first).
+        pub fn encode(&self, data: &mut [u8]) -> Option<()> {
+            let mut v = DISCRIMINATOR.to_vec();
+            self.serialize(&mut v).ok()?;
+            data.get_mut(..v.len())?.copy_from_slice(&v);
+            Some(())
+        }
+
+        /// Rolling inbound raid volume from `rival` at `now` over windows of `window` seconds.
+        pub fn rolling(&self, rival: &Pubkey, now: i64, window: i64) -> u64 {
+            self.inbound
+                .iter()
+                .find(|e| e.rival_mint == *rival)
+                .map(|e| rolling_volume(e, now, window))
+                .unwrap_or(0)
+        }
+
+        /// This season's raid volume, when the ledger's season is `season`.
+        pub fn season_volume(&self, season: u32) -> u64 {
+            if self.season_id == season {
+                self.outbound_volume_season
+            } else {
+                0
+            }
+        }
+
+        /// Rolls the season (04 section 2.9).
+        pub fn roll_season(&mut self, current: u32) {
+            if self.season_id != current {
+                self.season_id = current;
+                self.outbound_volume_season = 0;
+            }
+        }
+
+        /// Adds `v` from `rival` at `now` (the two-window rolling rule; a full table of live
+        /// windows records nothing, so dust rivals cannot evict a live raid).
+        pub fn add_inbound(&mut self, rival: &Pubkey, now: i64, window: i64, v: u64) {
+            let w = window.max(1);
+            let idx = match self.inbound.iter().position(|e| e.rival_mint == *rival) {
+                Some(i) => i,
+                None => {
+                    let free = self
+                        .inbound
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, e)| e.rival_mint == Pubkey::default() || now >= e.window_start + 2 * w)
+                        .min_by_key(|(_, e)| e.window_start)
+                        .map(|(i, _)| i);
+                    let Some(i) = free else { return };
+                    self.inbound[i] = RaidWindow {
+                        rival_mint: *rival,
+                        window_start: now,
+                        volume: 0,
+                        prev_volume: 0,
+                    };
+                    i
+                }
+            };
+            let e = &mut self.inbound[idx];
+            let k = if now > e.window_start { (now - e.window_start) / w } else { 0 };
+            if k == 1 {
+                e.prev_volume = e.volume;
+                e.volume = 0;
+            } else if k >= 2 {
+                e.prev_volume = 0;
+                e.volume = 0;
+            }
+            e.window_start += k * w;
+            e.volume = e.volume.saturating_add(v);
+        }
+    }
+
+    /// The rolling volume of one window entry at `now` (05 section 2.5).
+    pub fn rolling_volume(e: &RaidWindow, now: i64, window: i64) -> u64 {
+        if window <= 0 || now < e.window_start {
+            return e.volume;
+        }
+        let passed = (now - e.window_start) / window;
+        let (current, previous, start) = match passed {
+            0 => (e.volume, e.prev_volume, e.window_start),
+            1 => (0, e.volume, e.window_start + window),
+            _ => return 0,
+        };
+        let overlap = (start + window - now).clamp(0, window);
+        let weighted = u128::from(previous) * overlap as u128 / window as u128;
+        current.saturating_add(weighted as u64)
+    }
+
+    /// A war touch (04 section 2.10): the payload `hookwars_war` sends through `touch`.
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum WarTouch {
+        /// Spend raid points of the current season.
+        SpendRaidPoints {
+            /// How many.
+            amount: u32,
+        },
+        /// Spend one loot ticket.
+        SpendTicket,
+        /// Add loot tickets.
+        AddTicket {
+            /// How many.
+            amount: u16,
+        },
+    }
+
+    /// The Raid range (04 section 3.1, 11 bytes): tag, season, points, tickets.
+    pub const RAID_RANGE_LEN: usize = 11;
+    /// The Raid range's layout tag.
+    pub const RAID_TAG: u8 = 0x01;
+
+    /// A Raid range decoded.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct RaidRange {
+        /// Season of the points.
+        pub season_id: u32,
+        /// Raid points.
+        pub raid_points: u32,
+        /// Loot tickets.
+        pub tickets: u16,
+    }
+
+    impl RaidRange {
+        /// Reads `bytes` (zeros: never stamped). Points of another season read as 0.
+        pub fn read(bytes: &[u8], current_season: u32) -> Self {
+            if bytes.len() < RAID_RANGE_LEN || bytes[0] != RAID_TAG {
+                return Self { season_id: current_season, ..Default::default() };
+            }
+            let season_id = u32::from_le_bytes(bytes[1..5].try_into().unwrap());
+            let raid_points = u32::from_le_bytes(bytes[5..9].try_into().unwrap());
+            let tickets = u16::from_le_bytes(bytes[9..11].try_into().unwrap());
+            Self {
+                season_id: current_season,
+                raid_points: if season_id == current_season { raid_points } else { 0 },
+                tickets,
+            }
+        }
+
+        /// The bytes (all zeros when nothing is held, so the holding can close).
+        pub fn write(&self) -> Vec<u8> {
+            if self.raid_points == 0 && self.tickets == 0 {
+                return vec![0; RAID_RANGE_LEN];
+            }
+            let mut v = vec![RAID_TAG];
+            v.extend_from_slice(&self.season_id.to_le_bytes());
+            v.extend_from_slice(&self.raid_points.to_le_bytes());
+            v.extend_from_slice(&self.tickets.to_le_bytes());
+            v
+        }
+    }
+}
+
+/// Composite items (08 section 2): the module list the armory keeps at `["composite", item]`.
+pub mod composite {
+    use super::*;
+
+    /// `sha256("account:CompositeItem")[..8]`.
+    pub const DISCRIMINATOR: [u8; 8] = [0x7d, 0x62, 0x96, 0xc4, 0x06, 0x4a, 0xd0, 0x29];
+    /// Seed under the armory.
+    pub const SEED: &[u8] = b"composite";
+    /// `reads_module` when a module reads no earlier module.
+    pub const NO_READ: u8 = 0xFF;
+
+    /// One module of a composite (08 2.2).
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct Module {
+        /// A composable template.
+        pub template_id: u16,
+        /// Its fields (written out: the IDL builder cannot follow the `Params` alias).
+        pub params: [u32; PARAM_FIELDS],
+        /// First of its targets in the equip's targets.
+        pub target_start: u8,
+        /// How many targets.
+        pub target_count: u8,
+        /// Its sub-range length (its manifest's `data_bytes`).
+        pub data_bytes: u8,
+        /// An earlier module whose bytes it may read, or [`NO_READ`].
+        pub reads_module: u8,
+    }
+
+    /// `CompositeItem` at `["composite", item]` under the armory (08 2.2).
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, Default, PartialEq, Eq)]
+    pub struct CompositeItem {
+        /// Layout version.
+        pub version: u8,
+        /// Bump.
+        pub bump: u8,
+        /// The item.
+        pub item: Pubkey,
+        /// Modules, run in this order.
+        pub modules: Vec<Module>,
+        /// Items fused into it (display only).
+        pub provenance: Vec<Pubkey>,
+    }
+
+    impl CompositeItem {
+        /// Space for `MAX_MODULES` modules and as many provenance keys.
+        pub const SPACE: usize = 8 + 1 + 1 + 32 + 4 + MAX_MODULES * 50 + 4 + MAX_MODULES * 32;
+
+        /// `["composite", item]` under the armory.
+        pub fn address(item: &Pubkey) -> (Pubkey, u8) {
+            Pubkey::find_program_address(&[SEED, item.as_ref()], &ids::ARMORY_ID)
+        }
+
+        /// Decodes an account's data (discriminator checked).
+        pub fn decode(data: &[u8]) -> Option<Self> {
+            if data.len() < 8 || data[..8] != DISCRIMINATOR {
+                return None;
+            }
+            Self::deserialize(&mut &data[8..]).ok()
+        }
+    }
+
+    /// Why a module list was refused (08 2.10).
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum CompositeError {
+        /// No module, or more than `MAX_MODULES`.
+        TooManyModules,
+        /// A template that may not be a module.
+        NotComposable,
+        /// Modules that no one slot kind can host.
+        KindMismatch,
+        /// Params refused by the template.
+        BadParams,
+        /// Two modules that conflict (08 3.2).
+        ModuleConflict,
+        /// Bytes past `max_bytes`.
+        CompositeBytes,
+        /// Target slices overlapping or past the limit.
+        BadTargets,
+        /// `reads_module` not an earlier module with bytes.
+        BadModuleRead,
+    }
+
+    /// Whether a slot of `host` kind may run a module of `kind` (08 2.8).
+    pub fn hostable(host: u8, kind_: u8) -> bool {
+        match host {
+            kind::FEE => kind_ == kind::FEE,
+            kind::REWARD => kind_ == kind::REWARD || kind_ == kind::FEE,
+            kind::DEFENSE => kind_ == kind::DEFENSE,
+            kind::RELATION => kind_ == kind::RELATION,
+            kind::POOL => matches!(kind_, kind::POOL | kind::FEE | kind::DEFENSE | kind::REWARD),
+            _ => false,
+        }
+    }
+
+    /// The host kind of a module list: the narrowest kind that hosts every module.
+    pub fn host_kind(modules: &[Module]) -> Option<u8> {
+        [kind::FEE, kind::REWARD, kind::DEFENSE, kind::RELATION, kind::POOL]
+            .into_iter()
+            .find(|h| {
+                modules.iter().all(|m| {
+                    shape(m.template_id).is_some_and(|s| hostable(*h, s.kind))
+                })
+            })
+    }
+
+    /// Validation at creation (08 2.10) and the combined manifest (08 2.4). `field` gives each
+    /// template's floors and ceilings; `max_targets` and `max_bytes` are the limits.
+    pub fn validate_modules(
+        modules: &[Module],
+        field: impl Fn(u16) -> Option<(Params, Params)>,
+        max_targets: u8,
+        max_bytes: u8,
+    ) -> core::result::Result<Manifest, CompositeError> {
+        if modules.is_empty() || modules.len() > MAX_MODULES {
+            return Err(CompositeError::TooManyModules);
+        }
+        if modules.iter().any(|m| !composable(m.template_id)) {
+            return Err(CompositeError::NotComposable);
+        }
+        let mut out = Manifest {
+            kind: host_kind(modules).ok_or(CompositeError::KindMismatch)?,
+            ..Default::default()
+        };
+        let mut bytes: u16 = 0;
+        let mut used = [false; 256];
+        let mut targets: u16 = 0;
+        let mut touch_modules = 0;
+        let mut markers: Option<(u8, u8)> = None;
+        let sum = |a: u16, b: u16| a.saturating_add(b).min(10_000);
+        for (i, m) in modules.iter().enumerate() {
+            if !composable(m.template_id) {
+                return Err(CompositeError::NotComposable);
+            }
+            let (min, max) = field(m.template_id).ok_or(CompositeError::NotComposable)?;
+            check_fields(m.template_id, &min, &max, &m.params)
+                .and_then(|_| validate(m.template_id, &m.params))
+                .map_err(|_| CompositeError::BadParams)?;
+            let mm = manifest(m.template_id, &m.params, m.target_count)
+                .map_err(|_| CompositeError::BadParams)?;
+            if m.data_bytes != mm.data_bytes {
+                return Err(CompositeError::CompositeBytes);
+            }
+            if mm.token_flags & token_flags::ANSWERS_TOUCH != 0 {
+                touch_modules += 1;
+            }
+            if mm.pool_flags & pool_flags::MARKS != 0 {
+                let slice = (m.target_start, m.target_count);
+                match markers {
+                    Some(prev) if prev != slice => return Err(CompositeError::ModuleConflict),
+                    _ => markers = Some(slice),
+                }
+            }
+            for t in m.target_start..m.target_start.saturating_add(m.target_count) {
+                if used[usize::from(t)] {
+                    return Err(CompositeError::BadTargets);
+                }
+                used[usize::from(t)] = true;
+            }
+            targets += u16::from(m.target_count);
+            if m.reads_module != NO_READ {
+                let r = usize::from(m.reads_module);
+                if r >= i || modules[r].data_bytes == 0 {
+                    return Err(CompositeError::BadModuleRead);
+                }
+            }
+            bytes += u16::from(mm.data_bytes);
+            out.token_flags |= mm.token_flags;
+            out.pool_flags |= mm.pool_flags;
+            out.max_cut_buy_bps = sum(out.max_cut_buy_bps, mm.max_cut_buy_bps);
+            out.max_cut_sell_bps = sum(out.max_cut_sell_bps, mm.max_cut_sell_bps);
+            out.max_cut_transfer_bps = sum(out.max_cut_transfer_bps, mm.max_cut_transfer_bps);
+            out.max_discount_bps = sum(out.max_discount_bps, mm.max_discount_bps);
+            out.may_refuse |= mm.may_refuse;
+            out.may_burn |= mm.may_burn;
+            out.reads_other_pools = out.reads_other_pools.saturating_add(mm.reads_other_pools);
+        }
+        if touch_modules > 1 {
+            return Err(CompositeError::ModuleConflict);
+        }
+        if targets > u16::from(max_targets) {
+            return Err(CompositeError::BadTargets);
+        }
+        if bytes > u16::from(max_bytes) {
+            return Err(CompositeError::CompositeBytes);
+        }
+        out.data_bytes = bytes as u8;
+        Ok(out)
+    }
+
+    /// The byte offset of module `i`'s sub-range inside the composite's range.
+    pub fn sub_offset(modules: &[Module], i: usize) -> usize {
+        modules[..i].iter().map(|m| usize::from(m.data_bytes)).sum()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -830,6 +1243,26 @@ mod tests {
         let mut a = [0; PARAM_FIELDS];
         a[..v.len()].copy_from_slice(v);
         a
+    }
+
+    #[test]
+    fn raid_ledger_len_matches_its_encoding() {
+        let mut v = Vec::new();
+        raid::RaidLedger::default().serialize(&mut v).unwrap();
+        assert_eq!(v.len() + 8, raid::RaidLedger::LEN);
+    }
+
+    #[test]
+    fn inbound_rolls_two_windows() {
+        let mut l = raid::RaidLedger::default();
+        let r = Pubkey::new_unique();
+        l.add_inbound(&r, 1_000, 100, 10);
+        l.add_inbound(&r, 1_050, 100, 5);
+        assert_eq!(l.inbound[0].volume, 15);
+        l.add_inbound(&r, 1_120, 100, 7);
+        assert_eq!((l.inbound[0].prev_volume, l.inbound[0].volume, l.inbound[0].window_start), (15, 7, 1_100));
+        l.add_inbound(&r, 1_400, 100, 1);
+        assert_eq!((l.inbound[0].prev_volume, l.inbound[0].volume), (0, 1));
     }
 
     #[test]

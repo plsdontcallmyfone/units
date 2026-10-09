@@ -8,6 +8,7 @@ use crate::common::*;
 use crate::constants::*;
 use crate::error::WarError;
 use crate::events::*;
+use crate::foreign::Foreign;
 use crate::foreign::RaidLedger;
 use crate::state::*;
 
@@ -96,7 +97,7 @@ pub fn process_submit_candidate(ctx: Context<SubmitCandidate>, number: u32) -> R
     let state = &mut ctx.accounts.war_state;
     state.roll(current);
     if let Some(info) = ctx.accounts.raid_ledger.as_ref() {
-        require_keys_eq!(info.key(), RaidLedger::address(&state.mint), WarError::WrongAccount);
+        require_keys_eq!(info.key(), crate::foreign::raid_ledger_address(&state.mint), WarError::WrongAccount);
         let ledger = RaidLedger::read(info)?;
         if state.season_id == number {
             state.season.raid_volume_won = state

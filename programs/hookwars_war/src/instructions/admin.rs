@@ -7,6 +7,7 @@ use anchor_lang::prelude::*;
 use crate::constants::*;
 use crate::error::WarError;
 use crate::events::*;
+use crate::foreign::Foreign;
 use crate::foreign::{Template, PARAM_FIELDS, TEMPLATE_ACTIVE};
 use crate::state::*;
 
@@ -346,7 +347,7 @@ pub fn process_propose_loot_table<'info>(
             .ok_or(WarError::MathOverflow)?;
         require_keys_eq!(
             *info.key,
-            Template::address(e.template_id),
+            crate::foreign::template_address(e.template_id),
             WarError::InvalidLootEntry
         );
         let t = Template::read(info)?;

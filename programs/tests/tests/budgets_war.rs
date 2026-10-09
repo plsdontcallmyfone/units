@@ -68,7 +68,7 @@ fn war_budgets() {
         mint,
         orders: war::Orders {
             item,
-            template: hookwars_war::foreign::Template::address(WAR_ORDERS_TEMPLATE),
+            template: hookwars_war::foreign::template_address(WAR_ORDERS_TEMPLATE),
         },
         pool: ww.w.launch_pool_key(&mint),
         raid_item: Pubkey::default(),

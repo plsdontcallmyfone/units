@@ -9,7 +9,6 @@ use anchor_lang::{system_program, InstructionData, ToAccountMetas};
 use bordrless_token::client as token_client;
 
 use crate::constants::*;
-use crate::foreign::{ForgeCounter, Observations, RaidLedger};
 use crate::instructions::{ConfigArgs, SeasonArgs, SliceArgs};
 use crate::state::*;
 
@@ -215,11 +214,10 @@ pub fn siege(
         mint,
         orders_item: orders.item,
         orders_template: orders.template,
-        raid_ledger: RaidLedger::address(&mint),
+        raid_ledger: crate::foreign::raid_ledger_address(&mint),
         rival_mint,
         rival_launch: bordrless_launch::client::launch_address(&rival_mint),
         rival_pool,
-        rival_observations: Observations::address(&rival_pool),
         rival_war_state: rival_has_war.then(|| WarState::address(&rival_mint).0),
         rival_kit_config: opt(rival_kit_config),
         system_program: system_program::ID,
@@ -261,7 +259,6 @@ pub fn counter_strike(
         orders_template: orders.template,
         launch: bordrless_launch::client::launch_address(&mint),
         pool,
-        observations: Observations::address(&pool),
         kit_config,
         system_program: system_program::ID,
         event_authority: event_authority(),
@@ -520,7 +517,7 @@ pub fn claim_quest(
         mint,
         holding: token_client::holding_address(&mint, &owner),
         quest_mark: QuestMark::address(season, &mark_mint, &owner).0,
-        forge_counter: (quest_id == quest::FORGE).then(|| ForgeCounter::address(&owner)),
+        forge_counter: (quest_id == quest::FORGE).then(|| crate::foreign::forge_counter_address(&owner)),
         war_signer: war_signer_address().0,
         items_program: ITEMS_ID,
         items_hook_signer: token_client::hook_signer(&ITEMS_ID),
@@ -578,7 +575,7 @@ pub fn submit_candidate(submitter: Pubkey, number: u32, mint: Pubkey, with_ledge
             config: config_address(),
             season: Season::address(number).0,
             war_state: WarState::address(&mint).0,
-            raid_ledger: with_ledger.then(|| RaidLedger::address(&mint)),
+            raid_ledger: with_ledger.then(|| crate::foreign::raid_ledger_address(&mint)),
             event_authority: event_authority(),
             program: crate::ID,
         }

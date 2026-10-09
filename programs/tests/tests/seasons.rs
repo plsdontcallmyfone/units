@@ -49,8 +49,8 @@ fn a_season_waits_for_the_timelock_and_its_start() {
     // No loot table yet: cannot open.
     ww.w.env.send(&[war::open_season(0)], &[]).expect_fail();
     let templates = [
-        hookwars_war::foreign::Template::address(RAID_TEMPLATE),
-        hookwars_war::foreign::Template::address(WAR_ORDERS_TEMPLATE),
+        hookwars_war::foreign::template_address(RAID_TEMPLATE),
+        hookwars_war::foreign::template_address(WAR_ORDERS_TEMPLATE),
     ];
     ww.w.env
         .send(&[war::propose_loot_table(admin.pubkey(), 1, WarWorld::loot_entries(), &templates)], &[&admin])
@@ -116,8 +116,8 @@ fn a_season_cannot_open_while_the_last_is_unfinalized() {
         penalize_besieged: false,
     };
     let templates = [
-        hookwars_war::foreign::Template::address(RAID_TEMPLATE),
-        hookwars_war::foreign::Template::address(WAR_ORDERS_TEMPLATE),
+        hookwars_war::foreign::template_address(RAID_TEMPLATE),
+        hookwars_war::foreign::template_address(WAR_ORDERS_TEMPLATE),
     ];
     let ixs = [
         war::propose_season(admin.pubkey(), args),
@@ -157,8 +157,8 @@ fn loot_tables_stay_inside_their_templates() {
     let mut entries = WarWorld::loot_entries();
     entries[0].ranges[0].max = 10_001; // above the Raid template's ceiling
     let templates = [
-        hookwars_war::foreign::Template::address(RAID_TEMPLATE),
-        hookwars_war::foreign::Template::address(WAR_ORDERS_TEMPLATE),
+        hookwars_war::foreign::template_address(RAID_TEMPLATE),
+        hookwars_war::foreign::template_address(WAR_ORDERS_TEMPLATE),
     ];
     ww.w.env
         .send(&[war::propose_loot_table(admin.pubkey(), 1, entries, &templates)], &[&admin])
@@ -168,8 +168,8 @@ fn loot_tables_stay_inside_their_templates() {
     entries[0].template_id = TREATY_TEMPLATE;
     entries[0].ranges = [ParamRange::default(); hookwars_war::foreign::PARAM_FIELDS];
     let templates = [
-        hookwars_war::foreign::Template::address(TREATY_TEMPLATE),
-        hookwars_war::foreign::Template::address(WAR_ORDERS_TEMPLATE),
+        hookwars_war::foreign::template_address(TREATY_TEMPLATE),
+        hookwars_war::foreign::template_address(WAR_ORDERS_TEMPLATE),
     ];
     ww.w.env
         .send(&[war::propose_loot_table(admin.pubkey(), 1, entries, &templates)], &[&admin])

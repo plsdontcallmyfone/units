@@ -10,6 +10,7 @@ use crate::common::*;
 use crate::constants::*;
 use crate::error::WarError;
 use crate::events::*;
+use crate::foreign::Foreign;
 use crate::foreign::ForgeCounter;
 use crate::instructions::admin::read_own;
 use crate::state::*;
@@ -178,7 +179,7 @@ pub fn process_claim_quest<'info>(
             .ok_or(WarError::MissingAccount)?;
         require_keys_eq!(
             info.key(),
-            ForgeCounter::address(&ctx.accounts.owner.key()),
+            crate::foreign::forge_counter_address(&ctx.accounts.owner.key()),
             WarError::WrongAccount
         );
         let counter = ForgeCounter::read(info)?;

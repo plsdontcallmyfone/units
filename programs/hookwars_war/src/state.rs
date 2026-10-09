@@ -1,3 +1,4 @@
+// Changed by Hookwars: new file (M4/M5); M3b: POINT_UNIT_LAMPORTS and LOOT_MIN_RAID_LAMPORTS in WarParams.
 //! Accounts of the war program (05 section 2).
 
 use anchor_lang::prelude::*;
@@ -47,6 +48,10 @@ pub struct WarParams {
     pub challenge_secs: i64,
     /// `SEASON_PRIZE_SHARE_BPS`: of the prize vault, to the last winner's chest.
     pub season_prize_share_bps: u16,
+    /// `POINT_UNIT_LAMPORTS` (M3b): raid quote volume per raid point unit (the Raid item reads it).
+    pub point_unit_lamports: u64,
+    /// `LOOT_MIN_RAID_LAMPORTS` (M3b): the smallest raid buy that earns a loot ticket.
+    pub loot_min_raid_lamports: u64,
 }
 
 impl WarParams {

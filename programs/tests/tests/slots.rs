@@ -631,7 +631,7 @@ fn the_rules_of_a_slot_table() {
     refused(vec![item_slot(kind::WAR, rule::VOTE, 0, 4, false)], true, InvalidSlotTable);
     refused(vec![item_slot(kind::REWARD, rule::VOTE, 0, 1, false)], true, InvalidSlotTable);
     refused(vec![item_slot(kind::DEFENSE, rule::VOTE, 10, 0, false)], true, InvalidSlotTable);
-    refused(vec![item_slot(kind::POOL, rule::VOTE, 10, 0, false)], true, InvalidSlotTable);
+    // Changed by Hookwars M3b: a Pool slot may cut (it hosts composites' Fee modules, 08 2.8).
     refused(vec![fee(6_000), fee(6_000)], true, InvalidSlotTable);
     refused(
         vec![

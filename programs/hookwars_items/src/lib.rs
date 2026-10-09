@@ -1,28 +1,30 @@
-// Changed by Hookwars: new file (M2), the template program's armory-facing entry points.
-//! `hookwars_items`: one program implementing every template (docs/spec/04-templates.md, 00 D-2).
+// Changed by Hookwars: new file (M2), the template program's armory-facing entry points; M3b: the
+// token and pool callbacks, every base template and arsenal wave A, composites, the raid ledger
+// and settle_equip.
+//! `hookwars_items`: one program implementing every template (docs/spec/04-templates.md,
+//! 08-arsenal.md, 00 D-2).
 //!
-//! M2 builds what the armory (docs/spec/02-armory.md) calls, all signed by the armory's
-//! `["armory"]` PDA:
+//! - Armory-facing (signed by the armory's `["armory"]` PDA, M2): `validate_params`, `manifest`,
+//!   `combine_params`, `init_equip`, `close_equip`.
+//! - Token slot callbacks (signed by the token program's `["hook-authority", items]`):
+//!   `before_transfer`, `after_transfer`, `before_burn`, `after_burn`, `on_touch`.
+//! - Pool callbacks (signed by the launchpad's `["hook-authority", items]`, 03 section 5):
+//!   `pool_before_swap`, `pool_after_swap`.
+//! - Permissionless: `init_raid_ledger`, `settle_equip`.
 //!
-//! - `validate_params`, `manifest`, `combine_params`: pure, answering through return data;
-//! - `init_equip`: creates or resets the slot's `EquipState` at `["equip", mint, slot]`, writes the
-//!   item's registry at `["bordrless-hook-accounts", mint, item]` and creates the equip vault (the
-//!   `EquipState`'s holding of the mint) for an item that may cut; returns the registry length;
-//! - `close_equip`: refuses while the slot's vaults hold anything unsettled, then empties it.
-//!
-//! The hook callbacks, `settle_equip` and `RaidLedger` are M3 (this crate is laid out so they are
-//! added beside these).
+//! Callbacks are leaves (R3): they make no CPI. Each template lives in `templates/<name>.rs`.
 
 #![allow(unexpected_cfgs)]
 
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::program::{invoke, set_return_data};
-use anchor_lang::system_program;
-use bordrless_hook::{AccountSource, ExtraAccount, HookAccountList, HOOK_ACCOUNTS_SEED};
-use hookwars_common::{
-    combine, manifest as compute_manifest, pda, template_id, validate, EquipConfig, Manifest,
-    Params, ParamsError,
-};
+use bordrless_hook::pool_item::ItemPoolContext;
+use bordrless_hook::{PoolHookArgs, TokenSlotArgs};
+use hookwars_common::{EquipConfig, ParamsError, MAX_MODULES, PARAM_FIELDS};
+
+pub mod engine;
+pub mod equip;
+pub mod settle;
+pub mod templates;
 
 declare_id!("8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv");
 
@@ -38,10 +40,26 @@ solana_security_txt::security_txt! {
 /// The armory's signer of every call here: `["armory"]` under the armory (02 section 2.2).
 pub const ARMORY_SIGNER: Pubkey =
     Pubkey::from_str_const("2NSNJ4W51G5ZZSc4wVqkjyR8yr5yzuEjquKv7iprzSHP");
+/// The token program's signer of every slot callback here: `["hook-authority", items]` under the
+/// token program (04 section 2.1).
+pub const TOKEN_ITEMS_SIGNER: Pubkey =
+    Pubkey::from_str_const("GtuzTUqRkfbWLarc8hhn7WWTkkuPXavZBQGb8MH43kwN");
+/// The launchpad's signer of every pool-item callback: `["hook-authority", items]` under the
+/// launchpad (04 section 2.1, 03 section 5.1).
+pub const LAUNCH_ITEMS_SIGNER: Pubkey =
+    Pubkey::from_str_const("7WNwXG1tgUs2Srx4wPxBiRfhtMvMkZUZCDuyvrGAYLnX");
+/// The war program's `["war-signer"]`: the only `authority` a war touch is accepted from.
+pub const WAR_SIGNER: Pubkey =
+    Pubkey::from_str_const("HCBAfMMN6JMUfnJ64H4Kxs6r3gaTpJCeFr5dyrDMENoe");
 /// `EquipState` layout version.
-pub const VERSION: u8 = 1;
+pub const VERSION: u8 = 2;
+/// Accounts before a token callback's extras: the signer, mint, source, destination, authority
+/// (`bordrless_hook::TOKEN_PREFIX_ACCOUNTS`).
+pub const TOKEN_PREFIX: usize = bordrless_hook::TOKEN_PREFIX_ACCOUNTS;
+/// Index of the equip vault in a token callback's accounts (prefix, `Item`, `EquipState`, vault).
+pub const VAULT_INDEX: u8 = (TOKEN_PREFIX + 2) as u8;
 
-/// Errors (04 section 6).
+/// Errors (04 section 6, 08 section 2.10).
 #[error_code]
 pub enum ItemsError {
     /// The params break a template rule.
@@ -68,9 +86,46 @@ pub enum ItemsError {
     /// A wrong account.
     #[msg("a wrong account")]
     WrongAccount,
+    /// The caller is not the token program's or the launchpad's signer for this program.
+    #[msg("the hook signer is not the caller's signer for this program")]
+    BadHookSigner,
+    /// The item in the arguments is not the one its accounts name.
+    #[msg("the item in the arguments is not the one its accounts name")]
+    WrongItem,
+    /// A Wall refuses the transfer.
+    #[msg("the wall holds: the wallet would hold too much while under siege")]
+    WallHolds,
+    /// A wallet cap refuses the transfer.
+    #[msg("the wallet would hold more than the cap")]
+    WalletTooLarge,
+    /// A war touch from another caller.
+    #[msg("only the war program may touch raid points and tickets")]
+    NotWarSigner,
+    /// Not enough raid points this season.
+    #[msg("not enough raid points this season")]
+    NotEnoughPoints,
+    /// No loot ticket.
+    #[msg("no loot ticket")]
+    NoTicket,
+    /// Arithmetic overflow.
+    #[msg("arithmetic overflow")]
+    Overflow,
+    /// A transfer larger than Max Transaction allows.
+    #[msg("the transfer moves more of the supply than one transfer may")]
+    TransferTooLarge,
+    /// A wallet send under Dust Guard's minimum.
+    #[msg("the send is under the minimum")]
+    DustRefused,
+    /// The composite's module list is unreadable or does not match the item.
+    #[msg("the composite's module list does not match the item")]
+    BadComposite,
+    /// The range is shorter than the item's bytes.
+    #[msg("the slot's range is shorter than the item's bytes")]
+    RangeTooShort,
 }
 
-fn map(e: ParamsError) -> Error {
+/// Maps a shared-rule error.
+pub fn map(e: ParamsError) -> Error {
     match e {
         ParamsError::UnknownTemplate => ItemsError::UnknownTemplate.into(),
         ParamsError::NotForgeable => ItemsError::NotForgeable.into(),
@@ -78,7 +133,8 @@ fn map(e: ParamsError) -> Error {
     }
 }
 
-/// One equip of a mint's slot (04 section 4). Also the owner of the slot's equip vault.
+/// One equip of a mint's slot (04 section 4, 08 section 2.11). Also the owner of the slot's
+/// equip vault.
 #[account]
 #[derive(Debug)]
 pub struct EquipState {
@@ -98,14 +154,18 @@ pub struct EquipState {
     pub config: EquipConfig,
     /// When equipped.
     pub equipped_at: i64,
-    /// Callbacks run (M3).
+    /// Callbacks run (informational).
     pub runs: u64,
-    /// Token-side cuts taken (M3).
+    /// Token-side cuts taken, all time.
     pub collected_token: u64,
-    /// Pool-side cuts recorded (M3).
+    /// Pool-side cuts recorded, all time.
     pub pool_owed: u64,
-    /// Pool-side cuts settled (M3).
+    /// Pool-side cuts settled, all time.
     pub pool_settled: u64,
+    /// Unsettled token-side cuts per module (index 0 for a plain item).
+    pub token_unsettled: [u64; MAX_MODULES],
+    /// Unsettled pool-side cuts per module.
+    pub pool_unsettled: [u64; MAX_MODULES],
     /// Reserved.
     pub reserved: [u8; 32],
 }
@@ -113,32 +173,72 @@ pub struct EquipState {
 impl EquipState {
     /// Space for an `EquipState` with `targets` targets.
     pub fn space(targets: usize) -> usize {
-        8 + 1 + 1 + 32 + 1 + 32 + 2 + (4 + 32 * targets + 1) + 8 + 8 + 8 + 8 + 8 + 32
+        8 + 1 + 1 + 32 + 1 + 32 + 2 + (4 + 32 * targets + 1) + 8 + 8 + 8 + 8 + 8
+            + 16 * MAX_MODULES
+            + 32
     }
 }
 
 /// Emitted by `init_equip` (program log: called only by CPI).
 #[event]
 pub struct EquipInitialized {
-    /// The token.
     pub mint: Pubkey,
-    /// The slot.
     pub slot: u8,
-    /// The item.
     pub item: Pubkey,
-    /// Targets and role.
     pub config: EquipConfig,
 }
 
 /// Emitted by `close_equip`.
 #[event]
 pub struct EquipClosed {
-    /// The token.
     pub mint: Pubkey,
-    /// The slot.
     pub slot: u8,
-    /// The item that left.
     pub item: Pubkey,
+}
+
+/// A raid buy stamped on its buyer's holding (04 section 5; 06's name and fields).
+#[event]
+pub struct RaidMarked {
+    pub mint: Pubkey,
+    pub rival: Pubkey,
+    pub trader: Pubkey,
+    pub volume: u64,
+    pub points: u32,
+    pub loot_ticket: bool,
+}
+
+/// A Shield's sell cut.
+#[event]
+pub struct ShieldTaken {
+    pub mint: Pubkey,
+    pub owner: Pubkey,
+    pub cut: u64,
+}
+
+/// Any item cut. `side`: 0 token, 1 pool on a buy, 2 pool on a sell.
+#[event]
+pub struct ItemCut {
+    pub mint: Pubkey,
+    pub slot: u8,
+    pub item: Pubkey,
+    pub module: u8,
+    pub side: u8,
+    pub amount: u64,
+}
+
+/// `settle_equip` (04 section 5).
+#[event]
+pub struct EquipSettled {
+    pub mint: Pubkey,
+    pub slot: u8,
+    pub item: Pubkey,
+    pub royalty_token: u64,
+    pub royalty_quote: u64,
+    pub amount_token: u64,
+    pub amount_quote: u64,
+    pub burned: u64,
+    pub bounty_token: u64,
+    pub bounty_quote: u64,
 }
 
 /// Instructions.
@@ -150,51 +250,41 @@ pub mod hookwars_items {
     pub fn validate_params(
         _ctx: Context<ArmoryOnly>,
         template_id: u16,
-        field_min: Params,
-        field_max: Params,
-        params: Params,
+        field_min: [u32; PARAM_FIELDS],
+        field_max: [u32; PARAM_FIELDS],
+        params: [u32; PARAM_FIELDS],
     ) -> Result<()> {
-        hookwars_common::check_fields(template_id, &field_min, &field_max, &params).map_err(map)?;
-        validate(template_id, &params).map_err(map)
+        equip::validate_params(template_id, field_min, field_max, params)
     }
 
     /// The item's manifest, as return data (16 bytes).
     pub fn manifest(
         _ctx: Context<ArmoryOnly>,
         template_id: u16,
-        params: Params,
+        params: [u32; PARAM_FIELDS],
         max_targets: u8,
     ) -> Result<()> {
-        let m = compute_manifest(template_id, &params, max_targets).map_err(map)?;
-        let mut v = Vec::new();
-        m.serialize(&mut v)?;
-        set_return_data(&v);
-        Ok(())
+        equip::manifest(template_id, params, max_targets)
     }
 
     /// The forged params, as return data.
     pub fn combine_params(
         _ctx: Context<ArmoryOnly>,
         template_id: u16,
-        field_min: Params,
-        field_max: Params,
+        field_min: [u32; PARAM_FIELDS],
+        field_max: [u32; PARAM_FIELDS],
         gain_bps: u16,
-        a: Params,
-        b: Params,
+        a: [u32; PARAM_FIELDS],
+        b: [u32; PARAM_FIELDS],
     ) -> Result<()> {
-        let out = combine(template_id, &field_min, &field_max, gain_bps, &a, &b).map_err(map)?;
-        validate(template_id, &out).map_err(map)?;
-        let mut v = Vec::new();
-        out.serialize(&mut v)?;
-        set_return_data(&v);
-        Ok(())
+        equip::combine_params(template_id, field_min, field_max, gain_bps, a, b)
     }
 
     /// Creates or resets the slot's `EquipState`, writes the item's registry, creates the equip
-    /// vault for an item that may cut on the token side. Return data: the registry length (`u8`),
-    /// which the armory passes to the token program as the slot's `extra_count`.
-    pub fn init_equip(
-        ctx: Context<InitEquip>,
+    /// vault for an item that may cut on the token side. Return data: the registry length (`u8`).
+    /// For a composite, the module list is the first remaining account.
+    pub fn init_equip<'info>(
+        ctx: Context<'info, InitEquip<'info>>,
         slot: u8,
         item: Pubkey,
         template_id: u16,
@@ -202,12 +292,81 @@ pub mod hookwars_items {
         config: EquipConfig,
         max_targets: u8,
     ) -> Result<()> {
-        process_init_equip(ctx, slot, item, template_id, manifest, config, max_targets)
+        equip::process_init_equip(ctx, slot, item, template_id, manifest, config, max_targets)
     }
 
     /// Empties the slot's `EquipState`; refused while its vaults hold anything unsettled.
     pub fn close_equip(ctx: Context<CloseEquip>, slot: u8) -> Result<()> {
-        process_close_equip(ctx, slot)
+        equip::process_close_equip(ctx, slot)
+    }
+
+    /// Creates a mint's `RaidLedger` (permissionless; the payer pays rent).
+    pub fn init_raid_ledger(ctx: Context<InitRaidLedger>) -> Result<()> {
+        engine::process_init_raid_ledger(ctx)
+    }
+
+    /// Token slot callback.
+    pub fn before_transfer<'info>(
+        ctx: Context<'info, TokenCallback<'info>>,
+        args: TokenSlotArgs,
+    ) -> Result<()> {
+        engine::token_before(ctx, args)
+    }
+
+    /// Token slot callback (answers nothing).
+    pub fn after_transfer<'info>(
+        ctx: Context<'info, TokenCallback<'info>>,
+        _args: TokenSlotArgs,
+    ) -> Result<()> {
+        engine::check_token_signer(&ctx.accounts.hook_signer)
+    }
+
+    /// Token slot callback (answers nothing).
+    pub fn before_burn<'info>(
+        ctx: Context<'info, TokenCallback<'info>>,
+        _args: TokenSlotArgs,
+    ) -> Result<()> {
+        engine::check_token_signer(&ctx.accounts.hook_signer)
+    }
+
+    /// Token slot callback (answers nothing).
+    pub fn after_burn<'info>(
+        ctx: Context<'info, TokenCallback<'info>>,
+        _args: TokenSlotArgs,
+    ) -> Result<()> {
+        engine::check_token_signer(&ctx.accounts.hook_signer)
+    }
+
+    /// `touch` of one holding (war payloads, 04 section 2.10).
+    pub fn on_touch<'info>(
+        ctx: Context<'info, TokenCallback<'info>>,
+        args: TokenSlotArgs,
+    ) -> Result<()> {
+        engine::touch(ctx, args)
+    }
+
+    /// Pool-item callback before a launch-pool swap.
+    pub fn pool_before_swap<'info>(
+        ctx: Context<'info, PoolCallback<'info>>,
+        args: PoolHookArgs,
+        item_ctx: ItemPoolContext,
+    ) -> Result<()> {
+        engine::pool(ctx, args, item_ctx, true)
+    }
+
+    /// Pool-item callback after a launch-pool swap.
+    pub fn pool_after_swap<'info>(
+        ctx: Context<'info, PoolCallback<'info>>,
+        args: PoolHookArgs,
+        item_ctx: ItemPoolContext,
+    ) -> Result<()> {
+        engine::pool(ctx, args, item_ctx, false)
+    }
+
+    /// Pays what a slot's item collected (04 section 2.5, 08 section 2.11): the royalty, the
+    /// sender's bounty, the rest to each module's destination. Permissionless.
+    pub fn settle_equip<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Result<()> {
+        settle::process(ctx, slot)
     }
 }
 
@@ -237,8 +396,7 @@ pub struct InitEquip<'info> {
     /// CHECK: `["bordrless-hook-accounts", mint, item]` under this program, written here.
     #[account(mut)]
     pub registry: UncheckedAccount<'info>,
-    /// CHECK: the equip vault (`EquipState`'s holding of the mint), created here when the item may
-    /// cut on the token side.
+    /// CHECK: the equip vault, created here when the item may cut on the token side.
     #[account(mut)]
     pub equip_vault: Option<UncheckedAccount<'info>>,
     /// CHECK: the token program.
@@ -264,311 +422,98 @@ pub struct CloseEquip<'info> {
     pub equip_vault: Option<UncheckedAccount<'info>>,
 }
 
-fn check_targets(template_id: u16, config: &EquipConfig, max_targets: u8) -> Result<()> {
-    let n = config.targets.len();
-    require!(n <= usize::from(max_targets), ItemsError::BadTargets);
-    let ok = match template_id {
-        template_id::RAID | template_id::SHIELD => n >= 1 && config.role == 0,
-        template_id::SPY | template_id::TREATY | template_id::TRANSFER_FEE => {
-            n == 1 && config.role == 0
-        }
-        template_id::TRIBUTE => n == 1 && (config.role == 1 || config.role == 2),
-        template_id::WALL | template_id::HALF_LIFE | template_id::WAR_ORDERS => {
-            n == 0 && config.role == 0
-        }
-        _ => false,
-    };
-    require!(ok, ItemsError::BadTargets);
-    let mut seen = config.targets.clone();
-    seen.sort();
-    seen.dedup();
-    require!(seen.len() == n, ItemsError::BadTargets);
-    Ok(())
+/// Accounts of `init_raid_ledger`.
+#[derive(Accounts)]
+pub struct InitRaidLedger<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    /// CHECK: the token (a mint of the token program).
+    #[account(owner = bordrless_token::ID)]
+    pub mint: UncheckedAccount<'info>,
+    /// CHECK: `["raid-ledger", mint]`, created here.
+    #[account(mut)]
+    pub raid_ledger: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
 }
 
-/// The registry of an equipped item: the `Item` and `EquipState` first (04 section 2.2), then the
-/// template's extras (04 section 3). M2 writes what each template's "Extras" names as fixed keys;
-/// M3 owns the final lists (M2 implementation notes in 02).
-fn registry_list(
-    template_id: u16,
-    mint: &Pubkey,
-    item: &Pubkey,
-    equip_state: &Pubkey,
-    equip_vault: Option<Pubkey>,
-    config: &EquipConfig,
-) -> HookAccountList {
-    let key = |k: Pubkey, writable: bool| ExtraAccount {
-        writable,
-        source: AccountSource::Key(k),
-    };
-    let mut v = vec![key(*item, false), key(*equip_state, true)];
-    if let Some(vault) = equip_vault {
-        v.push(key(vault, true));
-    }
-    let launches = |v: &mut Vec<ExtraAccount>| {
-        for t in &config.targets {
-            v.push(key(pda::launch(t).0, false));
-        }
-    };
-    match template_id {
-        template_id::RAID => {
-            v.push(key(pda::raid_ledger(mint).0, true));
-            v.push(key(pda::war_config().0, false));
-            launches(&mut v);
-        }
-        template_id::SHIELD => {
-            v.push(key(pda::raid_ledger(mint).0, true));
-            v.push(key(pda::war_config().0, false));
-            v.push(key(pda::war_state(mint).0, false));
-            launches(&mut v);
-        }
-        template_id::WALL => v.push(key(pda::war_state(mint).0, false)),
-        template_id::SPY => launches(&mut v),
-        template_id::TREATY | template_id::TRIBUTE => {
-            for t in &config.targets {
-                v.push(key(*t, false));
-            }
-        }
-        _ => {}
-    }
-    HookAccountList::new(v)
+/// A token slot callback: the token prefix, then the item's extras (remaining accounts).
+#[derive(Accounts)]
+pub struct TokenCallback<'info> {
+    /// CHECK: the token program's signer for this program (checked in the engine).
+    pub hook_signer: UncheckedAccount<'info>,
+    /// CHECK: the mint.
+    pub mint: UncheckedAccount<'info>,
+    /// CHECK: source.
+    pub source: UncheckedAccount<'info>,
+    /// CHECK: destination.
+    pub destination: UncheckedAccount<'info>,
+    /// CHECK: authority.
+    pub authority: UncheckedAccount<'info>,
 }
 
-/// Creates `target` (a PDA of this program with `seeds`) with `space` bytes, or resizes it when
-/// it exists and is smaller, topping up rent from `payer`. An address someone already funded is
-/// allocated and assigned, as upstream `write_registry` does.
-fn create_or_resize<'info>(
-    payer: &AccountInfo<'info>,
-    target: &AccountInfo<'info>,
-    system: &AccountInfo<'info>,
-    seeds: &[&[u8]],
-    space: usize,
-) -> Result<()> {
-    let rent = Rent::get()?.minimum_balance(space);
-    if *target.owner == system_program::ID {
-        let current = target.lamports();
-        if current == 0 {
-            system_program::create_account(
-                CpiContext::new_with_signer(
-                    system.key(),
-                    system_program::CreateAccount {
-                        from: payer.clone(),
-                        to: target.clone(),
-                    },
-                    &[seeds],
-                ),
-                rent,
-                space as u64,
-                &crate::ID,
-            )?;
-        } else {
-            let top_up = rent.saturating_sub(current);
-            if top_up > 0 {
-                system_program::transfer(
-                    CpiContext::new(
-                        system.key(),
-                        system_program::Transfer {
-                            from: payer.clone(),
-                            to: target.clone(),
-                        },
-                    ),
-                    top_up,
-                )?;
-            }
-            system_program::allocate(
-                CpiContext::new_with_signer(
-                    system.key(),
-                    system_program::Allocate {
-                        account_to_allocate: target.clone(),
-                    },
-                    &[seeds],
-                ),
-                space as u64,
-            )?;
-            system_program::assign(
-                CpiContext::new_with_signer(
-                    system.key(),
-                    system_program::Assign {
-                        account_to_assign: target.clone(),
-                    },
-                    &[seeds],
-                ),
-                &crate::ID,
-            )?;
-        }
-        return Ok(());
-    }
-    require_keys_eq!(*target.owner, crate::ID, ItemsError::WrongAccount);
-    if target.data_len() < space {
-        let top_up = rent.saturating_sub(target.lamports());
-        if top_up > 0 {
-            system_program::transfer(
-                CpiContext::new(
-                    system.key(),
-                    system_program::Transfer {
-                        from: payer.clone(),
-                        to: target.clone(),
-                    },
-                ),
-                top_up,
-            )?;
-        }
-        target.resize(space)?;
-    }
-    Ok(())
+/// A pool-item callback: the launchpad's signer and the pool prefix, then the item's extras.
+#[derive(Accounts)]
+pub struct PoolCallback<'info> {
+    /// CHECK: the launchpad's signer for this program (checked in the engine).
+    pub hook_signer: UncheckedAccount<'info>,
+    /// CHECK: the pool.
+    pub pool: UncheckedAccount<'info>,
+    /// CHECK: the base mint (the token).
+    pub base_mint: UncheckedAccount<'info>,
+    /// CHECK: the quote mint.
+    pub quote_mint: UncheckedAccount<'info>,
+    /// CHECK: the trader.
+    pub actor: UncheckedAccount<'info>,
 }
 
-#[allow(clippy::too_many_arguments)]
-fn process_init_equip(
-    ctx: Context<InitEquip>,
-    slot: u8,
-    item: Pubkey,
-    template_id: u16,
-    manifest: Manifest,
-    config: EquipConfig,
-    max_targets: u8,
-) -> Result<()> {
-    check_targets(template_id, &config, max_targets)?;
-    let mint = ctx.accounts.mint.key();
-    let (state_key, state_bump) = pda::equip_state(&mint, slot);
-    require_keys_eq!(ctx.accounts.equip_state.key(), state_key, ItemsError::WrongAccount);
-    let payer = ctx.accounts.payer.to_account_info();
-    let system = ctx.accounts.system_program.to_account_info();
-
-    // EquipState: create, or reset an empty one.
-    let state_info = ctx.accounts.equip_state.to_account_info();
-    if *state_info.owner == crate::ID && state_info.data_len() > 8 {
-        let existing = EquipState::try_deserialize(&mut &state_info.try_borrow_data()?[..])?;
-        require!(existing.item == Pubkey::default(), ItemsError::SlotNotEmpty);
-        require!(
-            existing.pool_owed == existing.pool_settled,
-            ItemsError::VaultNotSettled
-        );
-    }
-    let slot_seed = [slot];
-    let bump_seed = [state_bump];
-    let seeds: &[&[u8]] = &[
-        hookwars_common::seeds::EQUIP,
-        mint.as_ref(),
-        &slot_seed,
-        &bump_seed,
-    ];
-    create_or_resize(
-        &payer,
-        &state_info,
-        &system,
-        seeds,
-        EquipState::space(config.targets.len()),
-    )?;
-    let (pool_owed, pool_settled) = if state_info.data_len() > 8
-        && state_info.try_borrow_data()?[..8] == *EquipState::DISCRIMINATOR
-    {
-        let s = EquipState::try_deserialize(&mut &state_info.try_borrow_data()?[..])?;
-        (s.pool_owed, s.pool_settled)
-    } else {
-        (0, 0)
-    };
-    let state = EquipState {
-        version: VERSION,
-        bump: state_bump,
-        mint,
-        slot,
-        item,
-        template_id,
-        config: config.clone(),
-        equipped_at: Clock::get()?.unix_timestamp,
-        runs: 0,
-        collected_token: 0,
-        pool_owed,
-        pool_settled,
-        reserved: [0; 32],
-    };
-    {
-        let mut data = state_info.try_borrow_mut_data()?;
-        let mut out: &mut [u8] = &mut data[..];
-        state.try_serialize(&mut out)?;
-    }
-
-    // The equip vault, for an item that may cut on the token side.
-    let vault = if manifest.token_cuts() {
-        let vault = ctx
-            .accounts
-            .equip_vault
-            .as_ref()
-            .ok_or(ItemsError::WrongAccount)?;
-        require_keys_eq!(
-            vault.key(),
-            pda::holding(&mint, &state_key),
-            ItemsError::WrongAccount
-        );
-        let ix = bordrless_token::client::create_holding(payer.key(), mint, state_key);
-        invoke(
-            &ix,
-            &[
-                payer.clone(),
-                ctx.accounts.mint.to_account_info(),
-                state_info.clone(),
-                vault.to_account_info(),
-                system.clone(),
-                ctx.accounts.token_event_authority.to_account_info(),
-                ctx.accounts.token_program.to_account_info(),
-            ],
-        )?;
-        Some(vault.key())
-    } else {
-        None
-    };
-
-    // The registry.
-    let list = registry_list(template_id, &mint, &item, &state_key, vault, &config);
-    let bytes = list.encode();
-    let (reg_key, reg_bump) = Pubkey::find_program_address(
-        &[HOOK_ACCOUNTS_SEED, mint.as_ref(), item.as_ref()],
-        &crate::ID,
-    );
-    require_keys_eq!(ctx.accounts.registry.key(), reg_key, ItemsError::WrongAccount);
-    let reg_info = ctx.accounts.registry.to_account_info();
-    let reg_bump_seed = [reg_bump];
-    let reg_seeds: &[&[u8]] = &[HOOK_ACCOUNTS_SEED, mint.as_ref(), item.as_ref(), &reg_bump_seed];
-    create_or_resize(&payer, &reg_info, &system, reg_seeds, bytes.len())?;
-    {
-        let mut data = reg_info.try_borrow_mut_data()?;
-        data[..bytes.len()].copy_from_slice(&bytes);
-        for b in data[bytes.len()..].iter_mut() {
-            *b = 0;
-        }
-    }
-    let count = list.accounts.len() as u8;
-    emit!(EquipInitialized {
-        mint,
-        slot,
-        item,
-        config,
-    });
-    set_return_data(&[count]);
-    Ok(())
-}
-
-fn process_close_equip(ctx: Context<CloseEquip>, slot: u8) -> Result<()> {
-    let mint = ctx.accounts.mint.key();
-    let state_key = ctx.accounts.equip_state.key();
-    require_keys_eq!(state_key, pda::equip_state(&mint, slot).0, ItemsError::WrongAccount);
-    let state = &mut ctx.accounts.equip_state;
-    require!(state.item != Pubkey::default(), ItemsError::NotEquipped);
-    require!(state.pool_owed == state.pool_settled, ItemsError::VaultNotSettled);
-    if let Some(vault) = ctx.accounts.equip_vault.as_ref() {
-        require_keys_eq!(
-            vault.key(),
-            pda::holding(&mint, &state_key),
-            ItemsError::WrongAccount
-        );
-        if *vault.owner == bordrless_token::ID && vault.data_len() > 0 {
-            let h = bordrless_token::client::read_holding(&vault.to_account_info())?;
-            require!(h.amount == 0, ItemsError::VaultNotSettled);
-        }
-    }
-    let item = state.item;
-    state.item = Pubkey::default();
-    emit!(EquipClosed { mint, slot, item });
-    Ok(())
+/// Accounts of `settle_equip`. Remaining accounts: per module, its token-side destination and
+/// its pool-side destination (a holding, or the mint itself for a burn; the program id when the
+/// module has none), then the mint's `Locked` slot slice when it has one.
+#[derive(Accounts)]
+pub struct SettleEquip<'info> {
+    /// Sends the instruction, pays any holding it creates, receives the bounty.
+    #[account(mut)]
+    pub cranker: Signer<'info>,
+    /// CHECK: the token (writable: burns).
+    #[account(mut, owner = bordrless_token::ID)]
+    pub mint: UncheckedAccount<'info>,
+    /// CHECK: the item (armory `Item`).
+    pub item: UncheckedAccount<'info>,
+    /// CHECK: the composite's module list, or this program's id.
+    pub composite: UncheckedAccount<'info>,
+    /// The slot's `EquipState`.
+    #[account(mut)]
+    pub equip_state: Account<'info, EquipState>,
+    /// CHECK: the equip vault, when the item cuts on the token side.
+    #[account(mut)]
+    pub equip_vault: Option<UncheckedAccount<'info>>,
+    /// CHECK: `["pool-cuts", mint]` (system-owned signer).
+    pub pool_cuts: UncheckedAccount<'info>,
+    /// CHECK: its holding of the quote.
+    #[account(mut)]
+    pub pool_cuts_holding: UncheckedAccount<'info>,
+    /// CHECK: the quote mint (bridged SOL).
+    pub quote_mint: UncheckedAccount<'info>,
+    /// CHECK: `["royalty", item]` under the armory.
+    pub royalty_owner: UncheckedAccount<'info>,
+    /// CHECK: its holding of the token.
+    #[account(mut)]
+    pub royalty_token: UncheckedAccount<'info>,
+    /// CHECK: its holding of the quote.
+    #[account(mut)]
+    pub royalty_quote: UncheckedAccount<'info>,
+    /// CHECK: the cranker's holding of the token (created when missing).
+    #[account(mut)]
+    pub cranker_token: UncheckedAccount<'info>,
+    /// CHECK: the cranker's holding of the quote (created when missing).
+    #[account(mut)]
+    pub cranker_quote: UncheckedAccount<'info>,
+    /// CHECK: the armory's config (the settle bounty rate).
+    pub armory_config: UncheckedAccount<'info>,
+    /// CHECK: the token program.
+    #[account(address = bordrless_token::ID)]
+    pub token_program: UncheckedAccount<'info>,
+    /// CHECK: the token program's event authority.
+    pub token_event_authority: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
 }

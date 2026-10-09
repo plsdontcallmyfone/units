@@ -35,6 +35,7 @@ pub const TEST_PARAMS: ArmoryParams = ArmoryParams {
     max_pool_item_discount_bps: 10_000,
     max_item_reads: 4,
     admin_timelock_secs: 600,
+    settle_bounty_bps: 50,
 };
 
 /// `p` padded with zeros.
@@ -64,6 +65,24 @@ pub fn test_schema(id: u16) -> (Params, Params, u8, bool) {
             params(&[1, 0, 60, 100, 60, 60, 60, 0, 0, 0, 0]),
             params(&[1_000_000, 1_000, 86_400, 5_000, 86_400, 86_400, 86_400, 1_000, 1, 1_000, 100]),
             0,
+            false,
+        ),
+        // Hookwars M3b: the arsenal's wave A and Composite (TEST ceilings).
+        template_id::SIZE_TIERS => (
+            params(&[0, 0, 0, 0, 0]),
+            params(&[4_000_000_000, 4_000_000_000, 300, 300, 300]),
+            0,
+            true,
+        ),
+        template_id::SIDE_SKEW => (params(&[0, 0]), params(&[300, 300]), 0, true),
+        template_id::LAUNCH_DECAY => (params(&[0, 0, 60]), params(&[300, 300, 86_400]), 0, true),
+        template_id::MAX_TRANSACTION => (params(&[1]), params(&[10_000]), 0, true),
+        template_id::DUST_GUARD => (params(&[0]), params(&[u32::MAX]), 0, true),
+        template_id::SELL_BURN => (params(&[0]), params(&[300]), 0, true),
+        template_id::COMPOSITE => (
+            params(&[1, 1]),
+            params(&[hookwars_common::MAX_MODULES as u32, 1]),
+            6,
             false,
         ),
         _ => panic!("no template {id}"),
@@ -375,6 +394,7 @@ impl Hw {
             royalty_holding_token: None,
             quote_mint: None,
             royalty_holding_quote: None,
+            new_composite: None,
             armory_signer: ARMORY_SIGNER,
             items_program: ids::ITEMS_ID,
             token: token_accounts(),
@@ -395,6 +415,9 @@ impl Hw {
             );
             if i.manifest.token_cuts() {
                 a.new_equip_vault = Some(vault);
+            }
+            if i.template_id == template_id::COMPOSITE {
+                a.new_composite = Some(hookwars_common::composite::CompositeItem::address(&n).0);
             }
             if i.manifest.token_cuts() || i.manifest.pool_cuts() {
                 a.royalty_owner = Some(owner);
