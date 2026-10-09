@@ -225,13 +225,13 @@ fn m2_a_proposer_below_the_threshold_cannot_hold_the_seat() {
     hw.equip_launch(&owner, &mint, Hw::entry(0, Some(a), EquipConfig::default()))
         .ok();
     let o = owner.pubkey();
-    hw.mint_to(&owner, &mint, &o, 10_000);
+    hw.mint_to(&owner, &mint, &o, 9_900);
     // The review's proof of concept: a wallet with no tokens.
     let griefer = hw.w.env.funded(1_000_000_000);
     let (_, junk, _) = hw.item(T::WAR_ORDERS, war_params(11), 0);
     let (tx, _) = hw.propose(&griefer, &mint, 0, Some(junk), EquipConfig::default());
     tx.expect_code(armory_code(E::BelowProposalThreshold));
-    // Below the TEST threshold (1% of 10,000 = 100): refused.
+    // Below the TEST threshold (1% of the supply; 100 once the supply is 10,000): refused.
     hw.mint_to(&owner, &mint, &griefer.pubkey(), 99);
     let (tx, _) = hw.propose(&griefer, &mint, 0, Some(junk), EquipConfig::default());
     tx.expect_code(armory_code(E::BelowProposalThreshold));

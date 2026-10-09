@@ -1617,6 +1617,23 @@ fn process_propose(
     let a = &ctx.accounts;
     let mint = read_mint(&a.token_mint.to_account_info())?;
     require!(a.slot_state.open_proposal.is_none(), ArmoryError::ProposalOpen);
+    check_proposed(
+        &a.config.params,
+        &mint,
+        slot,
+        item,
+        &config,
+        a.item.as_deref(),
+        a.template.as_deref(),
+        a.template_program.as_ref(),
+        a.template_programdata.as_ref(),
+    )?;
+    if mint.slots[usize::from(slot)].item != Pubkey::default() || item.is_some() {
+        require!(
+            mint.slots[usize::from(slot)].item != item.unwrap_or_default(),
+            ArmoryError::NoChange
+        );
+    }
     // Security review 1, M-2: a proposer holds at least the threshold, locked for the vote period,
     // so one wallet with no tokens cannot hold a slot's only open-proposal seat.
     let min_bps = a.config.params.proposal_min_bps;
@@ -1653,23 +1670,6 @@ fn process_propose(
             until,
             ts,
         )?;
-    }
-    check_proposed(
-        &a.config.params,
-        &mint,
-        slot,
-        item,
-        &config,
-        a.item.as_deref(),
-        a.template.as_deref(),
-        a.template_program.as_ref(),
-        a.template_programdata.as_ref(),
-    )?;
-    if mint.slots[usize::from(slot)].item != Pubkey::default() || item.is_some() {
-        require!(
-            mint.slots[usize::from(slot)].item != item.unwrap_or_default(),
-            ArmoryError::NoChange
-        );
     }
     let ts = now()?;
     let vote_end = ts + i64::from(a.config.params.vote_period_secs);

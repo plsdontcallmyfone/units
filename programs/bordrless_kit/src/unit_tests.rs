@@ -1146,7 +1146,7 @@ fn an_unstamped_program_address_cannot_move_as_a_holder() {
     let mut l = Ledger::new(modules::HOLDER_REWARDS);
     let c = l.kit.config.clone();
     let a = wallet();
-    l.send(c.pool, a, 1_000_000).unwrap();
+    l.send(c.pool, a, 1_500_000_000_000).unwrap();
     l.share(5_000).unwrap();
     l.now += 7_200;
     // A protocol vault (a royalty owner, say) holds some; it pays a program address (the
