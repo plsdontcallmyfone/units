@@ -1,4 +1,4 @@
-// Changed by Hookwars: slot protocol (slot flags and kinds, TokenSlotArgs, SlotReturn, on_touch).
+// Changed by Hookwars: slot protocol (slot flags and kinds, TokenSlotArgs, SlotReturn, on_touch); PoolHookArgs.route (RouteContext).
 //! The Bordrless hook protocol (v2), shared by the token standard (`bordrless_token`), the DEX
 //! (`bordrless_swap`) and every program that implements a hook.
 //!
@@ -247,8 +247,47 @@ pub struct PoolHookArgs {
     pub created_at: i64,
     /// LP amount of a liquidity operation.
     pub lp_amount: u64,
-    /// Opaque data from the caller (v4's `hookData`).
+    /// Opaque data from the caller (v4's `hookData`). The trader writes it freely: never read a
+    /// route or any fact from it.
     pub hook_data: Vec<u8>,
+    /// Hookwars (spec 03 section 3.2, R5): the route of the swap this callback is part of, filled
+    /// only by the DEX. A plain swap is a one-hop route; liquidity and initialize callbacks carry
+    /// `hop_count` 0.
+    pub route: RouteContext,
+}
+
+/// Hookwars: the route of a swap, as the DEX tells each hop's pool hook (spec 03 section 3.2).
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RouteContext {
+    /// The mint the trader started with (the first hop's input).
+    pub route_input_mint: Pubkey,
+    /// The mint the trader ends with (the last hop's output).
+    pub route_output_mint: Pubkey,
+    /// The pool of the first hop.
+    pub first_pool: Pubkey,
+    /// What the first hop took from the trader, in `route_input_mint` units.
+    pub route_amount_in: u64,
+    /// This hop, from 0.
+    pub hop_index: u8,
+    /// How many hops; 0 on liquidity and initialize callbacks (not a swap).
+    pub hop_count: u8,
+}
+
+impl RouteContext {
+    /// Bytes on the wire.
+    pub const LEN: usize = 32 * 3 + 8 + 1 + 1;
+
+    /// The route of a plain one-hop swap.
+    pub fn single(in_mint: Pubkey, out_mint: Pubkey, pool: Pubkey, amount_in: u64) -> Self {
+        Self {
+            route_input_mint: in_mint,
+            route_output_mint: out_mint,
+            first_pool: pool,
+            route_amount_in: amount_in,
+            hop_index: 0,
+            hop_count: 1,
+        }
+    }
 }
 
 /// One cut an answer takes from the amount.
