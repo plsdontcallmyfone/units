@@ -124,6 +124,22 @@ pub struct Siege<'info> {
     pub system_program: Program<'info, System>,
 }
 
+/// Security review 1, M-4: marks the rival's war state besieged when the address holds one. Its
+/// own frame, the state boxed: `WarState` on `process_siege`'s stack overflows the 4 KB frame.
+#[inline(never)]
+fn mark_besieged(info: &AccountInfo, current: u32, until: i64, chest: Pubkey) -> Result<()> {
+    if *info.owner != crate::ID || info.data_len() == 0 {
+        return Ok(());
+    }
+    let mut state = Box::new(WarState::try_deserialize(&mut &info.try_borrow_data()?[..])?);
+    state.roll(current);
+    state.under_siege_until = until;
+    state.siege_by_chest = chest;
+    state.season.times_besieged = state.season.times_besieged.saturating_add(1);
+    state.try_serialize(&mut &mut info.try_borrow_mut_data()?[..])?;
+    Ok(())
+}
+
 /// `siege(rival)`: the chest spot-buys the rival on its launch pool and keeps what it buys
 /// (05 section 6.2).
 pub fn process_siege<'info>(ctx: Context<'info, Siege<'info>>, args: SliceArgs) -> Result<()> {
@@ -275,15 +291,12 @@ pub fn process_siege<'info>(ctx: Context<'info, Siege<'info>>, args: SliceArgs) 
     s.last_siege_at = now;
     s.last_seen_balance = balance_after;
 
-    let rival_info = ctx.accounts.rival_war_state.to_account_info();
-    if *rival_info.owner == crate::ID && rival_info.data_len() > 0 {
-        let mut rival_state = WarState::try_deserialize(&mut &rival_info.try_borrow_data()?[..])?;
-        rival_state.roll(current);
-        rival_state.under_siege_until = now.saturating_add(params.siege_interval_secs);
-        rival_state.siege_by_chest = chest;
-        rival_state.season.times_besieged = rival_state.season.times_besieged.saturating_add(1);
-        rival_state.try_serialize(&mut &mut rival_info.try_borrow_mut_data()?[..])?;
-    }
+    mark_besieged(
+        &ctx.accounts.rival_war_state.to_account_info(),
+        current,
+        now.saturating_add(params.siege_interval_secs),
+        chest,
+    )?;
     emit_cpi!(SiegeExecuted {
         mint: mint_key,
         rival_mint: rival_key,

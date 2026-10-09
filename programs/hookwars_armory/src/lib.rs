@@ -1828,10 +1828,6 @@ fn process_finalize(ctx: Context<Finalize>) -> Result<()> {
     Ok(())
 }
 
-/// `sha256("global:refresh_pool_registry")[..8]`, the launchpad's instruction (checked in a unit
-/// test against the hash).
-pub const REFRESH_POOL_REGISTRY_DISCRIMINATOR: [u8; 8] = [191, 148, 145, 179, 73, 189, 85, 221];
-
 /// Security review 2, L-D: after an equip of a `Pool` or `Relation` slot, refresh the launch pool's
 /// registry in the same instruction, so no swap runs against a registry that does not list the
 /// slot's new item (the launchpad refuses such swaps). The remaining accounts of the equip are
@@ -1891,7 +1887,7 @@ fn refresh_after_equip<'info>(
     let ix = anchor_lang::solana_program::instruction::Instruction {
         program_id: ids::LAUNCH_ID,
         accounts: metas,
-        data: REFRESH_POOL_REGISTRY_DISCRIMINATOR.to_vec(),
+        data: <bordrless_launch::instruction::RefreshPoolRegistry as anchor_lang::Discriminator>::DISCRIMINATOR.to_vec(),
     };
     anchor_lang::solana_program::program::invoke(&ix, &infos)?;
     Ok(())
@@ -2270,11 +2266,3 @@ mod tests {
     }
 }
 
-#[cfg(test)]
-mod security_review_tests {
-    #[test]
-    fn the_refresh_discriminator_is_the_launchpads() {
-        let h = anchor_lang::solana_program::hash::hash(b"global:refresh_pool_registry");
-        assert_eq!(&h.to_bytes()[..8], &super::REFRESH_POOL_REGISTRY_DISCRIMINATOR);
-    }
-}
