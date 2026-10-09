@@ -823,6 +823,39 @@ from section 4:
 10. **Errors** are a separate `ArsenalError` with `#[error_code(offset = 7100)]`, so `ItemsError`
     is unchanged.
 
+11. **Measured** (`budgets_arsenal2.rs`, LiteSVM, legacy transactions; pool rows go through the
+    test-only `launch_stub`, so they include its call level; token rows include an idempotent
+    `create_holding`):
+
+| Path | Keys | Bytes | Trace | Height | CU |
+| --- | --- | --- | --- | --- | --- |
+| transfer (send), Gift Ember | 15 | 643 | 5 | 2 | 53,954 |
+| transfer (sell), Sell Ladder | 15 | 643 | 7 | 2 | 51,665 |
+| transfer (send), Loyalty Pot stamp | 14 | 610 | 5 | 2 | 53,362 |
+| transfer (sell), Patience token half | 15 | 643 | 7 | 2 | 48,890 |
+| transfer (send), Mercenary range | 16 | 676 | 5 | 2 | 63,068 |
+| pool_before_swap buy, Guest List | 13 | 962 | 3 | 2 | 17,178 |
+| pool_before_swap buy, Ally Pass | 12 | 929 | 3 | 2 | 16,992 |
+| pool_before_swap buy, Embargo | 11 | 896 | 3 | 2 | 15,098 |
+| pool_before_swap buy, Holder Stream | 11 | 896 | 3 | 2 | 16,462 |
+| pool_before_swap buy, Garrison | 12 | 929 | 3 | 2 | 20,849 |
+| pool_after_swap sell, War Levy | 13 | 962 | 3 | 2 | 23,054 |
+| pool_before_swap sell, Target Burn | 12 | 930 | 3 | 2 | 21,109 |
+| pool_after_swap buy, Mercenary mark | 14 | 995 | 3 | 2 | 26,850 |
+| pool_after_swap sell, Loyalty Pot | 12 | 929 | 3 | 2 | 15,662 |
+| pool_before_swap buy, First Blood | 12 | 929 | 3 | 2 | 16,891 |
+| pool_before_swap buy, Referral | 12 | 929 | 3 | 2 | 17,684 |
+| pool_after_swap sell, Patience | 13 | 962 | 3 | 2 | 22,168 |
+| set_referrer | 6 | 351 | 3 | 2 | 8,392 |
+| init_first_blood | 6 | 319 | 3 | 2 | 6,611 |
+| init_loyalty | 6 | 320 | 3 | 2 | 6,801 |
+| settle_referral | 15 | 617 | 6 | 3 | 54,896 |
+| claim_loyalty (first claim: roll and receipt) | 18 | 716 | 5 | 3 | 64,650 |
+
+12. **One deliberate edit outside the templates:** `equip.rs` `check_module_targets` gains one
+    delegating arm (`hookwars_common::arsenal2::targets_ok`), or `init_equip` refuses every new
+    template with `BadTargets` and none of them can be equipped.
+
 ## Integration requests (arsenal 2)
 
 1. **items `equip.rs` `process_init_equip`:** write `templates::extra_sources(...)` instead of

@@ -191,3 +191,8 @@ through the test stand-in 17,278 to 29,738 CU; a raid delivery that stamps point
 composite of 3 on a pool callback 23,182 CU and on a transfer 54,929 CU; `settle_equip` of a
 composite of 3 208,107 CU (height 3, 22 trace entries). Full table in 04, "M3b items implementation
 notes", item 14.
+
+Arsenal waves D and E, measured (`budgets_arsenal2.rs`, branch arsenal2, 2026-10-09): pool callbacks
+15,098 to 26,850 CU (through `launch_stub`), token transfers 48,890 to 63,068 CU, `settle_referral`
+54,896 CU at height 3, `claim_loyalty` 64,650 CU at height 3; full table in 08, "Arsenal waves D and
+E notes", item 11.
