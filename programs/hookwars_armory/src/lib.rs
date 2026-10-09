@@ -1887,6 +1887,16 @@ fn process_forge(ctx: Context<Forge>) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    /// Hookwars R21: burns fit only slots that allow them.
+    #[test]
+    fn a_burning_item_fits_only_a_may_burn_slot() {
+        use crate::cpi::burn_fits;
+        assert!(burn_fits(false, false));
+        assert!(burn_fits(false, true));
+        assert!(burn_fits(true, true));
+        assert!(!burn_fits(true, false));
+    }
+
     use super::*;
 
     #[test]

@@ -1,4 +1,4 @@
-// Changed by Hookwars: slot table in the mint, vote lock in the holding.
+// Changed by Hookwars: slot table in the mint, vote lock in the holding; R21 SlotBounds.may_burn.
 //! Accounts of the token standard.
 
 use anchor_lang::prelude::*;
@@ -68,6 +68,9 @@ pub struct SlotBounds {
     pub may_write_data: bool,
     /// Whether an item may answer `touch`.
     pub may_answer_touch: bool,
+    /// Hookwars R21: Pool slots only: whether an item may burn part of a swap (through the
+    /// launchpad's pool-slot forwarding, M3b).
+    pub may_burn: bool,
 }
 
 /// One slot of a mint (docs/spec/01-token-slots.md section 1.1).

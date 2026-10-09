@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file, the slot table's calls, answers and hook-data ranges.
+// Changed by Hookwars: new file, the slot table's calls, answers and hook-data ranges; R20 Locked slot last.
 //! Slots (docs/spec/01-token-slots.md): the accounts each called slot brings, the two calling
 //! conventions (the Locked slot keeps the upstream one), the checks on every answer, and the
 //! hook-data ranges with their epoch byte.
@@ -181,8 +181,15 @@ impl OpState {
         }
     }
 
-    /// Legacy arguments (the Locked slot): the full 64 bytes.
+    /// Legacy arguments (the Locked slot): the full 64 bytes. Hookwars R20: in a protocol transfer
+    /// `authority` is [`crate::constants::PROTOCOL_TRANSFER_MARKER`], and in `Before` `delta` is
+    /// the item slots' total cut on this operation (the Locked slot runs after them, R20).
     pub fn legacy_args(&self, phase: Phase, delta: u64) -> TokenHookArgs {
+        let authority = if self.op == SlotOp::ProtocolTransfer {
+            crate::constants::PROTOCOL_TRANSFER_MARKER
+        } else {
+            self.authority
+        };
         TokenHookArgs {
             op: self.token_op(),
             phase,
@@ -191,7 +198,7 @@ impl OpState {
             destination: self.destination,
             source_owner: self.source_owner,
             destination_owner: self.destination_owner,
-            authority: self.authority,
+            authority,
             authority_is_delegate: self.authority_is_delegate,
             amount: self.amount,
             delta,
@@ -303,13 +310,24 @@ pub fn run_before(state: &OpState, slices: &[SlotSlice]) -> Result<Vec<SlotAnswe
         return Ok(answers);
     };
     let flag = before_flag(state.op);
-    for (n, s) in slices.iter().enumerate() {
+    // Hookwars R20: item slots first, then the Locked slot, told the items' total cut as `delta`
+    // so it can count what the destination really receives (the kit's eligible supply).
+    let mut order: Vec<usize> = (0..slices.len())
+        .filter(|n| !slices[*n].slot.is_locked())
+        .collect();
+    order.extend((0..slices.len()).filter(|n| slices[*n].slot.is_locked()));
+    for n in order {
+        let s = &slices[n];
         if s.slot.flags & flag == 0 {
             continue;
         }
         if s.slot.is_locked() {
             let allowed = Allowed::token(state.token_op(), Phase::Before, s.slot.flags);
-            let args = state.legacy_args(Phase::Before, 0);
+            let items_cut = answers
+                .iter()
+                .try_fold(0u64, |t: u64, a: &SlotAnswer| t.checked_add(a.cut))
+                .ok_or(TokenError::DeltaTooLarge)?;
+            let args = state.legacy_args(Phase::Before, items_cut);
             if let Some((answer, sum)) = s.call.invoke_for_answer(disc, &args, allowed)? {
                 let HookReturn {
                     deltas,

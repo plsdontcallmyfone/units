@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file, slot-table instructions (create_slot_mint, set_slot_item,
+// Changed by Hookwars: new file, slot-table instructions (create_slot_mint, set_slot_item,; R21 may_burn only on Pool slots.
 // set_vote_lock, touch); M2: Fee items may write data, Relation items may carry pool flags.
 //! The slot table (docs/spec/01-token-slots.md sections 1, 4 and 5).
 
@@ -88,6 +88,11 @@ pub fn process_create_slot_mint(
             TokenError::InvalidSlotTable
         );
         let b = init.bounds;
+        // Hookwars R21: only a Pool slot may let its item burn part of a swap.
+        require!(
+            !b.may_burn || init.kind == slot_kind::POOL,
+            TokenError::InvalidSlotTable
+        );
         cut_sum += u32::from(b.max_cut_bps);
         let slot = &mut table[i];
         slot.kind = init.kind;
@@ -232,6 +237,7 @@ pub fn process_create_slot_mint(
                 may_refuse: s.bounds.may_refuse,
                 may_write_data: s.bounds.may_write_data,
                 may_answer_touch: s.bounds.may_answer_touch,
+                may_burn: s.bounds.may_burn,
                 data_offset: s.data_offset,
                 data_len: s.data_len,
                 equip_vault: s.equip_vault,

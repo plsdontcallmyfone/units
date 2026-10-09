@@ -725,3 +725,45 @@ template's field floors and ceilings named in section 4 (O), `EMBARGO_MAX_TARGET
   pay from the equip vault or `PoolCuts` through `transfer_from_protocol` (R16), never from a
   callback, and each checks solvency against the module's recorded share.
 - **Template flag `composable`** in the armory's `Template` (02 2.2), set at registration.
+
+## R20 to R24 implementation notes (branch r20)
+
+- **R20, the Locked slot runs last.** The token program calls the item slots first and then the
+  Locked slot, telling it the items' total cut as `TokenHookArgs.delta` in the `Before` phase
+  (upstream always passed 0 there). The kit uses it: a holder destination receives
+  `amount - delta`, so settle, max wallet, the early-buyer lock and `eligible` count what really
+  arrives; on a holder-to-holder transfer `eligible` falls by the cut, which leaves for an equip
+  vault. Upstream single-hook mints still pass 0, so nothing changes for them. Upstream Locked
+  hooks (Half-Life, tax_hook) ignore `delta` in `Before`.
+- **R20 (b), the encoding.** In `transfer_from_protocol` the Locked slot is told `authority =
+  PROTOCOL_TRANSFER_MARKER`, the token program's PDA `["protocol-transfer"]`
+  (`HHwFz2okVQVyTE3HLsKSM2a7u4Y2DW729MbmkSeNoWEG`). No ordinary transfer can carry it: it is a PDA
+  the token program never signs for. The kit reads it as "verified protocol source": the source is
+  excluded, and an off-curve destination is excluded (a royalty holding, a partner's treaty
+  inbox); a wallet destination is an ordinary holder. No argument layout changed.
+- **R20 (a).** `KitConfig::is_excluded` now also covers the owners derivable from the mint: every
+  `["equip", mint, slot]` for `slot < MAX_SLOTS` and `["pool-cuts", mint]` under the items id,
+  `["war-chest", mint]` and `["treaty-inbox", mint]` under the war id. The derivations run only for
+  off-curve owners; a wallet costs one curve check. `is_excluded_basic` keeps the upstream three.
+  The mirror and `claim` use the same function, so off chain and on chain agree.
+- **Invariant this relies on (R24).** A protocol program moves what its PDAs hold only through
+  `transfer_from_protocol` (or burns from a derived vault). A royalty owner or a partner inbox that
+  sent through an ordinary transfer would be treated as a holder on that send. The armory's
+  `claim_royalty` already uses `transfer_from_protocol`; M3b's `settle_equip` and M4's treaty
+  streaming must too.
+- **Any other program address stays refused** on a token with holder rewards (upstream section 0
+  item 5: no second pool), tested.
+- **R21.** `SlotBounds.may_burn` (a new last field, so `Slot` and `Mint` grow by one byte per
+  slot; `SlotInfo` in `SlotsInitialized` gains `may_burn` after `may_answer_touch`, which 06's
+  decoder must follow). `create_slot_mint` refuses it on any slot but `Pool`
+  (`InvalidSlotTable`). The armory's fit check is `burn_fits(manifest.may_burn,
+  bounds.may_burn)`. The run-time enforcement of a pool item's burn is the launchpad's forwarding
+  (M3b).
+- **R22** needed no token-program change: extras are passed by count (`extra_count`), so a
+  derived extra is resolved by the client like any other. The SDK work is the app branch's.
+- **R23** needed no token-program change: `touch` already accepts any signer and tells the item
+  `authority` and `source_owner`; the item decides (tested with an item that acts only for the
+  owner).
+- **Test stand-ins:** `items_stub` (new, test-only, at the items id) and `armory_stub::as_pda`
+  forward a token instruction signing as any PDA of their id, standing in for `settle_equip` and
+  `claim_royalty` until M3b. `items_stub-keypair.json` is a copy of the items keypair.

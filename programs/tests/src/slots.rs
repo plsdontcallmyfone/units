@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file, helpers for slot mints (M1).
+// Changed by Hookwars: new file, helpers for slot mints (M1); R21 may_burn in the slot helpers.
 //! Slot mints in the LiteSVM suites. `slot_tester` is a scripted slot item; `armory_stub`,
 //! declared at the armory's program id, signs as a mint's `["slots", mint]` PDA by CPI (the real
 //! armory is M2). `hook_tester` stands in for a Locked legacy hook (the kit's place).
@@ -39,6 +39,7 @@ pub fn item_slot(kind: u8, rule: u8, max_cut_bps: u16, data_len: u8, touch: bool
             may_refuse: true,
             may_write_data: data_len > 0,
             may_answer_touch: touch,
+            may_burn: false,
         },
         data_len,
         locked_program: None,
@@ -57,6 +58,7 @@ pub fn locked_slot(program: Pubkey, flags: u16, data_len: u8, extra_count: u8) -
             may_refuse: true,
             may_write_data: data_len > 0,
             may_answer_touch: false,
+            may_burn: false,
         },
         data_len,
         locked_program: Some(program),

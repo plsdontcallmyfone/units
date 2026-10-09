@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file, a test-only stand-in for hookwars_armory.
+// Changed by Hookwars: new file, a test-only stand-in for hookwars_armory; R20 adds as_pda.
 //! `armory_stub`: test-only, never deployed. It is declared at the armory's program id
 //! (`bordrless_token::constants::ARMORY_ID`) so the LiteSVM suites can sign as a mint's slot
 //! authority, `["slots", mint]` under the armory, before the real armory exists (M2). It does one
@@ -45,6 +45,46 @@ pub mod armory_stub {
         invoke_signed(&ix, &infos, &[&[b"slots", mint.as_ref(), &[bump]]])?;
         Ok(())
     }
+
+    /// Hookwars R20, R24: calls the token program with `data` and the remaining accounts,
+    /// signing as `PDA(seeds)` under the armory's id (a royalty owner, `["royalty", item]`).
+    pub fn as_pda<'info>(
+        ctx: Context<'info, AsPda<'info>>,
+        seeds: Vec<Vec<u8>>,
+        data: Vec<u8>,
+    ) -> Result<()> {
+        let refs: Vec<&[u8]> = seeds.iter().map(Vec::as_slice).collect();
+        let (pda, bump) = Pubkey::find_program_address(&refs, &crate::ID);
+        let metas = ctx
+            .remaining_accounts
+            .iter()
+            .map(|a| AccountMeta {
+                pubkey: *a.key,
+                is_signer: *a.key == pda || a.is_signer,
+                is_writable: a.is_writable,
+            })
+            .collect();
+        let mut infos: Vec<AccountInfo> = ctx.remaining_accounts.to_vec();
+        infos.push(ctx.accounts.token_program.to_account_info());
+        let ix = Instruction {
+            program_id: bordrless_token::ID,
+            accounts: metas,
+            data,
+        };
+        let bump = [bump];
+        let mut signer: Vec<&[u8]> = refs.clone();
+        signer.push(&bump);
+        invoke_signed(&ix, &infos, &[&signer])?;
+        Ok(())
+    }
+}
+
+/// Accounts of `as_pda`; the token instruction's accounts follow as remaining.
+#[derive(Accounts)]
+pub struct AsPda<'info> {
+    /// CHECK: the token program.
+    #[account(address = bordrless_token::ID)]
+    pub token_program: UncheckedAccount<'info>,
 }
 
 /// Accounts of `as_slot_authority`; the token instruction's accounts follow as remaining.

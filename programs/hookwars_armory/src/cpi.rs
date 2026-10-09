@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M2).
+// Changed by Hookwars: new file (M2); R21 burns fit only may_burn slots.
 //! Calls out of the armory: into `hookwars_items` (signed by `["armory"]`, 02 section 2.2) and into
 //! the token program (signed by `["minter"]`, `["slots", mint]` or `["royalty", item]`), plus the
 //! compatibility check (`check_fits`, 02 section 6.1) and the equip steps every path shares
@@ -266,6 +266,11 @@ pub fn read_mint(info: &AccountInfo) -> Result<Mint> {
 /// The compatibility check (02 section 6.1). `launch`: the `equip_launch` path (fills a slot whose
 /// rule is `Locked` once). `revert`: a performance revert (staleness allowed, 02 section 3.3).
 #[allow(clippy::too_many_arguments)]
+/// Hookwars R21: an item that may burn fits only a slot whose bounds allow burns.
+pub fn burn_fits(item_may_burn: bool, slot_may_burn: bool) -> bool {
+    !item_may_burn || slot_may_burn
+}
+
 pub fn check_fits(
     mint: &Mint,
     slot: u8,
@@ -320,7 +325,8 @@ pub fn check_fits(
         ArmoryError::OverBounds
     );
     require!(!manifest.may_refuse || s.bounds.may_refuse, ArmoryError::OverBounds);
-    require!(!manifest.may_burn, ArmoryError::OverBounds);
+    // Hookwars R21: an item that may burn fits only a slot whose bounds allow burns (Pool slots).
+    require!(burn_fits(manifest.may_burn, s.bounds.may_burn), ArmoryError::OverBounds);
     require!(
         manifest.token_flags & token_flags::MINT == 0,
         ArmoryError::OverBounds

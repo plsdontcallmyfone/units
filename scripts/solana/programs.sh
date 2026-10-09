@@ -21,9 +21,9 @@ set -euo pipefail
 TOOLS_VERSION="v1.57"
 SBF_ARCH="v3"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-PROGRAMS=(bordrless_token bordrless_swap bordrless_bridge bordrless_launch bordrless_kit tax_hook half_life bordrless_companion hookwars_armory hookwars_items hook_tester slot_tester armory_stub launch_stub war_stub)
+PROGRAMS=(bordrless_token bordrless_swap bordrless_bridge bordrless_launch bordrless_kit tax_hook half_life bordrless_companion hookwars_armory hookwars_items hook_tester slot_tester armory_stub launch_stub war_stub items_stub)
 # Changed by Hookwars: slot_tester and armory_stub are test-only too.
-TEST_ONLY=(hook_tester slot_tester armory_stub launch_stub war_stub)
+TEST_ONLY=(hook_tester slot_tester armory_stub launch_stub war_stub items_stub)
 DEPLOY_DIR="$ROOT/target/deploy"
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/.cache/bordrless/target}"
 AGAVE_BIN="$HOME/.local/share/solana/install/releases/v4.3.0/solana-release/bin"
