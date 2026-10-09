@@ -232,12 +232,16 @@ impl<'info> TokenAccounts<'info> {
         signer_seeds: &[&[&[u8]]],
     ) -> Result<()> {
         let (hook, hook_program, hook_signer) = self.hook_of(side);
+        // Changed by Hookwars: a slot mint's side carries its transfer slices; a burn calls only
+        // the slots subscribed to burns, so the others' slices are left out.
+        let burn_extras = burn_slices(mint, side.extras)?;
+        let side_extras: &[AccountInfo<'info>] = burn_extras.as_deref().unwrap_or(side.extras);
         let ix = token_client::burn_with(
             *authority.key,
             *source.key,
             *mint.key,
             hook,
-            extra_metas(side.extras),
+            extra_metas(side_extras),
             amount,
         );
         let mut infos = Vec::with_capacity(7 + side.extras.len());
@@ -248,9 +252,40 @@ impl<'info> TokenAccounts<'info> {
         infos.push(hook_signer);
         infos.push(self.event_authority.clone());
         infos.push(self.program.clone());
-        infos.extend(side.extras.iter().cloned());
+        infos.extend(side_extras.iter().cloned());
         invoke_signed(&ix, &infos, signer_seeds).map_err(Into::into)
     }
+}
+
+/// For a mint with a slot table, the burn slices out of `transfer` (the side's transfer slices, one
+/// `[program, signer, extras]` per slot called on a transfer): `None` for a mint without slots.
+#[inline(never)]
+fn burn_slices<'info>(
+    mint: &AccountInfo<'info>,
+    transfer: &[AccountInfo<'info>],
+) -> Result<Option<Vec<AccountInfo<'info>>>> {
+    use bordrless_token::slots::{is_called, SlotOp};
+    let m = Box::new(token_client::read_mint(mint)?);
+    if !m.uses_slots() {
+        return Ok(None);
+    }
+    let mut out = Vec::new();
+    let mut at = 0usize;
+    for s in m.active_slots() {
+        if !is_called(s, SlotOp::Transfer) {
+            continue;
+        }
+        let end = at + 2 + usize::from(s.extra_count);
+        if end > transfer.len() {
+            // Not a full transfer slice: pass what was given; the token program decides.
+            return Ok(None);
+        }
+        if is_called(s, SlotOp::Burn) {
+            out.extend(transfer[at..end].iter().cloned());
+        }
+        at = end;
+    }
+    Ok(Some(out))
 }
 
 /// A token hook's extra accounts as metas, with the writability they were given.

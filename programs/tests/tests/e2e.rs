@@ -70,6 +70,9 @@ fn send(env: &mut bordrless_program_tests::env::Env, ixs: &[Instruction], payer:
 /// suites' TEST parameters.
 fn world() -> Hw {
     let mut hw = arsenal();
+    // Whole logs: a route through several items' callbacks runs past LiteSVM's default log cap.
+    let svm = std::mem::replace(&mut hw.w.env.svm, litesvm::LiteSVM::new());
+    hw.w.env.svm = svm.with_log_bytes_limit(None);
     for (name, id) in [
         ("bordrless_launch", bordrless_launch::ID),
         ("hookwars_war", hookwars_war::ID),
