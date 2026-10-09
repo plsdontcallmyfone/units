@@ -767,3 +767,74 @@ template's field floors and ceilings named in section 4 (O), `EMBARGO_MAX_TARGET
 - **Test stand-ins:** `items_stub` (new, test-only, at the items id) and `armory_stub::as_pda`
   forward a token instruction signing as any PDA of their id, standing in for `settle_equip` and
   `claim_royalty` until M3b. `items_stub-keypair.json` is a copy of the items keypair.
+
+## Arsenal waves B and C notes (2026-10-09, branch arsenal1)
+
+Built: Cooldown (17), Flash Guard (20), Daily Sell Cap (18), Streak (26), Rank Badge (35), Guild
+Tag (39), Velocity Fee (13), Impact Fee (14), Volatility Fee (15), Dump Brake (21), Rush Hour (16),
+each a new file in `programs/hookwars_items/src/templates/`, with its shape, validation and manifest
+in `hookwars-common` and one suite `programs/tests/tests/templates_<name>.rs` (behaviour, abuse,
+forge, invariants after every step) plus `budgets_arsenal1.rs`. Full suite on server B: 405 passed,
+0 failed, 2 ignored (the Studio fixtures), with `app_vectors.rs` removed in the server copy only.
+
+Where the build differs from section 4:
+
+1. **`init_equip` target rule.** `check_module_targets` in `equip.rs` refuses any template it does
+   not name, so the eleven ids were added to its no-target arm (one arm, nothing else in `equip.rs`).
+   Templates 43 to 45 (Coalition, Boss, Rivalry) are not named there either, so they cannot be
+   equipped yet; that belongs to the expansion lane.
+2. **Kinds.** Streak, Rank Badge and Guild Tag are slot kind `Reward` (there is no Social kind).
+   Cooldown, Flash Guard and Daily Sell Cap are `Defense`; Velocity, Impact, Volatility, Rush Hour
+   and Dump Brake are `Pool`.
+3. **Quote side.** As wave A, the pool templates cut on a buy's `pool_before_swap` (input) and a
+   sell's `pool_after_swap` (output). Dump Brake therefore answers on a sell's `after` callback,
+   not `pool_before_swap`, and its manifest names `AFTER_SWAP` only.
+4. **Own-ring extras.** Velocity, Volatility, Dump Brake and Rank Badge read the token's own ring:
+   extras are our `Launch` and our launch pool (`launch_pool_address`), and the pool must be the one
+   the `Launch` names. Every read uses `MIN_TWAP_SECS` as the floor (rule 7); any read error is no
+   signal and no effect. Cooldown, Flash Guard, Daily Sell Cap and Streak take our `Launch` only
+   (buy and sell detection); Impact Fee, Rush Hour and Guild Tag take none.
+5. **Velocity Fee** counts swaps from the ring entry at or before `now - window_secs` to the pool's
+   current `swap_count`.
+6. **Impact Fee.** A buy is measured at its `before` callback from the reserves before the swap and
+   the quote in; a sell at its `after` callback, where the DEX passes the reserves after the swap,
+   from `(x - amount_in, y + amount_out)` before against `(x, y)` after. Virtual reserves count.
+7. **Rank Badge** values a buy as the tokens bought times the time-weighted price over
+   `MIN_TWAP_SECS` (not the raid mark, which only Raid writes); with no signal the buy earns no
+   units. A stamp is written only once a buy earns at least one unit.
+8. **Daily Sell Cap** raises a same-day `base` by the amount received before other slots' cuts (an
+   upper bound). Transfers out of the pool and protocol accounts are never capped.
+9. **Flash Guard** refuses sells only; sends pass (as section 4.2 says, Cooldown covers them).
+10. **Guild Tag** has one field (`version`, Keep); its payload is `GuildTouch::SetGuild { guild }`
+    (Borsh), only the holding's owner may send it (`NotHolder`), and `guild = 0` removes the tag.
+11. **Emptying a holding** clears the stamp of Cooldown, Flash Guard, Daily Sell Cap, Streak, Rank
+    Badge and Guild Tag, so the holding can close.
+12. **New errors** (appended to `ItemsError`): `CooldownActive`, `FlashSellTooSoon`,
+    `DailyCapExceeded`, `NotHolder`.
+13. **Test harness.** `programs/tests/src/arsenal1.rs` (new): a slot mint with Pool, Defense (12
+    bytes), Reward (7 bytes, touch) and Relation slots; a fake launch pool with a ring at the real
+    launch pool address; a delegate written onto a pool holding so suites can move tokens out of a
+    pool address; pool callbacks carrying reserves. TEST floors and ceilings for the eleven ids are in
+    `src/armory.rs` `test_schema`.
+14. **Engine dependency.** These templates follow the engine at `ed4fa47`: a module that answers
+    nothing returns a default answer. Security review 2 H-A (a silent pool item reverting the swap)
+    is the integration lane's fix; none of these templates depends on how it is fixed.
+
+Measured (server B, `budgets_arsenal1.rs`, every account in one lookup table):
+
+| Template | Path | Keys | v0 bytes (with table) | Trace | Height | CU |
+| --- | --- | --- | --- | --- | --- | --- |
+| 17 Cooldown | buy delivery | 12 | 528 (283) | 4 | 2 | 35,340 |
+| 20 Flash Guard | buy delivery | 12 | 528 (283) | 4 | 2 | 33,822 |
+| 18 Daily Sell Cap | buy delivery | 12 | 528 (283) | 4 | 2 | 32,244 |
+| 26 Streak | buy delivery | 12 | 528 (283) | 4 | 2 | 33,709 |
+| 35 Rank Badge | buy delivery, ring read | 13 | 561 (285) | 4 | 2 | 43,304 |
+| 39 Guild Tag | buy delivery | 11 | 495 (281) | 4 | 2 | 29,696 |
+| 13 Velocity Fee | pool callback through `launch_stub` | 12 | 930 (685) | 3 | 2 | 18,711 |
+| 14 Impact Fee | pool callback through `launch_stub` | 11 | 896 (682) | 3 | 2 | 15,719 |
+| 15 Volatility Fee | pool callback through `launch_stub` | 12 | 930 (685) | 3 | 2 | 27,720 |
+| 16 Rush Hour | pool callback through `launch_stub` | 11 | 896 (682) | 3 | 2 | 16,741 |
+| 21 Dump Brake | pool callback through `launch_stub` | 12 | 930 (685) | 3 | 2 | 23,307 |
+
+Transfer rows are one `transfer` with the slot's registry slice; pool rows include the stub's own
+call level and its instruction data (the forwarded `PoolHookArgs`).

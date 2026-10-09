@@ -257,6 +257,29 @@ pub mod template_id {
     pub const DUST_GUARD: u16 = 22;
     /// Sell Burn (08 4.6).
     pub const SELL_BURN: u16 = 32;
+    // Hookwars arsenal waves B and C (08 5.1).
+    /// Velocity Fee (08 4.1).
+    pub const VELOCITY_FEE: u16 = 13;
+    /// Impact Fee (08 4.1).
+    pub const IMPACT_FEE: u16 = 14;
+    /// Volatility Fee (08 4.1).
+    pub const VOLATILITY_FEE: u16 = 15;
+    /// Rush Hour (08 4.1).
+    pub const RUSH_HOUR: u16 = 16;
+    /// Cooldown (08 4.2).
+    pub const COOLDOWN: u16 = 17;
+    /// Daily Sell Cap (08 4.2).
+    pub const DAILY_SELL_CAP: u16 = 18;
+    /// Flash Guard (08 4.2).
+    pub const FLASH_GUARD: u16 = 20;
+    /// Dump Brake (08 4.2).
+    pub const DUMP_BRAKE: u16 = 21;
+    /// Streak (08 4.3).
+    pub const STREAK: u16 = 26;
+    /// Rank Badge (08 4.7).
+    pub const RANK_BADGE: u16 = 35;
+    /// Guild Tag (08 4.7).
+    pub const GUILD_TAG: u16 = 39;
     /// Composite (08 2).
     pub const COMPOSITE: u16 = 41;
     /// Soulbound (09 section 4.3): the agent badge's Defense item.
@@ -442,6 +465,18 @@ pub fn shape(id: u16) -> Option<TemplateShape> {
         template_id::BOSS => (kind::POOL, &[Keep], false),
         template_id::RIVALRY => (kind::RELATION, &[Keep, Keep, Keep], false),
         template_id::SOULBOUND => (kind::DEFENSE, &[], false),
+        // Hookwars arsenal waves B and C (08 4.1, 4.2, 4.3, 4.7).
+        template_id::VELOCITY_FEE => (kind::POOL, &[Keep, TowardCeiling, TowardCeiling, TowardCeiling], true),
+        template_id::IMPACT_FEE => (kind::POOL, &[TowardCeiling, TowardCeiling], true),
+        template_id::VOLATILITY_FEE => (kind::POOL, &[Keep, Keep, TowardFloor, TowardCeiling], true),
+        template_id::RUSH_HOUR => (kind::POOL, &[Keep, Keep, TowardCeiling, TowardCeiling], true),
+        template_id::COOLDOWN => (kind::DEFENSE, &[TowardCeiling], true),
+        template_id::DAILY_SELL_CAP => (kind::DEFENSE, &[TowardFloor], true),
+        template_id::FLASH_GUARD => (kind::DEFENSE, &[TowardCeiling], true),
+        template_id::DUMP_BRAKE => (kind::POOL, &[Keep, Keep, TowardFloor, TowardCeiling], true),
+        template_id::STREAK => (kind::REWARD, &[TowardCeiling], true),
+        template_id::RANK_BADGE => (kind::REWARD, &[TowardFloor, Keep, Keep], true),
+        template_id::GUILD_TAG => (kind::REWARD, &[Keep], true),
         _ => return None,
     };
     rules[..used.len()].copy_from_slice(used);
@@ -510,6 +545,20 @@ pub fn validate(id: u16, p: &Params) -> core::result::Result<(), ParamsError> {
         template_id::BOSS if p[0] == 0 => Err(ParamsError::BadParams),
         // Rivalry: [start unix seconds, duration seconds, war budget bps of the chest].
         template_id::RIVALRY if p[1] == 0 || p[2] > 10_000 => Err(ParamsError::BadParams),
+        // Hookwars arsenal waves B and C.
+        template_id::VELOCITY_FEE if p[0] == 0 || p[2] == 0 => Err(ParamsError::BadParams),
+        template_id::IMPACT_FEE if p[0] == 0 => Err(ParamsError::BadParams),
+        template_id::VOLATILITY_FEE | template_id::DUMP_BRAKE if p[0] == 0 || p[0] >= p[1] || p[2] > 10_000 => {
+            Err(ParamsError::BadParams)
+        }
+        template_id::RUSH_HOUR if p[0] > 23 || p[1] == 0 || p[1] > 24 => Err(ParamsError::BadParams),
+        template_id::COOLDOWN | template_id::FLASH_GUARD | template_id::STREAK if p[0] == 0 => {
+            Err(ParamsError::BadParams)
+        }
+        template_id::DAILY_SELL_CAP if p[0] == 0 || p[0] > 10_000 => Err(ParamsError::BadParams),
+        template_id::RANK_BADGE if p[0] == 0 || p[1] == 0 || p[2] > u32::from(u8::MAX) => {
+            Err(ParamsError::BadParams)
+        }
         _ => Ok(()),
     }
 }
@@ -603,6 +652,51 @@ pub fn manifest(id: u16, p: &Params, max_targets: u8) -> core::result::Result<Ma
             // Changed by Hookwars (security review 2 L-E): the burn rate counts as the sell-side
             // worst case, so the armory's `max_pool_item_cut_bps` caps it at every equip.
             m.max_cut_sell_bps = bps(p[0]);
+        }
+        // Hookwars arsenal waves B and C (08 4.1, 4.2, 4.3, 4.7). Quote-side pool cuts run on a buy's
+        // before and a sell's after callback, as wave A's.
+        template_id::VELOCITY_FEE => {
+            m.pool_flags = pool_flags::BEFORE_SWAP | pool_flags::AFTER_SWAP;
+            m.max_cut_buy_bps = bps(p[3]);
+            m.max_cut_sell_bps = bps(p[3]);
+        }
+        template_id::IMPACT_FEE => {
+            m.pool_flags = pool_flags::BEFORE_SWAP | pool_flags::AFTER_SWAP;
+            m.max_cut_buy_bps = bps(p[1]);
+            m.max_cut_sell_bps = bps(p[1]);
+        }
+        template_id::VOLATILITY_FEE => {
+            m.pool_flags = pool_flags::BEFORE_SWAP | pool_flags::AFTER_SWAP;
+            m.max_cut_buy_bps = bps(p[3]);
+            m.max_cut_sell_bps = bps(p[3]);
+        }
+        template_id::RUSH_HOUR => {
+            m.pool_flags = pool_flags::BEFORE_SWAP | pool_flags::AFTER_SWAP;
+            let worst = bps(p[2].max(p[3]));
+            m.max_cut_buy_bps = worst;
+            m.max_cut_sell_bps = worst;
+        }
+        template_id::DUMP_BRAKE => {
+            m.pool_flags = pool_flags::AFTER_SWAP;
+            m.max_cut_sell_bps = bps(p[3]);
+        }
+        template_id::COOLDOWN | template_id::FLASH_GUARD => {
+            m.token_flags = BEFORE_TRANSFER | WRITES_HOOK_DATA;
+            m.may_refuse = true;
+            m.data_bytes = 5;
+        }
+        template_id::DAILY_SELL_CAP => {
+            m.token_flags = BEFORE_TRANSFER | WRITES_HOOK_DATA;
+            m.may_refuse = true;
+            m.data_bytes = 11;
+        }
+        template_id::STREAK | template_id::RANK_BADGE => {
+            m.token_flags = BEFORE_TRANSFER | WRITES_HOOK_DATA;
+            m.data_bytes = 6;
+        }
+        template_id::GUILD_TAG => {
+            m.token_flags = BEFORE_TRANSFER | WRITES_HOOK_DATA | ANSWERS_TOUCH;
+            m.data_bytes = 3;
         }
         // Boss marks inbound raid volume; it never cuts, discounts or burns.
         template_id::BOSS => {
