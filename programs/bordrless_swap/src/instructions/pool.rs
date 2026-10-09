@@ -1,12 +1,13 @@
-// Changed by Hookwars: Mint accounts boxed (the Hookwars slot table makes Mint larger than the SBF stack frame allows).
+// Changed by Hookwars: Mint accounts boxed (the Hookwars slot table makes Mint larger than the SBF stack frame allows);
+// every pool account carries its observation ring (allocated at creation) and `finalize_curve` writes it; pool callbacks carry an empty route.
 //! Pool creation, curve finalization and protocol fee collection.
 
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 use bordrless_core::{initial_lp, policy};
 use bordrless_hook::{
-    discriminators, pool_flags, Allowed, Phase, PoolHookArgs, PoolOp, HOOK_AUTHORITY_SEED,
-    MAX_HOOK_DATA,
+    discriminators, pool_flags, Allowed, Phase, PoolHookArgs, PoolOp, RouteContext,
+    HOOK_AUTHORITY_SEED, MAX_HOOK_DATA,
 };
 use bordrless_token::instructions::CreateMintArgs;
 use bordrless_token::state::Mint as TokenMint;
@@ -14,6 +15,7 @@ use bordrless_token::state::Mint as TokenMint;
 use crate::constants::*;
 use crate::error::SwapError;
 use crate::events::*;
+use crate::obs;
 use crate::hooks::{split_extras, PoolHookCall};
 use crate::state::*;
 use crate::token::{balance, read_holding, TokenAccounts, TokenSide};
@@ -65,7 +67,7 @@ pub struct CreatePool<'info> {
     #[account(
         init,
         payer = payer,
-        space = Pool::LEN,
+        space = crate::obs::POOL_ACCOUNT_LEN,
         seeds = [POOL_SEED, base_mint.key().as_ref(), quote_mint.key().as_ref(), &args.lp_fee_bps.to_le_bytes(), args.hook_program.as_ref()],
         bump
     )]
@@ -355,6 +357,7 @@ pub fn process_create_pool<'info>(
         created_at: clock.unix_timestamp,
         lp_amount: 0,
         hook_data: args.hook_data.clone(),
+        route: RouteContext::default(),
     };
     if let Some(call) = &call {
         if !by_hook && args.hook_flags & pool_flags::BEFORE_INITIALIZE != 0 {
@@ -418,6 +421,13 @@ pub fn process_create_pool<'info>(
         pool.quote_reserve = quote_received;
         pool.lp_supply = lp_supply;
     }
+    // Hookwars: the observation ring, opening at the pool's first price.
+    obs::create(
+        &ctx.accounts.pool.to_account_info(),
+        &pool_key,
+        &ctx.accounts.pool,
+        clock.unix_timestamp,
+    )?;
     config.pools_created = config
         .pools_created
         .checked_add(1)
@@ -506,6 +516,11 @@ pub fn process_finalize_curve(ctx: Context<FinalizeCurve>, hook_caller_bump: u8)
         event_authority: ctx.accounts.token_event_authority.to_account_info(),
     };
     token.check()?;
+    obs::begin(
+        &ctx.accounts.pool.to_account_info(),
+        &ctx.accounts.pool,
+        clock.unix_timestamp,
+    )?;
     let base_total = balance(&ctx.accounts.base_vault)?;
     let quote_total = balance(&ctx.accounts.quote_vault)?;
     let pool_info = ctx.accounts.pool.to_account_info();
@@ -532,6 +547,7 @@ pub fn process_finalize_curve(ctx: Context<FinalizeCurve>, hook_caller_bump: u8)
     pool.virtual_quote = 0;
     pool.lp_supply = total;
     pool.curve = false;
+    obs::end(&pool_info, pool)?;
     emit_cpi!(CurveFinalized {
         pool: pool.key(),
         base_reserve,

@@ -92,6 +92,12 @@ Account sizes with the provisional layout constants (`MAX_CAPTURED` 8, `LOOT_TAB
 launch pools with no kit and slot tables of a War slot and a touch-only Raid slot; heavier rival or
 token items add their own cost to `siege`, `raze` and `counter_strike`.
 
+Measured in M3a (spec 03, "M3a implementation notes"): buy and sell with the observation ring
+54,933 and 54,937 CU (keys and bytes unchanged); `swap_route` 2 hops 19 keys, 787 v0 bytes (325
+with a table), 13 trace, height 3, 105,903 CU; 3 hops 24 keys, 960 bytes (343), 18 trace, height
+3, 154,746 CU; 2 hops delivering a 3-cutting-slot mint 27 keys, 1,055 bytes (345), 16 trace,
+height 3, 161,616 CU; pool account with a 32-entry ring 2,043 bytes, rent 15,110,160 lamports.
+
 These measurements set `MAX_SLOTS`, `MAX_CUTTING_SLOTS`, `MAX_ROUTE_HOPS`, `OBS_RING_LEN`,
 `PARAM_FIELDS`, `MAX_CAPTURED`, `RAID_TABLE_LEN` and `LOOT_TABLE_LEN` (00 section 6, set by M).
 

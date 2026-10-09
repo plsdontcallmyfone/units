@@ -1,3 +1,4 @@
+// Changed by Hookwars: `swap_route` builder.
 //! Instruction builders for calling the DEX: used by the launchpad (CPI), the tests and as the
 //! reference for the TypeScript SDK. Account order is that of each `Accounts` struct, with the
 //! event authority and the program appended.
@@ -9,7 +10,8 @@ use bordrless_token::client as token_client;
 
 use crate::constants::*;
 use crate::instructions::{
-    AddLiquidityArgs, ConfigArgs, CreatePoolArgs, RemoveLiquidityArgs, SwapArgs,
+    AddLiquidityArgs, ConfigArgs, CreatePoolArgs, HopArgs, RemoveLiquidityArgs, SwapArgs,
+    SwapRouteArgs,
 };
 use crate::state::Pool;
 
@@ -260,6 +262,76 @@ pub fn swap(keys: &SwapKeys, args: SwapArgs, extras: Vec<AccountMeta>) -> Instru
         program_id: crate::ID,
         accounts,
         data: crate::instruction::Swap { args }.data(),
+    }
+}
+
+/// Hookwars: one hop of a [`swap_route`]: the keys a swap takes for its pool, its direction, and
+/// its token-hook slices and pool-hook extras as [`swap`] takes them.
+pub struct RouteHop {
+    /// The pool and the trader's two holdings of it.
+    pub keys: SwapKeys,
+    /// 0 sell, 1 buy.
+    pub direction: u8,
+    /// The input mint's token-hook slice ([`token_hook_slice`]).
+    pub in_slice: Vec<AccountMeta>,
+    /// The output mint's.
+    pub out_slice: Vec<AccountMeta>,
+    /// The pool hook's extras.
+    pub pool_extras: Vec<AccountMeta>,
+}
+
+/// Hookwars: `swap_route`. `trader` signs; each hop's `keys.trader` is ignored.
+pub fn swap_route(
+    trader: Pubkey,
+    amount_in: u64,
+    min_amount_out: u64,
+    hops: Vec<RouteHop>,
+    hook_data: Vec<u8>,
+) -> Instruction {
+    let mut accounts = vec![
+        AccountMeta::new_readonly(trader, true),
+        AccountMeta::new_readonly(config_address(), false),
+    ];
+    accounts.extend(token_fixed());
+    let mut accounts = with_events(accounts);
+    let mut args = Vec::with_capacity(hops.len());
+    for hop in hops {
+        let k = &hop.keys;
+        let group = vec![
+            AccountMeta::new(k.pool, false),
+            mint_meta(k.base_mint, k.base_mint_writable),
+            mint_meta(k.quote_mint, k.quote_mint_writable),
+            AccountMeta::new(vault_address(&k.pool, &k.base_mint), false),
+            AccountMeta::new(vault_address(&k.pool, &k.quote_mint), false),
+            AccountMeta::new(k.trader_base, false),
+            AccountMeta::new(k.trader_quote, false),
+            optional(k.hook_program),
+            hook_signer_meta(k.hook_program),
+        ];
+        let n = group.len() + hop.in_slice.len() + hop.out_slice.len() + hop.pool_extras.len();
+        args.push(HopArgs {
+            direction: hop.direction,
+            accounts: u8::try_from(n).expect("at most 255 accounts a hop"),
+            in_hook_accounts: u8::try_from(hop.in_slice.len()).expect("slice"),
+            out_hook_accounts: u8::try_from(hop.out_slice.len()).expect("slice"),
+        });
+        accounts.extend(group);
+        accounts.extend(hop.in_slice);
+        accounts.extend(hop.out_slice);
+        accounts.extend(hop.pool_extras);
+    }
+    Instruction {
+        program_id: crate::ID,
+        accounts,
+        data: crate::instruction::SwapRoute {
+            args: SwapRouteArgs {
+                amount_in,
+                min_amount_out,
+                hops: args,
+                hook_data,
+            },
+        }
+        .data(),
     }
 }
 

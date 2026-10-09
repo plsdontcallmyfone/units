@@ -1,4 +1,4 @@
-// Changed by Hookwars: program ids and derived addresses.
+// Changed by Hookwars: program ids and derived addresses; observation ring (obs) and swap_route.
 //! `bordrless_swap`: the Bordrless DEX.
 //!
 //! Constant-product pools between two Bordrless Token Standard mints. A pool has an LP fee that
@@ -28,6 +28,7 @@ pub mod error;
 pub mod events;
 pub mod hooks;
 pub mod instructions;
+pub mod obs;
 pub mod state;
 pub mod token;
 
@@ -109,5 +110,14 @@ pub mod bordrless_swap {
     /// Swaps an exact input for at least `min_amount_out`.
     pub fn swap<'info>(ctx: Context<'info, Swap<'info>>, args: SwapArgs) -> Result<()> {
         swap::process_swap(ctx, args)
+    }
+
+    /// Hookwars: a multi-hop swap. Hops run in order inside this instruction; each hop's input is
+    /// what the previous one delivered; every hop's pool hook is told the route.
+    pub fn swap_route<'info>(
+        ctx: Context<'info, SwapRoute<'info>>,
+        args: SwapRouteArgs,
+    ) -> Result<()> {
+        swap::process_swap_route(ctx, args)
     }
 }

@@ -1,9 +1,11 @@
+// Changed by Hookwars: Swapped.route, RouteSwapped.
 //! Events of the DEX, emitted by self-CPI. A `Swapped` event carries the reserves after the swap
 //! (virtual offsets included), which is what the indexer prices from.
 
 #![allow(missing_docs)]
 
 use anchor_lang::prelude::*;
+use bordrless_hook::RouteContext;
 
 #[event]
 pub struct ConfigSet {
@@ -107,6 +109,8 @@ pub struct Swapped {
     pub swap_count: u64,
     pub slot: u64,
     pub ts: i64,
+    /// Hookwars (spec 03 section 9): the route this swap was a hop of; a plain swap is one hop.
+    pub route: RouteContext,
 }
 
 #[event]
@@ -158,3 +162,20 @@ pub struct ProtocolFeesCollected {
     pub collector: Pubkey,
     pub ts: i64,
 }
+
+/// Hookwars: one `swap_route`, after each hop's own `Swapped`.
+#[event]
+pub struct RouteSwapped {
+    pub trader: Pubkey,
+    pub route_input_mint: Pubkey,
+    pub route_output_mint: Pubkey,
+    /// What the first hop took from the trader.
+    pub amount_in: u64,
+    /// What the trader's final holding gained.
+    pub amount_out: u64,
+    /// The pools, in hop order.
+    pub pools: Vec<Pubkey>,
+    pub slot: u64,
+    pub ts: i64,
+}
+

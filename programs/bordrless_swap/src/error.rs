@@ -1,3 +1,4 @@
+// Changed by Hookwars: route and observation errors appended.
 //! Errors of the DEX.
 
 use anchor_lang::prelude::*;
@@ -81,6 +82,21 @@ pub enum SwapError {
     BadHookSigner,
     #[msg("the pool's quote is not bridged SOL")]
     NotBridgedSol,
+    // Hookwars (spec 03 section 3.3), appended so upstream codes keep their numbers.
+    #[msg("a route needs at least one hop")]
+    EmptyRoute,
+    #[msg("the route has more hops than allowed")]
+    RouteTooLong,
+    #[msg("a hop's output does not feed the next hop's input")]
+    RouteBroken,
+    #[msg("a pool appears twice in the route")]
+    RoutePoolRepeated,
+    #[msg("the TWAP window is shorter than the minimum")]
+    TwapWindowTooShort,
+    #[msg("no observation is old enough for the window")]
+    ObservationTooOld,
+    #[msg("the observations account is not this pool's")]
+    WrongObservations,
 }
 
 /// The DEX's error for a swap the fees or the curve refuse.

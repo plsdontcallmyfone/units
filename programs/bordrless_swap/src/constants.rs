@@ -1,4 +1,4 @@
-// Changed by Hookwars: program ids and derived addresses.
+// Changed by Hookwars: program ids and derived addresses; observation ring and route constants.
 //! Constants of the DEX.
 
 /// `["config"]`.
@@ -7,6 +7,20 @@ pub const CONFIG_SEED: &[u8] = b"config";
 pub const POOL_SEED: &[u8] = b"pool";
 /// `["lp", pool]`.
 pub const LP_SEED: &[u8] = b"lp";
+/// Hookwars parameter `OBS_RING_LEN` (to set, spec 00 section 6): entries in the observation ring
+/// every pool account carries after its `Pool` fields (spec 03 section 3.1, M3a notes).
+/// This build value is a TEST value measured in `programs/tests/tests/budgets.rs`.
+pub const OBS_RING_LEN: u16 = 32;
+/// Hookwars: least seconds between two ring entries (to set with `OBS_RING_LEN`: together they
+/// fix the history a ring covers, `OBS_RING_LEN * OBS_SPACING_SECS` seconds at least). TEST value.
+pub const OBS_SPACING_SECS: u32 = 30;
+/// Hookwars parameter `MIN_TWAP_SECS` (to set, owner decision): the shortest window any reader of
+/// another pool's observations may use. Readers pass it to `bordrless_core::observations::window_read`.
+/// TEST value.
+pub const MIN_TWAP_SECS: i64 = 300;
+/// Hookwars parameter `MAX_ROUTE_HOPS` (to set by measurement): hops in one `swap_route`. Build
+/// value measured in `budgets.rs`.
+pub const MAX_ROUTE_HOPS: usize = 3;
 /// Bump of `["config"]` (`HnckfEpqfiSan7VurzXtFxmHHTsKmkD2dwepwTdkrF5Z`).
 pub const CONFIG_BUMP: u8 = 255;
 /// Layout version.

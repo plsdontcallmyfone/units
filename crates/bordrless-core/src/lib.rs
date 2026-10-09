@@ -1,9 +1,12 @@
+// Changed by Hookwars: the observation ring module (observations.rs).
 //! Pure math and policy of the Bordrless programs. No dependencies, `no_std`, integer only, so the
 //! programs, their LiteSVM tests and the TypeScript mirror (`packages/shared/src/policy.ts`) compute
 //! the same numbers bit for bit. Every function answers `None` on overflow or an impossible input
 //! ([`swap_amounts`] answers why, as a [`SwapFailure`]); the programs turn that into an error.
 
 #![no_std]
+
+pub mod observations;
 
 /// Basis points in one.
 pub const BPS: u64 = 10_000;
