@@ -1,5 +1,6 @@
 // Changed by Hookwars: new file (M2), the armory; M3b: composites (create_composite, the module
-// list passed to init_equip), the Performance reader on the pool's ring, settle_bounty_bps.
+// list passed to init_equip), the Performance reader on the pool's ring, settle_bounty_bps;
+// security review 1: H-1 fail_stale, H-2 royalty recipients, M-1 finalize, M-2 proposal threshold, I-3.
 //! `hookwars_armory` (docs/spec/02-armory.md): templates, items as supply-1 tokens on the token
 //! standard, royalties and their claims, equip rules (holder vote with notice, performance revert,
 //! locked), equipping at launch (signed by the launchpad), loot minting (signed by the war program),
@@ -73,6 +74,7 @@ fn check_params(p: &ArmoryParams) -> Result<()> {
             && p.max_pool_item_cut_bps <= 10_000
             && p.max_pool_item_discount_bps <= 10_000
             && p.settle_bounty_bps <= 10_000
+            && p.proposal_min_bps <= 10_000
             && p.vote_period_secs > 0
             && p.min_twap_secs > 0
             && p.min_notice_secs <= p.max_notice_secs,
@@ -655,6 +657,14 @@ pub struct Propose<'info> {
     pub template_program: Option<UncheckedAccount<'info>>,
     /// CHECK: its ProgramData.
     pub template_programdata: Option<UncheckedAccount<'info>>,
+    /// CHECK: the proposer's holding of the token (security review 1, M-2: the proposal
+    /// threshold, locked in place for the vote period; address-checked in the handler).
+    #[account(mut)]
+    pub proposer_holding: UncheckedAccount<'info>,
+    /// CHECK: `["slots", token_mint]`, which signs the proposer's vote lock.
+    #[account(seeds = [seeds::SLOTS, token_mint.key().as_ref()], bump)]
+    pub slot_authority: UncheckedAccount<'info>,
+    pub token: TokenAccounts<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -693,7 +703,8 @@ pub struct Finalize<'info> {
     /// CHECK: the token.
     #[account(address = proposal.mint @ ArmoryError::WrongAccount)]
     pub token_mint: UncheckedAccount<'info>,
-    /// CHECK: the token's `Launch` (`["launch", mint]` under the launchpad), if it launched.
+    /// CHECK: the token's `Launch` address (`["launch", mint]` under the launchpad), always
+    /// passed (security review 1, M-1); when it holds a launch, the two holdings below are required.
     pub launch: Option<UncheckedAccount<'info>>,
     /// CHECK: the launch pool's base vault (`holding(mint, pool)`).
     pub pool_base_vault: Option<UncheckedAccount<'info>>,
@@ -1221,6 +1232,17 @@ fn process_claim_royalty<'info>(
         ArmoryError::NotItemOwner
     );
     let cut_mint = a.cut_mint.key();
+    // Security review 1, H-2: the kit counts a protocol transfer's program-owned destination as an
+    // excluded vault, so a royalty of a kit token must go to a wallet (a key on the curve), never to
+    // a program address that could later move it as an ordinary holder.
+    {
+        let m = read_mint(&a.cut_mint.to_account_info())?;
+        let runs_kit = m.hook_program == Some(ids::KIT_ID)
+            || m.slots[..usize::from(m.slot_count)].iter().any(|sl| {
+                sl.kind == hookwars_common::kind::LOCKED && sl.program == ids::KIT_ID
+            });
+        require!(!runs_kit || claimant.is_on_curve(), ArmoryError::RecipientOffCurve);
+    }
     let owner_key = a.royalty_owner.key();
     require_keys_eq!(
         a.royalty_holding.key(),
@@ -1510,6 +1532,8 @@ fn check_proposed(
         ArmoryError::SlotLocked
     );
     let Some(k) = item else {
+        // Security review 1, I-3: an emptying proposal names no targets.
+        require!(config.targets.is_empty(), ArmoryError::OverBounds);
         return Ok(());
     };
     let i = item_acc.ok_or(ArmoryError::WrongAccount)?;
@@ -1536,6 +1560,53 @@ fn check_proposed(
     )
 }
 
+/// Locks `amount` of `holding` in place until `until` through the token program's `set_vote_lock`,
+/// signed by `["slots", mint]`. One lock backs several votes and proposals: an existing lock keeps
+/// the larger amount and the later end.
+#[allow(clippy::too_many_arguments)]
+fn lock_in_place<'info>(
+    slot_authority: &AccountInfo<'info>,
+    slot_authority_bump: u8,
+    token_mint: &AccountInfo<'info>,
+    holding_info: &AccountInfo<'info>,
+    holding: &bordrless_token::state::Holding,
+    token: &TokenAccounts<'info>,
+    amount: u64,
+    until: i64,
+    now: i64,
+) -> Result<(u64, i64)> {
+    let (lock_amount, until) = if holding.vote_lock_until > now {
+        (
+            holding.vote_locked.max(amount),
+            holding.vote_lock_until.max(until),
+        )
+    } else {
+        (amount, until)
+    };
+    let mint_key = token_mint.key();
+    let ix = bordrless_token::client::set_vote_lock(
+        slot_authority.key(),
+        mint_key,
+        holding_info.key(),
+        lock_amount,
+        until,
+    );
+    let bump = [slot_authority_bump];
+    let signer: &[&[u8]] = &[seeds::SLOTS, mint_key.as_ref(), &bump];
+    anchor_lang::solana_program::program::invoke_signed(
+        &ix,
+        &[
+            slot_authority.clone(),
+            token_mint.clone(),
+            holding_info.clone(),
+            token.token_event_authority.to_account_info(),
+            token.token_program.to_account_info(),
+        ],
+        &[signer],
+    )?;
+    Ok((lock_amount, until))
+}
+
 fn process_propose(
     ctx: Context<Propose>,
     slot: u8,
@@ -1545,6 +1616,43 @@ fn process_propose(
     let a = &ctx.accounts;
     let mint = read_mint(&a.token_mint.to_account_info())?;
     require!(a.slot_state.open_proposal.is_none(), ArmoryError::ProposalOpen);
+    // Security review 1, M-2: a proposer holds at least the threshold, locked for the vote period,
+    // so one wallet with no tokens cannot hold a slot's only open-proposal seat.
+    let min_bps = a.config.params.proposal_min_bps;
+    if min_bps > 0 {
+        let mint_key = a.token_mint.key();
+        let proposer = a.proposer.key();
+        require_keys_eq!(
+            a.proposer_holding.key(),
+            pda::holding(&mint_key, &proposer),
+            ArmoryError::WrongAccount
+        );
+        let h = bordrless_token::client::read_holding(&a.proposer_holding.to_account_info())
+            .map_err(|_| ArmoryError::BelowProposalThreshold)?;
+        require!(
+            h.owner == proposer && h.mint == mint_key,
+            ArmoryError::WrongAccount
+        );
+        let need = u64::try_from(
+            (u128::from(mint.supply) * u128::from(min_bps)).div_ceil(10_000),
+        )
+        .map_err(|_| ArmoryError::InvalidAmount)?
+        .max(1);
+        require!(h.amount >= need, ArmoryError::BelowProposalThreshold);
+        let ts = now()?;
+        let until = ts + i64::from(a.config.params.vote_period_secs);
+        lock_in_place(
+            &a.slot_authority.to_account_info(),
+            ctx.bumps.slot_authority,
+            &a.token_mint.to_account_info(),
+            &a.proposer_holding.to_account_info(),
+            &h,
+            &a.token,
+            need,
+            until,
+            ts,
+        )?;
+    }
     check_proposed(
         &a.config.params,
         &mint,
@@ -1621,34 +1729,16 @@ fn process_vote(ctx: Context<Vote>, support: bool, amount: u64) -> Result<()> {
     );
     require!(amount > 0 && amount <= holding.amount, ArmoryError::InvalidAmount);
     // One lock backs votes on several proposals: keep the larger amount and the later end.
-    let (lock_amount, until) = if holding.vote_lock_until > ts {
-        (
-            holding.vote_locked.max(amount),
-            holding.vote_lock_until.max(p.vote_end),
-        )
-    } else {
-        (amount, p.vote_end)
-    };
-    let mint_key = a.token_mint.key();
-    let ix = bordrless_token::client::set_vote_lock(
-        a.slot_authority.key(),
-        mint_key,
-        a.holding.key(),
-        lock_amount,
-        until,
-    );
-    let bump = [ctx.bumps.slot_authority];
-    let signer: &[&[u8]] = &[seeds::SLOTS, mint_key.as_ref(), &bump];
-    anchor_lang::solana_program::program::invoke_signed(
-        &ix,
-        &[
-            a.slot_authority.to_account_info(),
-            a.token_mint.to_account_info(),
-            a.holding.to_account_info(),
-            a.token.token_event_authority.to_account_info(),
-            a.token.token_program.to_account_info(),
-        ],
-        &[signer],
+    let (_, until) = lock_in_place(
+        &a.slot_authority.to_account_info(),
+        ctx.bumps.slot_authority,
+        &a.token_mint.to_account_info(),
+        &a.holding.to_account_info(),
+        &holding,
+        &a.token,
+        amount,
+        p.vote_end,
+        ts,
     )?;
     let proposal_key = ctx.accounts.proposal.key();
     let p = &mut ctx.accounts.proposal;
@@ -1685,10 +1775,12 @@ fn process_finalize(ctx: Context<Finalize>) -> Result<()> {
     require!(ts >= p.vote_end, ArmoryError::VotingNotEnded);
     let mint = read_mint(&a.token_mint.to_account_info())?;
     let mut eligible = mint.supply;
-    if let Some(launch) = a.launch.as_ref() {
-        let (launch_key, _) = pda::launch(&p.mint);
-        require_keys_eq!(launch.key(), launch_key, ArmoryError::WrongAccount);
-        require_keys_eq!(*launch.owner, ids::LAUNCH_ID, ArmoryError::WrongAccount);
+    // Security review 1, M-1: the launch address is always passed, so nobody can finalize against
+    // the whole supply by omitting it; when it holds a launch, both holdings are required.
+    let launch = a.launch.as_ref().ok_or(ArmoryError::WrongAccount)?;
+    let (launch_key, _) = pda::launch(&p.mint);
+    require_keys_eq!(launch.key(), launch_key, ArmoryError::WrongAccount);
+    if *launch.owner == ids::LAUNCH_ID {
         let pool = hookwars_common::launch_pool(&launch.try_borrow_data()?, &p.mint)
             .ok_or(ArmoryError::WrongAccount)?;
         for (acc, owner) in [
@@ -1771,11 +1863,56 @@ fn process_execute(ctx: Context<Execute>) -> Result<()> {
     Ok(())
 }
 
+/// Security review 1, H-1: the errors that mean a passed proposal no longer fits its slot (the
+/// world changed since the vote). Any other error (a missing or wrong account) is the caller's
+/// mistake and fails the transaction instead of the proposal.
+fn is_stale_error(e: &Error) -> bool {
+    let Error::AnchorError(a) = e else {
+        return false;
+    };
+    let offset = anchor_lang::error::ERROR_CODE_OFFSET;
+    [
+        ArmoryError::TemplateClosed as u32,
+        ArmoryError::TemplateChanged as u32,
+        ArmoryError::KindMismatch as u32,
+        ArmoryError::OverBounds as u32,
+        ArmoryError::DataRangeTooSmall as u32,
+        ArmoryError::AlreadyEquipped as u32,
+        ArmoryError::SlotLocked as u32,
+        ArmoryError::SlotIndexOutOfRange as u32,
+    ]
+    .iter()
+    .any(|c| c + offset == a.error_code_number)
+}
+
 fn process_fail_stale(ctx: Context<FailStale>) -> Result<()> {
     let a = &ctx.accounts;
     let p = &a.proposal;
     require!(p.status == proposal_status::PASSED, ArmoryError::NotExecutable);
     let mint = read_mint(&a.token_mint.to_account_info())?;
+    // Security review 1, H-1: the proposal's own accounts are required, so leaving them out is an
+    // error, never staleness.
+    if let Some(k) = p.item {
+        let i = a.item.as_deref().ok_or(ArmoryError::WrongAccount)?;
+        require_keys_eq!(i.key(), k, ArmoryError::WrongAccount);
+        let t = a.template.as_deref().ok_or(ArmoryError::WrongAccount)?;
+        require_keys_eq!(t.key(), pda::template(i.template_id).0, ArmoryError::WrongAccount);
+        if t.deploy_slot.is_some() {
+            let program = a.template_program.as_ref().ok_or(ArmoryError::ProgramDataMissing)?;
+            require_keys_eq!(program.key(), t.program, ArmoryError::WrongAccount);
+            if *program.owner != ids::LOADER_V4_ID {
+                let pd = a
+                    .template_programdata
+                    .as_ref()
+                    .ok_or(ArmoryError::ProgramDataMissing)?;
+                require_keys_eq!(
+                    pd.key(),
+                    hookwars_common::programdata_address(&t.program),
+                    ArmoryError::ProgramDataMissing
+                );
+            }
+        }
+    }
     let fits = check_proposed(
         &a.config.params,
         &mint,
@@ -1787,7 +1924,11 @@ fn process_fail_stale(ctx: Context<FailStale>) -> Result<()> {
         a.template_program.as_ref(),
         a.template_programdata.as_ref(),
     );
-    require!(fits.is_err(), ArmoryError::NotStale);
+    match fits {
+        Ok(()) => return err!(ArmoryError::NotStale),
+        Err(e) if !is_stale_error(&e) => return Err(e),
+        Err(_) => {}
+    }
     let p_key = p.key();
     let (vf, va) = (p.votes_for, p.votes_against);
     ctx.accounts.proposal.status = proposal_status::FAILED;

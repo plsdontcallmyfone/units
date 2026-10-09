@@ -1,3 +1,4 @@
+// Changed by Hookwars: security review 1: the bounty rate capped by bounty_max_point_bps (M-6)
 //! `claim_bounty`: a holder turns raid points into SOL from the chest (05 section 7).
 
 use anchor_lang::prelude::*;
@@ -61,7 +62,10 @@ pub fn process_claim_bounty<'info>(
         &ctx.accounts.orders_item,
         &ctx.accounts.orders_template,
     )?;
-    let rate = u64::from(orders.get(orders::BOUNTY_RATE));
+    // Security review 1, M-6: a point never pays more than `bounty_max_point_bps` of the quote
+    // volume it stands for, whatever rate the War orders set, so wash raids cannot drain the chest.
+    let cap = bps_of(params.point_unit_lamports, u64::from(params.bounty_max_point_bps));
+    let rate = u64::from(orders.get(orders::BOUNTY_RATE)).min(cap);
     require!(rate > 0, WarError::NoWarOrders);
     let slot = raid_slot(&ctx.accounts.mint, raid_slot_index)?;
     let before = read_raid(&ctx.accounts.holding, &slot)?;

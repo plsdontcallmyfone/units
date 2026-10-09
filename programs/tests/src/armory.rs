@@ -36,6 +36,8 @@ pub const TEST_PARAMS: ArmoryParams = ArmoryParams {
     max_item_reads: 4,
     admin_timelock_secs: 600,
     settle_bounty_bps: 50,
+    // Security review 1, M-2: TEST threshold, 1% of the supply.
+    proposal_min_bps: 100,
 };
 
 /// `p` padded with zeros.
@@ -496,6 +498,9 @@ impl Hw {
                 template_program: item.map(|_| ids::ITEMS_ID),
                 template_programdata: item
                     .map(|_| hookwars_common::programdata_address(&ids::ITEMS_ID)),
+                proposer_holding: token::holding_address(mint, &proposer.pubkey()),
+                slot_authority: pda::slot_authority(mint).0,
+                token: token_accounts(),
                 system_program: anchor_lang::system_program::ID,
                 event_authority: armory_events(),
                 program: ids::ARMORY_ID,
@@ -529,7 +534,8 @@ impl Hw {
         self.w.env.send_paid_by(&[ix], voter, &[])
     }
 
-    /// `finalize` (no launch: eligible is the whole supply).
+    /// `finalize` (no launch: eligible is the whole supply; the launch address is always passed,
+    /// security review 1, M-1).
     pub fn finalize(&mut self, proposal: &Pubkey) -> Tx {
         let p: hookwars_armory::state::Proposal = self.w.env.read(proposal);
         let ix = armory_ix(
@@ -538,7 +544,7 @@ impl Hw {
                 proposal: *proposal,
                 slot_state: pda::slot_state(&p.mint, p.slot).0,
                 token_mint: p.mint,
-                launch: None,
+                launch: Some(pda::launch(&p.mint).0),
                 pool_base_vault: None,
                 launch_holding: None,
                 event_authority: armory_events(),

@@ -1,3 +1,4 @@
+// Changed by Hookwars: security review 1: RazeWaited (M-3)
 //! Events, all emitted by self-CPI (`emit_cpi!`), with the names 06 uses (05 section 12).
 
 use anchor_lang::prelude::*;
@@ -34,6 +35,15 @@ pub struct SiegeExecuted {
 
 #[event]
 pub struct SiegeWaited {
+    pub mint: Pubkey,
+    pub rival_mint: Pubkey,
+    pub rival_price: u128,
+    pub rival_twap: u128,
+}
+
+/// Security review 1, M-3: a raze waited (the rival trades too far below its TWAP).
+#[event]
+pub struct RazeWaited {
     pub mint: Pubkey,
     pub rival_mint: Pubkey,
     pub rival_price: u128,

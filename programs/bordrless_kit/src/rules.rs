@@ -1,4 +1,4 @@
-// Changed by Hookwars: R20 protocol transfers, protocol vaults and item cuts.
+// Changed by Hookwars: R20 protocol transfers, protocol vaults and item cuts; security review 1: unstamped program-address sources refused (H-2)
 //! What the callbacks do (`docs/hooks-v2.md` §4.9), as pure functions of the config, the token
 //! program's arguments, the reward vault's balance and the time, so the order of the rules is
 //! the same on chain and in host tests. The callbacks bind the accounts first
@@ -82,6 +82,19 @@ pub fn before_transfer(
         .amount
         .checked_sub(items_cut)
         .ok_or(KitError::MathOverflow)?;
+
+    // Security review 1, H-2: a program address the kit never stamped is one that received while
+    // excluded (the destination of a protocol transfer). With holder rewards on it may not move
+    // the token in an ordinary transfer: as a holder it would settle rewards since launch on a
+    // balance that never entered `eligible`. The curve check runs only for such unstamped sources.
+    if config.rewards_on()
+        && !protocol
+        && !source_excluded
+        && HolderData::read(&args.source_hook_data) == HolderData::default()
+        && !args.source_owner.is_on_curve()
+    {
+        return err!(KitError::SourceNotAllowed);
+    }
 
     // 1. Where the token may go.
     require!(
@@ -230,6 +243,13 @@ pub fn before_burn(
     }
     let read = args.source_hook_data;
     let mut source = HolderData::read(&read);
+    // Security review 1, H-2: the same rule as an ordinary transfer's source.
+    if config.rewards_on()
+        && source == HolderData::default()
+        && !args.source_owner.is_on_curve()
+    {
+        return err!(KitError::SourceNotAllowed);
+    }
     let after = args
         .source_balance
         .checked_sub(args.amount)

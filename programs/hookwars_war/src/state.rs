@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M4/M5); M3b: POINT_UNIT_LAMPORTS and LOOT_MIN_RAID_LAMPORTS in WarParams.
+// Changed by Hookwars: new file (M4/M5); M3b: POINT_UNIT_LAMPORTS and LOOT_MIN_RAID_LAMPORTS in WarParams; security review 1: raze_max_discount_bps (M-3), bounty_max_point_bps (M-6)
 //! Accounts of the war program (05 section 2).
 
 use anchor_lang::prelude::*;
@@ -52,6 +52,12 @@ pub struct WarParams {
     pub point_unit_lamports: u64,
     /// `LOOT_MIN_RAID_LAMPORTS` (M3b): the smallest raid buy that earns a loot ticket.
     pub loot_min_raid_lamports: u64,
+    /// Security review 1, M-3: a raze waits while the rival trades below its TWAP by more than
+    /// this (basis points). To set.
+    pub raze_max_discount_bps: u16,
+    /// Security review 1, M-6: one raid point never pays more than this share of the quote volume
+    /// it stands for (`point_unit_lamports`), in basis points, whatever the War orders' rate. To set.
+    pub bounty_max_point_bps: u16,
 }
 
 impl WarParams {
@@ -65,6 +71,8 @@ impl WarParams {
             self.counter_max_spend_bps,
             self.raze_max_bps_per_interval,
             self.season_prize_share_bps,
+            self.raze_max_discount_bps,
+            self.bounty_max_point_bps,
         ];
         let secs = [
             self.admin_timelock_secs,
@@ -83,6 +91,7 @@ impl WarParams {
             && self.max_crank_bounty_bps <= BOUNTY_CEILING_BPS
             && secs.iter().all(|s| *s > 0)
             && self.siege_unit_lamports > 0
+            && self.raze_max_discount_bps < 10_000
     }
 }
 
