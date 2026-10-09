@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file, the war program's harness; M3b: the armory's and the shared types,
+// Changed by Hookwars: new file, the war program's harness; M3b: the armory's and the shared types; security review 1: TEST params, WarWorld::with_params.
 // the observation ring in the pool account.
 //! The war suites' world: the upstream world plus `hookwars_war` and its test-only stand-ins at the
 //! items and armory ids (`war_items_stub`, `war_armory_stub`) and a randomness adapter
@@ -51,6 +51,13 @@ pub const TEST_PARAMS: WarParams = WarParams {
     season_prize_share_bps: 2_000,
     point_unit_lamports: 1_000_000,
     loot_min_raid_lamports: 10_000_000,
+    // Security review 1: TEST values. A raze waits below the TWAP by more than 10% (M-3); the
+    // bounty cap (M-6) is left wide open here (100% of a point's volume) so the suites' TEST rates
+    // stand, and `tests/security.rs` sets a tight one.
+    raze_max_discount_bps: 1_000,
+    bounty_max_point_bps: 10_000,
+    // Security review 2, M-B: TEST, raid volume scored per lamport the chest received in the season.
+    raid_volume_per_funded: 1_000,
 };
 
 /// TEST template ids (the armory numbers its templates densely; these are the suites').
@@ -138,6 +145,11 @@ impl WarWorld {
     /// The world, the war program and its stand-ins loaded, its config created with
     /// [`TEST_PARAMS`], the War orders and Treaty templates written.
     pub fn new() -> Self {
+        Self::with_params(TEST_PARAMS)
+    }
+
+    /// As [`WarWorld::new`] with the war config created with `params` (security review 1 tests).
+    pub fn with_params(params: WarParams) -> Self {
         let mut w = World::new();
         let loads = [
             ("hookwars_war", hookwars_war::ID),
@@ -155,7 +167,7 @@ impl WarWorld {
         w.env
             .set_upgrade_authority(hookwars_war::ID, Some(deployer.pubkey()));
         let mut ww = Self { w };
-        ww.init_config(TEST_PARAMS).ok();
+        ww.init_config(params).ok();
         ww.put_template(WAR_ORDERS_TEMPLATE, slot_kind::WAR, 11, [0; PARAM_FIELDS], [u32::MAX; PARAM_FIELDS], true);
         let mut max = [0u32; PARAM_FIELDS];
         max[..3].copy_from_slice(&[10_000, 10_000, 1]);

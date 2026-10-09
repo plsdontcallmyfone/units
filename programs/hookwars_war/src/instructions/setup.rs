@@ -1,3 +1,4 @@
+// Changed by Hookwars: security review 2: season funding, record_funding rolls (M-B)
 //! `init_war` and `record_funding` (05 sections 4 and 5).
 
 use anchor_lang::prelude::*;
@@ -84,6 +85,8 @@ pub fn process_init_war(ctx: Context<InitWar>) -> Result<()> {
 pub fn note_funding(state: &mut WarState, balance: u64) -> u64 {
     let increase = balance.saturating_sub(state.last_seen_balance);
     state.funded_total = state.funded_total.saturating_add(increase);
+    // Security review 2, M-B: the season's own funding (callers roll the state first).
+    state.season.funded = state.season.funded.saturating_add(increase);
     state.last_seen_balance = balance;
     increase
 }
@@ -100,6 +103,9 @@ pub fn chest_balance(chest_holding: &AccountInfo) -> Result<u64> {
 #[event_cpi]
 #[derive(Accounts)]
 pub struct RecordFunding<'info> {
+    /// Security review 2, M-B: the season the funding counts for.
+    #[account(seeds = [WAR_CONFIG_SEED], bump = config.bump)]
+    pub config: Box<Account<'info, WarConfig>>,
     #[account(mut, seeds = [WAR_SEED, war_state.mint.as_ref()], bump = war_state.bump)]
     pub war_state: Box<Account<'info, WarState>>,
     /// CHECK: the chest's holding of bridged SOL (address-checked).
@@ -110,7 +116,9 @@ pub struct RecordFunding<'info> {
 /// `record_funding`: permissionless, no bounty.
 pub fn process_record_funding(ctx: Context<RecordFunding>) -> Result<()> {
     let balance = chest_balance(&ctx.accounts.chest_holding)?;
+    let current = ctx.accounts.config.current_season;
     let s = &mut ctx.accounts.war_state;
+    s.roll(current);
     let amount = note_funding(s, balance);
     emit_cpi!(WarFunded {
         mint: s.mint,

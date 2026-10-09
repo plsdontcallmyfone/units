@@ -25,6 +25,8 @@ solana-security-txt = { workspace = true }
 bordrless-hook = { path = "../../crates/bordrless-hook" }
 bordrless-token = { path = "../bordrless_token", features = ["no-entrypoint"] }
 bordrless-swap = { path = "../bordrless_swap", features = ["no-entrypoint"] }
+# Security review 2, L-D: reads the Launch account to refresh a slot launch's pool registry.
+bordrless-launch = { path = "../bordrless_launch", features = ["no-entrypoint"] }
 hookwars-common = { path = "../../crates/hookwars-common" }
 
 [lints]

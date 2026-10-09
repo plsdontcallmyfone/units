@@ -1,3 +1,4 @@
+// Changed by Hookwars: security review 1: SourceNotAllowed (H-2)
 //! Errors of the kit.
 
 use anchor_lang::prelude::*;
@@ -63,4 +64,7 @@ pub enum KitError {
     WrongProgram,
     #[msg("math overflow")]
     MathOverflow,
+    /// Security review 1, H-2.
+    #[msg("a program address the kit never counted may not move the token outside a protocol transfer")]
+    SourceNotAllowed,
 }

@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file.
+// Changed by Hookwars: new file; security review 2: raid volume capped by season funding (M-B).
 //! Seasons (05 section 10): proposals behind the timelock, opening, king of the hill in O(1) per
 //! call with a challenge window that never extends, finalizing, the prize split from protocol fees
 //! (R14), and treaty time.
@@ -74,6 +74,10 @@ fn king_of_the_hill_takes_strictly_higher_scores_in_its_window() {
     let n = s.number;
     ww.put_ledger(&a.mint, n, 500, &[]);
     ww.put_ledger(&b.mint, n, 800, &[]);
+    // Security review 2, M-B: raid volume scores up to `raid_volume_per_funded` times the season's
+    // chest funding; both chests receive enough for their whole volume to count.
+    ww.fund_chest(&a.mint, SOL);
+    ww.fund_chest(&b.mint, SOL);
     let me = ww.w.env.funded(SOL);
     let submit = |ww: &mut WarWorld, mint| {
         ww.w.env
@@ -102,6 +106,51 @@ fn king_of_the_hill_takes_strictly_higher_scores_in_its_window() {
     // The next season can open only now.
     let s2 = ww.open_season(by_raid_volume());
     assert_eq!(s2.number, n + 1);
+}
+
+/// Security review 2, M-B: a community that washes raid volume with self-raid loops ("sell rival X on
+/// X's pool, buy ours, sell ours, buy back X": every loop adds its whole buy to our raid volume for
+/// only the fees) gains score only up to `raid_volume_per_funded` times what its chest received in
+/// the season. The ledger below stands for those loops: honest raids of 5,000 for `b`, and 200
+/// loops of 1,000 for `a`.
+#[test]
+fn washed_raid_volume_scores_only_up_to_the_seasons_funding() {
+    let mut ww = WarWorld::new();
+    let a = ww.war_token("WASH", OrdersSpec::default());
+    let b = ww.war_token("FAIR", OrdersSpec::default());
+    let s = ww.open_season(by_raid_volume());
+    let n = s.number;
+    let loops: u64 = 200;
+    ww.put_ledger(&a.mint, n, loops * 1_000, &[]);
+    ww.put_ledger(&b.mint, n, 5_000, &[]);
+    // The washer's chest received 1 lamport this season, the honest token's enough for its raids.
+    ww.fund_chest(&a.mint, 1);
+    ww.fund_chest(&b.mint, SOL);
+    let me = ww.w.env.funded(SOL);
+    ww.w.env.warp(s.ends_at - ww.now());
+    let submit = |ww: &mut WarWorld, mint| {
+        ww.w.env
+            .send(&[war::submit_candidate(me.pubkey(), n, mint, true)], &[&me])
+    };
+    let e = submit(&mut ww, a.mint).event::<CandidateSubmitted>();
+    // 200,000 of raid volume, scored at 1 lamport of funding times the TEST 1,000.
+    assert_eq!(e.score, i128::from(TEST_PARAMS.raid_volume_per_funded));
+    let e = submit(&mut ww, b.mint).event::<CandidateChallenged>();
+    assert_eq!((e.score, e.beaten), (5_000, a.mint));
+    // Funding recorded before the season opened does not count for it.
+    let mut ww = WarWorld::new();
+    let c = ww.war_token("EARLY", OrdersSpec::default());
+    ww.fund_chest(&c.mint, SOL);
+    let s = ww.open_season(by_raid_volume());
+    ww.put_ledger(&c.mint, s.number, 5_000, &[]);
+    ww.w.env.warp(s.ends_at - ww.now());
+    let me = ww.w.env.funded(SOL);
+    let e = ww
+        .w
+        .env
+        .send(&[war::submit_candidate(me.pubkey(), s.number, c.mint, true)], &[&me])
+        .event::<CandidateSubmitted>();
+    assert_eq!(e.score, 0);
 }
 
 #[test]

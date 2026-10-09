@@ -1,3 +1,4 @@
+// Changed by Hookwars: security review 1: the siege always names the rival's war state (M-4), the raze waits below the TWAP floor (M-3)
 //! Attack and defense paid from the chest (05 section 6): `siege`, `counter_strike`, `raze`,
 //! `return_captured`. Each is permissionless, checks on chain that it is due, is capped per call
 //! and per interval, and pays its sender at most the War orders' crank bounty (capped by the
@@ -114,12 +115,29 @@ pub struct Siege<'info> {
     /// CHECK: the rival's launch pool (read by hand).
     #[account(mut)]
     pub rival_pool: UncheckedAccount<'info>,
-    /// The rival's war state, when it has one: marked besieged.
-    #[account(mut)]
-    pub rival_war_state: Option<Box<Account<'info, WarState>>>,
+    /// CHECK: the rival's war state address, always passed (security review 1, M-4): when it holds
+    /// a war state it is marked besieged; empty only while the rival has no war state.
+    #[account(mut, address = WarState::address(&rival_mint.key()).0 @ WarError::WrongAccount)]
+    pub rival_war_state: UncheckedAccount<'info>,
     /// CHECK: the rival's `KitConfig`, when the rival runs the kit (checked when read).
     pub rival_kit_config: Option<UncheckedAccount<'info>>,
     pub system_program: Program<'info, System>,
+}
+
+/// Security review 1, M-4: marks the rival's war state besieged when the address holds one. Its
+/// own frame, the state boxed: `WarState` on `process_siege`'s stack overflows the 4 KB frame.
+#[inline(never)]
+fn mark_besieged(info: &AccountInfo, current: u32, until: i64, chest: Pubkey) -> Result<()> {
+    if *info.owner != crate::ID || info.data_len() == 0 {
+        return Ok(());
+    }
+    let mut state = Box::new(WarState::try_deserialize(&mut &info.try_borrow_data()?[..])?);
+    state.roll(current);
+    state.under_siege_until = until;
+    state.siege_by_chest = chest;
+    state.season.times_besieged = state.season.times_besieged.saturating_add(1);
+    state.try_serialize(&mut &mut info.try_borrow_mut_data()?[..])?;
+    Ok(())
 }
 
 /// `siege(rival)`: the chest spot-buys the rival on its launch pool and keeps what it buys
@@ -273,17 +291,12 @@ pub fn process_siege<'info>(ctx: Context<'info, Siege<'info>>, args: SliceArgs) 
     s.last_siege_at = now;
     s.last_seen_balance = balance_after;
 
-    if let Some(rival_state) = ctx.accounts.rival_war_state.as_mut() {
-        require_keys_eq!(
-            rival_state.key(),
-            WarState::address(&rival_key).0,
-            WarError::WrongAccount
-        );
-        rival_state.roll(current);
-        rival_state.under_siege_until = now.saturating_add(params.siege_interval_secs);
-        rival_state.siege_by_chest = chest;
-        rival_state.season.times_besieged = rival_state.season.times_besieged.saturating_add(1);
-    }
+    mark_besieged(
+        &ctx.accounts.rival_war_state.to_account_info(),
+        current,
+        now.saturating_add(params.siege_interval_secs),
+        chest,
+    )?;
     emit_cpi!(SiegeExecuted {
         mint: mint_key,
         rival_mint: rival_key,
@@ -533,6 +546,31 @@ pub fn process_raze<'info>(ctx: Context<'info, Raze<'info>>, args: SliceArgs) ->
         allowance.min(c.amount).min(pool_cap)
     };
     require!(sell > 0, WarError::NothingToDo);
+    // Security review 1, M-3: the floor check, the mirror of the siege's premium check. A raze waits
+    // while the rival's spot price is below its TWAP by more than `raze_max_discount_bps`, so a
+    // searcher cannot depress the pool in the same transaction and buy the chest's tokens cheap.
+    let spot = spot_q64(
+        pool.quote_reserve,
+        pool.virtual_quote,
+        pool.base_reserve,
+        pool.virtual_base,
+    )
+    .ok_or(WarError::NoQuote)?;
+    let window = i64::from(orders.get(orders::SIEGE_TWAP_SECS)).max(params.min_twap_secs);
+    let twap = pool_twap(&ctx.accounts.rival_pool, now, window).ok_or(WarError::NoObservations)?;
+    let floor = twap
+        .checked_mul(u128::from(BPS - u64::from(params.raze_max_discount_bps)))
+        .ok_or(WarError::MathOverflow)?
+        / u128::from(BPS);
+    if spot < floor {
+        emit_cpi!(RazeWaited {
+            mint: mint_key,
+            rival_mint: rival_key,
+            rival_price: spot,
+            rival_twap: twap,
+        });
+        return Ok(());
+    }
     let gross = swap_out(
         sell,
         pool.base_reserve,

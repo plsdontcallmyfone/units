@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M2).
+// Changed by Hookwars: new file (M2); security review 1 (H-2, M-2).
 //! Errors of the armory (docs/spec/02-armory.md section 12).
 
 use anchor_lang::prelude::*;
@@ -91,4 +91,8 @@ pub enum ArmoryError {
     SlotIndexOutOfRange,
     #[msg("the condition does not hold long enough")]
     ConditionNotMet,
+    #[msg("royalties of a kit token go to a wallet (a key on the curve)")]
+    RecipientOffCurve,
+    #[msg("the proposer holds less than the proposal threshold")]
+    BelowProposalThreshold,
 }

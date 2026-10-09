@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M2); M3b: settle_bounty_bps, CompositeItem.
+// Changed by Hookwars: new file (M2); M3b: settle_bounty_bps, CompositeItem; security review 1: proposal_min_bps.
 //! Accounts of the armory (docs/spec/02-armory.md section 2).
 
 use anchor_lang::prelude::*;
@@ -35,6 +35,9 @@ pub struct ArmoryParams {
     /// Hookwars M3b: the bounty `settle_equip` pays its sender, of what it settles
     /// (`MAX_CRANK_BOUNTY_BPS` at most; 04 section 2.5).
     pub settle_bounty_bps: u16,
+    /// Security review 1, M-2: the least a proposer must hold, in basis points of the mint's
+    /// supply, locked in place for the vote period (0 turns the requirement off). To set.
+    pub proposal_min_bps: u16,
 }
 
 /// `ArmoryConfig` at `["config"]` (02 section 2.1).
