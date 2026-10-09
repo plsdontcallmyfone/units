@@ -42,6 +42,7 @@ Spot only: every effect is a transfer, a cut, a burn, a fee change or a spot swa
 | `05-war.md` | `hookwars_war`: war chest, war state, siege, counter-strike, raze, bounties, loot tickets and randomness, quests, seasons and the king-of-the-hill challenge |
 | `06-app.md` | indexer, API types, SDK additions, site pages (war room, map, armory, token page), bots, share cards |
 | `07-budgets-tests.md` | transaction budgets, call-depth table, test plan per milestone, security checklist |
+| `08-arsenal.md` | composite items and the arsenal of templates (ids 10 to 41), compatibility model, presets, build waves |
 
 ## 3. Programs
 
@@ -114,6 +115,9 @@ two keys Bordrless hard-codes in `HOOK_UPGRADE_AUTHORITIES`.
 | armory's own signer (calls into items) | armory | `["armory"]` |
 | launchpad signer for `equip_launch` | launch | `["armory-caller", mint]` |
 | `TreatyInbox` owner | war | `["treaty-inbox", mint]` |
+| `CompositeItem` | armory | `["composite", item]` |
+| preset recipe | armory | `["preset", id: u16 le]` |
+| referral record | items | `["referred", mint, holder]` |
 | `QuestMark` | war | `["quest", holding, quest_id: u8, period: u32 le]` (05 is authoritative) |
 | hook signer | token, swap, launch | upstream `["hook-authority", program]`, unchanged |
 
@@ -189,6 +193,8 @@ Parts refer to them by name only.
 | per-template ceilings | named in 04, one per parameter field | O |
 | `MAX_ITEM_TARGETS`, `SIEGE_UNIT_LAMPORTS` | items per-equip targets; siege threshold unit (04) | O |
 | `ADMIN_TIMELOCK_SECS` | delay on every admin setter of armory and war (D-9) | O |
+| `MAX_MODULES`, `ITEM_DATA_MAX` | modules per composite; composite param storage | M |
+| arsenal parameters | every floor, ceiling and named limit in 08 (e.g. `EMBARGO_MAX_TARGETS`, `LOYALTY_MIN_EPOCH_SECS`, `STREAK_MAX`, `MERC_MAX_POINTS_PER_UNIT`, `COOLDOWN_MAX_SECS`, `DECAY_MIN_SECS`, `DECAY_MAX_SECS`, `CAP_MIN_BPS`) | O |
 
 `PARAM_FIELDS` is at least 11 (the War orders template, 04).
 
@@ -278,6 +284,28 @@ Where a part disagrees with a ruling, the part is revised. Numbered for referenc
 - **R18 Item events are program logs.** Items are leaves, and `emit_cpi!` is a self-CPI, so
   `hookwars_items` callbacks emit with `emit!` (logs); the indexer decodes logs for items and
   self-CPI events for every other program (06).
+- **R19 Composites** (08): one item, template 41, runs up to `MAX_MODULES` modules inside one
+  `hookwars_items` callback; one slot, one call level, one cut into the equip vault with
+  per-module destinations in `EquipState`, one royalty to the composite's owner; refusals AND,
+  cuts, discounts and burns summed and capped, one fee override per side; each module has its own
+  hook-data sub-range and may only read earlier modules' bytes. Module list in `["composite", item]`.
+- **R20 The kit excludes protocol vaults instead of refusing them** (replaces 08's refusal and
+  narrows R10). The kit treats as excluded owners (not settled, not capped, not counted, like the
+  pool and the launch): (a) owners derivable from the mint: each `["equip", mint, slot]` and
+  `["pool-cuts", mint]` under items, `["war-chest", mint]` and `["treaty-inbox", mint]` under war,
+  checked by derivation; (b) the destination of a `transfer_from_protocol` (R16), which the token
+  program marks in the kit's arguments after verifying the protocol source. Token-side cuts and
+  royalty settlements therefore work on tokens with holder rewards on. Sieges of such tokens stay
+  refused (R10) until war chests holding foreign kit tokens are covered by (a) for the foreign mint.
+- **R21 Pool slots may burn.** `SlotBounds` gains `may_burn` for Pool and Composite-in-Pool slots;
+  Sell Burn and Target Burn need it.
+- **R22 Derived registry extras.** An item registry entry may be a PDA whose seeds include prefix
+  account keys (for example `["holding", other_mint, source_owner]` under the token program), so
+  items can read a holder's holding of another mint.
+- **R23 Holder touch.** A holder may `touch` their own holding for an item's social payloads
+  (Guild Tag, Rank Badge refresh); the item checks the authority is the owner.
+- **R24 Item payouts** (`claim_loyalty`, `settle_referral`, `settle_equip`) leave protocol vaults
+  only through `transfer_from_protocol`.
 - **R15 Events the app relies on** (06 section 9): every part emits the events 06 lists, with the
   names 06 uses unless the part already named them; 06 adopts the parts' names where they differ.
 
