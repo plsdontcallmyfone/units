@@ -3,10 +3,10 @@ import { Keypair, PublicKey } from '@solana/web3.js';
 import { FIXED_ADDRESSES, HOOK_SIGNERS, PROGRAM_IDS } from '@hookwars/shared';
 import { encodeHookAccountList } from '../hooks.ts';
 import {
-  ARMORY_ID, ITEMS_ID, LAUNCH_ID, MAX_SLOTS, MINT_FIELDS, PARAM_FIELDS, SLOT, TOKEN_ID, WAR_ID, activeSlots, decodeCpiEvent, decodeObservations,
-  decodeRaidLedger, decodeSlotMint, decodeWarState, discriminator, encode, encodeEventBody, EVENT_IX_TAG, holdingCodec, hookwarsIx,
-  isCalled, itemCodec, itemLogEvents, lockedAt, logsTruncated, resolveSlices, sliceAccounts, slotRegistryAddress, tokenHookSigner,
-  type SlotData, type SlotMintData,
+  ARMORY_ID, ITEMS_ID, LAUNCH_ID, MAX_SLOTS, PARAM_FIELDS, TOKEN_ID, WAR_ID, activeSlots, claimQuest, coderOf, decodeCpiEvent, decodeObservations,
+  decodeRaidLedger, decodeSlotMint, decodeWarState, discriminator, encode, encodeEventBody, EVENT_IX_TAG, EVENT_SPECS, forge, holdingCodec, hookwarsIx,
+  idlAccountCodec, isCalled, itemCodec, itemLogEvents, lockedAt, logsTruncated, resolveSlices, settleEquip, sliceAccounts, slotRegistryAddress, structFields,
+  tokenHookSigner, tyOf, vote, IDLS, type SlotData, type SlotMintData,
 } from './index.ts';
 
 const pda = (seeds: (string | PublicKey)[], program: PublicKey) =>
@@ -44,10 +44,10 @@ const emptySlot = (): SlotData => ({
 });
 
 function mintBytes(m: SlotMintData, pad = 0): Buffer {
-  return Buffer.concat([discriminator('account', 'Mint'), encode({ struct: MINT_FIELDS }, m), Buffer.alloc(pad)]);
+  return Buffer.concat([discriminator('account', 'Mint'), encode({ struct: structFields('token', 'Mint') }, m), Buffer.alloc(pad)]);
 }
 
-describe('token Mint with slots (M1 layout)', () => {
+describe('token Mint with slots (IDL)', () => {
   const kitSlot: SlotData = { ...emptySlot(), kind: 5, equipRule: 0, dataLen: 32, program: k(), flags: 1 | 64 | 128, extraCount: 0 };
   const raidSlot: SlotData = { ...emptySlot(), kind: 4, equipRule: 1, dataOffset: 32, dataLen: 12, item: k(), program: ITEMS_ID, flags: 1, extraCount: 2, dataEpoch: 1, bounds: { maxCutBps: 300, mayRefuse: false, mayWriteData: true, mayAnswerTouch: true } };
   const warSlot: SlotData = { ...emptySlot(), kind: 6, item: k(), program: ITEMS_ID };
@@ -64,8 +64,8 @@ describe('token Mint with slots (M1 layout)', () => {
     expect(d.slots[1]!.bounds.maxCutBps).toBe(300);
     expect(d.slots[1]!.item.equals(raidSlot.item)).toBe(true);
   });
-  it('a slot is 113 bytes', () => {
-    expect(encode(SLOT, emptySlot()).length).toBe(113);
+  it('a slot is 113 bytes (01 M1 notes)', () => {
+    expect(encode(tyOf(IDLS.token!, { defined: { name: 'Slot' } }), emptySlot()).length).toBe(113);
   });
   it('calls slots as M1 does', () => {
     expect(isCalled(kitSlot, 'transfer')).toBe(true);
@@ -100,24 +100,39 @@ describe('Holding with the vote lock', () => {
   });
 });
 
-describe('spec-layout accounts', () => {
+describe('IDL accounts', () => {
+  it('PARAM_FIELDS and MAX_SLOTS come from the IDLs', () => {
+    expect(PARAM_FIELDS).toBe(11);
+    expect(MAX_SLOTS).toBe(4);
+  });
   it('Item round-trips with PARAM_FIELDS params', () => {
     const c = itemCodec();
     const item = {
       version: 1, bump: 254, itemMint: k(), templateId: 1, params: Array.from({ length: PARAM_FIELDS }, (_, i) => i),
       manifest: { kind: 4, tokenFlags: 257, poolFlags: 7, maxCutBuyBps: 100, maxCutSellBps: 0, maxCutTransferBps: 0, maxDiscountBps: 500, mayRefuse: false, mayBurn: false, dataBytes: 11, readsOtherPools: 1 },
-      author: k(), royaltyBps: 250, level: 1, source: 0, equippedCount: 0, royaltyOwnerBump: 253, createdAt: 5n,
+      author: k(), royaltyBps: 250, level: 1, source: 0, equippedCount: 0, royaltyOwnerBump: 253, createdAt: 5n, reserved: Buffer.alloc(32),
     };
     expect(c.decode(c.encode(item))).toMatchObject({ templateId: 1, royaltyBps: 250, level: 1 });
   });
-  it('variable-length rings and tables are sized from the data', () => {
+  it('every account of the IDL programs has a codec that round-trips zeros', () => {
+    for (const [program, idl] of Object.entries(IDLS)) {
+      for (const a of idl.accounts ?? []) {
+        const codec = idlAccountCodec<Record<string, unknown>>(program, a.name);
+        const zero = coderOf(program).decodeAccount(a.name, Buffer.concat([Buffer.from(a.discriminator), Buffer.alloc(20_000)]));
+        expect(codec.decode(codec.encode(zero as Record<string, unknown>))).toBeTruthy();
+      }
+    }
+  });
+  it('WarState decodes through the IDL with MAX_CAPTURED entries', () => {
+    const zero = coderOf('war').decodeAccount<Record<string, unknown>>('WarState', Buffer.concat([discriminator('account', 'WarState'), Buffer.alloc(4_000)]));
+    const data = idlAccountCodec<Record<string, unknown>>('war', 'WarState').encode(zero);
+    expect(decodeWarState(data).captured.length).toBeGreaterThan(0);
+  });
+  it('spec-layout rings and tables are sized from the data', () => {
     const OBS = Buffer.concat([discriminator('account', 'Observations'), Buffer.alloc(1 + 1 + 32 + 16 + 8 + 2 + 2), Buffer.alloc(48 * 7)]);
     expect(decodeObservations(OBS).entries).toHaveLength(7);
     const RL = Buffer.concat([discriminator('account', 'RaidLedger'), Buffer.alloc(46), Buffer.alloc(56 * 5), Buffer.alloc(81), Buffer.alloc(32)]);
     expect(decodeRaidLedger(RL).inbound).toHaveLength(5);
-    const head = 4 + 64 + 8 * 8 + 8 * 4 + 32;
-    const WS = Buffer.concat([discriminator('account', 'WarState'), Buffer.alloc(head), Buffer.alloc(80 * 3), Buffer.alloc(4 + 36 + 36 + 64)]);
-    expect(decodeWarState(WS).captured).toHaveLength(3);
   });
 });
 
@@ -150,12 +165,46 @@ describe('events', () => {
 });
 
 describe('instructions', () => {
-  it('anchor discriminator then args', () => {
-    const ix = hookwarsIx('war', 'claim_quest', { questId: 1, period: 9 }, []);
+  it('IDL builders use the IDL discriminator, arguments and account order', () => {
+    const owner = k(), mint = k();
+    const ix = claimQuest(owner, mint, 3, 1, 9, 1);
+    const def = coderOf('war').instruction('claim_quest');
     expect(ix.programId.equals(WAR_ID)).toBe(true);
-    expect(ix.data.subarray(0, 8)).toEqual(discriminator('global', 'claim_quest'));
-    expect([...ix.data.subarray(8)]).toEqual([1, 9, 0, 0, 0]);
-    expect(() => hookwarsIx('war', 'nope', {}, [])).toThrow();
+    expect(ix.data.subarray(0, 8)).toEqual(Buffer.from(def.discriminator));
+    expect([...ix.data.subarray(8)]).toEqual([1, 9, 0, 0, 0, 1]);
+    const idlCount = coderOf('war').accountsOf('claim_quest').length;
+    expect(ix.keys.length).toBe(idlCount + 2); // the token program and its event authority (client.rs)
+    expect(ix.keys[0]!.pubkey.equals(owner) && ix.keys[0]!.isSigner).toBe(true);
+    // forge_counter is optional and None for the Raid quest: the program id stands in.
+    const fc = coderOf('war').accountsOf('claim_quest').findIndex((a) => a.name === 'forge_counter');
+    expect(ix.keys[fc]!.pubkey.equals(WAR_ID)).toBe(true);
+  });
+  it('PDAs come from the IDL seeds', () => {
+    const voter = k(), mint = k();
+    const ix = vote(voter, mint, 2, 0n, true, 10n);
+    const names = coderOf('armory').accountsOf('vote').map((a) => a.name);
+    const slotAuth = PublicKey.findProgramAddressSync([Buffer.from('slots'), mint.toBuffer()], ARMORY_ID)[0];
+    expect(ix.keys[names.indexOf('slot_authority')]!.pubkey.equals(slotAuth)).toBe(true);
+    const ea = PublicKey.findProgramAddressSync([Buffer.from('__event_authority')], ARMORY_ID)[0];
+    expect(ix.keys[names.indexOf('event_authority')]!.pubkey.equals(ea)).toBe(true);
+  });
+  it('forge derives the new item from items_minted', () => {
+    const forger = k();
+    const ix = forge(forger, { item: k(), itemMint: k() }, { item: k(), itemMint: k() }, 1, 7n);
+    const names = coderOf('armory').accountsOf('forge').map((a) => a.name);
+    const itemMint = PublicKey.findProgramAddressSync([Buffer.from('item-mint'), Buffer.from([7, 0, 0, 0, 0, 0, 0, 0])], ARMORY_ID)[0];
+    expect(ix.keys[names.indexOf('item_mint')]!.pubkey.equals(itemMint)).toBe(true);
+  });
+  it('spec-layout builders for programs not on main', () => {
+    const ix = settleEquip(k(), k(), 1, k());
+    expect(ix.programId.equals(ITEMS_ID)).toBe(true);
+    expect(ix.data.subarray(0, 8)).toEqual(discriminator('global', 'settle_equip'));
+    expect(() => hookwarsIx('items', 'nope', {}, [])).toThrow();
+  });
+  it('events of the IDL programs come from the IDLs', () => {
+    const war = EVENT_SPECS.war!.map(([n]) => n);
+    expect(war).toContain('BountyClaimed');
+    expect(EVENT_SPECS.items!.map(([n]) => n)).toEqual(expect.arrayContaining(['EquipInitialized', 'EquipClosed', 'RaidMarked']));
   });
 });
 

@@ -19,6 +19,15 @@ import { PROTOCOL_PROGRAMS, buildCreateConfig, configProblems, programUpgradeInf
 import { TAX_HOOK_FLAGS, bridge, halfLife, kit, launch, launchKeys, launchKeysOf, swap, taxHook, token } from './instructions.ts';
 import { halfLifeSince } from './accounts.ts';
 
+/** Changed by Hookwars: the token `Mint` gained the slot table (M1); upstream mints carry an empty one. */
+const NO_SLOTS = {
+  slotAuthority: null, slotCount: 0,
+  slots: Array.from({ length: 4 }, () => ({
+    kind: 0, equipRule: 0, bounds: { maxCutBps: 0, mayRefuse: false, mayWriteData: false, mayAnswerTouch: false }, dataOffset: 0, dataLen: 0,
+    item: PublicKey.default, program: PublicKey.default, flags: 0, poolFlags: 0, equipVault: PublicKey.default, signerBump: 0, launchSignerBump: 0, dataEpoch: 0, extraCount: 0,
+  })),
+};
+
 const k = (): PublicKey => Keypair.generate().publicKey;
 const disc = (name: string): Buffer => createHash('sha256').update(`global:${name}`).digest().subarray(0, 8);
 const SOL = a.BRIDGED_SOL_MINT;
@@ -229,7 +238,7 @@ describe('registries (programs-summary §2.4)', () => {
     const plainMint = k();
     const vault = a.rewardVaultAddress(kitMint, SOL);
     const mintAccount = async (hookProgram: PublicKey | null): Promise<Buffer> =>
-      CODERS.token.accounts.encode('mint', { version: 1, decimals: 6, supply: new BN(1), maxSupply: new BN(1), mintAuthority: null, freezeAuthority: null, hookAuthority: null, metadataAuthority: null, hookProgram, hookFlags: hookProgram ? 145 : 0, name: 'N', symbol: 'S', uri: 'u', createdAt: new BN(1), creator: owner, hookSignerBump: hookProgram ? 255 : 0, reserved: Array(31).fill(0) });
+      CODERS.token.accounts.encode('mint', { version: 1, decimals: 6, supply: new BN(1), maxSupply: new BN(1), mintAuthority: null, freezeAuthority: null, hookAuthority: null, metadataAuthority: null, hookProgram, hookFlags: hookProgram ? 145 : 0, name: 'N', symbol: 'S', uri: 'u', createdAt: new BN(1), creator: owner, hookSignerBump: hookProgram ? 255 : 0, reserved: Array(31).fill(0), ...NO_SLOTS });
     const accounts = new Map<string, { owner: PublicKey; data: Buffer }>([
       [kitMint.toBase58(), { owner: a.TOKEN_PROGRAM, data: await mintAccount(a.KIT_PROGRAM) }],
       [plainMint.toBase58(), { owner: a.TOKEN_PROGRAM, data: await mintAccount(null) }],

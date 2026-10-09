@@ -4,3 +4,4 @@ export * from './params.ts';
 export * from './ranges.ts';
 export * from './templates.ts';
 export * from './words.ts';
+export * as exact from './exact.ts';

@@ -1,0 +1,5332 @@
+{
+  "address": "5vJnBvr33jpsfYxMY2pvNf6tF9tkj8eaZ6goFtByUWA2",
+  "metadata": {
+    "name": "hookwars_war",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Hookwars war chests: sieges, counter-strikes, razes, bounties, loot rolls, quests and seasons, every spend permissionless, capped and paid from a token's own war chest (docs/spec/05-war.md)."
+  },
+  "instructions": [
+    {
+      "name": "accrue_treaty_time",
+      "docs": [
+        "Adds the season time treaties held to the score's counter."
+      ],
+      "discriminator": [
+        91,
+        17,
+        180,
+        140,
+        103,
+        241,
+        190,
+        172
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "war_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "season"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "apply_config",
+      "docs": [
+        "Anyone applies a proposed config change after its `eta`."
+      ],
+      "discriminator": [
+        121,
+        42,
+        53,
+        8,
+        51,
+        150,
+        105,
+        249
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel_pending",
+      "docs": [
+        "The admin cancels a pending config change, season or loot table before it applies."
+      ],
+      "discriminator": [
+        74,
+        87,
+        109,
+        242,
+        64,
+        192,
+        151,
+        71
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "target",
+          "docs": [
+            "a config change."
+          ],
+          "writable": true
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "what",
+          "type": "u8"
+        },
+        {
+          "name": "season",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "cancel_roll",
+      "docs": [
+        "The owner closes an expired roll (no ticket refund)."
+      ],
+      "discriminator": [
+        17,
+        175,
+        33,
+        37,
+        26,
+        207,
+        87,
+        199
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "roll_request"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "roll_request",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  108,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "roll_request.holding",
+                "account": "RollRequest"
+              },
+              {
+                "kind": "account",
+                "path": "roll_request.nonce",
+                "account": "RollRequest"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_bounty",
+      "docs": [
+        "A holder turns raid points into SOL from the chest."
+      ],
+      "discriminator": [
+        225,
+        157,
+        163,
+        238,
+        239,
+        169,
+        75,
+        226
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "war_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "war_chest",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  104,
+                  101,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "chest_holding",
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "orders_item"
+        },
+        {
+          "name": "orders_template"
+        },
+        {
+          "name": "holding",
+          "writable": true
+        },
+        {
+          "name": "war_signer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  115,
+                  105,
+                  103,
+                  110,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "items_program",
+          "address": "8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv"
+        },
+        {
+          "name": "items_hook_signer"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "raid_slot",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "claim_quest",
+      "docs": [
+        "Claims a quest's loot ticket, once per period."
+      ],
+      "discriminator": [
+        38,
+        197,
+        33,
+        123,
+        0,
+        108,
+        206,
+        161
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "season"
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "holding",
+          "writable": true
+        },
+        {
+          "name": "quest_mark",
+          "writable": true
+        },
+        {
+          "name": "forge_counter",
+          "optional": true
+        },
+        {
+          "name": "war_signer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  115,
+                  105,
+                  103,
+                  110,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "items_program",
+          "address": "8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv"
+        },
+        {
+          "name": "items_hook_signer"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "quest_id",
+          "type": "u8"
+        },
+        {
+          "name": "period",
+          "type": "u32"
+        },
+        {
+          "name": "raid_slot",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "close_quest_mark",
+      "docs": [
+        "Returns a quest mark's rent once its season is finalized."
+      ],
+      "discriminator": [
+        124,
+        68,
+        7,
+        207,
+        22,
+        28,
+        10,
+        167
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "quest_mark"
+          ]
+        },
+        {
+          "name": "season",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "quest_mark.season",
+                "account": "QuestMark"
+              }
+            ]
+          }
+        },
+        {
+          "name": "quest_mark",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "counter_strike",
+      "docs": [
+        "After a fall, the chest buys back its own token and burns it."
+      ],
+      "discriminator": [
+        18,
+        74,
+        102,
+        30,
+        139,
+        222,
+        140,
+        205
+      ],
+      "accounts": [
+        {
+          "name": "cranker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "war_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "war_state.mint",
+                "account": "WarState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "war_chest",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  104,
+                  101,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "war_state.mint",
+                "account": "WarState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "writable": true
+        },
+        {
+          "name": "orders_item"
+        },
+        {
+          "name": "orders_template"
+        },
+        {
+          "name": "launch",
+          "writable": true
+        },
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "observations"
+        },
+        {
+          "name": "kit_config",
+          "optional": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SliceArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finalize_season",
+      "docs": [
+        "Finalizes a season after its challenge window."
+      ],
+      "discriminator": [
+        183,
+        221,
+        183,
+        7,
+        73,
+        215,
+        158,
+        50
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "season",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "number"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "number",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "init_config",
+      "docs": [
+        "Creates the config, once, by this program's upgrade authority."
+      ],
+      "discriminator": [
+        23,
+        235,
+        115,
+        232,
+        168,
+        96,
+        1,
+        231
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "This program's upgrade authority, paying the rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program_data"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "ConfigArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "init_war",
+      "docs": [
+        "A token's war state, chest and treaty inbox."
+      ],
+      "discriminator": [
+        227,
+        213,
+        47,
+        3,
+        20,
+        59,
+        181,
+        81
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "launch",
+          "docs": [
+            "The mint's launch: a war chest buys back on the launch pool."
+          ]
+        },
+        {
+          "name": "war_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "war_chest",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  104,
+                  101,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treaty_inbox",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  116,
+                  121,
+                  45,
+                  105,
+                  110,
+                  98,
+                  111,
+                  120
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bridged_sol_mint",
+          "address": "7YMXcZ3AUD5pBceT4QzM2hrApoH3rEmPZUAzpKPHVvR4"
+        },
+        {
+          "name": "chest_holding",
+          "writable": true
+        },
+        {
+          "name": "inbox_holding",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "open_season",
+      "docs": [
+        "Opens the next season."
+      ],
+      "discriminator": [
+        100,
+        152,
+        95,
+        245,
+        247,
+        126,
+        124,
+        215
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "next",
+          "writable": true
+        },
+        {
+          "name": "previous",
+          "docs": [
+            "The running season, when there is one (it must be finalized)."
+          ],
+          "optional": true
+        },
+        {
+          "name": "loot_table"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "propose_config",
+      "docs": [
+        "The admin proposes a config change, applied after `admin_timelock_secs`."
+      ],
+      "discriminator": [
+        163,
+        247,
+        238,
+        160,
+        236,
+        129,
+        153,
+        160
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "ConfigArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "propose_loot_table",
+      "docs": [
+        "The admin proposes a season's loot table, behind the timelock."
+      ],
+      "discriminator": [
+        214,
+        159,
+        60,
+        18,
+        135,
+        58,
+        72,
+        47
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "loot_table",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  111,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "season"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "season",
+          "type": "u32"
+        },
+        {
+          "name": "entries",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "LootEntry"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "propose_season",
+      "docs": [
+        "The admin proposes a season (weights and dates), behind the timelock."
+      ],
+      "discriminator": [
+        75,
+        187,
+        55,
+        182,
+        40,
+        92,
+        88,
+        113
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "season",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "args.number"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SeasonArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "raze",
+      "docs": [
+        "Sells captured rival tokens back into the rival's pool, slowly."
+      ],
+      "discriminator": [
+        146,
+        32,
+        45,
+        178,
+        37,
+        92,
+        210,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "cranker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "war_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "war_chest",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  104,
+                  101,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "orders_item"
+        },
+        {
+          "name": "orders_template"
+        },
+        {
+          "name": "rival_mint"
+        },
+        {
+          "name": "rival_launch",
+          "writable": true
+        },
+        {
+          "name": "rival_pool",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SliceArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "record_funding",
+      "docs": [
+        "Counts what reached the chest since the last write."
+      ],
+      "discriminator": [
+        26,
+        83,
+        155,
+        138,
+        94,
+        108,
+        21,
+        56
+      ],
+      "accounts": [
+        {
+          "name": "war_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "war_state.mint",
+                "account": "WarState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "chest_holding"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "return_captured",
+      "docs": [
+        "Peace: captured rival tokens to the rival's chest, under a treaty both equip."
+      ],
+      "discriminator": [
+        211,
+        133,
+        47,
+        12,
+        243,
+        167,
+        238,
+        245
+      ],
+      "accounts": [
+        {
+          "name": "cranker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "war_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "war_chest",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  104,
+                  101,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "rival_mint"
+        },
+        {
+          "name": "treaty_item"
+        },
+        {
+          "name": "treaty_template"
+        },
+        {
+          "name": "rival_war_chest"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SliceArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "reveal",
+      "docs": [
+        "Reads the randomness and asks the armory to mint the item."
+      ],
+      "discriminator": [
+        9,
+        35,
+        59,
+        190,
+        167,
+        249,
+        76,
+        115
+      ],
+      "accounts": [
+        {
+          "name": "revealer",
+          "docs": [
+            "Pays the item's rent; anyone."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "writable": true
+        },
+        {
+          "name": "roll_request",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  108,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "roll_request.holding",
+                "account": "RollRequest"
+              },
+              {
+                "kind": "account",
+                "path": "roll_request.nonce",
+                "account": "RollRequest"
+              }
+            ]
+          }
+        },
+        {
+          "name": "loot_table",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  111,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "roll_request.season",
+                "account": "RollRequest"
+              }
+            ]
+          }
+        },
+        {
+          "name": "oracle_account"
+        },
+        {
+          "name": "loot_signer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  111,
+                  116,
+                  45,
+                  115,
+                  105,
+                  103,
+                  110,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "armory_program",
+          "address": "7xnkyX5B7Ywz86Cu2ofM5T2z2UPmy1qhpgrAuK9Kk5MU"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "roll",
+      "docs": [
+        "Spends a loot ticket and asks the randomness adapter."
+      ],
+      "discriminator": [
+        143,
+        143,
+        93,
+        91,
+        13,
+        254,
+        64,
+        93
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "holding",
+          "writable": true
+        },
+        {
+          "name": "roll_request",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  108,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "holding"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "war_signer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  115,
+                  105,
+                  103,
+                  110,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "items_program",
+          "address": "8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv"
+        },
+        {
+          "name": "items_hook_signer"
+        },
+        {
+          "name": "oracle_program"
+        },
+        {
+          "name": "oracle_account",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "raid_slot",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "share_treaty_inflow",
+      "docs": [
+        "Streams what treaties paid this token to its holders through the kit."
+      ],
+      "discriminator": [
+        209,
+        251,
+        90,
+        27,
+        63,
+        248,
+        88,
+        208
+      ],
+      "accounts": [
+        {
+          "name": "cranker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "war_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "war_state.mint",
+                "account": "WarState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treaty_inbox",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  116,
+                  121,
+                  45,
+                  105,
+                  110,
+                  98,
+                  111,
+                  120
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "war_state.mint",
+                "account": "WarState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inbox_holding",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "siege",
+      "docs": [
+        "The chest spot-buys a rival that has been raided into this token enough."
+      ],
+      "discriminator": [
+        88,
+        140,
+        151,
+        212,
+        131,
+        71,
+        14,
+        128
+      ],
+      "accounts": [
+        {
+          "name": "cranker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "war_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "war_chest",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  104,
+                  101,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "orders_item"
+        },
+        {
+          "name": "orders_template"
+        },
+        {
+          "name": "raid_ledger"
+        },
+        {
+          "name": "rival_mint"
+        },
+        {
+          "name": "rival_launch",
+          "writable": true
+        },
+        {
+          "name": "rival_pool",
+          "writable": true
+        },
+        {
+          "name": "rival_observations"
+        },
+        {
+          "name": "rival_war_state",
+          "docs": [
+            "The rival's war state, when it has one: marked besieged."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "rival_kit_config",
+          "optional": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SliceArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "split_protocol_fees",
+      "docs": [
+        "Splits the prize vault between the last winner's chest and the treasury."
+      ],
+      "discriminator": [
+        202,
+        221,
+        12,
+        120,
+        29,
+        81,
+        145,
+        147
+      ],
+      "accounts": [
+        {
+          "name": "cranker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "prize_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  122,
+                  101,
+                  45,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "prize_holding",
+          "writable": true
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "winner_chest",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "winner_season",
+          "docs": [
+            "The last winner's season (its `prize_paid` accumulates)."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "submit_candidate",
+      "docs": [
+        "Submits a token as the season's leader, or challenges the leader."
+      ],
+      "discriminator": [
+        243,
+        205,
+        174,
+        112,
+        158,
+        104,
+        210,
+        134
+      ],
+      "accounts": [
+        {
+          "name": "submitter",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "season",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "number"
+              }
+            ]
+          }
+        },
+        {
+          "name": "war_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "war_state.mint",
+                "account": "WarState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "raid_ledger",
+          "optional": true
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "number",
+          "type": "u32"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "LootTable",
+      "discriminator": [
+        193,
+        86,
+        38,
+        107,
+        189,
+        131,
+        211,
+        157
+      ]
+    },
+    {
+      "name": "QuestMark",
+      "discriminator": [
+        154,
+        41,
+        61,
+        238,
+        195,
+        175,
+        0,
+        27
+      ]
+    },
+    {
+      "name": "RollRequest",
+      "discriminator": [
+        204,
+        253,
+        122,
+        192,
+        160,
+        91,
+        16,
+        202
+      ]
+    },
+    {
+      "name": "Season",
+      "discriminator": [
+        76,
+        67,
+        93,
+        156,
+        180,
+        157,
+        248,
+        47
+      ]
+    },
+    {
+      "name": "WarConfig",
+      "discriminator": [
+        60,
+        73,
+        207,
+        224,
+        38,
+        94,
+        53,
+        191
+      ]
+    },
+    {
+      "name": "WarState",
+      "discriminator": [
+        102,
+        183,
+        165,
+        152,
+        166,
+        163,
+        21,
+        39
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "BountyClaimed",
+      "discriminator": [
+        140,
+        202,
+        21,
+        51,
+        211,
+        65,
+        142,
+        21
+      ]
+    },
+    {
+      "name": "CandidateChallenged",
+      "discriminator": [
+        126,
+        139,
+        219,
+        84,
+        163,
+        126,
+        34,
+        95
+      ]
+    },
+    {
+      "name": "CandidateSubmitted",
+      "discriminator": [
+        205,
+        53,
+        115,
+        164,
+        182,
+        183,
+        197,
+        94
+      ]
+    },
+    {
+      "name": "CapturedReturned",
+      "discriminator": [
+        45,
+        111,
+        209,
+        44,
+        210,
+        255,
+        80,
+        238
+      ]
+    },
+    {
+      "name": "ConfigApplied",
+      "discriminator": [
+        193,
+        101,
+        90,
+        205,
+        113,
+        125,
+        184,
+        13
+      ]
+    },
+    {
+      "name": "ConfigProposed",
+      "discriminator": [
+        148,
+        34,
+        23,
+        129,
+        45,
+        161,
+        66,
+        192
+      ]
+    },
+    {
+      "name": "CounterStrikeExecuted",
+      "discriminator": [
+        9,
+        138,
+        7,
+        47,
+        54,
+        8,
+        224,
+        163
+      ]
+    },
+    {
+      "name": "LootTableProposed",
+      "discriminator": [
+        167,
+        12,
+        79,
+        82,
+        51,
+        67,
+        165,
+        193
+      ]
+    },
+    {
+      "name": "PendingCancelled",
+      "discriminator": [
+        24,
+        20,
+        230,
+        224,
+        239,
+        65,
+        117,
+        159
+      ]
+    },
+    {
+      "name": "PrizePaid",
+      "discriminator": [
+        6,
+        20,
+        237,
+        248,
+        90,
+        77,
+        102,
+        211
+      ]
+    },
+    {
+      "name": "QuestClaimed",
+      "discriminator": [
+        49,
+        134,
+        11,
+        29,
+        35,
+        182,
+        38,
+        197
+      ]
+    },
+    {
+      "name": "Razed",
+      "discriminator": [
+        222,
+        192,
+        96,
+        223,
+        167,
+        53,
+        151,
+        75
+      ]
+    },
+    {
+      "name": "RollCancelled",
+      "discriminator": [
+        113,
+        246,
+        38,
+        232,
+        98,
+        128,
+        173,
+        118
+      ]
+    },
+    {
+      "name": "RollRequested",
+      "discriminator": [
+        225,
+        43,
+        126,
+        11,
+        108,
+        114,
+        143,
+        63
+      ]
+    },
+    {
+      "name": "RollRevealed",
+      "discriminator": [
+        119,
+        114,
+        168,
+        8,
+        124,
+        169,
+        182,
+        58
+      ]
+    },
+    {
+      "name": "SeasonFinalized",
+      "discriminator": [
+        17,
+        0,
+        146,
+        8,
+        1,
+        167,
+        147,
+        101
+      ]
+    },
+    {
+      "name": "SeasonOpened",
+      "discriminator": [
+        188,
+        53,
+        161,
+        112,
+        10,
+        91,
+        118,
+        131
+      ]
+    },
+    {
+      "name": "SeasonProposed",
+      "discriminator": [
+        98,
+        199,
+        20,
+        73,
+        206,
+        164,
+        65,
+        73
+      ]
+    },
+    {
+      "name": "SiegeExecuted",
+      "discriminator": [
+        6,
+        68,
+        121,
+        233,
+        237,
+        225,
+        161,
+        139
+      ]
+    },
+    {
+      "name": "SiegeWaited",
+      "discriminator": [
+        133,
+        183,
+        229,
+        217,
+        206,
+        170,
+        6,
+        91
+      ]
+    },
+    {
+      "name": "TreatyInflowShared",
+      "discriminator": [
+        23,
+        186,
+        113,
+        141,
+        248,
+        123,
+        48,
+        244
+      ]
+    },
+    {
+      "name": "TreatyTimeAccrued",
+      "discriminator": [
+        189,
+        216,
+        148,
+        191,
+        119,
+        143,
+        90,
+        18
+      ]
+    },
+    {
+      "name": "WarChestCreated",
+      "discriminator": [
+        182,
+        13,
+        218,
+        178,
+        84,
+        118,
+        82,
+        187
+      ]
+    },
+    {
+      "name": "WarFunded",
+      "discriminator": [
+        144,
+        96,
+        128,
+        69,
+        228,
+        86,
+        170,
+        112
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "AlreadyInitialized",
+      "msg": "the war state of this mint already exists"
+    },
+    {
+      "code": 6001,
+      "name": "MissingWarSlot",
+      "msg": "the mint has no War slot"
+    },
+    {
+      "code": 6002,
+      "name": "NoWarOrders",
+      "msg": "the War slot is empty, or the orders turn this action off"
+    },
+    {
+      "code": 6003,
+      "name": "WrongWarOrders",
+      "msg": "the item is not the War orders the mint's War slot names"
+    },
+    {
+      "code": 6004,
+      "name": "MissingAccount",
+      "msg": "an account the step needs was not passed"
+    },
+    {
+      "code": 6005,
+      "name": "NothingToDo",
+      "msg": "nothing to do"
+    },
+    {
+      "code": 6006,
+      "name": "ChestInsufficient",
+      "msg": "the chest cannot pay this"
+    },
+    {
+      "code": 6007,
+      "name": "SelfSiege",
+      "msg": "a token cannot besiege itself"
+    },
+    {
+      "code": 6008,
+      "name": "SiegeTargetHasRewards",
+      "msg": "the rival's kit has holder rewards on: a war chest cannot hold it"
+    },
+    {
+      "code": 6009,
+      "name": "OwnTokenHasRewards",
+      "msg": "this token's kit has holder rewards on: its chest cannot hold it"
+    },
+    {
+      "code": 6010,
+      "name": "SiegeNotDue",
+      "msg": "the siege is not due"
+    },
+    {
+      "code": 6011,
+      "name": "CapturedTableFull",
+      "msg": "the captured table is full"
+    },
+    {
+      "code": 6012,
+      "name": "CounterNotDue",
+      "msg": "the counter-strike is not due"
+    },
+    {
+      "code": 6013,
+      "name": "NoObservations",
+      "msg": "the observations do not cover the window"
+    },
+    {
+      "code": 6014,
+      "name": "RazeDisabled",
+      "msg": "the War orders do not allow razing"
+    },
+    {
+      "code": 6015,
+      "name": "RazeLimit",
+      "msg": "this window's raze allowance is used"
+    },
+    {
+      "code": 6016,
+      "name": "PeaceReturnsOff",
+      "msg": "the treaty does not return captured holdings"
+    },
+    {
+      "code": 6017,
+      "name": "NoTreaty",
+      "msg": "the treaty is not equipped by both tokens"
+    },
+    {
+      "code": 6018,
+      "name": "TouchMismatch",
+      "msg": "the touch did not change the holding as asked"
+    },
+    {
+      "code": 6019,
+      "name": "RandomnessNotReady",
+      "msg": "the randomness is not ready"
+    },
+    {
+      "code": 6020,
+      "name": "WrongRandomness",
+      "msg": "the randomness account is not this roll's"
+    },
+    {
+      "code": 6021,
+      "name": "RollNotExpired",
+      "msg": "the roll has not expired"
+    },
+    {
+      "code": 6022,
+      "name": "QuestAlreadyClaimed",
+      "msg": "the quest was already claimed this period"
+    },
+    {
+      "code": 6023,
+      "name": "QuestConditionUnmet",
+      "msg": "the quest's condition is not met"
+    },
+    {
+      "code": 6024,
+      "name": "SeasonNotOpen",
+      "msg": "no season is open"
+    },
+    {
+      "code": 6025,
+      "name": "SeasonNotEnded",
+      "msg": "the season has not ended"
+    },
+    {
+      "code": 6026,
+      "name": "ChallengeClosed",
+      "msg": "the challenge window is closed"
+    },
+    {
+      "code": 6027,
+      "name": "NotHigherScore",
+      "msg": "the score is not higher than the leader's"
+    },
+    {
+      "code": 6028,
+      "name": "SeasonNotFinalized",
+      "msg": "the season is not finalized"
+    },
+    {
+      "code": 6029,
+      "name": "TimelockNotPassed",
+      "msg": "the timelock has not passed"
+    },
+    {
+      "code": 6030,
+      "name": "NotAdmin",
+      "msg": "only the admin may do this"
+    },
+    {
+      "code": 6031,
+      "name": "MathOverflow",
+      "msg": "arithmetic overflow"
+    },
+    {
+      "code": 6032,
+      "name": "NotUpgradeAuthority",
+      "msg": "only the program's upgrade authority may create the config"
+    },
+    {
+      "code": 6033,
+      "name": "InvalidParams",
+      "msg": "invalid parameters"
+    },
+    {
+      "code": 6034,
+      "name": "WrongForeignAccount",
+      "msg": "a foreign account does not decode as the spec's layout"
+    },
+    {
+      "code": 6035,
+      "name": "NoQuote",
+      "msg": "the pool gives no quote"
+    },
+    {
+      "code": 6036,
+      "name": "WrongLaunch",
+      "msg": "the launch is not this mint's"
+    },
+    {
+      "code": 6037,
+      "name": "WrongRaidSlot",
+      "msg": "the slot is not this program's Raid slot"
+    },
+    {
+      "code": 6038,
+      "name": "NothingPending",
+      "msg": "nothing is pending"
+    },
+    {
+      "code": 6039,
+      "name": "SeasonClosed",
+      "msg": "the season is already open or finalized"
+    },
+    {
+      "code": 6040,
+      "name": "LootTableNotReady",
+      "msg": "the season's loot table is missing or not yet in force"
+    },
+    {
+      "code": 6041,
+      "name": "InvalidLootEntry",
+      "msg": "a loot entry is outside its template"
+    },
+    {
+      "code": 6042,
+      "name": "NoTreatyTemplate",
+      "msg": "the treaty template is not configured"
+    },
+    {
+      "code": 6043,
+      "name": "WrongAccount",
+      "msg": "the account passed is not the one expected"
+    }
+  ],
+  "types": [
+    {
+      "name": "BountyClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "points",
+            "type": "u32"
+          },
+          {
+            "name": "paid",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CandidateChallenged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "season",
+            "type": "u32"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "score",
+            "type": "i128"
+          },
+          {
+            "name": "submitted_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "beaten",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CandidateSubmitted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "season",
+            "type": "u32"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "score",
+            "type": "i128"
+          },
+          {
+            "name": "submitted_by",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Captured",
+      "docs": [
+        "A rival holding a chest captured."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rival_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "cost",
+            "docs": [
+              "Bridged SOL spent on it."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "captured_at",
+            "type": "i64"
+          },
+          {
+            "name": "raze_window_start",
+            "type": "i64"
+          },
+          {
+            "name": "raze_window_base",
+            "type": "u64"
+          },
+          {
+            "name": "razed_in_window",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CapturedReturned",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "rival_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "treaty_item",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfigApplied",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "change",
+            "type": {
+              "defined": {
+                "name": "ConfigChange"
+              }
+            }
+          },
+          {
+            "name": "eta",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfigArgs",
+      "docs": [
+        "Arguments of `init_config` and `propose_config`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "protocol_treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "randomness_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "treaty_template_id",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "WarParams"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfigChange",
+      "docs": [
+        "What a config change proposes (05 section 11)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "protocol_treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "randomness_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "treaty_template_id",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "WarParams"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfigProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "change",
+            "type": {
+              "defined": {
+                "name": "ConfigChange"
+              }
+            }
+          },
+          {
+            "name": "eta",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CounterStrikeExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "spent",
+            "type": "u64"
+          },
+          {
+            "name": "burned",
+            "type": "u64"
+          },
+          {
+            "name": "bounty",
+            "type": "u64"
+          },
+          {
+            "name": "cranker",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Launch",
+      "docs": [
+        "A launch at `[\"launch\", mint]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Layout version."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "docs": [
+              "The token."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Who launched it."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pool",
+            "docs": [
+              "The pool on the DEX."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "quote_mint",
+            "docs": [
+              "The quote mint."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "`STATUS_CURVE` or `STATUS_GRADUATED`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "creator_fee_bps",
+            "docs": [
+              "Creator fee on every swap, in basis points of the quote."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "lp_fee_bps",
+            "docs": [
+              "LP fee of the pool."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "sniper_window_secs",
+            "docs": [
+              "Sniper window."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "sniper_start_bps",
+            "docs": [
+              "LP fee at the start of the window."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "virtual_quote",
+            "docs": [
+              "Virtual quote reserve at opening."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "virtual_base",
+            "docs": [
+              "Virtual base reserve."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "graduation_quote",
+            "docs": [
+              "Real quote reserve at which the launch graduates."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "curve_tokens",
+            "docs": [
+              "Tokens on the curve."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reserve_tokens",
+            "docs": [
+              "Tokens reserved for graduation."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reserve_holding",
+            "docs": [
+              "The launch's holding of the token (the reserve, then nothing)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "quote_holding",
+            "docs": [
+              "The launch's holding of the quote (creator fees)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "lp_holding",
+            "docs": [
+              "The launch's holding of the pool's LP mint (locked for ever)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Creation time."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "graduated_at",
+            "docs": [
+              "Graduation time (0 until then)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "creator_fees_accrued",
+            "docs": [
+              "Creator fees taken so far."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "creator_fees_claimed",
+            "docs": [
+              "Creator fees claimed so far."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "graduation_topup",
+            "docs": [
+              "Base added to the pool at graduation."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "graduation_burned",
+            "docs": [
+              "Base burned at graduation."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "rules",
+            "docs": [
+              "The token rules, fixed at launch."
+            ],
+            "type": {
+              "defined": {
+                "name": "LaunchRules"
+              }
+            }
+          },
+          {
+            "name": "modules",
+            "docs": [
+              "The kit modules of `rules` (0: no kit, no token hook)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "kit_config",
+            "docs": [
+              "`PDA([\"kit\", mint], KIT_ID)`, derived whatever the modules (the pool hook's fixed key)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "holder_vault",
+            "docs": [
+              "`holding(quote_mint, kit_config)`, derived whatever the modules: the kit's reward vault",
+              "when holder rewards are on, where holder fees go."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "kit_caller_bump",
+            "docs": [
+              "Bump of `PDA([\"kit-caller\", mint], LAUNCH_ID)`, which signs the kit's `init` and",
+              "`graduate`; 0 without a kit."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "creator_unlock_at",
+            "docs": [
+              "The creator wallet unlocks at this time; 0 when off."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "early_window_end",
+            "docs": [
+              "Buys from the pool before this time are locked; 0 when off."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "early_unlock_at",
+            "docs": [
+              "... until this time; 0 when off."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "creator_bought",
+            "docs": [
+              "The creator's own first buy took the normal LP fee inside the sniper window (once)."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "holder_fees_accrued",
+            "docs": [
+              "Holder fees taken so far (bridged SOL, into the holder vault)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "burned_on_trades",
+            "docs": [
+              "Tokens burned on trades (both sides; not the graduation burn)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "config",
+            "docs": [
+              "The `LaunchConfig` the launch was made from; the default key for inline rules."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "custom_hook",
+            "docs": [
+              "The creator's own token hook (from the config), when the token has one. It runs on every",
+              "transfer, mint and burn its flags name; nobody vets its code."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "custom_hook_flags",
+            "docs": [
+              "The custom hook's flags; 0 without one."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "author_share_bps",
+            "docs": [
+              "The config author's share of the creator fee (basis points of it), from a listed config",
+              "whose author is not the launch's creator; 0 otherwise. Fixed at launch: every claim pays",
+              "the author this part of what it takes."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "author_fees_paid",
+            "docs": [
+              "Creator fees paid to the config's author so far (quote)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Reserved."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                22
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "LaunchRules",
+      "docs": [
+        "The rules a launch fixes for its token (`docs/hooks-v2.md` §5.1): what the pool hook takes on",
+        "each side, and the kit modules the token gets. Holder rewards are on when either holder fee is",
+        "above 0."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "holder_fee_buy_bps",
+            "docs": [
+              "Holder fee on buys, from the quote input, paid to the holder vault."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "holder_fee_sell_bps",
+            "docs": [
+              "Holder fee on sells, from the quote output after the protocol fee."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "burn_buy_bps",
+            "docs": [
+              "Burn on buys, from the token output."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "burn_sell_bps",
+            "docs": [
+              "Burn on sells, from the token input."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "max_wallet_bps",
+            "docs": [
+              "Max wallet in basis points of the supply; 0 = off. Lifts at graduation."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "creator_lock_secs",
+            "docs": [
+              "Creator wallet lock, counted from the launch; 0 = off."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "early_window_secs",
+            "docs": [
+              "Early-buyer window, counted from the launch; 0 = off."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "early_lock_secs",
+            "docs": [
+              "Early-buyer unlock, counted from the launch; above `early_window_secs` (0 when the lock is",
+              "off)."
+            ],
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LootEntry",
+      "docs": [
+        "One template a roll may mint, with its weight and a range per field (05 section 8.3)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "weight",
+            "type": "u32"
+          },
+          {
+            "name": "ranges",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "ParamRange"
+                  }
+                },
+                11
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "LootTable",
+      "docs": [
+        "`LootTable` at `[\"loot\", season: u32 le]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "season",
+            "type": "u32"
+          },
+          {
+            "name": "count",
+            "type": "u8"
+          },
+          {
+            "name": "entries",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "LootEntry"
+                  }
+                },
+                8
+              ]
+            }
+          },
+          {
+            "name": "eta",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LootTableProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "season",
+            "type": "u32"
+          },
+          {
+            "name": "eta",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Mint",
+      "docs": [
+        "A mint. Address: any signer at creation (a keypair, or a PDA of the creating program)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Layout version."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "decimals",
+            "docs": [
+              "Decimals."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "supply",
+            "docs": [
+              "Current supply."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_supply",
+            "docs": [
+              "Largest supply ever allowed; 0 means unlimited."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "mint_authority",
+            "docs": [
+              "May mint; `None` once revoked."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "freeze_authority",
+            "docs": [
+              "May freeze and thaw holdings; `None` once revoked."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "hook_authority",
+            "docs": [
+              "May change the hook; `None` locks the hook for ever."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "metadata_authority",
+            "docs": [
+              "May change the metadata; `None` fixes it for ever."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "hook_program",
+            "docs": [
+              "The hook program, if any."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "hook_flags",
+            "docs": [
+              "Which callbacks run (`bordrless_hook::token_flags`)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "name",
+            "docs": [
+              "Name."
+            ],
+            "type": "string"
+          },
+          {
+            "name": "symbol",
+            "docs": [
+              "Symbol."
+            ],
+            "type": "string"
+          },
+          {
+            "name": "uri",
+            "docs": [
+              "Metadata URI."
+            ],
+            "type": "string"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Creation time."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Who paid for the creation."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "hook_signer_bump",
+            "docs": [
+              "Bump of `[\"hook-authority\", hook_program]`, this program's signer of every callback to the",
+              "hook (one per hook program, so a hook can tell its own callbacks from a signer another hook",
+              "passed on); 0 without a hook. Set with the hook."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Reserved."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                31
+              ]
+            }
+          },
+          {
+            "name": "slot_authority",
+            "docs": [
+              "Hookwars: the armory's `[\"slots\", mint]` PDA, which alone may change the slots and vote",
+              "locks; `None` when the table never changes."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "slot_count",
+            "docs": [
+              "Hookwars: entries of `slots` in use (0: no slot table, the upstream single hook applies)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "slots",
+            "docs": [
+              "Hookwars: the slot table, in call order; entries at `slot_count..` are zero."
+            ],
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "Slot"
+                  }
+                },
+                4
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ParamRange",
+      "docs": [
+        "A parameter's range in a loot entry."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "min",
+            "type": "u32"
+          },
+          {
+            "name": "max",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PendingCancelled",
+      "docs": [
+        "What `cancel_pending` cancelled: 0 the config change, 1 a season, 2 a loot table."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "what",
+            "type": "u8"
+          },
+          {
+            "name": "season",
+            "type": "u32"
+          },
+          {
+            "name": "eta",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PendingConfig",
+      "docs": [
+        "A proposed change of the config, applied by anyone after `eta` (05 section 11)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "protocol_treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "randomness_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "treaty_template_id",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "WarParams"
+              }
+            }
+          },
+          {
+            "name": "eta",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PrizePaid",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "season",
+            "type": "u32"
+          },
+          {
+            "name": "winner",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "to_winner",
+            "type": "u64"
+          },
+          {
+            "name": "to_treasury",
+            "type": "u64"
+          },
+          {
+            "name": "bounty",
+            "type": "u64"
+          },
+          {
+            "name": "cranker",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "QuestClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "quest_id",
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "season",
+            "type": "u32"
+          },
+          {
+            "name": "period",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "QuestMark",
+      "docs": [
+        "`QuestMark` at `[\"quest\", season: u32 le, mint, owner]` (05 section 9; for `Forge` the mint is",
+        "the default key)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "season",
+            "type": "u32"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "last_period",
+            "type": "u32"
+          },
+          {
+            "name": "last_forge_count",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Razed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "rival_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "sold",
+            "type": "u64"
+          },
+          {
+            "name": "got",
+            "type": "u64"
+          },
+          {
+            "name": "bounty",
+            "type": "u64"
+          },
+          {
+            "name": "cranker",
+            "type": "pubkey"
+          },
+          {
+            "name": "captured_left",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RollCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "roll",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RollRequest",
+      "docs": [
+        "`RollRequest` at `[\"roll\", holding, nonce: u64 le]` (05 section 8.2)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "holding",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "season",
+            "type": "u32"
+          },
+          {
+            "name": "requested_slot",
+            "type": "u64"
+          },
+          {
+            "name": "requested_at",
+            "type": "i64"
+          },
+          {
+            "name": "oracle_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "oracle_account",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RollRequested",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "roll",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "holding",
+            "type": "pubkey"
+          },
+          {
+            "name": "season",
+            "type": "u32"
+          },
+          {
+            "name": "requested_slot",
+            "type": "u64"
+          },
+          {
+            "name": "oracle_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "oracle_account",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RollRevealed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "roll",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "item",
+            "docs": [
+              "The new item, as the armory derives it; default when the armory names it in its own event",
+              "(`LootMinted`)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "params",
+            "type": {
+              "array": [
+                "u32",
+                11
+              ]
+            }
+          },
+          {
+            "name": "season",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ScoreWeights",
+      "docs": [
+        "One `u64` weight per counter (05 section 10.2)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "raid_volume_won",
+            "type": "u64"
+          },
+          {
+            "name": "sieges",
+            "type": "u64"
+          },
+          {
+            "name": "siege_spend",
+            "type": "u64"
+          },
+          {
+            "name": "times_besieged",
+            "type": "u64"
+          },
+          {
+            "name": "counter_strikes",
+            "type": "u64"
+          },
+          {
+            "name": "treaty_secs",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Season",
+      "docs": [
+        "`Season` at `[\"season\", number: u32 le]` (05 section 10.2)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "number",
+            "type": "u32"
+          },
+          {
+            "name": "starts_at",
+            "type": "i64"
+          },
+          {
+            "name": "ends_at",
+            "type": "i64"
+          },
+          {
+            "name": "weights",
+            "type": {
+              "defined": {
+                "name": "ScoreWeights"
+              }
+            }
+          },
+          {
+            "name": "penalize_besieged",
+            "type": "bool"
+          },
+          {
+            "name": "eta",
+            "docs": [
+              "From the timelock."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "opened",
+            "type": "bool"
+          },
+          {
+            "name": "leader",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "leader_score",
+            "type": "i128"
+          },
+          {
+            "name": "finalized",
+            "type": "bool"
+          },
+          {
+            "name": "prize_paid",
+            "docs": [
+              "Prize paid to this season's winner so far."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "SeasonArgs",
+      "docs": [
+        "Arguments of `propose_season`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "number",
+            "type": "u32"
+          },
+          {
+            "name": "starts_at",
+            "type": "i64"
+          },
+          {
+            "name": "weights",
+            "type": {
+              "defined": {
+                "name": "ScoreWeights"
+              }
+            }
+          },
+          {
+            "name": "penalize_besieged",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SeasonCounters",
+      "docs": [
+        "A season's counters of one token: values only, never marked to market (05 section 2.4)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "raid_volume_won",
+            "type": "u64"
+          },
+          {
+            "name": "sieges",
+            "type": "u32"
+          },
+          {
+            "name": "siege_spend",
+            "type": "u64"
+          },
+          {
+            "name": "times_besieged",
+            "type": "u32"
+          },
+          {
+            "name": "counter_strikes",
+            "type": "u32"
+          },
+          {
+            "name": "treaty_secs",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SeasonFinalized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "season",
+            "type": "u32"
+          },
+          {
+            "name": "winner",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "score",
+            "type": "i128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SeasonOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "season",
+            "type": "u32"
+          },
+          {
+            "name": "starts_at",
+            "type": "i64"
+          },
+          {
+            "name": "ends_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SeasonProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "season",
+            "type": "u32"
+          },
+          {
+            "name": "starts_at",
+            "type": "i64"
+          },
+          {
+            "name": "ends_at",
+            "type": "i64"
+          },
+          {
+            "name": "weights",
+            "type": {
+              "defined": {
+                "name": "ScoreWeights"
+              }
+            }
+          },
+          {
+            "name": "penalize_besieged",
+            "type": "bool"
+          },
+          {
+            "name": "eta",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SiegeExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "rival_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "spent",
+            "type": "u64"
+          },
+          {
+            "name": "bought",
+            "type": "u64"
+          },
+          {
+            "name": "bounty",
+            "type": "u64"
+          },
+          {
+            "name": "cranker",
+            "type": "pubkey"
+          },
+          {
+            "name": "captured_total",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SiegeWaited",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "rival_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "rival_price",
+            "type": "u128"
+          },
+          {
+            "name": "rival_twap",
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SliceArgs",
+      "docs": [
+        "Arguments of `siege`, `counter_strike`, `raze` and `return_captured`: how many of the",
+        "remaining accounts are token slices the client resolved (in the order the step names)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "first",
+            "type": "u8"
+          },
+          {
+            "name": "second",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Slot",
+      "docs": [
+        "One slot of a mint (docs/spec/01-token-slots.md section 1.1)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "kind",
+            "docs": [
+              "`bordrless_hook::slot_kind`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "equip_rule",
+            "docs": [
+              "`bordrless_hook::equip_rule` (stored, never acted on here)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bounds",
+            "docs": [
+              "Fixed bounds."
+            ],
+            "type": {
+              "defined": {
+                "name": "SlotBounds"
+              }
+            }
+          },
+          {
+            "name": "data_offset",
+            "docs": [
+              "First byte of this slot's range in `Holding.hook_data`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "data_len",
+            "docs": [
+              "Length of the range (item slots: including the epoch byte; 0 without data)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "docs": [
+              "The equipped item (default when empty or Locked)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "program",
+            "docs": [
+              "The program that runs (default when empty)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "flags",
+            "docs": [
+              "Token callbacks and answers (`bordrless_hook::slot_flags`)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "pool_flags",
+            "docs": [
+              "Pool slots only: the launchpad's pool flags (stored, never read here)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "equip_vault",
+            "docs": [
+              "The only holding a cut of this slot may credit (default when the slot never cuts)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "signer_bump",
+            "docs": [
+              "Bump of `[\"hook-authority\", program]` under this program."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "launch_signer_bump",
+            "docs": [
+              "Pool slots only: bump of the launchpad's `[\"hook-authority\", program]`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "data_epoch",
+            "docs": [
+              "Tags this slot's data in every holding; changes on every equip; starts at 1."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "extra_count",
+            "docs": [
+              "Extra accounts the item takes after its program and signer (fixed when equipped; the",
+              "Locked slot's when created). Hookwars M1: replaces the `slot_accounts` argument (M1 notes)."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SlotBounds",
+      "docs": [
+        "Bounds a slot keeps for life."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "max_cut_bps",
+            "docs": [
+              "Most an item in this slot may cut from one transfer, in bps of the amount."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "may_refuse",
+            "docs": [
+              "Whether an item may refuse operations (declared; not enforceable at run time)."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "may_write_data",
+            "docs": [
+              "Whether an item may write this slot's hook-data range."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "may_answer_touch",
+            "docs": [
+              "Whether an item may answer `touch`."
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TreatyInflowShared",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "bounty",
+            "type": "u64"
+          },
+          {
+            "name": "cranker",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TreatyTimeAccrued",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "treaty_item",
+            "type": "pubkey"
+          },
+          {
+            "name": "secs",
+            "type": "u64"
+          },
+          {
+            "name": "season",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WarChestCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "chest",
+            "type": "pubkey"
+          },
+          {
+            "name": "treaty_inbox",
+            "type": "pubkey"
+          },
+          {
+            "name": "war_state",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WarConfig",
+      "docs": [
+        "`WarConfig` at `[\"war-config\"]` (05 section 2.1)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "prize_vault_bump",
+            "type": "u8"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "protocol_treasury",
+            "docs": [
+              "Receives protocol fees after the season prize share."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "randomness_program",
+            "docs": [
+              "The randomness adapter (D-4; section 8.2)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "treaty_template_id",
+            "docs": [
+              "The armory template id of Treaty items (`return_captured`, `accrue_treaty_time`); `None`",
+              "until the admin names it. War orders are recognised by their kind, `War` (one template)."
+            ],
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "current_season",
+            "docs": [
+              "Season now running (0 before the first)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "last_winner",
+            "docs": [
+              "Mint that won the last finalized season, and that season."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "last_winner_season",
+            "type": "u32"
+          },
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "WarParams"
+              }
+            }
+          },
+          {
+            "name": "pending",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "PendingConfig"
+                }
+              }
+            }
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "WarFunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "balance",
+            "type": "u64"
+          },
+          {
+            "name": "funded_total",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WarParams",
+      "docs": [
+        "Every policy number of the war program (00 section 6, the parameters 05 uses). Set at",
+        "`init_config` and changed only through the timelock (`propose_config`, `apply_config`)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin_timelock_secs",
+            "docs": [
+              "`ADMIN_TIMELOCK_SECS`: delay on every admin change (D-9)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "max_crank_bounty_bps",
+            "docs": [
+              "`MAX_CRANK_BOUNTY_BPS`: ceiling on any war step's crank bounty (at most the companion's)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "siege_interval_secs",
+            "docs": [
+              "`SIEGE_INTERVAL_SECS`: spacing of a chest's sieges; also how long a besieged token is",
+              "\"under siege\"."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "siege_max_spend_bps",
+            "docs": [
+              "`SIEGE_MAX_SPEND_BPS`: ceiling on a siege's spend, of the chest."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "siege_max_premium_bps",
+            "docs": [
+              "`SIEGE_MAX_PREMIUM_BPS`: a siege waits while the rival trades above its TWAP by more."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "siege_slippage_bps",
+            "docs": [
+              "`SIEGE_SLIPPAGE_BPS`: a siege or raze takes no less than the quote less the fees and this."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "siege_unit_lamports",
+            "docs": [
+              "`SIEGE_UNIT_LAMPORTS`: the unit of the War orders' `siege_threshold`."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "counter_max_spend_bps",
+            "docs": [
+              "`COUNTER_STRIKE_MAX_SPEND_BPS`: ceiling on a counter-strike's spend, of the chest."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "counter_min_interval_secs",
+            "docs": [
+              "`COUNTER_STRIKE_MIN_INTERVAL_SECS`: floor on the War orders' counter-strike spacing."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "raze_max_bps_per_interval",
+            "docs": [
+              "`RAZE_MAX_BPS_PER_INTERVAL`, `RAZE_INTERVAL_SECS`: how fast captured holdings may be sold."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "raze_interval_secs",
+            "type": "i64"
+          },
+          {
+            "name": "bounty_max_per_claim",
+            "docs": [
+              "`BOUNTY_MAX_PER_CLAIM` (lamports)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "min_twap_secs",
+            "docs": [
+              "`MIN_TWAP_SECS`: the shortest window any price read may use."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "raid_window_secs",
+            "docs": [
+              "`RAID_WINDOW_SECS`: the raid ledger's window (the items program writes with the same)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "roll_expiry_secs",
+            "docs": [
+              "`ROLL_EXPIRY_SECS`: an unfulfilled roll may be cancelled after this."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "quest_period_secs",
+            "docs": [
+              "`QUEST_PERIOD_SECS`, `QUEST_RAID_POINTS`."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "quest_raid_points",
+            "type": "u32"
+          },
+          {
+            "name": "season_secs",
+            "docs": [
+              "`SEASON_SECS`, `CHALLENGE_SECS`."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "challenge_secs",
+            "type": "i64"
+          },
+          {
+            "name": "season_prize_share_bps",
+            "docs": [
+              "`SEASON_PRIZE_SHARE_BPS`: of the prize vault, to the last winner's chest."
+            ],
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WarState",
+      "docs": [
+        "`WarState` at `[\"war\", mint]`: war-side facts only (05 section 2.4)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "chest_bump",
+            "type": "u8"
+          },
+          {
+            "name": "inbox_bump",
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "last_seen_balance",
+            "docs": [
+              "The chest's bridged-SOL balance after the last write."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "funded_total",
+            "type": "u64"
+          },
+          {
+            "name": "spent_siege",
+            "type": "u64"
+          },
+          {
+            "name": "spent_counter",
+            "type": "u64"
+          },
+          {
+            "name": "paid_bounties",
+            "type": "u64"
+          },
+          {
+            "name": "paid_cranks",
+            "type": "u64"
+          },
+          {
+            "name": "razed_proceeds",
+            "type": "u64"
+          },
+          {
+            "name": "treaty_shared_total",
+            "type": "u64"
+          },
+          {
+            "name": "last_siege_at",
+            "type": "i64"
+          },
+          {
+            "name": "last_counter_at",
+            "type": "i64"
+          },
+          {
+            "name": "last_treaty_tick",
+            "type": "i64"
+          },
+          {
+            "name": "under_siege_until",
+            "docs": [
+              "Set when another token's chest besieges this one; read by Defense items (04)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "siege_by_chest",
+            "docs": [
+              "The besieging chest while `under_siege_until > now`."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "captured",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "Captured"
+                  }
+                },
+                8
+              ]
+            }
+          },
+          {
+            "name": "season_id",
+            "docs": [
+              "Season the `season` counters belong to."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "season",
+            "type": {
+              "defined": {
+                "name": "SeasonCounters"
+              }
+            }
+          },
+          {
+            "name": "prev_season",
+            "docs": [
+              "The frozen previous season (10.1)."
+            ],
+            "type": {
+              "defined": {
+                "name": "SeasonCounters"
+              }
+            }
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

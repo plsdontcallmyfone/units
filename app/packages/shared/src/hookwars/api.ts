@@ -34,7 +34,7 @@ export interface TemplateInfo {
   sentence: string;
   program: Address;
   kind: SlotKind;
-  fields: { index: number; name: string; min: number; max: number; forge: 'towardCeiling' | 'towardFloor' | 'keep' | 'none' }[];
+  fields: { index: number; name: string; min: number; max: number; forge: 'towardCeiling' | 'towardFloor' | 'keep' | 'floorWhenBothOn' | 'none' }[];
   codeHash: string;
   verified: boolean | null;
   upgradeAuthority: Address | null;
@@ -96,7 +96,8 @@ export interface WarOrdersInfo {
   item: Address; level: number;
   siegeThreshold: Amount; siegeSpendBps: number; siegeTwapSecs: number;
   counterDropBps: number; counterShortSecs: number; counterLongSecs: number; counterIntervalSecs: number; counterSpendBps: number;
-  razeEnabled: boolean; peaceReturns: boolean | null;
+  /** Peace returns are not a War orders field: a Treaty item's `returns_captured` (04 3.5) gates them (05 M4/M5 notes). */
+  razeEnabled: boolean;
   bountyRate: Amount; crankBountyBps: number;
 }
 

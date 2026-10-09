@@ -14,6 +14,15 @@ import { CODERS, IDL, type ProgramName } from './coders.ts';
 import { PROGRAM_ERRORS, explainFailure, explainProgramError, failedProgram } from './errors.ts';
 import { EVENT_IX_TAG, eventsOf, launchSwapCuts, typedEvent, type DecodedEvent, type LaunchConfigCreatedEvent, type SwappedEvent } from './events.ts';
 
+/** Changed by Hookwars: the token `Mint` gained the slot table (M1); upstream mints carry an empty one. */
+const NO_SLOTS = {
+  slotAuthority: null, slotCount: 0,
+  slots: Array.from({ length: 4 }, () => ({
+    kind: 0, equipRule: 0, bounds: { maxCutBps: 0, mayRefuse: false, mayWriteData: false, mayAnswerTouch: false }, dataOffset: 0, dataLen: 0,
+    item: PublicKey.default, program: PublicKey.default, flags: 0, poolFlags: 0, equipVault: PublicKey.default, signerBump: 0, launchSignerBump: 0, dataEpoch: 0, extraCount: 0,
+  })),
+};
+
 const k = (): PublicKey => Keypair.generate().publicKey;
 const SOL = a.BRIDGED_SOL_MINT;
 const bn = (v: bigint | number): BN => new BN(v.toString());
@@ -56,7 +65,7 @@ describe('v2 accounts (programs-summary §3 and §6)', () => {
   });
 
   it('reads a Mint with its hook signer bump, and a Pool without protocol_fees_base', async () => {
-    const mint = decodeMint(await encodeAccount('token', 'mint', { version: 1, decimals: 6, supply: bn(10), maxSupply: bn(10), mintAuthority: null, freezeAuthority: null, hookAuthority: null, metadataAuthority: null, hookProgram: a.KIT_PROGRAM, hookFlags: 145, name: 'N', symbol: 'S', uri: 'u', createdAt: bn(1), creator: k(), hookSignerBump: 255, reserved: Array(31).fill(0) }));
+    const mint = decodeMint(await encodeAccount('token', 'mint', { version: 1, decimals: 6, supply: bn(10), maxSupply: bn(10), mintAuthority: null, freezeAuthority: null, hookAuthority: null, metadataAuthority: null, hookProgram: a.KIT_PROGRAM, hookFlags: 145, name: 'N', symbol: 'S', uri: 'u', createdAt: bn(1), creator: k(), hookSignerBump: 255, reserved: Array(31).fill(0), ...NO_SLOTS }));
     expect([mint.hookProgram?.equals(a.KIT_PROGRAM), mint.hookFlags, mint.hookSignerBump]).toEqual([true, 145, 255]);
     const poolFields = (IDL.swap as unknown as { types: { name: string; type: { fields: { name: string }[] } }[] }).types.find((t) => t.name === 'Pool')!.type.fields.map((f) => f.name);
     expect(poolFields).not.toContain('protocol_fees_base');
@@ -139,7 +148,7 @@ describe('v2 accounts (programs-summary §3 and §6)', () => {
     expect(rewardsClaimable(kitRewardsOf(config), 21_000_000n, 1_800_000_100, 1_000_000_000_000n, holder)).toEqual({ claimable: 7_000_000n, payable: 7_000_000n });
     expect([kitExcludes(config, pool), kitExcludes(config, a.launchAddress(mintKey)), kitExcludes(config, k())]).toEqual([true, true, false]);
     // §4.15: the kit as hook, no hook or mint authority, its flags, the config's launch and pool.
-    const mint = decodeMint(await encodeAccount('token', 'mint', { version: 1, decimals: 6, supply: bn(10n ** 15n), maxSupply: bn(10n ** 15n), mintAuthority: null, freezeAuthority: null, hookAuthority: null, metadataAuthority: null, hookProgram: a.KIT_PROGRAM, hookFlags: kitMintFlags(15), name: 'N', symbol: 'S', uri: 'u', createdAt: bn(1), creator: k(), hookSignerBump: 255, reserved: Array(31).fill(0) }));
+    const mint = decodeMint(await encodeAccount('token', 'mint', { version: 1, decimals: 6, supply: bn(10n ** 15n), maxSupply: bn(10n ** 15n), mintAuthority: null, freezeAuthority: null, hookAuthority: null, metadataAuthority: null, hookProgram: a.KIT_PROGRAM, hookFlags: kitMintFlags(15), name: 'N', symbol: 'S', uri: 'u', createdAt: bn(1), creator: k(), hookSignerBump: 255, reserved: Array(31).fill(0), ...NO_SLOTS }));
     const launch = { mint: mintKey, pool } as Parameters<typeof isVerifiedKitToken>[2];
     expect(isVerifiedKitToken(mintKey, mint, launch, config)).toBe(true);
     expect(isVerifiedKitToken(mintKey, { ...mint, hookFlags: 1 }, launch, config)).toBe(false);
@@ -153,7 +162,7 @@ describe('v2 events, decoded by the program that emitted them', () => {
   it('reads Transferred with its deltas and HookDataWritten', () => {
     const [mint, owner] = [k(), k()];
     const delta = { holding: k(), owner: k(), amount: bn(2), post: bn(9) };
-    const ev = decodeOne(emitted('token', a.TOKEN_PROGRAM, 'transferred', { mint, source: k(), destination: k(), sourceOwner: owner, destinationOwner: k(), authority: owner, amount: bn(10), deltas: [delta], sourcePost: bn(1), destinationPost: bn(8), slot: bn(5), ts: bn(77) }));
+    const ev = decodeOne(emitted('token', a.TOKEN_PROGRAM, 'transferred', { mint, source: k(), destination: k(), sourceOwner: owner, destinationOwner: k(), authority: owner, amount: bn(10), deltas: [delta], sourcePost: bn(1), destinationPost: bn(8), slot: bn(5), ts: bn(77), slotCuts: [] }));
     expect([ev.program, ev.name]).toEqual(['token', 'transferred']);
     const t = typedEvent(ev);
     expect(t).toMatchObject({ kind: 'token.Transferred', mint: mint.toBase58(), amount: 10n, deltas: [{ holding: delta.holding.toBase58(), owner: delta.owner.toBase58(), amount: 2n, post: 9n }], destinationPost: 8n, ts: 77 });
@@ -221,7 +230,7 @@ describe('errors are explained by the program that failed (codes overlap)', () =
     expect(explainProgramError('launch', 2006)).toMatchObject({ name: 'ConstraintSeeds' });
     expect(explainProgramError('kit', 6999).name).toBeNull();
     expect(explainProgramError('swap', 6037)).toMatchObject({ name: 'NotBridgedSol', message: "the pool's quote is not bridged SOL" });
-    expect([PROGRAM_ERRORS.kit.size, PROGRAM_ERRORS.launch.size, PROGRAM_ERRORS.swap.size, PROGRAM_ERRORS.token.size, PROGRAM_ERRORS.bridge.size, PROGRAM_ERRORS.taxHook.size]).toEqual([29, 44, 38, 27, 14, 6]);
+    expect([PROGRAM_ERRORS.kit.size, PROGRAM_ERRORS.launch.size, PROGRAM_ERRORS.swap.size, PROGRAM_ERRORS.token.size, PROGRAM_ERRORS.bridge.size, PROGRAM_ERRORS.taxHook.size]).toEqual([29, 44, 38, 45, 14, 6]); // Changed by Hookwars: the token program has the slot errors (M1)
   });
 
   it('finds the innermost failure in the logs of a swap that the kit refused', () => {

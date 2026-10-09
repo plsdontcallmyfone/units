@@ -1,0 +1,4359 @@
+{
+  "address": "7xnkyX5B7Ywz86Cu2ofM5T2z2UPmy1qhpgrAuK9Kk5MU",
+  "metadata": {
+    "name": "hookwars_armory",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Hookwars: the armory (docs/spec/02-armory.md). Templates, items as supply-1 tokens, royalties, equip rules (vote, performance, locked), equipping at launch, loot minting for the war program, forging."
+  },
+  "docs": [
+    "Instructions."
+  ],
+  "instructions": [
+    {
+      "name": "accept_admin",
+      "docs": [
+        "The proposed admin accepts."
+      ],
+      "discriminator": [
+        112,
+        42,
+        45,
+        90,
+        116,
+        181,
+        13,
+        170
+      ],
+      "accounts": [
+        {
+          "name": "new_admin",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "apply_params",
+      "docs": [
+        "Applies proposed params once the timelock has passed; anyone may send it."
+      ],
+      "discriminator": [
+        188,
+        203,
+        86,
+        124,
+        178,
+        34,
+        133,
+        116
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  45,
+                  112,
+                  97,
+                  114,
+                  97,
+                  109,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel",
+      "docs": [
+        "The proposer cancels an open proposal with no votes (02 section 6.5)."
+      ],
+      "discriminator": [
+        232,
+        219,
+        223,
+        41,
+        219,
+        236,
+        220,
+        190
+      ],
+      "accounts": [
+        {
+          "name": "proposer",
+          "signer": true,
+          "relations": [
+            "proposal"
+          ]
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "slot_state",
+          "writable": true
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "check_performance",
+      "docs": [
+        "Checks a `Performance` slot's condition and reverts it when due (02 section 6.7)."
+      ],
+      "discriminator": [
+        251,
+        224,
+        246,
+        134,
+        249,
+        227,
+        123,
+        247
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "slot_state",
+          "writable": true
+        },
+        {
+          "name": "launch"
+        },
+        {
+          "name": "pool",
+          "docs": [
+            "The launch pool."
+          ]
+        },
+        {
+          "name": "observations"
+        },
+        {
+          "name": "open_proposal",
+          "docs": [
+            "The slot's open proposal, cancelled by a revert."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "equip",
+          "accounts": [
+            {
+              "name": "payer",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "token_mint",
+              "writable": true
+            },
+            {
+              "name": "slot_authority"
+            },
+            {
+              "name": "equip_state",
+              "writable": true
+            },
+            {
+              "name": "old_item",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "old_equip_vault",
+              "optional": true
+            },
+            {
+              "name": "new_item",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "new_template",
+              "optional": true
+            },
+            {
+              "name": "template_program",
+              "optional": true
+            },
+            {
+              "name": "template_programdata",
+              "optional": true
+            },
+            {
+              "name": "registry",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "new_equip_vault",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "royalty_owner",
+              "optional": true
+            },
+            {
+              "name": "royalty_holding_token",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "quote_mint",
+              "optional": true
+            },
+            {
+              "name": "royalty_holding_quote",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "armory_signer",
+              "address": "2NSNJ4W51G5ZZSc4wVqkjyR8yr5yzuEjquKv7iprzSHP"
+            },
+            {
+              "name": "items_program",
+              "address": "8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv"
+            },
+            {
+              "name": "token",
+              "accounts": [
+                {
+                  "name": "token_program",
+                  "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+                },
+                {
+                  "name": "token_event_authority",
+                  "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
+                },
+                {
+                  "name": "system_program",
+                  "address": "11111111111111111111111111111111"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_royalty",
+      "docs": [
+        "The item's holder claims royalty from one of its royalty holdings (02 section 5.2)."
+      ],
+      "discriminator": [
+        10,
+        75,
+        29,
+        207,
+        114,
+        170,
+        28,
+        108
+      ],
+      "accounts": [
+        {
+          "name": "claimant",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "item"
+        },
+        {
+          "name": "item_holding"
+        },
+        {
+          "name": "royalty_owner",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  121,
+                  97,
+                  108,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item"
+              }
+            ]
+          }
+        },
+        {
+          "name": "cut_mint"
+        },
+        {
+          "name": "royalty_holding",
+          "writable": true
+        },
+        {
+          "name": "destination",
+          "writable": true
+        },
+        {
+          "name": "token",
+          "accounts": [
+            {
+              "name": "token_program",
+              "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+            },
+            {
+              "name": "token_event_authority",
+              "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
+            },
+            {
+              "name": "system_program",
+              "address": "11111111111111111111111111111111"
+            }
+          ]
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "close_proposal",
+      "docs": [
+        "Closes a final proposal once its vote locks are closed; rent to the proposer (02 6.6)."
+      ],
+      "discriminator": [
+        213,
+        178,
+        139,
+        19,
+        50,
+        191,
+        82,
+        245
+      ],
+      "accounts": [
+        {
+          "name": "proposer",
+          "writable": true
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_vote",
+      "docs": [
+        "Closes a vote lock of a final proposal; rent to the voter (02 section 6.6)."
+      ],
+      "discriminator": [
+        137,
+        152,
+        87,
+        249,
+        170,
+        239,
+        133,
+        59
+      ],
+      "accounts": [
+        {
+          "name": "voter",
+          "writable": true
+        },
+        {
+          "name": "proposal",
+          "writable": true,
+          "relations": [
+            "vote_lock"
+          ]
+        },
+        {
+          "name": "vote_lock",
+          "writable": true
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_item",
+      "docs": [
+        "Anyone authors an item from an open template (02 section 4.2)."
+      ],
+      "discriminator": [
+        176,
+        125,
+        142,
+        227,
+        8,
+        231,
+        222,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "author",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "template",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  101,
+                  109,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "template_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "minter",
+          "address": "GMD68dRY3cr58rLgwyNtxyGFjGRVg2RUzmeNo7X7CVPe"
+        },
+        {
+          "name": "item_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  116,
+                  101,
+                  109,
+                  45,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.items_minted",
+                "account": "ArmoryConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "item",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  116,
+                  101,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient_holding",
+          "writable": true
+        },
+        {
+          "name": "armory_signer",
+          "address": "2NSNJ4W51G5ZZSc4wVqkjyR8yr5yzuEjquKv7iprzSHP"
+        },
+        {
+          "name": "items_program",
+          "address": "8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv"
+        },
+        {
+          "name": "token",
+          "accounts": [
+            {
+              "name": "token_program",
+              "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+            },
+            {
+              "name": "token_event_authority",
+              "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
+            },
+            {
+              "name": "system_program",
+              "address": "11111111111111111111111111111111"
+            }
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "template_id",
+          "type": "u16"
+        },
+        {
+          "name": "params",
+          "type": {
+            "array": [
+              "u32",
+              11
+            ]
+          }
+        },
+        {
+          "name": "royalty_bps",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "equip_launch",
+      "docs": [
+        "The launchpad equips one slot of a fresh mint (02 section 7.1)."
+      ],
+      "discriminator": [
+        48,
+        11,
+        21,
+        138,
+        90,
+        194,
+        210,
+        75
+      ],
+      "accounts": [
+        {
+          "name": "launch_caller",
+          "docs": [
+            "The launchpad's `[\"armory-caller\", mint]` (checked in the handler)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "slot_state",
+          "writable": true
+        },
+        {
+          "name": "equip",
+          "accounts": [
+            {
+              "name": "payer",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "token_mint",
+              "writable": true
+            },
+            {
+              "name": "slot_authority"
+            },
+            {
+              "name": "equip_state",
+              "writable": true
+            },
+            {
+              "name": "old_item",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "old_equip_vault",
+              "optional": true
+            },
+            {
+              "name": "new_item",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "new_template",
+              "optional": true
+            },
+            {
+              "name": "template_program",
+              "optional": true
+            },
+            {
+              "name": "template_programdata",
+              "optional": true
+            },
+            {
+              "name": "registry",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "new_equip_vault",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "royalty_owner",
+              "optional": true
+            },
+            {
+              "name": "royalty_holding_token",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "quote_mint",
+              "optional": true
+            },
+            {
+              "name": "royalty_holding_quote",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "armory_signer",
+              "address": "2NSNJ4W51G5ZZSc4wVqkjyR8yr5yzuEjquKv7iprzSHP"
+            },
+            {
+              "name": "items_program",
+              "address": "8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv"
+            },
+            {
+              "name": "token",
+              "accounts": [
+                {
+                  "name": "token_program",
+                  "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+                },
+                {
+                  "name": "token_event_authority",
+                  "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
+                },
+                {
+                  "name": "system_program",
+                  "address": "11111111111111111111111111111111"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "entry",
+          "type": {
+            "defined": {
+              "name": "LaunchEquip"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "execute",
+      "docs": [
+        "Applies a passed proposal after its notice (02 section 6.4)."
+      ],
+      "discriminator": [
+        130,
+        221,
+        242,
+        154,
+        13,
+        193,
+        189,
+        29
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "slot_state",
+          "writable": true
+        },
+        {
+          "name": "equip",
+          "accounts": [
+            {
+              "name": "payer",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "token_mint",
+              "writable": true
+            },
+            {
+              "name": "slot_authority"
+            },
+            {
+              "name": "equip_state",
+              "writable": true
+            },
+            {
+              "name": "old_item",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "old_equip_vault",
+              "optional": true
+            },
+            {
+              "name": "new_item",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "new_template",
+              "optional": true
+            },
+            {
+              "name": "template_program",
+              "optional": true
+            },
+            {
+              "name": "template_programdata",
+              "optional": true
+            },
+            {
+              "name": "registry",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "new_equip_vault",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "royalty_owner",
+              "optional": true
+            },
+            {
+              "name": "royalty_holding_token",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "quote_mint",
+              "optional": true
+            },
+            {
+              "name": "royalty_holding_quote",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "armory_signer",
+              "address": "2NSNJ4W51G5ZZSc4wVqkjyR8yr5yzuEjquKv7iprzSHP"
+            },
+            {
+              "name": "items_program",
+              "address": "8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv"
+            },
+            {
+              "name": "token",
+              "accounts": [
+                {
+                  "name": "token_program",
+                  "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+                },
+                {
+                  "name": "token_event_authority",
+                  "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
+                },
+                {
+                  "name": "system_program",
+                  "address": "11111111111111111111111111111111"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "fail_stale",
+      "docs": [
+        "Fails a passed proposal that no longer fits (02 section 6.4)."
+      ],
+      "discriminator": [
+        61,
+        153,
+        88,
+        170,
+        13,
+        25,
+        74,
+        248
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "slot_state",
+          "writable": true
+        },
+        {
+          "name": "token_mint"
+        },
+        {
+          "name": "item",
+          "optional": true
+        },
+        {
+          "name": "template",
+          "optional": true
+        },
+        {
+          "name": "template_program",
+          "optional": true
+        },
+        {
+          "name": "template_programdata",
+          "optional": true
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "finalize",
+      "docs": [
+        "Resolves a proposal once voting ends (02 section 6.4)."
+      ],
+      "discriminator": [
+        171,
+        61,
+        218,
+        56,
+        127,
+        115,
+        12,
+        217
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "slot_state",
+          "writable": true
+        },
+        {
+          "name": "token_mint"
+        },
+        {
+          "name": "launch",
+          "optional": true
+        },
+        {
+          "name": "pool_base_vault",
+          "optional": true
+        },
+        {
+          "name": "launch_holding",
+          "optional": true
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "forge",
+      "docs": [
+        "Forges two items of one template into one (02 section 9)."
+      ],
+      "discriminator": [
+        63,
+        5,
+        211,
+        28,
+        237,
+        195,
+        110,
+        144
+      ],
+      "accounts": [
+        {
+          "name": "forger",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "forge_counter",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  111,
+                  114,
+                  103,
+                  101,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "forger"
+              }
+            ]
+          }
+        },
+        {
+          "name": "item_a",
+          "writable": true
+        },
+        {
+          "name": "item_b",
+          "writable": true
+        },
+        {
+          "name": "mint_a",
+          "writable": true
+        },
+        {
+          "name": "mint_b",
+          "writable": true
+        },
+        {
+          "name": "holding_a",
+          "writable": true
+        },
+        {
+          "name": "holding_b",
+          "writable": true
+        },
+        {
+          "name": "template",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  101,
+                  109,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item_a.template_id",
+                "account": "Item"
+              }
+            ]
+          }
+        },
+        {
+          "name": "minter",
+          "address": "GMD68dRY3cr58rLgwyNtxyGFjGRVg2RUzmeNo7X7CVPe"
+        },
+        {
+          "name": "item_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  116,
+                  101,
+                  109,
+                  45,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.items_minted",
+                "account": "ArmoryConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "item",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  116,
+                  101,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient_holding",
+          "writable": true
+        },
+        {
+          "name": "armory_signer",
+          "address": "2NSNJ4W51G5ZZSc4wVqkjyR8yr5yzuEjquKv7iprzSHP"
+        },
+        {
+          "name": "items_program",
+          "address": "8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv"
+        },
+        {
+          "name": "token",
+          "accounts": [
+            {
+              "name": "token_program",
+              "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+            },
+            {
+              "name": "token_event_authority",
+              "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
+            },
+            {
+              "name": "system_program",
+              "address": "11111111111111111111111111111111"
+            }
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "init",
+      "docs": [
+        "Creates the config; the program's upgrade authority signs."
+      ],
+      "discriminator": [
+        220,
+        59,
+        207,
+        236,
+        108,
+        250,
+        47,
+        100
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program_data"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "admin",
+          "type": "pubkey"
+        },
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "ArmoryParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "mint_loot",
+      "docs": [
+        "The war program mints a loot item (02 section 4.3)."
+      ],
+      "discriminator": [
+        145,
+        126,
+        144,
+        205,
+        237,
+        57,
+        47,
+        211
+      ],
+      "accounts": [
+        {
+          "name": "loot_signer",
+          "docs": [
+            "The war program's `[\"loot-signer\"]`."
+          ],
+          "signer": true,
+          "address": "DK5PUA6578wDF96DAEqxqiUDypvqPvdaoYASisgyPuZv"
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "owner"
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "template",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  101,
+                  109,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "template_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "minter",
+          "address": "GMD68dRY3cr58rLgwyNtxyGFjGRVg2RUzmeNo7X7CVPe"
+        },
+        {
+          "name": "item_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  116,
+                  101,
+                  109,
+                  45,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.items_minted",
+                "account": "ArmoryConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "item",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  116,
+                  101,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient_holding",
+          "writable": true
+        },
+        {
+          "name": "armory_signer",
+          "address": "2NSNJ4W51G5ZZSc4wVqkjyR8yr5yzuEjquKv7iprzSHP"
+        },
+        {
+          "name": "items_program",
+          "address": "8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv"
+        },
+        {
+          "name": "token",
+          "accounts": [
+            {
+              "name": "token_program",
+              "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+            },
+            {
+              "name": "token_event_authority",
+              "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
+            },
+            {
+              "name": "system_program",
+              "address": "11111111111111111111111111111111"
+            }
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "template_id",
+          "type": "u16"
+        },
+        {
+          "name": "params",
+          "type": {
+            "array": [
+              "u32",
+              11
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "propose",
+      "docs": [
+        "Proposes an item (or emptying) for a slot (02 section 6.2)."
+      ],
+      "discriminator": [
+        93,
+        253,
+        82,
+        168,
+        118,
+        33,
+        102,
+        90
+      ],
+      "accounts": [
+        {
+          "name": "proposer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_mint"
+        },
+        {
+          "name": "slot_state",
+          "writable": true
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "item",
+          "optional": true
+        },
+        {
+          "name": "template",
+          "optional": true
+        },
+        {
+          "name": "template_program",
+          "optional": true
+        },
+        {
+          "name": "template_programdata",
+          "optional": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "slot",
+          "type": "u8"
+        },
+        {
+          "name": "item",
+          "type": {
+            "option": "pubkey"
+          }
+        },
+        {
+          "name": "equip_config",
+          "type": {
+            "defined": {
+              "name": "EquipConfig"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "propose_admin",
+      "docs": [
+        "The admin proposes a new admin, who may accept after the timelock."
+      ],
+      "discriminator": [
+        121,
+        214,
+        199,
+        212,
+        87,
+        39,
+        117,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "admin",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "propose_params",
+      "docs": [
+        "The admin proposes new params; they apply after `admin_timelock_secs` (D-9)."
+      ],
+      "discriminator": [
+        94,
+        141,
+        220,
+        182,
+        171,
+        53,
+        52,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  45,
+                  112,
+                  97,
+                  114,
+                  97,
+                  109,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "ArmoryParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "register_template",
+      "docs": [
+        "Registers a template (02 section 3.1)."
+      ],
+      "discriminator": [
+        174,
+        125,
+        229,
+        78,
+        140,
+        171,
+        67,
+        131
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "template",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  101,
+                  109,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "args.id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "template_program"
+        },
+        {
+          "name": "programdata"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "RegisterTemplateArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "retire_template",
+      "docs": [
+        "Retires a template (02 section 3.2)."
+      ],
+      "discriminator": [
+        17,
+        65,
+        241,
+        254,
+        218,
+        113,
+        64,
+        56
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "template",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  101,
+                  109,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "template.id",
+                "account": "Template"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "template_id",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "vote",
+      "docs": [
+        "Votes by locking tokens in place (02 section 6.3)."
+      ],
+      "discriminator": [
+        227,
+        110,
+        155,
+        23,
+        136,
+        126,
+        172,
+        25
+      ],
+      "accounts": [
+        {
+          "name": "voter",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "vote_lock",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              },
+              {
+                "kind": "account",
+                "path": "voter"
+              }
+            ]
+          }
+        },
+        {
+          "name": "holding",
+          "writable": true
+        },
+        {
+          "name": "token_mint"
+        },
+        {
+          "name": "slot_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  108,
+                  111,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token",
+          "accounts": [
+            {
+              "name": "token_program",
+              "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+            },
+            {
+              "name": "token_event_authority",
+              "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
+            },
+            {
+              "name": "system_program",
+              "address": "11111111111111111111111111111111"
+            }
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "support",
+          "type": "bool"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "ArmoryConfig",
+      "discriminator": [
+        159,
+        188,
+        66,
+        58,
+        158,
+        88,
+        136,
+        153
+      ]
+    },
+    {
+      "name": "ForgeCounter",
+      "discriminator": [
+        97,
+        33,
+        228,
+        24,
+        73,
+        15,
+        208,
+        106
+      ]
+    },
+    {
+      "name": "Item",
+      "discriminator": [
+        92,
+        157,
+        163,
+        130,
+        72,
+        254,
+        86,
+        216
+      ]
+    },
+    {
+      "name": "PendingParams",
+      "discriminator": [
+        236,
+        177,
+        172,
+        140,
+        121,
+        185,
+        6,
+        146
+      ]
+    },
+    {
+      "name": "Proposal",
+      "discriminator": [
+        26,
+        94,
+        189,
+        187,
+        116,
+        136,
+        53,
+        33
+      ]
+    },
+    {
+      "name": "SlotState",
+      "discriminator": [
+        209,
+        52,
+        50,
+        211,
+        230,
+        123,
+        226,
+        242
+      ]
+    },
+    {
+      "name": "Template",
+      "discriminator": [
+        43,
+        26,
+        88,
+        69,
+        69,
+        96,
+        9,
+        79
+      ]
+    },
+    {
+      "name": "VoteLock",
+      "discriminator": [
+        83,
+        95,
+        46,
+        43,
+        238,
+        13,
+        207,
+        97
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AdminAccepted",
+      "discriminator": [
+        174,
+        12,
+        76,
+        139,
+        158,
+        99,
+        110,
+        254
+      ]
+    },
+    {
+      "name": "AdminProposed",
+      "discriminator": [
+        129,
+        249,
+        226,
+        227,
+        199,
+        82,
+        110,
+        243
+      ]
+    },
+    {
+      "name": "EquipApplied",
+      "discriminator": [
+        214,
+        101,
+        150,
+        81,
+        232,
+        8,
+        111,
+        12
+      ]
+    },
+    {
+      "name": "Forged",
+      "discriminator": [
+        188,
+        39,
+        21,
+        208,
+        64,
+        116,
+        240,
+        88
+      ]
+    },
+    {
+      "name": "ItemCreated",
+      "discriminator": [
+        9,
+        55,
+        235,
+        113,
+        49,
+        45,
+        29,
+        225
+      ]
+    },
+    {
+      "name": "LootMinted",
+      "discriminator": [
+        77,
+        28,
+        116,
+        59,
+        130,
+        150,
+        145,
+        129
+      ]
+    },
+    {
+      "name": "ParamsApplied",
+      "discriminator": [
+        79,
+        221,
+        60,
+        141,
+        244,
+        69,
+        47,
+        209
+      ]
+    },
+    {
+      "name": "ParamsProposed",
+      "discriminator": [
+        29,
+        64,
+        243,
+        241,
+        75,
+        135,
+        93,
+        142
+      ]
+    },
+    {
+      "name": "PerformanceCondition",
+      "discriminator": [
+        234,
+        127,
+        34,
+        110,
+        161,
+        163,
+        114,
+        147
+      ]
+    },
+    {
+      "name": "PerformanceReverted",
+      "discriminator": [
+        76,
+        210,
+        252,
+        134,
+        192,
+        143,
+        242,
+        136
+      ]
+    },
+    {
+      "name": "ProposalCreated",
+      "discriminator": [
+        186,
+        8,
+        160,
+        108,
+        81,
+        13,
+        51,
+        206
+      ]
+    },
+    {
+      "name": "ProposalResolved",
+      "discriminator": [
+        252,
+        55,
+        181,
+        169,
+        236,
+        238,
+        0,
+        149
+      ]
+    },
+    {
+      "name": "RoyaltyClaimed",
+      "discriminator": [
+        159,
+        50,
+        182,
+        139,
+        127,
+        230,
+        105,
+        189
+      ]
+    },
+    {
+      "name": "TemplateRegistered",
+      "discriminator": [
+        108,
+        218,
+        84,
+        231,
+        122,
+        114,
+        35,
+        20
+      ]
+    },
+    {
+      "name": "TemplateRetired",
+      "discriminator": [
+        25,
+        160,
+        126,
+        244,
+        25,
+        27,
+        23,
+        35
+      ]
+    },
+    {
+      "name": "VoteLocked",
+      "discriminator": [
+        71,
+        73,
+        224,
+        99,
+        77,
+        100,
+        154,
+        250
+      ]
+    },
+    {
+      "name": "VoteUnlocked",
+      "discriminator": [
+        7,
+        228,
+        84,
+        149,
+        55,
+        44,
+        201,
+        153
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "NotAdmin",
+      "msg": "not the admin"
+    },
+    {
+      "code": 6001,
+      "name": "TemplateUpgradeable",
+      "msg": "the template program is upgradeable by someone not allowed"
+    },
+    {
+      "code": 6002,
+      "name": "ProgramDataMissing",
+      "msg": "the template program's ProgramData is missing or malformed"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidTemplateProgram",
+      "msg": "the template program is a protocol program"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidKind",
+      "msg": "not a template kind"
+    },
+    {
+      "code": 6005,
+      "name": "InvalidSchema",
+      "msg": "the template's schema is invalid"
+    },
+    {
+      "code": 6006,
+      "name": "RoyaltyTooHigh",
+      "msg": "royalty above the maximum"
+    },
+    {
+      "code": 6007,
+      "name": "TemplateClosed",
+      "msg": "the template is retired or closed to this path"
+    },
+    {
+      "code": 6008,
+      "name": "TemplateChanged",
+      "msg": "the template program changed since registration"
+    },
+    {
+      "code": 6009,
+      "name": "TemplateMismatch",
+      "msg": "the items are of different templates"
+    },
+    {
+      "code": 6010,
+      "name": "ParamOutOfRange",
+      "msg": "a param is outside its floor and ceiling"
+    },
+    {
+      "code": 6011,
+      "name": "KindMismatch",
+      "msg": "the item's kind is not the slot's"
+    },
+    {
+      "code": 6012,
+      "name": "NotLootSigner",
+      "msg": "not the war program's loot signer"
+    },
+    {
+      "code": 6013,
+      "name": "NotLaunchCaller",
+      "msg": "not the launchpad's caller for this mint"
+    },
+    {
+      "code": 6014,
+      "name": "NotFreshMint",
+      "msg": "the mint is not fresh"
+    },
+    {
+      "code": 6015,
+      "name": "InvalidRule",
+      "msg": "invalid performance rule"
+    },
+    {
+      "code": 6016,
+      "name": "NotItemOwner",
+      "msg": "not the item's holder"
+    },
+    {
+      "code": 6017,
+      "name": "InsufficientRoyalty",
+      "msg": "not enough royalty"
+    },
+    {
+      "code": 6018,
+      "name": "SlotLocked",
+      "msg": "the slot is locked"
+    },
+    {
+      "code": 6019,
+      "name": "OverBounds",
+      "msg": "the item exceeds the slot's bounds"
+    },
+    {
+      "code": 6020,
+      "name": "DataRangeTooSmall",
+      "msg": "the slot's data range is too small"
+    },
+    {
+      "code": 6021,
+      "name": "AlreadyEquipped",
+      "msg": "the item is already in another slot of this token"
+    },
+    {
+      "code": 6022,
+      "name": "ProposalOpen",
+      "msg": "a proposal is open for this slot"
+    },
+    {
+      "code": 6023,
+      "name": "VotingClosed",
+      "msg": "voting is closed"
+    },
+    {
+      "code": 6024,
+      "name": "InvalidAmount",
+      "msg": "invalid amount"
+    },
+    {
+      "code": 6025,
+      "name": "NotExecutable",
+      "msg": "the proposal cannot be executed"
+    },
+    {
+      "code": 6026,
+      "name": "ItemEquipped",
+      "msg": "the item is equipped"
+    },
+    {
+      "code": 6027,
+      "name": "MaxLevel",
+      "msg": "the forge would pass the template's maximum level"
+    },
+    {
+      "code": 6028,
+      "name": "ProposalNotFinal",
+      "msg": "the proposal is not final"
+    },
+    {
+      "code": 6029,
+      "name": "VotesOpen",
+      "msg": "vote locks of this proposal are still open"
+    },
+    {
+      "code": 6030,
+      "name": "VotesExist",
+      "msg": "the proposal has votes"
+    },
+    {
+      "code": 6031,
+      "name": "VotingNotEnded",
+      "msg": "voting has not ended"
+    },
+    {
+      "code": 6032,
+      "name": "NotStale",
+      "msg": "the proposal still fits"
+    },
+    {
+      "code": 6033,
+      "name": "NoChange",
+      "msg": "the slot already runs this item"
+    },
+    {
+      "code": 6034,
+      "name": "InvalidNotice",
+      "msg": "notice outside its bounds"
+    },
+    {
+      "code": 6035,
+      "name": "InvalidParams",
+      "msg": "invalid params"
+    },
+    {
+      "code": 6036,
+      "name": "Timelock",
+      "msg": "the timelock has not passed"
+    },
+    {
+      "code": 6037,
+      "name": "NotPendingAdmin",
+      "msg": "not the pending admin"
+    },
+    {
+      "code": 6038,
+      "name": "NotUpgradeAuthority",
+      "msg": "not the upgrade authority"
+    },
+    {
+      "code": 6039,
+      "name": "WrongAccount",
+      "msg": "a wrong account"
+    },
+    {
+      "code": 6040,
+      "name": "BadReturn",
+      "msg": "the items program answered nothing usable"
+    },
+    {
+      "code": 6041,
+      "name": "SlotIndexOutOfRange",
+      "msg": "the slot index is out of range"
+    },
+    {
+      "code": 6042,
+      "name": "ConditionNotMet",
+      "msg": "the condition does not hold long enough"
+    }
+  ],
+  "types": [
+    {
+      "name": "AdminAccepted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AdminProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "ready_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ArmoryConfig",
+      "docs": [
+        "`ArmoryConfig` at `[\"config\"]` (02 section 2.1)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "admin",
+            "docs": [
+              "Registers and retires templates, proposes params."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_admin",
+            "docs": [
+              "Proposed admin and when it may accept."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "pending_admin_at",
+            "type": "i64"
+          },
+          {
+            "name": "items_minted",
+            "docs": [
+              "Seed of the next item mint."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "templates",
+            "docs": [
+              "Templates registered."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "params",
+            "docs": [
+              "The numbers."
+            ],
+            "type": {
+              "defined": {
+                "name": "ArmoryParams"
+              }
+            }
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ArmoryParams",
+      "docs": [
+        "Every number the armory acts on (00 section 6), set by the admin behind `admin_timelock_secs`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "max_royalty_bps",
+            "docs": [
+              "`MAX_ROYALTY_BPS`."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "vote_period_secs",
+            "docs": [
+              "`VOTE_PERIOD_SECS`."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "vote_quorum_bps",
+            "docs": [
+              "`VOTE_QUORUM_BPS`."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "min_notice_secs",
+            "docs": [
+              "`MIN_NOTICE_SECS`."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "max_notice_secs",
+            "docs": [
+              "`MAX_NOTICE_SECS`."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "forge_gain_bps",
+            "docs": [
+              "`FORGE_GAIN_BPS`."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "min_twap_secs",
+            "docs": [
+              "`MIN_TWAP_SECS`."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "max_pool_item_cut_bps",
+            "docs": [
+              "`MAX_POOL_ITEM_CUT_BPS`: the most a Pool or Relation item may cut on one side of a swap."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "max_pool_item_discount_bps",
+            "docs": [
+              "The most creator and holder fee discount an item may ask for."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "max_item_reads",
+            "docs": [
+              "The most foreign accounts an item may read."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "admin_timelock_secs",
+            "docs": [
+              "`ADMIN_TIMELOCK_SECS`: delay on every admin change, this one included."
+            ],
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EquipApplied",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "old_item",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "new_item",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "by",
+            "type": "u8"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EquipConfig",
+      "docs": [
+        "Targets and role chosen by the community that equips an item (04 section 2.3)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "targets",
+            "docs": [
+              "Targets; their meaning is the template's."
+            ],
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "role",
+            "docs": [
+              "0 none; Tribute: 1 Pay, 2 Receive."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ForgeCounter",
+      "docs": [
+        "`ForgeCounter` at `[\"forges\", wallet]` (02 section 2.10)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "count",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Forged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "burned",
+            "type": {
+              "array": [
+                "pubkey",
+                2
+              ]
+            }
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "params",
+            "type": {
+              "array": [
+                "u32",
+                11
+              ]
+            }
+          },
+          {
+            "name": "level",
+            "type": "u8"
+          },
+          {
+            "name": "forger",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Item",
+      "docs": [
+        "`Item` at `[\"item\", item_mint]` (02 section 2.4)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "item_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "params",
+            "type": {
+              "array": [
+                "u32",
+                11
+              ]
+            }
+          },
+          {
+            "name": "manifest",
+            "type": {
+              "defined": {
+                "name": "Manifest"
+              }
+            }
+          },
+          {
+            "name": "author",
+            "type": "pubkey"
+          },
+          {
+            "name": "royalty_bps",
+            "type": "u16"
+          },
+          {
+            "name": "level",
+            "type": "u8"
+          },
+          {
+            "name": "source",
+            "docs": [
+              "`Authored` 0, `Loot` 1, `Forged` 2."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "equipped_count",
+            "type": "u32"
+          },
+          {
+            "name": "royalty_owner_bump",
+            "type": "u8"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ItemCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "item_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "params",
+            "type": {
+              "array": [
+                "u32",
+                11
+              ]
+            }
+          },
+          {
+            "name": "manifest",
+            "type": {
+              "defined": {
+                "name": "Manifest"
+              }
+            }
+          },
+          {
+            "name": "author",
+            "type": "pubkey"
+          },
+          {
+            "name": "royalty_bps",
+            "type": "u16"
+          },
+          {
+            "name": "level",
+            "type": "u8"
+          },
+          {
+            "name": "source",
+            "type": "u8"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LaunchEquip",
+      "docs": [
+        "One slot at launch (02 section 7.1; M2: one slot per call)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "config",
+            "type": {
+              "defined": {
+                "name": "EquipConfig"
+              }
+            }
+          },
+          {
+            "name": "notice_secs",
+            "type": "u32"
+          },
+          {
+            "name": "rule",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "PerformanceRule"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "LootMinted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "params",
+            "type": {
+              "array": [
+                "u32",
+                11
+              ]
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Manifest",
+      "docs": [
+        "What an item may do, computed once from its template and params (04 section 2.7; 16 bytes)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "kind",
+            "docs": [
+              "Slot kind."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "token_flags",
+            "docs": [
+              "Token flags (upstream bits plus `ANSWERS_TOUCH`); 0 without token callbacks."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "pool_flags",
+            "docs": [
+              "Pool flags; 0 without pool callbacks."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "max_cut_buy_bps",
+            "docs": [
+              "Worst-case pool cut on a buy."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "max_cut_sell_bps",
+            "docs": [
+              "Worst-case pool cut on a sell."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "max_cut_transfer_bps",
+            "docs": [
+              "Worst-case token-side cut on a transfer."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "max_discount_bps",
+            "docs": [
+              "Largest creator and holder fee discount."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "may_refuse",
+            "docs": [
+              "Can fail a transfer."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "may_burn",
+            "docs": [
+              "Answers a burn."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "data_bytes",
+            "docs": [
+              "Range bytes used, without the epoch byte."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "reads_other_pools",
+            "docs": [
+              "Foreign accounts it reads."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ParamsApplied",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "ArmoryParams"
+              }
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ParamsProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "ArmoryParams"
+              }
+            }
+          },
+          {
+            "name": "ready_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PendingParams",
+      "docs": [
+        "Params waiting out the timelock at `[\"pending-params\"]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "ArmoryParams"
+              }
+            }
+          },
+          {
+            "name": "ready_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PerformanceCondition",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "true_since",
+            "type": {
+              "option": "i64"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PerformanceReverted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "from_item",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "to_item",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PerformanceRule",
+      "docs": [
+        "The `Performance` rule (02 section 6.7, 16 bytes)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "metric",
+            "docs": [
+              "`QuoteVolume` 0, `Twap` 1, `SwapCount` 2."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "window_secs",
+            "docs": [
+              "The window measured."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "base_window_secs",
+            "docs": [
+              "The longer window it is compared with."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "op",
+            "docs": [
+              "`Below` 0, `Above` 1."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "ratio_bps",
+            "docs": [
+              "`rate(window) op rate(base_window) * ratio_bps / 10_000`."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "hold_secs",
+            "docs": [
+              "How long it must hold."
+            ],
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Pool",
+      "docs": [
+        "A pool at `[\"pool\", base_mint, quote_mint, lp_fee_bps, hook_program or default]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Layout version."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump of the pool PDA."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "lp_mint_bump",
+            "docs": [
+              "Bump of the LP mint PDA `[\"lp\", pool]`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "base_mint",
+            "docs": [
+              "Base mint."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "quote_mint",
+            "docs": [
+              "Quote mint."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "lp_mint",
+            "docs": [
+              "LP mint (a BTS mint whose authority is the pool)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "base_vault",
+            "docs": [
+              "The pool's holding of the base mint."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "quote_vault",
+            "docs": [
+              "The pool's holding of the quote mint."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "hook_program",
+            "docs": [
+              "Hook program, if any."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "hook_flags",
+            "docs": [
+              "Which callbacks run (`bordrless_hook::pool_flags`)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "lp_fee_bps",
+            "docs": [
+              "LP fee in basis points of the input; stays in the pool."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "protocol_fee_bps",
+            "docs": [
+              "Flat protocol fee in basis points (`FEE_MODEL_FLAT`), always charged in the quote token: of",
+              "what reaches the vault on a buy, of the curve's output on a sell. Accrued for the fee",
+              "collector. 0 under the share model."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "base_reserve",
+            "docs": [
+              "Real base reserve (the base vault's balance)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "quote_reserve",
+            "docs": [
+              "Real quote reserve (the quote vault's balance minus accrued protocol fees)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "virtual_base",
+            "docs": [
+              "Virtual base offset used for pricing."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "virtual_quote",
+            "docs": [
+              "Virtual quote offset used for pricing."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "lp_supply",
+            "docs": [
+              "LP shares outstanding, including the minimum liquidity the pool keeps."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "protocol_fees_quote",
+            "docs": [
+              "Protocol fees accrued (always in the quote token), sitting in the quote vault apart from",
+              "the reserve until `collect_protocol_fees`."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "curve",
+            "docs": [
+              "A curve: virtual offsets live, no LP minted yet, liquidity locked until finalized."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Who created the pool (the deposit authority)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Creation time."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "last_swap_at",
+            "docs": [
+              "Time of the last swap."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "swap_count",
+            "docs": [
+              "Swaps so far."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "base_volume",
+            "docs": [
+              "Base traded so far (both directions)."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "quote_volume",
+            "docs": [
+              "Quote traded so far (both directions)."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "hook_signer_bump",
+            "docs": [
+              "Bump of `[\"hook-authority\", hook_program]`, this program's signer of every callback to the",
+              "pool's hook (one per hook program, so a hook can tell its own callbacks from a signer",
+              "another hook passed on); 0 without a hook."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "fee_model",
+            "docs": [
+              "How the protocol fee is taken: `FEE_MODEL_FLAT` (a rate of the quote, ordinary pools) or",
+              "`FEE_MODEL_SHARE` (a share of what the hooks cut, launch pools). Fixed at creation."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "protocol_share_bps",
+            "docs": [
+              "Under `FEE_MODEL_SHARE`: Bordrless's share of what the hooks cut on each swap, in basis",
+              "points of the cuts, taken in the quote (base-side cuts valued at the swap's own price). 0",
+              "under the flat model."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Reserved."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                60
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Proposal",
+      "docs": [
+        "`Proposal` at `[\"proposal\", mint, slot, nonce]` (02 section 2.8)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "proposer",
+            "type": "pubkey"
+          },
+          {
+            "name": "item",
+            "docs": [
+              "`None` empties the slot."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "config",
+            "docs": [
+              "Targets and role of the equip (04 section 2.3)."
+            ],
+            "type": {
+              "defined": {
+                "name": "EquipConfig"
+              }
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "vote_end",
+            "type": "i64"
+          },
+          {
+            "name": "executable_at",
+            "type": "i64"
+          },
+          {
+            "name": "votes_for",
+            "type": "u64"
+          },
+          {
+            "name": "votes_against",
+            "type": "u64"
+          },
+          {
+            "name": "voters_open",
+            "docs": [
+              "`VoteLock` accounts not yet closed (the proposal closes after them)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "proposer",
+            "type": "pubkey"
+          },
+          {
+            "name": "item",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "vote_end",
+            "type": "i64"
+          },
+          {
+            "name": "executable_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalResolved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal",
+            "type": "pubkey"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "votes_for",
+            "type": "u64"
+          },
+          {
+            "name": "votes_against",
+            "type": "u64"
+          },
+          {
+            "name": "eligible",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RegisterTemplateArgs",
+      "docs": [
+        "Arguments of `register_template` (02 section 3.1)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "docs": [
+              "The template id: `ArmoryConfig.templates + 1` (04 reserves 0 for \"none\")."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "code_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "field_count",
+            "type": "u8"
+          },
+          {
+            "name": "field_min",
+            "type": {
+              "array": [
+                "u32",
+                11
+              ]
+            }
+          },
+          {
+            "name": "field_max",
+            "type": {
+              "array": [
+                "u32",
+                11
+              ]
+            }
+          },
+          {
+            "name": "open_authoring",
+            "type": "bool"
+          },
+          {
+            "name": "loot_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "forge_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "max_level",
+            "type": "u8"
+          },
+          {
+            "name": "loot_royalty_bps",
+            "type": "u16"
+          },
+          {
+            "name": "max_targets",
+            "type": "u8"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoyaltyClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "cut_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "claimant",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SlotState",
+      "docs": [
+        "`SlotState` at `[\"slot-state\", mint, slot]` (02 section 2.7)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "equip_rule",
+            "docs": [
+              "The slot's equip rule (copied from the mint at launch)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "notice_secs",
+            "docs": [
+              "Delay between a passed vote and its equip, fixed at launch."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "launch_item",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "launch_config",
+            "docs": [
+              "The launch item's targets and role: a performance revert re-aims it the same way."
+            ],
+            "type": {
+              "defined": {
+                "name": "EquipConfig"
+              }
+            }
+          },
+          {
+            "name": "rule",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "PerformanceRule"
+                }
+              }
+            }
+          },
+          {
+            "name": "open_proposal",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "next_nonce",
+            "type": "u64"
+          },
+          {
+            "name": "condition_since",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "last_check",
+            "type": "i64"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Template",
+      "docs": [
+        "`Template` at `[\"template\", id]` (02 section 2.3)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "id",
+            "type": "u16"
+          },
+          {
+            "name": "program",
+            "type": "pubkey"
+          },
+          {
+            "name": "code_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "deploy_slot",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "field_count",
+            "type": "u8"
+          },
+          {
+            "name": "field_min",
+            "type": {
+              "array": [
+                "u32",
+                11
+              ]
+            }
+          },
+          {
+            "name": "field_max",
+            "type": {
+              "array": [
+                "u32",
+                11
+              ]
+            }
+          },
+          {
+            "name": "open_authoring",
+            "type": "bool"
+          },
+          {
+            "name": "loot_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "forge_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "max_level",
+            "type": "u8"
+          },
+          {
+            "name": "loot_royalty_bps",
+            "type": "u16"
+          },
+          {
+            "name": "max_targets",
+            "docs": [
+              "Most targets an equip of its items may name (M2 notes: the manifest promises the most)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "`Active` 0, `Retired` 1."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "registered_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "TemplateRegistered",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "program",
+            "type": "pubkey"
+          },
+          {
+            "name": "code_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "deploy_slot",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "field_count",
+            "type": "u8"
+          },
+          {
+            "name": "field_min",
+            "type": {
+              "array": [
+                "u32",
+                11
+              ]
+            }
+          },
+          {
+            "name": "field_max",
+            "type": {
+              "array": [
+                "u32",
+                11
+              ]
+            }
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TemplateRetired",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteLock",
+      "docs": [
+        "`VoteLock` at `[\"vote\", proposal, voter]` (02 section 2.9)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal",
+            "type": "pubkey"
+          },
+          {
+            "name": "voter",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "support",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteLocked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal",
+            "type": "pubkey"
+          },
+          {
+            "name": "voter",
+            "type": "pubkey"
+          },
+          {
+            "name": "support",
+            "type": "bool"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "until",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteUnlocked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal",
+            "type": "pubkey"
+          },
+          {
+            "name": "voter",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -21,7 +21,7 @@ use anchor_lang::system_program;
 use bordrless_hook::{AccountSource, ExtraAccount, HookAccountList, HOOK_ACCOUNTS_SEED};
 use hookwars_common::{
     combine, manifest as compute_manifest, pda, template_id, validate, EquipConfig, Manifest,
-    Params, ParamsError,
+    ParamsError, PARAM_FIELDS,
 };
 
 declare_id!("8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv");
@@ -150,9 +150,9 @@ pub mod hookwars_items {
     pub fn validate_params(
         _ctx: Context<ArmoryOnly>,
         template_id: u16,
-        field_min: Params,
-        field_max: Params,
-        params: Params,
+        field_min: [u32; PARAM_FIELDS],
+        field_max: [u32; PARAM_FIELDS],
+        params: [u32; PARAM_FIELDS],
     ) -> Result<()> {
         hookwars_common::check_fields(template_id, &field_min, &field_max, &params).map_err(map)?;
         validate(template_id, &params).map_err(map)
@@ -162,7 +162,7 @@ pub mod hookwars_items {
     pub fn manifest(
         _ctx: Context<ArmoryOnly>,
         template_id: u16,
-        params: Params,
+        params: [u32; PARAM_FIELDS],
         max_targets: u8,
     ) -> Result<()> {
         let m = compute_manifest(template_id, &params, max_targets).map_err(map)?;
@@ -176,11 +176,11 @@ pub mod hookwars_items {
     pub fn combine_params(
         _ctx: Context<ArmoryOnly>,
         template_id: u16,
-        field_min: Params,
-        field_max: Params,
+        field_min: [u32; PARAM_FIELDS],
+        field_max: [u32; PARAM_FIELDS],
         gain_bps: u16,
-        a: Params,
-        b: Params,
+        a: [u32; PARAM_FIELDS],
+        b: [u32; PARAM_FIELDS],
     ) -> Result<()> {
         let out = combine(template_id, &field_min, &field_max, gain_bps, &a, &b).map_err(map)?;
         validate(template_id, &out).map_err(map)?;

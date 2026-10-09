@@ -808,16 +808,18 @@
             }
           },
           {
-            "name": "reserved",
+            "name": "vote_locked",
             "docs": [
-              "Reserved."
+              "Hookwars (R11): tokens the armory locked for a vote (was `reserved[0..8]`)."
             ],
-            "type": {
-              "array": [
-                "u8",
-                16
-              ]
-            }
+            "type": "u64"
+          },
+          {
+            "name": "vote_lock_until",
+            "docs": [
+              "Hookwars (R11): unix time the lock ends; 0 with no lock (was `reserved[8..16]`)."
+            ],
+            "type": "i64"
           }
         ]
       }
@@ -1474,6 +1476,39 @@
                 31
               ]
             }
+          },
+          {
+            "name": "slot_authority",
+            "docs": [
+              "Hookwars: the armory's `[\"slots\", mint]` PDA, which alone may change the slots and vote",
+              "locks; `None` when the table never changes."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "slot_count",
+            "docs": [
+              "Hookwars: entries of `slots` in use (0: no slot table, the upstream single hook applies)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "slots",
+            "docs": [
+              "Hookwars: the slot table, in call order; entries at `slot_count..` are zero."
+            ],
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "Slot"
+                  }
+                },
+                4
+              ]
+            }
           }
         ]
       }
@@ -1553,6 +1588,159 @@
           {
             "name": "total_shared",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Slot",
+      "docs": [
+        "One slot of a mint (docs/spec/01-token-slots.md section 1.1)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "kind",
+            "docs": [
+              "`bordrless_hook::slot_kind`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "equip_rule",
+            "docs": [
+              "`bordrless_hook::equip_rule` (stored, never acted on here)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bounds",
+            "docs": [
+              "Fixed bounds."
+            ],
+            "type": {
+              "defined": {
+                "name": "SlotBounds"
+              }
+            }
+          },
+          {
+            "name": "data_offset",
+            "docs": [
+              "First byte of this slot's range in `Holding.hook_data`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "data_len",
+            "docs": [
+              "Length of the range (item slots: including the epoch byte; 0 without data)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "docs": [
+              "The equipped item (default when empty or Locked)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "program",
+            "docs": [
+              "The program that runs (default when empty)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "flags",
+            "docs": [
+              "Token callbacks and answers (`bordrless_hook::slot_flags`)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "pool_flags",
+            "docs": [
+              "Pool slots only: the launchpad's pool flags (stored, never read here)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "equip_vault",
+            "docs": [
+              "The only holding a cut of this slot may credit (default when the slot never cuts)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "signer_bump",
+            "docs": [
+              "Bump of `[\"hook-authority\", program]` under this program."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "launch_signer_bump",
+            "docs": [
+              "Pool slots only: bump of the launchpad's `[\"hook-authority\", program]`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "data_epoch",
+            "docs": [
+              "Tags this slot's data in every holding; changes on every equip; starts at 1."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "extra_count",
+            "docs": [
+              "Extra accounts the item takes after its program and signer (fixed when equipped; the",
+              "Locked slot's when created). Hookwars M1: replaces the `slot_accounts` argument (M1 notes)."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SlotBounds",
+      "docs": [
+        "Bounds a slot keeps for life."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "max_cut_bps",
+            "docs": [
+              "Most an item in this slot may cut from one transfer, in bps of the amount."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "may_refuse",
+            "docs": [
+              "Whether an item may refuse operations (declared; not enforceable at run time)."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "may_write_data",
+            "docs": [
+              "Whether an item may write this slot's hook-data range."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "may_answer_touch",
+            "docs": [
+              "Whether an item may answer `touch`."
+            ],
+            "type": "bool"
           }
         ]
       }

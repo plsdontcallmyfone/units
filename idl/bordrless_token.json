@@ -296,6 +296,76 @@
       ]
     },
     {
+      "name": "create_slot_mint",
+      "docs": [
+        "Hookwars: creates a mint with a slot table and no single hook."
+      ],
+      "discriminator": [
+        49,
+        102,
+        242,
+        202,
+        113,
+        179,
+        221,
+        243
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Pays the rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "The new mint, which signs."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "CreateMintArgs"
+            }
+          }
+        },
+        {
+          "name": "slot_authority",
+          "type": {
+            "option": "pubkey"
+          }
+        },
+        {
+          "name": "slots",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "SlotInit"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "mint_to",
       "docs": [
         "Mints `amount` into a holding; the mint authority signs."
@@ -543,6 +613,178 @@
       ]
     },
     {
+      "name": "set_slot_item",
+      "docs": [
+        "Hookwars: the armory puts an item in a slot (or empties it)."
+      ],
+      "discriminator": [
+        34,
+        180,
+        244,
+        194,
+        168,
+        157,
+        222,
+        189
+      ],
+      "accounts": [
+        {
+          "name": "slot_authority",
+          "docs": [
+            "The armory's `[\"slots\", mint]` PDA, signing by CPI."
+          ],
+          "signer": true
+        },
+        {
+          "name": "mint",
+          "writable": true
+        },
+        {
+          "name": "item_program"
+        },
+        {
+          "name": "equip_vault",
+          "optional": true
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "slot",
+          "type": "u8"
+        },
+        {
+          "name": "item",
+          "type": "pubkey"
+        },
+        {
+          "name": "flags",
+          "type": "u16"
+        },
+        {
+          "name": "pool_flags",
+          "type": "u16"
+        },
+        {
+          "name": "extra_count",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "set_vote_lock",
+      "docs": [
+        "Hookwars: the armory locks a holding's tokens in place for a vote."
+      ],
+      "discriminator": [
+        215,
+        250,
+        81,
+        216,
+        23,
+        243,
+        146,
+        227
+      ],
+      "accounts": [
+        {
+          "name": "slot_authority",
+          "docs": [
+            "The armory's `[\"slots\", mint]` PDA, signing by CPI."
+          ],
+          "signer": true
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "holding"
+          ]
+        },
+        {
+          "name": "holding",
+          "writable": true
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "until",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "touch",
+      "docs": [
+        "Hookwars: one slot's item may rewrite one holding's range."
+      ],
+      "discriminator": [
+        80,
+        157,
+        106,
+        220,
+        181,
+        72,
+        101,
+        81
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "docs": [
+            "Any signer; the item decides whether to act for it."
+          ],
+          "signer": true
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "holding"
+          ]
+        },
+        {
+          "name": "holding",
+          "writable": true
+        },
+        {
+          "name": "item_program"
+        },
+        {
+          "name": "hook_signer"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "slot",
+          "type": "u8"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
       "name": "transfer",
       "docs": [
         "Moves `amount` from one holding to another, running the mint's hooks. The authority is the",
@@ -604,6 +846,80 @@
         {
           "name": "amount",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "transfer_from_protocol",
+      "docs": [
+        "Hookwars (R16): a transfer out of a protocol vault; on a slot mint only the Locked slot runs."
+      ],
+      "discriminator": [
+        87,
+        215,
+        227,
+        9,
+        143,
+        248,
+        173,
+        47
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The source's owner or delegate."
+          ],
+          "signer": true
+        },
+        {
+          "name": "source",
+          "writable": true
+        },
+        {
+          "name": "destination",
+          "writable": true
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "source",
+            "destination"
+          ]
+        },
+        {
+          "name": "hook_program",
+          "optional": true
+        },
+        {
+          "name": "hook_signer",
+          "docs": [
+            "`[\"hook-authority\", hook_program]` (checked in the handler); unused (this program's id)",
+            "otherwise."
+          ],
+          "optional": true
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "program",
+          "type": "pubkey"
+        },
+        {
+          "name": "seeds",
+          "type": {
+            "vec": "bytes"
+          }
         }
       ]
     },
@@ -889,6 +1205,32 @@
       ]
     },
     {
+      "name": "SlotEquipped",
+      "discriminator": [
+        76,
+        183,
+        142,
+        16,
+        121,
+        209,
+        84,
+        32
+      ]
+    },
+    {
+      "name": "SlotsInitialized",
+      "discriminator": [
+        200,
+        65,
+        183,
+        130,
+        87,
+        155,
+        227,
+        8
+      ]
+    },
+    {
       "name": "Transferred",
       "discriminator": [
         21,
@@ -899,6 +1241,19 @@
         239,
         166,
         68
+      ]
+    },
+    {
+      "name": "VoteLockSet",
+      "discriminator": [
+        12,
+        236,
+        251,
+        181,
+        33,
+        237,
+        68,
+        36
       ]
     }
   ],
@@ -1037,6 +1392,96 @@
       "code": 6026,
       "name": "NotHookAuthority",
       "msg": "the signer is not the hook authority of the mint's hook program"
+    },
+    {
+      "code": 6027,
+      "name": "InvalidSlotTable",
+      "msg": "the slot table breaks a rule of slot tables"
+    },
+    {
+      "code": 6028,
+      "name": "InvalidSlotAuthority",
+      "msg": "the slot authority is not the armory's [\\slots\\, mint] PDA"
+    },
+    {
+      "code": 6029,
+      "name": "MixedHookModes",
+      "msg": "a mint has either one hook or a slot table, never both"
+    },
+    {
+      "code": 6030,
+      "name": "TooManyCuttingSlots",
+      "msg": "too many slots may cut on one transfer"
+    },
+    {
+      "code": 6031,
+      "name": "SlotIndexOutOfRange",
+      "msg": "no such slot"
+    },
+    {
+      "code": 6032,
+      "name": "SlotLocked",
+      "msg": "the slot is locked"
+    },
+    {
+      "code": 6033,
+      "name": "SlotEmpty",
+      "msg": "the slot is empty"
+    },
+    {
+      "code": 6034,
+      "name": "InvalidSlotItem",
+      "msg": "the slot item is not acceptable"
+    },
+    {
+      "code": 6035,
+      "name": "SlotFlagsNotAllowed",
+      "msg": "the slot's kind or bounds do not allow these flags"
+    },
+    {
+      "code": 6036,
+      "name": "WrongEquipVault",
+      "msg": "a slot's cut must go to its equip vault"
+    },
+    {
+      "code": 6037,
+      "name": "SlotCutExceeded",
+      "msg": "the cut exceeds the slot's bound"
+    },
+    {
+      "code": 6038,
+      "name": "SlotDataLength",
+      "msg": "a slot's data answer has the wrong length"
+    },
+    {
+      "code": 6039,
+      "name": "SlotAccountsMismatch",
+      "msg": "the slot accounts do not match the slots called"
+    },
+    {
+      "code": 6040,
+      "name": "TouchNotSupported",
+      "msg": "the slot does not answer touch"
+    },
+    {
+      "code": 6041,
+      "name": "PayloadTooLong",
+      "msg": "the payload is too long"
+    },
+    {
+      "code": 6042,
+      "name": "VoteLocked",
+      "msg": "the holding's tokens are locked for a vote"
+    },
+    {
+      "code": 6043,
+      "name": "VoteLockExceedsBalance",
+      "msg": "the vote lock exceeds the balance"
+    },
+    {
+      "code": 6044,
+      "name": "NotProtocolSource",
+      "msg": "the source is not a protocol vault"
     }
   ],
   "types": [
@@ -1394,16 +1839,18 @@
             }
           },
           {
-            "name": "reserved",
+            "name": "vote_locked",
             "docs": [
-              "Reserved."
+              "Hookwars (R11): tokens the armory locked for a vote (was `reserved[0..8]`)."
             ],
-            "type": {
-              "array": [
-                "u8",
-                16
-              ]
-            }
+            "type": "u64"
+          },
+          {
+            "name": "vote_lock_until",
+            "docs": [
+              "Hookwars (R11): unix time the lock ends; 0 with no lock (was `reserved[8..16]`)."
+            ],
+            "type": "i64"
           }
         ]
       }
@@ -1689,6 +2136,39 @@
                 31
               ]
             }
+          },
+          {
+            "name": "slot_authority",
+            "docs": [
+              "Hookwars: the armory's `[\"slots\", mint]` PDA, which alone may change the slots and vote",
+              "locks; `None` when the table never changes."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "slot_count",
+            "docs": [
+              "Hookwars: entries of `slots` in use (0: no slot table, the upstream single hook applies)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "slots",
+            "docs": [
+              "Hookwars: the slot table, in call order; entries at `slot_count..` are zero."
+            ],
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "Slot"
+                  }
+                },
+                4
+              ]
+            }
           }
         ]
       }
@@ -1812,6 +2292,384 @@
       }
     },
     {
+      "name": "Slot",
+      "docs": [
+        "One slot of a mint (docs/spec/01-token-slots.md section 1.1)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "kind",
+            "docs": [
+              "`bordrless_hook::slot_kind`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "equip_rule",
+            "docs": [
+              "`bordrless_hook::equip_rule` (stored, never acted on here)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bounds",
+            "docs": [
+              "Fixed bounds."
+            ],
+            "type": {
+              "defined": {
+                "name": "SlotBounds"
+              }
+            }
+          },
+          {
+            "name": "data_offset",
+            "docs": [
+              "First byte of this slot's range in `Holding.hook_data`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "data_len",
+            "docs": [
+              "Length of the range (item slots: including the epoch byte; 0 without data)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "docs": [
+              "The equipped item (default when empty or Locked)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "program",
+            "docs": [
+              "The program that runs (default when empty)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "flags",
+            "docs": [
+              "Token callbacks and answers (`bordrless_hook::slot_flags`)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "pool_flags",
+            "docs": [
+              "Pool slots only: the launchpad's pool flags (stored, never read here)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "equip_vault",
+            "docs": [
+              "The only holding a cut of this slot may credit (default when the slot never cuts)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "signer_bump",
+            "docs": [
+              "Bump of `[\"hook-authority\", program]` under this program."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "launch_signer_bump",
+            "docs": [
+              "Pool slots only: bump of the launchpad's `[\"hook-authority\", program]`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "data_epoch",
+            "docs": [
+              "Tags this slot's data in every holding; changes on every equip; starts at 1."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "extra_count",
+            "docs": [
+              "Extra accounts the item takes after its program and signer (fixed when equipped; the",
+              "Locked slot's when created). Hookwars M1: replaces the `slot_accounts` argument (M1 notes)."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SlotBounds",
+      "docs": [
+        "Bounds a slot keeps for life."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "max_cut_bps",
+            "docs": [
+              "Most an item in this slot may cut from one transfer, in bps of the amount."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "may_refuse",
+            "docs": [
+              "Whether an item may refuse operations (declared; not enforceable at run time)."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "may_write_data",
+            "docs": [
+              "Whether an item may write this slot's hook-data range."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "may_answer_touch",
+            "docs": [
+              "Whether an item may answer `touch`."
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SlotCut",
+      "docs": [
+        "One slot's cut of a transfer."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "docs": [
+              "The item (default for the Locked slot)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "cut",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SlotEquipped",
+      "docs": [
+        "A slot's item changed (an empty included)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "old_item",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_item",
+            "type": "pubkey"
+          },
+          {
+            "name": "program",
+            "type": "pubkey"
+          },
+          {
+            "name": "flags",
+            "type": "u16"
+          },
+          {
+            "name": "pool_flags",
+            "type": "u16"
+          },
+          {
+            "name": "data_epoch",
+            "type": "u8"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SlotInfo",
+      "docs": [
+        "What `SlotsInitialized` reports per slot."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "equip_rule",
+            "type": "u8"
+          },
+          {
+            "name": "max_cut_bps",
+            "type": "u16"
+          },
+          {
+            "name": "may_refuse",
+            "type": "bool"
+          },
+          {
+            "name": "may_write_data",
+            "type": "bool"
+          },
+          {
+            "name": "may_answer_touch",
+            "type": "bool"
+          },
+          {
+            "name": "data_offset",
+            "type": "u8"
+          },
+          {
+            "name": "data_len",
+            "type": "u8"
+          },
+          {
+            "name": "equip_vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "locked_program",
+            "docs": [
+              "The Locked slot's program (default otherwise)."
+            ],
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SlotInit",
+      "docs": [
+        "One slot of a new slot table."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "kind",
+            "docs": [
+              "`bordrless_hook::slot_kind`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "equip_rule",
+            "docs": [
+              "`bordrless_hook::equip_rule`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bounds",
+            "docs": [
+              "Bounds for life."
+            ],
+            "type": {
+              "defined": {
+                "name": "SlotBounds"
+              }
+            }
+          },
+          {
+            "name": "data_len",
+            "docs": [
+              "Item slots: range length including the epoch byte, or 0. Locked: the legacy program's",
+              "range from byte 0 (the kit: 32), or 0."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "locked_program",
+            "docs": [
+              "Locked slot only: the legacy program."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "locked_flags",
+            "docs": [
+              "Locked slot only: its upstream token flags."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "locked_extra_count",
+            "docs": [
+              "Locked slot only: how many extra accounts it takes (its registry's length)."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SlotsInitialized",
+      "docs": [
+        "A mint was created with a slot table (after `MintCreated`)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot_authority",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "slots",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "SlotInfo"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "Transferred",
       "docs": [
         "A transfer. The source lost `amount`; the destination gained `amount` less the deltas; each",
@@ -1869,6 +2727,54 @@
           {
             "name": "slot",
             "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          },
+          {
+            "name": "slot_cuts",
+            "docs": [
+              "Hookwars: one entry per slot that cut (empty for a mint without slots)."
+            ],
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "SlotCut"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteLockSet",
+      "docs": [
+        "The armory set a holding's vote lock."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "holding",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "until",
+            "type": "i64"
           },
           {
             "name": "ts",

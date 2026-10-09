@@ -860,6 +860,19 @@
       ]
     },
     {
+      "name": "CompanionWarFunded",
+      "discriminator": [
+        42,
+        144,
+        215,
+        184,
+        122,
+        165,
+        178,
+        144
+      ]
+    },
+    {
       "name": "DevBought",
       "discriminator": [
         215,
@@ -1022,6 +1035,11 @@
       "code": 6021,
       "name": "NoQuote",
       "msg": "the pool can't quote a buyback right now"
+    },
+    {
+      "code": 6022,
+      "name": "WarShareTooHigh",
+      "msg": "the war chest's share is above WAR_BPS_MAX"
     }
   ],
   "types": [
@@ -1240,11 +1258,18 @@
             "type": "i64"
           },
           {
+            "name": "war_total",
+            "docs": [
+              "Running total paid to the war chest (Hookwars)."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                64
+                54
               ]
             }
           }
@@ -1315,6 +1340,46 @@
           {
             "name": "ts",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CompanionWarFunded",
+      "docs": [
+        "Hookwars: a claim paid the war chest its share."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "companion",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "war_chest",
+            "docs": [
+              "`PDA([\"war-chest\", mint], WAR_ID)`."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Bridged SOL paid into the war chest's holding."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "war_total",
+            "docs": [
+              "Running total paid to the war chest."
+            ],
+            "type": "u64"
           }
         ]
       }
@@ -1952,6 +2017,14 @@
             "name": "beneficiary_bps",
             "docs": [
               "Accrued to the beneficiary, who is paid it as SOL."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "war_bps",
+            "docs": [
+              "Hookwars: paid at every claim to the token's war chest, `PDA([\"war-chest\", mint], WAR_ID)`'s",
+              "bridged-SOL holding (at most `WAR_BPS_MAX`)."
             ],
             "type": "u16"
           }
