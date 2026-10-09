@@ -802,6 +802,8 @@ dependencies = [
  "hookwars-armory",
  "hookwars-common",
  "hookwars-items",
+ "hookwars-market",
+ "hookwars-social",
  "hookwars-war",
  "items-stub",
  "launch-stub",
@@ -1633,9 +1635,38 @@ name = "hookwars-items"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
+ "bordrless-core",
+ "bordrless-hook",
+ "bordrless-swap",
+ "bordrless-token",
+ "hookwars-armory",
+ "hookwars-common",
+ "hookwars-war",
+ "solana-security-txt",
+]
+
+[[package]]
+name = "hookwars-market"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
  "bordrless-hook",
  "bordrless-token",
+ "hookwars-armory",
  "hookwars-common",
+ "solana-security-txt",
+]
+
+[[package]]
+name = "hookwars-social"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "bordrless-hook",
+ "bordrless-token",
+ "hookwars-armory",
+ "hookwars-common",
+ "hookwars-war",
  "solana-security-txt",
 ]
 
@@ -1652,6 +1683,8 @@ dependencies = [
  "bordrless-launch",
  "bordrless-swap",
  "bordrless-token",
+ "hookwars-armory",
+ "hookwars-common",
  "solana-security-txt",
 ]
 

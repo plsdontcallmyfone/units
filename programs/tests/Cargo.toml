@@ -36,6 +36,9 @@ war-armory-stub = { path = "../war_armory_stub", features = ["no-entrypoint"] }
 randomness-stub = { path = "../randomness_stub", features = ["no-entrypoint"] }
 pool-item-stub = { path = "../pool_item_stub", features = ["no-entrypoint"] }
 items-stub = { path = "../items_stub", features = ["no-entrypoint"] }
+# Hookwars expansion (10): market and social.
+hookwars-market = { path = "../hookwars_market", features = ["no-entrypoint"] }
+hookwars-social = { path = "../hookwars_social", features = ["no-entrypoint"] }
 solana-account = "=4.7.0"
 solana-hash.workspace = true
 solana-keypair.workspace = true

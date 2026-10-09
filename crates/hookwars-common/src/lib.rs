@@ -1,5 +1,5 @@
 // Changed by Hookwars: new file (M2), shared by hookwars_armory and hookwars_items; M3b: raid ledger,
-// war touches, launch reads, arsenal wave A templates, composites.
+// war touches, launch reads, arsenal wave A templates, composites; expansion templates 43 to 45 (10).
 //! Types and pure rules shared by the armory (docs/spec/02-armory.md) and the items program
 //! (docs/spec/04-templates.md): params (R7), the manifest (04 section 2.7), the equip config (04
 //! section 2.3), each template's fields and forge rules (04 section 3), seeds (00 section 4.3), the
@@ -252,12 +252,27 @@ pub mod template_id {
     pub const SELL_BURN: u16 = 32;
     /// Composite (08 2).
     pub const COMPOSITE: u16 = 41;
+    /// Coalition (10 section 8): a Relation config item naming a coalition id; no callbacks.
+    pub const COALITION: u16 = 43;
+    /// Boss (10 section 11.1): the boss token's Pool item marking inbound raid volume per source.
+    pub const BOSS: u16 = 44;
+    /// Rivalry (10 section 11.3): a Relation config item naming a rival; no callbacks.
+    pub const RIVALRY: u16 = 45;
 }
 
 /// Whether template `id` may be a module of a composite (08 2.7): every known template but War
 /// orders and Composite itself.
 pub fn composable(id: u16) -> bool {
-    id != template_id::WAR_ORDERS && id != template_id::COMPOSITE && shape(id).is_some()
+    // Hookwars expansion: Coalition, Boss and Rivalry are standalone config items (10 sections 8,
+    // 11.1, 11.3); a composite never carries them.
+    !matches!(
+        id,
+        template_id::WAR_ORDERS
+            | template_id::COMPOSITE
+            | template_id::COALITION
+            | template_id::BOSS
+            | template_id::RIVALRY
+    ) && shape(id).is_some()
 }
 
 /// Most modules a composite holds (`MAX_MODULES`, 08 2.2; provisional, to measure).
@@ -412,6 +427,10 @@ pub fn shape(id: u16) -> Option<TemplateShape> {
         template_id::DUST_GUARD => (kind::DEFENSE, &[Keep], true),
         template_id::SELL_BURN => (kind::POOL, &[TowardCeiling], true),
         template_id::COMPOSITE => (kind::POOL, &[Keep, Keep], false),
+        // Hookwars expansion (10): config items, never forged.
+        template_id::COALITION => (kind::RELATION, &[Keep, Keep], false),
+        template_id::BOSS => (kind::POOL, &[Keep], false),
+        template_id::RIVALRY => (kind::RELATION, &[Keep, Keep, Keep], false),
         _ => return None,
     };
     rules[..used.len()].copy_from_slice(used);
@@ -474,6 +493,12 @@ pub fn validate(id: u16, p: &Params) -> core::result::Result<(), ParamsError> {
         template_id::COMPOSITE if p[0] == 0 || p[0] as usize > MAX_MODULES => {
             Err(ParamsError::BadParams)
         }
+        // Coalition: [coalition id, max contribution bps of the member's chest].
+        template_id::COALITION if p[0] == 0 || p[1] == 0 || p[1] > 10_000 => Err(ParamsError::BadParams),
+        // Boss: [counting window seconds].
+        template_id::BOSS if p[0] == 0 => Err(ParamsError::BadParams),
+        // Rivalry: [start unix seconds, duration seconds, war budget bps of the chest].
+        template_id::RIVALRY if p[1] == 0 || p[2] > 10_000 => Err(ParamsError::BadParams),
         _ => Ok(()),
     }
 }
@@ -564,6 +589,10 @@ pub fn manifest(id: u16, p: &Params, max_targets: u8) -> core::result::Result<Ma
         template_id::SELL_BURN => {
             m.pool_flags = pool_flags::BEFORE_SWAP;
             m.may_burn = true;
+        }
+        // Boss marks inbound raid volume; it never cuts, discounts or burns.
+        template_id::BOSS => {
+            m.pool_flags = pool_flags::AFTER_SWAP | pool_flags::MARKS;
         }
         _ => {}
     }

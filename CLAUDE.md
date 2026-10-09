@@ -43,6 +43,6 @@ Branch workflow (2026-10-09): parallel workers commit on their own branch in the
 | Claude (integration pass after M3b + review 2 + app audit fixes, fork of session d79dfc8e) | branch integ, ~/hookwars-integ, server A /root/hw-integ; heavy builds inside that server's flock /root/build.lock | 2026-10-09 | active |
 | Claude (security fixes (review 1 + review 2 war/armory parts), fork of session d79dfc8e) | branch secfix, ~/hookwars-secfix, server A /root/hw-secfix; heavy builds inside that server's flock /root/build.lock | 2026-10-09 | active |
 | Claude (agents program (09) + template 42, fork of session d79dfc8e) | branch agents, ~/hookwars-agents, server B 192.153.57.190 /root/hw-agents; heavy builds inside that server's flock /root/build.lock | 2026-10-09 | active |
-| Claude (market + social programs, templates 43 to 45 (10), fork of session d79dfc8e) | branch expand, ~/hookwars-expand, server B /root/hw-expand; heavy builds inside that server's flock /root/build.lock | 2026-10-09 | active |
+| Claude (market + social programs, templates 43 to 45 (10), fork of session d79dfc8e) | branch expand, ~/hookwars-expand, server B /root/hw-expand | 2026-10-09 | done, merged into main: 371 pass on branch; integration requests I-1 to I-12 in spec 10 section 17 |
 
 Build servers (2026-10-09): A = root@206.189.99.242 (4 CPU, 7 GB), B = root@192.153.57.190 (6 CPU, 15 GB); same SSH key ~/.ssh/hookwars_build, same pinned toolchain, one lock per server.

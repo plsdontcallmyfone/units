@@ -1,0 +1,32 @@
+[package]
+name = "hookwars-social"
+description = "Hookwars (units): achievement badges and guild halls (docs/spec/10-expansion.md sections 3, 6, 7)."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "hookwars_social"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "bordrless-token/idl-build", "hookwars-common/idl-build", "hookwars-armory/idl-build", "hookwars-war/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+anchor-lang.workspace = true
+solana-security-txt = { workspace = true }
+bordrless-token = { path = "../bordrless_token", features = ["no-entrypoint"] }
+bordrless-hook = { path = "../../crates/bordrless-hook" }
+hookwars-common = { path = "../../crates/hookwars-common" }
+hookwars-armory = { path = "../hookwars_armory", features = ["no-entrypoint"] }
+hookwars-war = { path = "../hookwars_war", features = ["no-entrypoint"] }
+
+[lints]
+workspace = true
