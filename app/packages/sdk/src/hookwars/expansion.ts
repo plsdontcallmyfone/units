@@ -9,7 +9,7 @@ import {
   ITEMS_ID, TOKEN_ID, agentsConfigAddress, collectionAddress, agentVaultAddress, armoryConfigAddress, badgeMintAddress, badgeMinterAddress, commissionAddress,
   commissionVaultAddress, equipStateAddress, firstBloodAddress, guildActionAddress, guildAddress, guildTreasuryAddress, holdingAddr,
   leaseAddress, leaseEscrowAddress, listingAddress, loyaltyClaimAddress, loyaltyPotAddress, marketEscrowAddress, passportAddress,
-  referralVaultOwner, referredAddress, submissionAddress, treatyInboxAddress, agentsSignerAddress, compositeAddress, launchAddr,
+  referralVaultOwner, referredAddress, submissionAddress, treatyInboxAddress, agentsSignerAddress, agentBadgeMintAddress, compositeAddress, launchAddr,
 } from './addresses.ts';
 
 const TOKEN_EVENT_AUTHORITY = new PublicKey(FIXED_ADDRESSES.tokenEventAuthority);
@@ -98,10 +98,11 @@ export function socialExecuteAction(guildId: number, nonce: bigint, to: PublicKe
 
 // ---------------------------------------------------------------- agents (09) --
 
-export interface PassportArgsInput { name: string; avatarUri: string; bioUri: string; hireUri: string; kinds: number }
+export interface PassportArgsInput { name: string; avatarUri: string; bioUri: string; hireUri: string; kinds: number; creditAgentId: Buffer | null }
 /** `register_passport(index, args)`: operator and agent key both sign (the operator's co-sign). */
-export function agentsRegisterPassport(operator: PublicKey, agentKey: PublicKey, payer: PublicKey, feeCollector: PublicKey, index: number, badgeMint: PublicKey, args: PassportArgsInput): TransactionInstruction {
-  return idlIx('agents', 'register_passport', { operator, agentKey, payer, feeCollector, passport: passportAddress(operator, index), badgeMint, token: TOKEN_ID }, { index, args });
+export function agentsRegisterPassport(operator: PublicKey, agentKey: PublicKey, payer: PublicKey, feeCollector: PublicKey, index: number, args: PassportArgsInput): TransactionInstruction {
+  const passport = passportAddress(operator, index);
+  return idlIx('agents', 'register_passport', { operator, agentKey, payer, feeCollector, passport, badgeMint: agentBadgeMintAddress(passport, 0), token: TOKEN_ID }, { index, args });
 }
 export function agentsUpdateProfile(operator: PublicKey, passport: PublicKey, badgeMint: PublicKey, args: PassportArgsInput): TransactionInstruction {
   return idlIx('agents', 'update_profile', { operator, passport, badgeMint, signer: agentsSignerAddress(), token: TOKEN_ID }, { args });

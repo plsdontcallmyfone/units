@@ -1,3 +1,4 @@
+// Changed by Hookwars: read routes for agents, market, commissions, guilds and badges; prepares get the database for mint lookup tables.
 /**
  * The Hookwars API (docs/spec/06-app.md 3.3) on node:http. JSON in and out, bigint as decimal
  * strings, `null` for anything not read, errors as upstream's `ApiErrorBody`.
@@ -10,6 +11,7 @@ import sharp from 'sharp';
 import { hookwars } from '@hookwars/sdk';
 import { findBannedWords, PARAMS, type PrizeVaultInfo, type SeasonInfo } from '@hookwars/shared';
 import * as reads from './reads.ts';
+import * as xreads from './reads-expansion.ts';
 import { prepare, PrepareError } from './prepares.ts';
 import { submit } from './submit.ts';
 import { clientKey, clusterName, HttpError, intParam, RateLimiter, readJsonBody } from './guard.ts';
@@ -99,7 +101,7 @@ export function handler(deps: Deps) {
       const client = clientKey(req);
       if (req.method === 'POST' && p.startsWith('/v1/') && p.endsWith('/prepare')) {
         if (!prepareLimit.take(client)) return json(res, 429, { error: 'Too many requests; wait a little.', code: 'RateLimited' });
-        return json(res, 200, await prepare(deps.conn, p.slice(4), await readJsonBody(req)));
+        return json(res, 200, await prepare(deps.conn, p.slice(4), await readJsonBody(req), db));
       }
       // Changed by Hookwars: wallet-signed transactions go out through the API (A-2), limited as prepares are.
       if (req.method === 'POST' && p === '/v1/submit') {
@@ -124,6 +126,18 @@ export function handler(deps: Deps) {
         const t = hookwars.decodeLootTable(info.data);
         return json(res, 200, { season: t.season, eta: Number(t.eta), entries: t.entries.filter((e) => e.weight > 0).map((e) => ({ templateId: e.templateId, templateName: String(e.templateId), weight: e.weight, ranges: e.ranges })) });
       }
+      // Agents, market and social (09, 10): chain state read directly, history from the indexer when it is up.
+      if (p === '/v1/agents') return json(res, 200, await cached(`agents:${q.get('sort') ?? ''}`, 15_000, () => xreads.agentsLeague(deps.conn, q.get('sort'))));
+      if ((m = /^\/v1\/agents\/(\w{32,44})$/.exec(p))) { const a = await xreads.agent(deps.conn, m[1]!); return a ? json(res, 200, a) : json(res, 404, { error: 'No such passport.' }); }
+      if (p === '/v1/market/listings') return json(res, 200, await cached('listings', 10_000, () => xreads.listings(deps.conn, db)));
+      if ((m = /^\/v1\/market\/items\/(\w{32,44})$/.exec(p))) { const it = await xreads.marketItem(deps.conn, db, m[1]!); return it ? json(res, 200, it) : json(res, 404, { error: 'No such item.' }); }
+      if (p === '/v1/market/leases') return json(res, 200, await cached('leases', 10_000, () => xreads.leases(deps.conn)));
+      if (p === '/v1/market/collections') return json(res, 200, await cached('collections', 30_000, () => xreads.collections(deps.conn)));
+      if (p === '/v1/commissions') return json(res, 200, await cached('commissions', 10_000, () => xreads.commissions(deps.conn)));
+      if ((m = /^\/v1\/commissions\/(\w{32,44})$/.exec(p))) { const c = await xreads.commission(deps.conn, m[1]!); return c ? json(res, 200, c) : json(res, 404, { error: 'No such commission.' }); }
+      if (p === '/v1/guilds') return json(res, 200, await cached('guilds', 15_000, () => xreads.guilds(deps.conn)));
+      if ((m = /^\/v1\/guilds\/(\d+)$/.exec(p))) { const g = await xreads.guild(deps.conn, intParam(m[1], 'guild', 0, 4_294_967_295)); return g ? json(res, 200, g) : json(res, 404, { error: 'No such guild.' }); }
+      if (p === '/v1/badges') return json(res, 200, await cached('badges', 15_000, () => xreads.badges(deps.conn, db)));
       if (!db) return json(res, 503, { error: 'The database is not reachable.', code: 'NoDatabase' });
       if (p === '/v1/templates') return json(res, 200, await reads.templates(db));
       if (p === '/v1/items') return json(res, 200, await reads.items(db, q));

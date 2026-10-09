@@ -98,6 +98,7 @@ export const agentVaultAddress = (passport: PublicKey) => pda([s('agent-vault'),
 export const bondAddress = (passport: PublicKey, proposalA: PublicKey) => pda([s('bond'), passport.toBuffer(), proposalA.toBuffer()], AGENTS_ID);
 export const bondMarkAddress = (proposal: PublicKey) => pda([s('bond-mark'), proposal.toBuffer()], AGENTS_ID);
 export const agentsSignerAddress = () => pda([s('agents-signer')], AGENTS_ID);
+export const agentBadgeMintAddress = (passport: PublicKey, generation: number) => pda([s('badge-mint'), passport.toBuffer(), u8(generation)], AGENTS_ID);
 // market (10: programs/hookwars_market/src/state.rs `seeds`)
 export const marketConfigAddress = () => pda([s('market-config')], MARKET_ID);
 export const listingAddress = (itemMint: PublicKey) => pda([s('listing'), itemMint.toBuffer()], MARKET_ID);

@@ -1,4 +1,4 @@
-// Changed by Hookwars: staged slot launch, raid and settle prepares; v0 with lookup tables; input caps (integration, app audit A-4, A-6, A-12).
+// Changed by Hookwars: staged slot launch, raid and settle prepares; v0 with lookup tables (the protocol's and the mint's own); input caps (integration, app audit A-4, A-6, A-12); agents, market, social and arsenal payout prepares.
 /**
  * The prepare routes of docs/spec/06-app.md 3.3: build with the SDK, simulate, return unsigned v0
  * transactions for the wallet (the backend holds no user key, 06 section 1 rule 5). Every prepare
@@ -10,6 +10,8 @@ import {
   type AccountMeta, type TransactionInstruction,
 } from '@solana/web3.js';
 import { hookwars, decodeLaunch, decodeKitConfig, decodePool, decodeLaunchConfig, launchHookExtras, launchPoolAddress, launchRulesFromInput, checkProtocolLookupTable, token, LAUNCH_CONFIG } from '@hookwars/sdk';
+import type { Pool as Db } from 'pg';
+import { EXPANSION_PREPARES } from './expansion-prepares.ts';
 import { FIXED_ADDRESSES, LP_FEE_BPS, remainderBuy, MAX_VIRTUAL_QUOTE, MIN_VIRTUAL_QUOTE, NO_RULES, PROGRAM_IDS, TEMPLATES, type LaunchRulesInput, type PreparedTx } from '@hookwars/shared';
 
 export class PrepareError extends Error {
@@ -18,14 +20,14 @@ export class PrepareError extends Error {
   constructor(status: number, code: string, message: string) { super(message); this.status = status; this.code = code; }
 }
 
-type Body = Record<string, unknown>;
-const pk = (b: Body, k: string): PublicKey => {
+export type Body = Record<string, unknown>;
+export const pk = (b: Body, k: string): PublicKey => {
   const v = b[k];
   if (typeof v !== 'string') throw new PrepareError(400, 'BadRequest', `"${k}" is required.`);
   try { return new PublicKey(v); } catch { throw new PrepareError(400, 'BadRequest', `"${k}" is not an address.`); }
 };
 const U64_MAX = (1n << 64n) - 1n;
-const big = (b: Body, k: string): bigint => {
+export const big = (b: Body, k: string): bigint => {
   let v: bigint;
   try { v = BigInt(String(b[k])); } catch { throw new PrepareError(400, 'BadRequest', `"${k}" must be an integer amount.`); }
   if (v < 0n || v > U64_MAX) throw new PrepareError(400, 'BadRequest', `"${k}" must be from 0 to 2^64 - 1.`);
@@ -33,13 +35,13 @@ const big = (b: Body, k: string): bigint => {
 };
 
 /** An integer in [lo, hi]; anything else is a 400 (audit A-12). */
-const int = (b: Body, k: string, lo: number, hi: number): number => {
+export const int = (b: Body, k: string, lo: number, hi: number): number => {
   const v = Number(b[k]);
   if (!Number.isInteger(v) || v < lo || v > hi) throw new PrepareError(400, 'BadRequest', `"${k}" must be an integer from ${lo} to ${hi}.`);
   return v;
 };
 /** An array of addresses of at most `max` entries (audit A-4). */
-const keys = (b: Body, k: string, max: number): PublicKey[] => {
+export const keys = (b: Body, k: string, max: number): PublicKey[] => {
   const v = b[k];
   if (v === undefined) return [];
   if (!Array.isArray(v) || v.length > max) throw new PrepareError(400, 'BadRequest', `"${k}" must be a list of at most ${max} addresses.`);
@@ -53,7 +55,7 @@ const MAX_PAIRS = 32;
 /** One staged transaction before compiling: its instructions, the keys the browser signs with, and whether it can be simulated now. */
 interface Stage { label: string; ixs: TransactionInstruction[]; extraSigners: ('mint' | 'config')[]; simulate: boolean; tables: AddressLookupTableAccount[] }
 
-interface PrepareDef {
+export interface PrepareDef {
   programs: (keyof typeof PROGRAM_IDS)[];
   label: string;
   payer: (b: Body) => PublicKey;
@@ -232,6 +234,9 @@ export const PREPARES: Record<string, PrepareDef> = {
 };
 
 /** The War orders, the Raid slot and its touch extras for `owner` (a war step that spends raid points). */
+// Agents, market, social and the arsenal payouts (09, 10, 08): one transaction each.
+Object.assign(PREPARES, EXPANSION_PREPARES);
+
 async function raidContext(conn: Connection, mint: PublicKey, owner: PublicKey) {
   const ctx = await hookwars.fetchWarContext(conn, mint).catch(() => null);
   if (!ctx) throw new PrepareError(404, 'NoSuchToken', 'This is not a token on this cluster.');
@@ -459,14 +464,24 @@ export async function finish(conn: Connection, payer: PublicKey, ixs: Transactio
   return { transaction: Buffer.from(bytes).toString('base64'), version: 'v0', stage: opts.stage ?? 0, label, extraSigners: opts.extraSigners ?? [] };
 }
 
-export async function prepare(conn: Connection, route: string, body: Body): Promise<{ transactions: PreparedTx[] }> {
+/** A slot launch's own lookup table, when the indexer recorded one for `mint` (audit A-6). */
+export async function mintTables(conn: Connection, db: Db | null | undefined, mint: unknown): Promise<AddressLookupTableAccount[]> {
+  if (!db || typeof mint !== 'string') return [];
+  let key: string | undefined;
+  try { key = (await db.query<{ lookup_table: string }>('select lookup_table from mint_tables where mint = $1', [mint])).rows[0]?.lookup_table; } catch { return []; }
+  if (!key) return [];
+  const r = await conn.getAddressLookupTable(new PublicKey(key), { commitment: 'confirmed' });
+  return r.value ? [r.value] : [];
+}
+
+export async function prepare(conn: Connection, route: string, body: Body, db?: Db | null): Promise<{ transactions: PreparedTx[] }> {
   const def = PREPARES[route];
   if (!def) throw new PrepareError(404, 'NotFound', 'No such prepare route.');
   const missing = await deployed(conn, def.programs);
   if (missing.length) {
     throw new PrepareError(409, 'NotDeployed', `Not on this cluster yet: the ${missing.join(', ')} program${missing.length > 1 ? 's are' : ' is'} not deployed, so this cannot be prepared.`);
   }
-  const protocol = await protocolTable(conn);
+  const protocol = [...await protocolTable(conn), ...await mintTables(conn, db, body.mint ?? body.tokenMint)];
   if (def.staged) {
     const stages = await def.staged(body, conn);
     const out: PreparedTx[] = [];
