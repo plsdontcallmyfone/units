@@ -267,3 +267,172 @@ fn composites_refuse_modules_that_share_one_state() {
     let pair = [module(t::RAID, &[]), module(a2::MERCENARY, &[])];
     assert_eq!(validate_modules(&pair, wide, 8, 64).err(), Some(CompositeError::ModuleConflict));
 }
+
+#[test]
+fn the_record_discriminator_matches_the_agents_program() {
+    use anchor_lang::Discriminator;
+    assert_eq!(
+        &hookwars_common::agents_record::RECORD_DISCRIMINATOR[..],
+        hookwars_agents::instruction::Record::DISCRIMINATOR
+    );
+}
+
+#[test]
+fn author_and_claim_counters_feed_the_social_badges() {
+    use hookwars_social::Criterion;
+    let mut hw = Hw::new();
+    let treasury = Keypair::new().pubkey();
+    hw.w.env.fund(treasury, SOL);
+    load(&mut hw.w.env, treasury);
+    let author = hw.w.env.funded(10 * SOL);
+    let a = author.pubkey();
+    let init = armory_ix(
+        hookwars_armory::accounts::InitCounters {
+            payer: a,
+            author_counter: pda::author_counter(&a).0,
+            claim_counter: pda::claim_counter(&a).0,
+            system_program: anchor_lang::system_program::ID,
+        },
+        hookwars_armory::instruction::InitCounters { wallet: a },
+    );
+    send(&mut hw.w.env, &author, &[init.clone()]).ok();
+    // Idempotent.
+    hw.w.env.warp(1);
+    send(&mut hw.w.env, &author, &[init]).ok();
+
+    // Two items authored with the counter passed, one without.
+    let author_ix = |hw: &Hw, with_counter: bool| {
+        let n = hw.config().items_minted;
+        let item_mint = pda::item_mint(n).0;
+        let mut ix = armory_ix(
+            hookwars_armory::accounts::CreateItem {
+                author: a,
+                config: pda::config().0,
+                template: pda::template(t::TRANSFER_FEE).0,
+                minter: hookwars_armory::cpi::MINTER,
+                item_mint,
+                item: pda::item(&item_mint).0,
+                recipient_holding: bordrless_token::client::holding_address(&item_mint, &a),
+                armory_signer: hookwars_armory::cpi::ARMORY_SIGNER,
+                items_program: ids::ITEMS_ID,
+                token: token_accounts(),
+                system_program: anchor_lang::system_program::ID,
+                event_authority: armory_events(),
+                program: ids::ARMORY_ID,
+            },
+            hookwars_armory::instruction::CreateItem {
+                template_id: t::TRANSFER_FEE,
+                params: params(&[100, 0]),
+                royalty_bps: 100,
+            },
+        );
+        if with_counter {
+            ix.accounts.push(AccountMeta::new(pda::author_counter(&a).0, false));
+        }
+        (ix, pda::item(&item_mint).0, item_mint)
+    };
+    let (ix, item, item_mint) = author_ix(&hw, true);
+    send(&mut hw.w.env, &author, &[ix]).ok();
+    let (ix, _, _) = author_ix(&hw, true);
+    send(&mut hw.w.env, &author, &[ix]).ok();
+    let (ix, _, _) = author_ix(&hw, false);
+    send(&mut hw.w.env, &author, &[ix]).ok();
+    let c: hookwars_armory::state::AuthorCounter = hw.w.env.read(&pda::author_counter(&a).0);
+    assert_eq!((c.wallet, c.items), (a, 2));
+
+    // A bridged-SOL royalty claim with the counter passed adds its lamports.
+    let sol = ids::BRIDGED_SOL_MINT;
+    let royalty_owner = pda::royalty_owner(&item).0;
+    let funder = hw.w.env.funded(10 * SOL);
+    bordrless_program_tests::items::give_sol(&mut hw, &funder, &royalty_owner, 700_000);
+    let mut claim = armory_ix(
+        hookwars_armory::accounts::ClaimRoyalty {
+            claimant: a,
+            item,
+            item_holding: bordrless_token::client::holding_address(&item_mint, &a),
+            royalty_owner,
+            cut_mint: sol,
+            royalty_holding: pda::holding(&sol, &royalty_owner),
+            destination: pda::holding(&sol, &a),
+            token: token_accounts(),
+            event_authority: armory_events(),
+            program: ids::ARMORY_ID,
+        },
+        hookwars_armory::instruction::ClaimRoyalty { amount: u64::MAX },
+    );
+    claim.accounts.push(AccountMeta::new(pda::claim_counter(&a).0, false));
+    send(&mut hw.w.env, &author, &[claim]).ok();
+    let c: hookwars_armory::state::ClaimCounter = hw.w.env.read(&pda::claim_counter(&a).0);
+    assert_eq!(c.lamports, 700_000);
+
+    // Social badges read both counters.
+    let admin = hw.w.env.deployer.insecure_clone();
+    send(&mut hw.w.env, &admin, &[create_badge_ix(&admin.pubkey(), 0, "Author", Criterion::ItemsAuthored { min: 2 })]).ok();
+    send(&mut hw.w.env, &admin, &[create_badge_ix(&admin.pubkey(), 1, "Prolific", Criterion::ItemsAuthored { min: 3 })]).ok();
+    send(&mut hw.w.env, &admin, &[create_badge_ix(&admin.pubkey(), 2, "Earner", Criterion::RoyaltiesClaimed { min_lamports: 700_000 })]).ok();
+    hw.w.env.warp(i64::from(TEST_SOCIAL.admin_timelock_secs));
+    let authored = vec![AccountMeta::new_readonly(pda::author_counter(&a).0, false)];
+    let claimed = vec![AccountMeta::new_readonly(pda::claim_counter(&a).0, false)];
+    send(&mut hw.w.env, &author, &[claim_badge_ix(&a, 0, &a, authored.clone())]).ok();
+    send(&mut hw.w.env, &author, &[claim_badge_ix(&a, 1, &a, authored)]).expect_code(social_code(hookwars_social::SocialError::CriterionNotMet));
+    send(&mut hw.w.env, &author, &[claim_badge_ix(&a, 2, &a, claimed)]).ok();
+}
+
+#[test]
+fn a_loyalty_pot_moves_to_the_slot_that_holds_it() {
+    use bordrless_program_tests::arsenal2::{init_loyalty_ix, item as a2_item, tok, world};
+    use bordrless_program_tests::items::equip;
+    use hookwars_common::arsenal2 as a2;
+    let mut hw = world();
+    let tk = tok(&mut hw);
+    let lp = a2_item(&mut hw, a2::LOYALTY_POT, &[100, 86_400], 0);
+    equip(&mut hw, &tk.owner, &tk.mint, 1, lp, vec![], 0).ok();
+    // Someone fixes the pot on the wrong slot.
+    let payer = tk.owner.insecure_clone();
+    hw.w.env.send_paid_by(&[init_loyalty_ix(&payer.pubkey(), &tk.mint, 0)], &payer, &[]).ok();
+    let reslot = |from: u8, to: u8, old_item: Pubkey, new_item: Pubkey| {
+        anchor_lang::solana_program::instruction::Instruction {
+            program_id: ids::ITEMS_ID,
+            accounts: hookwars_items::accounts::ReslotLoyalty {
+                mint: tk.mint,
+                pot: a2::pda::loyalty(&tk.mint).0,
+                old_equip_state: pda::equip_state(&tk.mint, from).0,
+                old_item,
+                old_composite: ids::ITEMS_ID,
+                new_equip_state: pda::equip_state(&tk.mint, to).0,
+                new_item,
+                new_composite: ids::ITEMS_ID,
+            }
+            .to_account_metas(None),
+            data: anchor_lang::InstructionData::data(&hookwars_items::instruction::ReslotLoyalty { slot: to }),
+        }
+    };
+    let cranker = hw.w.env.funded(SOL);
+    // Slot 0 holds no pot: it cannot be the target.
+    hw.w.env
+        .send_paid_by(&[reslot(1, 0, ids::ITEMS_ID, ids::ITEMS_ID)], &cranker, &[])
+        .expect_fail();
+    hw.w.env.send_paid_by(&[reslot(0, 1, ids::ITEMS_ID, lp)], &cranker, &[]).ok();
+    let pot: hookwars_items::LoyaltyPot = hw.w.env.read(&a2::pda::loyalty(&tk.mint).0);
+    assert_eq!(pot.slot, 1);
+    // While slot 1 holds the pot it stays.
+    hw.w.env.warp(1);
+    hw.w.env
+        .send_paid_by(&[reslot(1, 0, lp, ids::ITEMS_ID)], &cranker, &[])
+        .expect_fail();
+}
+
+#[test]
+fn kit_tokens_pay_token_side_cuts_only_to_wallets_or_their_vaults() {
+    use hookwars_items::templates::kit_payee_ok;
+    let mint = Pubkey::new_unique();
+    let wallet = Keypair::new().pubkey();
+    assert!(kit_payee_ok(&mint, &wallet));
+    let war_chest = Pubkey::find_program_address(&[b"war-chest", mint.as_ref()], &ids::WAR_ID).0;
+    assert!(kit_payee_ok(&mint, &war_chest));
+    assert!(kit_payee_ok(&mint, &hookwars_common::arsenal2::pda::loyalty(&mint).0));
+    // A program address of another mint, or any other off-curve key, is refused.
+    let other = Pubkey::find_program_address(&[b"war-chest", Pubkey::new_unique().as_ref()], &ids::WAR_ID).0;
+    assert!(!kit_payee_ok(&mint, &other));
+    assert!(!kit_payee_ok(&mint, &pda::royalty_owner(&Pubkey::new_unique()).0));
+}

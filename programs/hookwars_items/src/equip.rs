@@ -1,4 +1,5 @@
-// Changed by Hookwars: integration pass 2 (08 arsenal 2 request 1): registries carry derived extra sources.
+// Changed by Hookwars: integration pass 2 (08 arsenal 2 request 1): registries carry derived extra sources;
+// kit tokens refuse off-curve token-side payees (review 1 H-2 carried to settle).
 // Changed by Hookwars: new file (M3b), the armory-facing entry points moved out of lib.rs (M2) and; agents branch: template 42 takes no targets.
 // extended with the M3b registries and composites.
 // Changed by Hookwars (arsenal waves D and E): one arm in `check_module_targets`.
@@ -268,6 +269,29 @@ pub fn process_init_equip<'info>(
         composite.as_ref().map(|(_, c)| c.modules.as_slice()),
     )?;
     let mint = ctx.accounts.mint.key();
+    // Integration pass 2 (security cross-branch, review 1 H-2): on a kit token a token-side payout
+    // goes only to a wallet on the curve or a vault derivable from the mint.
+    {
+        let m = bordrless_token::client::read_mint(&ctx.accounts.mint.to_account_info())?;
+        if crate::templates::runs_kit(&m) {
+            let modules: Vec<(u16, usize, usize)> = match &composite {
+                Some((_, c)) => c
+                    .modules
+                    .iter()
+                    .map(|md| (md.template_id, usize::from(md.target_start), usize::from(md.target_count)))
+                    .collect(),
+                None => vec![(template_id, 0, config.targets.len())],
+            };
+            for (id, start, count) in modules {
+                let end = (start + count).min(config.targets.len());
+                if let crate::templates::Destination::Owner(o) =
+                    crate::templates::token_destination(id, &config.targets[start.min(end)..end])
+                {
+                    require!(crate::templates::kit_payee_ok(&mint, &o), ItemsError::BadTargets);
+                }
+            }
+        }
+    }
     let (state_key, state_bump) = pda::equip_state(&mint, slot);
     require_keys_eq!(ctx.accounts.equip_state.key(), state_key, ItemsError::WrongAccount);
     let payer = ctx.accounts.payer.to_account_info();

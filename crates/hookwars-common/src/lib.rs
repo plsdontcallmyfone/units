@@ -105,6 +105,10 @@ pub mod seeds {
     pub const VOTE: &[u8] = b"vote";
     /// `["forges", wallet]`.
     pub const FORGES: &[u8] = b"forges";
+    /// Integration pass 2 (10 section 17 I-5): items a wallet authored.
+    pub const AUTHORED: &[u8] = b"authored";
+    /// Integration pass 2 (10 section 17 I-5): bridged-SOL royalties a wallet claimed.
+    pub const CLAIMED: &[u8] = b"claimed";
     /// `["pending-params"]`.
     pub const PENDING: &[u8] = b"pending-params";
     /// The launchpad's caller of `equip_launch`: `["armory-caller", mint]` under the launchpad.
@@ -188,6 +192,14 @@ pub mod pda {
     /// `["forges", wallet]`.
     pub fn forge_counter(wallet: &Pubkey) -> (Pubkey, u8) {
         Pubkey::find_program_address(&[seeds::FORGES, wallet.as_ref()], &ARMORY_ID)
+    }
+    /// `["authored", wallet]` (integration pass 2, I-5).
+    pub fn author_counter(wallet: &Pubkey) -> (Pubkey, u8) {
+        Pubkey::find_program_address(&[seeds::AUTHORED, wallet.as_ref()], &ARMORY_ID)
+    }
+    /// `["claimed", wallet]` (integration pass 2, I-5).
+    pub fn claim_counter(wallet: &Pubkey) -> (Pubkey, u8) {
+        Pubkey::find_program_address(&[seeds::CLAIMED, wallet.as_ref()], &ARMORY_ID)
     }
     /// `["armory-caller", mint]` under the launchpad.
     pub fn armory_caller(mint: &Pubkey) -> (Pubkey, u8) {
@@ -1776,10 +1788,12 @@ pub mod arsenal2 {
 /// is built by hand so the armory, war and items need not depend on the agents crate.
 pub mod agents_record {
     use super::*;
-    use anchor_lang::solana_program::hash::hashv;
     use anchor_lang::solana_program::instruction::{AccountMeta, Instruction};
     use anchor_lang::solana_program::program::invoke_signed;
 
+    /// `sha256("global:record")[..8]`, the agents program's `record` discriminator (checked
+    /// against the agents crate in the integ2 suite).
+    pub const RECORD_DISCRIMINATOR: [u8; 8] = [222, 57, 201, 216, 199, 90, 247, 136];
     /// Seed of each caller's recorder PDA.
     pub const CALLER_SEED: &[u8] = b"agents-caller";
     /// Accounts in the suffix.
@@ -1848,7 +1862,7 @@ pub mod agents_record {
         {
             return Err(ProgramError::InvalidArgument.into());
         }
-        let mut data = hashv(&[b"global:record"]).to_bytes()[..8].to_vec();
+        let mut data = RECORD_DISCRIMINATOR.to_vec();
         data.push(kind);
         data.extend_from_slice(&value.to_le_bytes());
         let ix = Instruction {

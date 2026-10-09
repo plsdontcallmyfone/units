@@ -439,6 +439,12 @@ pub mod hookwars_items {
         payouts::process_init_loyalty(ctx, slot)
     }
 
+    /// Loyalty Pot: moves the pot to `slot` when its slot no longer holds the pot and `slot` does
+    /// (integration pass 2, 08 arsenal 2 request 7; permissionless).
+    pub fn reslot_loyalty(ctx: Context<ReslotLoyalty>, slot: u8) -> Result<()> {
+        payouts::process_reslot_loyalty(ctx, slot)
+    }
+
     /// Loyalty Pot: the holder's claim for the epoch (08 4.3).
     pub fn claim_loyalty(ctx: Context<ClaimLoyalty>) -> Result<()> {
         payouts::process_claim_loyalty(ctx)

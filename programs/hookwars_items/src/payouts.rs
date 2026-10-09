@@ -1,4 +1,5 @@
-// Changed by Hookwars: new file (arsenal waves D and E); integration pass 2: errors in ItemsError.
+// Changed by Hookwars: new file (arsenal waves D and E); integration pass 2: errors in ItemsError,
+// reslot_loyalty.
 //! The payouts and state of arsenal waves D and E (08 sections 4.3, 4.7): Referral
 //! (`set_referrer`, `settle_referral`), Loyalty Pot (`init_loyalty`, `claim_loyalty`) and First
 //! Blood (`init_first_blood`). Hooks never pay (00 rule 1): every payment here leaves a vault this
@@ -257,6 +258,39 @@ pub fn process_init_loyalty(ctx: Context<InitLoyalty>, slot: u8) -> Result<()> {
     Ok(())
 }
 
+/// The item an `EquipState` names, or the default key when the account is empty.
+fn equipped_item(info: &AccountInfo) -> Result<Pubkey> {
+    if *info.owner != crate::ID || info.data_is_empty() {
+        return Ok(Pubkey::default());
+    }
+    Ok(EquipState::try_deserialize(&mut &info.try_borrow_data()?[..])?.item)
+}
+
+/// Integration pass 2 (08 arsenal 2 request 7): `reslot_loyalty(slot)` moves the pot to `slot` when
+/// the slot it names no longer holds a Loyalty Pot (re-equipped elsewhere, or a wrong slot given at
+/// `init_loyalty`) and `slot` does. Permissionless; the pot's epoch accounting is kept.
+pub fn process_reslot_loyalty(ctx: Context<ReslotLoyalty>, slot: u8) -> Result<()> {
+    let a = &ctx.accounts;
+    let mint = a.mint.key();
+    require!(slot != a.pot.slot, ItemsError::BadParams);
+    require_keys_eq!(a.old_equip_state.key(), pda::equip_state(&mint, a.pot.slot).0, ItemsError::WrongAccount);
+    require_keys_eq!(a.new_equip_state.key(), pda::equip_state(&mint, slot).0, ItemsError::WrongAccount);
+    let new_item = equipped_item(&a.new_equip_state)?;
+    require!(new_item != Pubkey::default(), ArsenalError::NoLoyaltyPot);
+    require_keys_eq!(a.new_item.key(), new_item, ItemsError::WrongItem);
+    loyalty_module(&a.new_item, &a.new_composite, &new_item)?;
+    let old_item = equipped_item(&a.old_equip_state)?;
+    if old_item != Pubkey::default() {
+        require_keys_eq!(a.old_item.key(), old_item, ItemsError::WrongItem);
+        require!(
+            loyalty_module(&a.old_item, &a.old_composite, &old_item).is_err(),
+            ItemsError::SlotNotEmpty
+        );
+    }
+    ctx.accounts.pot.slot = slot;
+    Ok(())
+}
+
 /// The Loyalty module of the slot's item: its params and its sub-range offset.
 fn loyalty_module(item_info: &AccountInfo, composite: &AccountInfo, item_key: &Pubkey) -> Result<(hookwars_common::Params, usize)> {
     require_keys_eq!(*item_info.owner, ids::ARMORY_ID, ItemsError::WrongItem);
@@ -484,6 +518,28 @@ pub struct InitLoyalty<'info> {
     )]
     pub pot: Account<'info, LoyaltyPot>,
     pub system_program: Program<'info, System>,
+}
+
+/// Accounts of `reslot_loyalty` (integration pass 2).
+#[derive(Accounts)]
+pub struct ReslotLoyalty<'info> {
+    /// CHECK: the token.
+    #[account(owner = bordrless_token::ID)]
+    pub mint: UncheckedAccount<'info>,
+    #[account(mut, seeds = [a2::seeds::LOYALTY, mint.key().as_ref()], bump = pot.bump)]
+    pub pot: Account<'info, LoyaltyPot>,
+    /// CHECK: `["equip", mint, pot.slot]` (checked in the handler).
+    pub old_equip_state: UncheckedAccount<'info>,
+    /// CHECK: the item it holds, if any (checked in the handler).
+    pub old_item: UncheckedAccount<'info>,
+    /// CHECK: that item's composite list, or any account (checked in the handler).
+    pub old_composite: UncheckedAccount<'info>,
+    /// CHECK: `["equip", mint, slot]` (checked in the handler).
+    pub new_equip_state: UncheckedAccount<'info>,
+    /// CHECK: the item it holds (checked in the handler).
+    pub new_item: UncheckedAccount<'info>,
+    /// CHECK: that item's composite list, or any account (checked in the handler).
+    pub new_composite: UncheckedAccount<'info>,
 }
 
 /// Accounts of `claim_loyalty`.

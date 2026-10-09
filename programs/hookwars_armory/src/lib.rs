@@ -2,6 +2,8 @@
 // list passed to init_equip), the Performance reader on the pool's ring, settle_bounty_bps;
 // security review 1: H-1 fail_stale, H-2 royalty recipients, M-1 finalize, M-2 proposal threshold, I-3;
 // security review 2, L-D: execute and the performance revert refresh a slot launch's pool registry.
+// Integration pass 2: badge equip by the agents caller, admin Soulbound item, close_proposal bond
+// guard, agent record calls, lease gate, revert_for_lease_end, listed claim refusal, badge counters.
 //! `hookwars_armory` (docs/spec/02-armory.md): templates, items as supply-1 tokens on the token
 //! standard, royalties and their claims, equip rules (holder vote with notice, performance revert,
 //! locked), equipping at launch (signed by the launchpad), loot minting (signed by the war program),
@@ -360,6 +362,12 @@ pub mod hookwars_armory {
     /// Forges two items of one template into one (02 section 9).
     pub fn forge(ctx: Context<Forge>) -> Result<()> {
         process_forge(ctx)
+    }
+
+    /// Integration pass 2 (10 section 17 I-5): creates `wallet`'s badge counters
+    /// (`["authored", wallet]`, `["claimed", wallet]`); permissionless, idempotent.
+    pub fn init_counters(ctx: Context<InitCounters>, wallet: Pubkey) -> Result<()> {
+        process_init_counters(ctx, wallet)
     }
 }
 
@@ -828,6 +836,21 @@ pub struct RevertForLeaseEnd<'info> {
     pub equip: EquipCtx<'info>,
 }
 
+/// Integration pass 2 (I-5).
+#[derive(Accounts)]
+#[instruction(wallet: Pubkey)]
+pub struct InitCounters<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(init_if_needed, payer = payer, space = 8 + AuthorCounter::INIT_SPACE,
+        seeds = [seeds::AUTHORED, wallet.as_ref()], bump)]
+    pub author_counter: Box<Account<'info, AuthorCounter>>,
+    #[account(init_if_needed, payer = payer, space = 8 + ClaimCounter::INIT_SPACE,
+        seeds = [seeds::CLAIMED, wallet.as_ref()], bump)]
+    pub claim_counter: Box<Account<'info, ClaimCounter>>,
+    pub system_program: Program<'info, System>,
+}
+
 #[event_cpi]
 #[derive(Accounts)]
 pub struct Forge<'info> {
@@ -1094,8 +1117,47 @@ fn process_create_item(
         ts
     });
     // Integration pass 2 (09 section 21 item 3): optional agent attribution, after the effects.
-    let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    let (rest, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    bump_author_counter(rest, &author)?;
     hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.author.key(), hookwars_common::agents_record::ITEMS_AUTHORED, 0)?;
+    Ok(())
+}
+
+/// Integration pass 2 (10 section 17 I-5): the counter last in `rest` when it is `key`'s, owned
+/// here; the rest without it.
+fn take_counter<'a, 'info>(
+    rest: &'a [AccountInfo<'info>],
+    key: &Pubkey,
+) -> (&'a [AccountInfo<'info>], Option<&'a AccountInfo<'info>>) {
+    match rest.last() {
+        Some(a) if a.key == key && *a.owner == crate::ID => (&rest[..rest.len() - 1], Some(a)),
+        _ => (rest, None),
+    }
+}
+
+/// Bumps `author`'s `AuthorCounter` when the remaining accounts end with it.
+fn bump_author_counter<'info>(rest: &[AccountInfo<'info>], author: &Pubkey) -> Result<()> {
+    let (_, c) = take_counter(rest, &pda::author_counter(author).0);
+    let Some(c) = c else { return Ok(()) };
+    require!(c.is_writable, ArmoryError::WrongAccount);
+    let mut v = AuthorCounter::try_deserialize(&mut &c.try_borrow_data()?[..])?;
+    v.items = v.items.saturating_add(1);
+    v.try_serialize(&mut &mut c.try_borrow_mut_data()?[..])?;
+    Ok(())
+}
+
+/// Integration pass 2 (I-5): creates `wallet`'s `AuthorCounter` and `ClaimCounter` (anyone pays).
+fn process_init_counters(ctx: Context<InitCounters>, wallet: Pubkey) -> Result<()> {
+    let a = &mut ctx.accounts.author_counter;
+    if a.wallet == Pubkey::default() {
+        a.wallet = wallet;
+        a.bump = ctx.bumps.author_counter;
+    }
+    let c = &mut ctx.accounts.claim_counter;
+    if c.wallet == Pubkey::default() {
+        c.wallet = wallet;
+        c.bump = ctx.bumps.claim_counter;
+    }
     Ok(())
 }
 
@@ -1117,6 +1179,8 @@ fn process_create_composite<'info>(
     );
     // Integration pass 2: an optional agent attribution suffix comes after the module templates.
     let (rem, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    // I-5: an optional `AuthorCounter` after the module templates.
+    let (rem, counter) = take_counter(rem, &pda::author_counter(&a.author.key()).0);
     require!(rem.len() == modules.len(), ArmoryError::WrongAccount);
     let mut fields: Vec<(u16, Params, Params)> = Vec::with_capacity(modules.len());
     for (m, info) in modules.iter().zip(rem.iter()) {
@@ -1194,6 +1258,9 @@ fn process_create_composite<'info>(
         source: source::AUTHORED,
         ts
     });
+    if let Some(c) = counter {
+        bump_author_counter(core::slice::from_ref(c), &ctx.accounts.author.key())?;
+    }
     hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.author.key(), hookwars_common::agents_record::ITEMS_AUTHORED, 0)?;
     Ok(())
 }
@@ -1329,8 +1396,10 @@ fn process_claim_royalty<'info>(
         item_key.to_bytes().to_vec(),
         bump.to_vec(),
     ];
-    let extras: Vec<_> = ctx
-        .remaining_accounts
+    // Integration pass 2: the agent suffix and the `ClaimCounter` (I-5) are not token extras.
+    let (rest, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    let (rest, counter) = take_counter(rest, &pda::claim_counter(&claimant).0);
+    let extras: Vec<_> = rest
         .iter()
         .map(|i| {
             if i.is_writable {
@@ -1358,7 +1427,7 @@ fn process_claim_royalty<'info>(
         tp.clone(),
         ea.clone(),
     ];
-    infos.extend(ctx.remaining_accounts.iter().cloned());
+    infos.extend(rest.iter().cloned());
     let signer: &[&[u8]] = &[seeds::ROYALTY, item_key.as_ref(), &bump];
     anchor_lang::solana_program::program::invoke_signed(&ix, &infos, &[signer])?;
     emit_cpi!(RoyaltyClaimed {
@@ -1368,8 +1437,13 @@ fn process_claim_royalty<'info>(
         amount,
         ts: now()?
     });
-    let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
     let value = if cut_mint == hookwars_common::ids::BRIDGED_SOL_MINT { amount } else { 0 };
+    if let Some(c) = counter {
+        require!(c.is_writable, ArmoryError::WrongAccount);
+        let mut v = ClaimCounter::try_deserialize(&mut &c.try_borrow_data()?[..])?;
+        v.lamports = v.lamports.saturating_add(value);
+        v.try_serialize(&mut &mut c.try_borrow_mut_data()?[..])?;
+    }
     hookwars_common::agents_record::record(rec, &crate::ID, &claimant, hookwars_common::agents_record::ROYALTY_CLAIM, value)?;
     Ok(())
 }

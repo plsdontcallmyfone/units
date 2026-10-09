@@ -1,7 +1,8 @@
 // Changed by Hookwars: new file (M3b); security review 2 M-A (stray tokens swept) and L-C (a missing
 // destination holding leaves only that module unsettled).
 // Changed by Hookwars: integration pass 2 (10 section 17 I-7, R32): a leased item's lessor is paid
-// its rent share out of the royalty; optional agent attribution suffix (09 section 21 item 5).
+// its rent share out of the royalty; optional agent attribution suffix (09 section 21 item 5);
+// kit tokens pay token-side cuts only to on-curve wallets or mint vaults (review 1 H-2).
 //! `settle_equip` (04 section 2.5, 08 section 2.11): pays what a slot's item collected. For each
 //! module, token side and pool side apart: the royalty (`Item.royalty_bps`) to the item's royalty
 //! holding, the sender's bounty (the armory's `settle_bounty_bps`), the rest to the module's
@@ -224,6 +225,7 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
     let mut token_left: [u64; MAX_MODULES] = [0; MAX_MODULES];
     let mut pool_left: [u64; MAX_MODULES] = [0; MAX_MODULES];
     let (mut r_t, mut b_t, mut r_q, mut b_q, mut paid_t, mut paid_q, mut burned) = (0u64, 0u64, 0u64, 0u64, 0u64, 0u64, 0u64);
+    let kit = templates::runs_kit(&bordrless_token::client::read_mint(&a.mint.to_account_info())?);
     let any_token = token_owed.iter().any(|x| *x > 0);
     let any_quote = pool_owed.iter().any(|x| *x > 0);
     if any_token {
@@ -267,7 +269,12 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
                 Destination::Owner(o) => {
                     let d = &dests[2 * i];
                     require_keys_eq!(d.key(), pda::holding(&mint_key, &o), ItemsError::WrongAccount);
-                    if exists(d) {
+                    // Integration pass 2 (review 1 H-2): an off-curve payee of a kit token that is no
+                    // vault of the mint is never paid; the cut stays owed (init_equip refuses such
+                    // targets, so only an equip made before that check can reach here).
+                    if kit && !templates::kit_payee_ok(&mint_key, &o) {
+                        token_left[i] = x;
+                    } else if exists(d) {
                         cpi.pay(&state_info, &vault, d, &mint_info, left, state_seeds, true)?;
                         paid_t += left;
                         r_t += royalty;

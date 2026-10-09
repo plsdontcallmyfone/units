@@ -438,7 +438,7 @@ pub mod hookwars_market {
     /// Anyone ends a lease after its term; the item returns to the lessor. Reverting the slot (if
     /// the item is still equipped there) is the armory's `revert_for_lease_end` (integration
     /// request in 10).
-    pub fn end_lease<'info>(ctx: Context<'_, '_, 'info, 'info, CloseLease<'info>>) -> Result<()> {
+    pub fn end_lease<'info>(ctx: Context<'info, CloseLease<'info>>) -> Result<()> {
         let l = &ctx.accounts.lease;
         require!(l.state == lease_state::ACTIVE, MarketError::WrongLeaseState);
         require!(now()? >= l.ends_at, MarketError::LeaseNotOver);
