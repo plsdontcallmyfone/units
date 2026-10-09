@@ -1,3 +1,4 @@
+// Changed by Hookwars: integration pass 2 (08 arsenal 2 request 1): registries carry derived extra sources.
 // Changed by Hookwars: new file (M3b), the armory-facing entry points moved out of lib.rs (M2) and; agents branch: template 42 takes no targets.
 // extended with the M3b registries and composites.
 // Changed by Hookwars (arsenal waves D and E): one arm in `check_module_targets`.
@@ -132,18 +133,16 @@ pub fn registry_list(
     }
     match composite {
         None => {
-            for (k, w) in crate::templates::extras(template_id, mint, &config.targets) {
-                v.push(key(k, w));
-            }
+            // Integration pass 2 (08 arsenal 2 request 1): derived entries (holdings, `Referred`)
+            // are written as seeds the token resolves per trade, not as a placeholder key.
+            v.extend(crate::templates::extra_sources(template_id, mint, &config.targets));
         }
         Some((list, modules)) => {
             v.push(key(*list, false));
             for m in modules {
                 let start = usize::from(m.target_start);
                 let end = start + usize::from(m.target_count);
-                for (k, w) in crate::templates::extras(m.template_id, mint, &config.targets[start..end]) {
-                    v.push(key(k, w));
-                }
+                v.extend(crate::templates::extra_sources(m.template_id, mint, &config.targets[start..end]));
             }
         }
     }

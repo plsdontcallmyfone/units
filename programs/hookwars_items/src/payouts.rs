@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (arsenal waves D and E).
+// Changed by Hookwars: new file (arsenal waves D and E); integration pass 2: errors in ItemsError.
 //! The payouts and state of arsenal waves D and E (08 sections 4.3, 4.7): Referral
 //! (`set_referrer`, `settle_referral`), Loyalty Pot (`init_loyalty`, `claim_loyalty`) and First
 //! Blood (`init_first_blood`). Hooks never pay (00 rule 1): every payment here leaves a vault this
@@ -14,25 +14,8 @@ use crate::equip::{create_or_resize, read_composite};
 use crate::templates::loyalty_pot;
 use crate::{EquipState, ItemsError};
 
-/// Errors of arsenal waves D and E (their own range, so `ItemsError` stays untouched).
-#[error_code(offset = 7100)]
-pub enum ArsenalError {
-    /// Guest List: the opening is for holders of the target only.
-    #[msg("the opening is for holders of the target mint only")]
-    GuestListClosed,
-    /// The holder joined during the claimed epoch, or claimed it already.
-    #[msg("not eligible for this epoch's loyalty claim")]
-    NotEligible,
-    /// Nothing to pay.
-    #[msg("nothing to pay")]
-    NothingToPay,
-    /// The slot does not hold a Loyalty Pot.
-    #[msg("the slot does not hold a Loyalty Pot")]
-    NoLoyaltyPot,
-    /// A referrer cannot be the buyer.
-    #[msg("a buyer cannot refer itself")]
-    SelfReferral,
-}
+/// Errors of arsenal waves D and E: `ItemsError` codes 7100 onward (integration pass 2).
+pub use crate::ItemsError as ArsenalError;
 
 /// A buyer's chosen referrer (`["referred", mint, buyer]`).
 #[account]

@@ -1312,6 +1312,18 @@ pub mod composite {
         if modules.iter().any(|m| !composable(m.template_id)) {
             return Err(CompositeError::NotComposable);
         }
+        // Integration pass 2 (08 arsenal 2 request 2): modules sharing one per-mint or per-slot
+        // state may not sit together: Shield and Patience share the slot's `sell_mark` bit,
+        // Mercenary and Raid both keep a Raid range, and Loyalty Pot and First Blood keep one
+        // state per mint.
+        let count = |id: u16| modules.iter().filter(|m| m.template_id == id).count();
+        if (count(template_id::SHIELD) > 0 && count(arsenal2::PATIENCE) > 0)
+            || (count(template_id::RAID) > 0 && count(arsenal2::MERCENARY) > 0)
+            || count(arsenal2::LOYALTY_POT) > 1
+            || count(arsenal2::FIRST_BLOOD) > 1
+        {
+            return Err(CompositeError::ModuleConflict);
+        }
         let mut out = Manifest {
             kind: host_kind(modules).ok_or(CompositeError::KindMismatch)?,
             ..Default::default()
@@ -1882,6 +1894,26 @@ pub mod market {
     }
     /// `Lease.state` Active.
     pub const LEASE_ACTIVE: u8 = 1;
+
+    /// Length of the optional lease suffix of `settle_equip`'s remaining accounts:
+    /// `[<MARKET_ID>, ["lease", item], lessor's token holding, lessor's quote holding]`.
+    pub const RENT_SUFFIX: usize = 4;
+
+    /// Splits the lease suffix off `rem` when it ends with one for `item` (10 section 17 I-7).
+    pub fn split_rent<'a, 'info>(
+        rem: &'a [AccountInfo<'info>],
+        item: &Pubkey,
+    ) -> (&'a [AccountInfo<'info>], Option<&'a [AccountInfo<'info>]>) {
+        let n = rem.len();
+        if n >= RENT_SUFFIX
+            && rem[n - RENT_SUFFIX].key() == ids::MARKET_ID
+            && rem[n - RENT_SUFFIX + 1].key() == lease(item)
+        {
+            (&rem[..n - RENT_SUFFIX], Some(&rem[n - RENT_SUFFIX..]))
+        } else {
+            (rem, None)
+        }
+    }
 
     /// What the armory and items read of a `Lease` (discriminator, version, bump, lessor, item,
     /// item_mint, token_mint, slot, rent_bps, fee_lamports, term_secs, starts_at, ends_at, state).

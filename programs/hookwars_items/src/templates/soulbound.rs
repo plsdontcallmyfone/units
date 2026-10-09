@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (09 section 4.3, agents branch).
+// Changed by Hookwars: new file (09 section 4.3, agents branch); integration pass 2: error in ItemsError.
 //! Soulbound (id 42): the agent badge's Defense item. It refuses every transfer of a badge, so a
 //! badge never leaves the agent key it was minted to; mints and burns pass. Extras: the mint.
 //!
@@ -12,13 +12,8 @@ use hookwars_common::ids::AGENTS_SIGNER;
 
 use super::{Env, TokenOut};
 
-/// Errors of this template (an offset of its own, so `ItemsError` is unchanged).
-#[error_code(offset = 7000)]
-pub enum SoulboundError {
-    /// A badge cannot be sent or sold.
-    #[msg("this badge cannot be sent or sold")]
-    SoulboundTransfer,
-}
+/// Errors of this template: `ItemsError::SoulboundTransfer` (code 7000, integration pass 2).
+pub use crate::ItemsError as SoulboundError;
 
 /// Whether `info` is `mint` and a badge.
 fn is_badge(info: &AccountInfo, mint: &Pubkey) -> bool {

@@ -372,9 +372,10 @@ pub fn absent(key: Pubkey) -> (Pubkey, Account) {
     )
 }
 
-/// An arsenal-2 error's code (`#[error_code(offset = 7100)]`).
+/// An arsenal-2 error's code (7100 onward in `ItemsError`).
 pub fn code(e: hookwars_items::ArsenalError) -> u32 {
-    7100 + e as u32
+    // Integration pass 2: one ItemsError enum; its codes are 6000 + the discriminant.
+    6000 + e as u32
 }
 
 /// A fresh slot mint whose `holder` holds `amount` (a target or ally token for the suites).

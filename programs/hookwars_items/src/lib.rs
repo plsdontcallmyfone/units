@@ -1,3 +1,4 @@
+// Changed by Hookwars: integration pass 2: one items error enum (Soulbound and arsenal codes kept); LeaseRentPaid.
 // Changed by Hookwars: new file (M2), the template program's armory-facing entry points; M3b: the
 // token and pool callbacks, every base template and arsenal wave A, composites, the raid ledger
 // and settle_equip; arsenal waves D and E (templates, `payouts`).
@@ -138,6 +139,27 @@ pub enum ItemsError {
     /// A holder payload from someone other than the holder.
     #[msg("only the holding's owner may set this")]
     NotHolder,
+    // Integration pass 2 (app/INTEGRATION.md section 4): the Soulbound (7000) and arsenal waves D
+    // and E (7100) errors joined this one enum so the IDL builder sees a single error enum; their
+    // explicit discriminants keep every code number unchanged.
+    /// Soulbound: a badge cannot be sent or sold.
+    #[msg("this badge cannot be sent or sold")]
+    SoulboundTransfer = 1000,
+    /// Guest List: the opening is for holders of the target only.
+    #[msg("the opening is for holders of the target mint only")]
+    GuestListClosed = 1100,
+    /// The holder joined during the claimed epoch, or claimed it already.
+    #[msg("not eligible for this epoch's loyalty claim")]
+    NotEligible,
+    /// Nothing to pay.
+    #[msg("nothing to pay")]
+    NothingToPay,
+    /// The slot does not hold a Loyalty Pot.
+    #[msg("the slot does not hold a Loyalty Pot")]
+    NoLoyaltyPot,
+    /// A referrer cannot be the buyer.
+    #[msg("a buyer cannot refer itself")]
+    SelfReferral,
 }
 
 /// Maps a shared-rule error.
@@ -255,6 +277,18 @@ pub struct EquipSettled {
     pub burned: u64,
     pub bounty_token: u64,
     pub bounty_quote: u64,
+}
+
+/// Integration pass 2 (10 section 17 I-7, R32): the lessor's share of a leased item's royalty,
+/// paid by `settle_equip` out of the royalty (never on top of it).
+#[event]
+pub struct LeaseRentPaid {
+    pub mint: Pubkey,
+    pub slot: u8,
+    pub item: Pubkey,
+    pub lessor: Pubkey,
+    pub rent_token: u64,
+    pub rent_quote: u64,
 }
 
 /// Instructions.
