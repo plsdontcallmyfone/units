@@ -48,7 +48,7 @@ export function eventTablesDdl(): string[] {
   for (const [program, specs] of Object.entries(hookwars.EVENT_SPECS)) {
     for (const [name, fields] of specs) {
       const cols = fields.flatMap(([f, ty]) => { const c = colName(f, ty); return c ? [`"${c}" ${sqlType(ty)}`] : []; }).join(', ');
-      out.push(`create table if not exists ${eventTable(program, name)} (${EVENT_COLS}, ${cols}, primary key (signature, ordinal))`);
+      out.push(`create table if not exists ${eventTable(program, name)} (${EVENT_COLS}, ${cols ? `${cols}, ` : ''}primary key (signature, ordinal))`);
     }
   }
   return out;

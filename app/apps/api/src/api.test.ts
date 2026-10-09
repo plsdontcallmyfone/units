@@ -8,6 +8,8 @@ import pg from 'pg';
 import { allDdl } from '@hookwars/indexer/schema.ts';
 import { findBannedWords } from '@hookwars/shared';
 import { serve } from './server.ts';
+import { writeTransaction } from '@hookwars/indexer/indexer.ts';
+import { badges, lineageOf } from './reads-expansion.ts';
 
 /** A real Postgres from DATABASE_URL (no default credentials in code, app audit A-9); skipped without one. */
 const url = process.env.DATABASE_URL ?? '';
@@ -76,5 +78,25 @@ withDb('prepares before deployment', () => {
     const b = await r.json() as { error: string; code: string };
     expect(b.code).toBe('NotDeployed');
     expect(b.error).toMatch(/armory, token programs are not deployed/);
+  });
+});
+
+withDb('market history from indexed events (app v2)', () => {
+  it('lineage walks Forged events in Postgres; sales come from Sold only; badge awards list', async () => {
+    const A = 'A'.repeat(43) + '1', B = 'B'.repeat(43) + '1', C = 'C'.repeat(43) + '1', D = 'D'.repeat(43) + '1';
+    const c = await db.connect();
+    await writeTransaction(c, 'sigF1', 10, 1_700_000_000, [{ ordinal: 0, program: 'armory', programId: '', name: 'Forged', via: 'cpi', data: { burned: [A, B], item: C, templateId: 1, params: [1], level: 2, forger: M, ts: '5' } }], false, ['armory']);
+    await writeTransaction(c, 'sigF2', 11, 1_700_000_001, [{ ordinal: 0, program: 'armory', programId: '', name: 'Forged', via: 'cpi', data: { burned: [C, A], item: D, templateId: 1, params: [1], level: 3, forger: M, ts: '6' } }], false, ['armory']);
+    await writeTransaction(c, 'sigS', 12, 1_700_000_002, [{ ordinal: 0, program: 'market', programId: '', name: 'Sold', via: 'cpi', data: { item: D, itemMint: B, seller: M, buyer: M, price: '100', fee: '1', resale: '2', ts: '7' } }], false, ['market']);
+    await writeTransaction(c, 'sigB', 13, 1_700_000_003, [{ ordinal: 0, program: 'social', programId: '', name: 'BadgeAwarded', via: 'cpi', data: { id: 1, recipient: M, claimant: M, ts: '8' } }], false, ['social']);
+    c.release();
+    const l = await lineageOf(db, D);
+    expect(l.level).toBe(3);
+    expect(l.parents.map((p) => (p as { item: string }).item)).toEqual([C, A]);
+    expect((l.parents[0] as { parents: { item: string }[] }).parents.map((p) => p.item)).toEqual([A, B]);
+    expect((await lineageOf(db, C)).children).toEqual([D]);
+    const sales = await db.query('select price from ev_market_sold where item_mint = $1', [B]);
+    expect(sales.rows.map((r) => String(r.price))).toEqual(['100']);
+    expect(((await badges(conn, db)) as { recent: unknown[] }).recent).toHaveLength(1); // the route caches 15 s, so the read itself
   });
 });
