@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M3b); expansion templates 43 to 45 (10).
+// Changed by Hookwars: new file (M3b); expansion templates 43 to 45 (10); arsenal waves B and C.
 //! Every template's behaviour (04 section 3, 08 section 4), one file per template. A template is a
 //! set of pure functions over an [`Env`] (who it is, its params and targets, its own extras) and
 //! the callback's arguments; the engine (`crate::engine`) checks signers and accounts, runs each
@@ -27,6 +27,18 @@ pub mod spy;
 pub mod transfer_fee;
 pub mod treaty;
 pub mod wall;
+// Arsenal waves B and C.
+pub mod cooldown;
+pub mod daily_sell_cap;
+pub mod dump_brake;
+pub mod flash_guard;
+pub mod guild_tag;
+pub mod impact_fee;
+pub mod rank_badge;
+pub mod rush_hour;
+pub mod streak;
+pub mod velocity_fee;
+pub mod volatility_fee;
 
 /// What a module sees.
 pub struct Env<'a, 'info> {
@@ -113,6 +125,13 @@ pub fn extras(template: u16, mint: &Pubkey, targets: &[Pubkey]) -> Vec<(Pubkey, 
         t::HALF_LIFE | t::TRANSFER_FEE | t::LAUNCH_DECAY | t::MAX_TRANSACTION | t::DUST_GUARD => {
             v.push(launch(mint))
         }
+        // Arsenal waves B and C: our Launch (buy and sell detection), and our launch pool where
+        // the template reads its ring.
+        t::COOLDOWN | t::FLASH_GUARD | t::DAILY_SELL_CAP | t::STREAK => v.push(launch(mint)),
+        t::VELOCITY_FEE | t::VOLATILITY_FEE | t::DUMP_BRAKE | t::RANK_BADGE => {
+            v.push(launch(mint));
+            v.push((launch_pool_address(mint), false));
+        }
         _ => {}
     }
     v
@@ -128,6 +147,8 @@ pub fn extra_count(template: u16, targets: usize) -> usize {
         t::SPY => 2 * targets,
         t::TREATY | t::TRIBUTE => targets * (1 + bordrless_token::constants::MAX_SLOTS),
         t::HALF_LIFE | t::TRANSFER_FEE | t::LAUNCH_DECAY | t::MAX_TRANSACTION | t::DUST_GUARD => 1,
+        t::COOLDOWN | t::FLASH_GUARD | t::DAILY_SELL_CAP | t::STREAK => 1,
+        t::VELOCITY_FEE | t::VOLATILITY_FEE | t::DUMP_BRAKE | t::RANK_BADGE => 2,
         _ => 0,
     }
 }
@@ -209,6 +230,12 @@ pub fn token_before(
         t::TRANSFER_FEE => transfer_fee::token(env, args),
         t::MAX_TRANSACTION => max_transaction::max_tx(env, args),
         t::DUST_GUARD => max_transaction::dust(env, args),
+        t::COOLDOWN => cooldown::token(env, args, src, dst),
+        t::FLASH_GUARD => flash_guard::token(env, args, src, dst),
+        t::DAILY_SELL_CAP => daily_sell_cap::token(env, args, src, dst),
+        t::STREAK => streak::token(env, args, src, dst),
+        t::RANK_BADGE => rank_badge::token(env, args, src, dst),
+        t::GUILD_TAG => guild_tag::token(env, args, src, dst),
         _ => Ok(TokenOut::default()),
     }
 }
@@ -217,6 +244,7 @@ pub fn token_before(
 pub fn touch(template: u16, env: &Env, args: &TokenSlotArgs, src: &[u8]) -> Result<Option<Vec<u8>>> {
     match template {
         t::RAID => raid::touch(env, args, src).map(Some),
+        t::GUILD_TAG => guild_tag::touch(env, args, src).map(Some),
         _ => Ok(None),
     }
 }
@@ -239,6 +267,11 @@ pub fn pool(
         t::LAUNCH_DECAY => launch_decay::pool(env, args, ctx, before),
         t::SELL_BURN => sell_burn::pool(env, args, ctx, before),
         t::BOSS => boss::pool(env, args, ctx, before),
+        t::VELOCITY_FEE => velocity_fee::pool(env, args, ctx, before),
+        t::IMPACT_FEE => impact_fee::pool(env, args, ctx, before),
+        t::VOLATILITY_FEE => volatility_fee::pool(env, args, ctx, before),
+        t::RUSH_HOUR => rush_hour::pool(env, args, ctx, before),
+        t::DUMP_BRAKE => dump_brake::pool(env, args, ctx, before),
         _ => Ok(PoolOut::default()),
     }
 }
@@ -267,6 +300,10 @@ pub fn token_destination(template: u16, targets: &[Pubkey]) -> Destination {
 pub fn pool_destination(template: u16, mint: &Pubkey, targets: &[Pubkey]) -> Destination {
     match template {
         t::RAID | t::SHIELD | t::SPY | t::SIZE_TIERS | t::SIDE_SKEW | t::LAUNCH_DECAY => {
+            Destination::Owner(war_chest(mint))
+        }
+        // Arsenal wave C: the war chest, as wave A's fee templates.
+        t::VELOCITY_FEE | t::IMPACT_FEE | t::VOLATILITY_FEE | t::RUSH_HOUR | t::DUMP_BRAKE => {
             Destination::Owner(war_chest(mint))
         }
         t::TREATY | t::TRIBUTE => targets

@@ -122,6 +122,19 @@ pub enum ItemsError {
     /// The range is shorter than the item's bytes.
     #[msg("the slot's range is shorter than the item's bytes")]
     RangeTooShort,
+    // Arsenal waves B and C.
+    /// Cooldown: the wallet bought too recently to sell or send.
+    #[msg("the wallet bought too recently to sell or send")]
+    CooldownActive,
+    /// Flash Guard: a sell too soon after the buy.
+    #[msg("the tokens were bought too few slots ago to sell")]
+    FlashSellTooSoon,
+    /// Daily Sell Cap: the day's cap is spent.
+    #[msg("the wallet has sold or sent its daily cap")]
+    DailyCapExceeded,
+    /// A holder payload from someone other than the holder.
+    #[msg("only the holding's owner may set this")]
+    NotHolder,
 }
 
 /// Maps a shared-rule error.

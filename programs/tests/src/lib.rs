@@ -1,9 +1,10 @@
-// Changed by Hookwars: slots helpers; armory helpers (M2); the war harness (M4/M5); items helpers (M3b); slot launch helpers (M3b); expansion helpers (10).
+// Changed by Hookwars: slots helpers; armory helpers (M2); the war harness (M4/M5); items helpers (M3b); slot launch helpers (M3b); expansion helpers (10); arsenal waves B and C helpers.
 //! LiteSVM harness for the Bordrless programs. The suites in `tests/` load the `.so` files that
 //! `scripts/solana/programs.sh build` wrote into `<checkout>/target/deploy` (or `SBF_OUT_DIR`), so
 //! they exercise the bytes that would be deployed.
 
 pub mod armory;
+pub mod arsenal1;
 pub mod env;
 pub mod events;
 pub mod expansion;

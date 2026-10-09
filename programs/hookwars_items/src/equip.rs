@@ -62,6 +62,18 @@ pub fn check_module_targets(template_id: u16, targets: &[Pubkey], role: u8) -> R
         | template_id::MAX_TRANSACTION
         | template_id::DUST_GUARD
         | template_id::SELL_BURN => n == 0,
+        // Arsenal waves B and C: no targets.
+        template_id::VELOCITY_FEE
+        | template_id::IMPACT_FEE
+        | template_id::VOLATILITY_FEE
+        | template_id::RUSH_HOUR
+        | template_id::COOLDOWN
+        | template_id::DAILY_SELL_CAP
+        | template_id::FLASH_GUARD
+        | template_id::DUMP_BRAKE
+        | template_id::STREAK
+        | template_id::RANK_BADGE
+        | template_id::GUILD_TAG => n == 0,
         _ => false,
     };
     require!(ok, ItemsError::BadTargets);

@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file, helpers for the armory and items programs (M2).
+// Changed by Hookwars: new file, helpers for the armory and items programs (M2); arsenal waves B and C schemas.
 //! The armory in the LiteSVM suites: loads `hookwars_armory`, `hookwars_items`, and the test-only
 //! `launch_stub` (at the launchpad's id: signs `["armory-caller", mint]`) and `war_stub` (at the
 //! war program's id: signs `["loot-signer"]`); initializes the armory with [`TEST_PARAMS`] and
@@ -79,6 +79,18 @@ pub fn test_schema(id: u16) -> (Params, Params, u8, bool) {
         template_id::MAX_TRANSACTION => (params(&[1]), params(&[10_000]), 0, true),
         template_id::DUST_GUARD => (params(&[0]), params(&[u32::MAX]), 0, true),
         template_id::SELL_BURN => (params(&[0]), params(&[300]), 0, true),
+        // Hookwars arsenal waves B and C (TEST floors and ceilings).
+        template_id::VELOCITY_FEE => (params(&[300, 0, 1, 0]), params(&[86_400, 1_000, 300, 300]), 0, true),
+        template_id::IMPACT_FEE => (params(&[1, 0]), params(&[1_000, 300]), 0, true),
+        template_id::VOLATILITY_FEE => (params(&[300, 300, 0, 0]), params(&[86_400, 86_400, 10_000, 300]), 0, true),
+        template_id::RUSH_HOUR => (params(&[0, 1, 0, 0]), params(&[23, 24, 300, 300]), 0, true),
+        template_id::COOLDOWN => (params(&[1]), params(&[86_400]), 0, true),
+        template_id::DAILY_SELL_CAP => (params(&[1]), params(&[10_000]), 0, true),
+        template_id::FLASH_GUARD => (params(&[1]), params(&[1_000]), 0, true),
+        template_id::DUMP_BRAKE => (params(&[300, 300, 0, 0]), params(&[86_400, 86_400, 10_000, 300]), 0, true),
+        template_id::STREAK => (params(&[1]), params(&[365]), 0, true),
+        template_id::RANK_BADGE => (params(&[1, 1, 0]), params(&[u32::MAX, 1_000_000, 255]), 0, true),
+        template_id::GUILD_TAG => (params(&[0]), params(&[1]), 0, true),
         template_id::COMPOSITE => (
             params(&[1, 1]),
             params(&[hookwars_common::MAX_MODULES as u32, 1]),
