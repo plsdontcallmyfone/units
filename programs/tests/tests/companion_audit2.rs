@@ -1,3 +1,4 @@
+// Changed by Hookwars: Split gains war_bps (0 here).
 //! The companion audit's second round (2026-10-08): the buyback's reference price. Each finding is
 //! kept as a regression test.
 
@@ -19,6 +20,7 @@ const BUYBACK: Split = Split {
     buyback_bps: 10_000,
     holders_bps: 0,
     beneficiary_bps: 0,
+    war_bps: 0,
 };
 
 fn companion_of(w: &World, mint: &Pubkey) -> Companion {

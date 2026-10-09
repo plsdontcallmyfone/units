@@ -1,3 +1,4 @@
+// Changed by Hookwars: the module sets also run with the kit in a Locked slot (R9), and the kit keeps to bytes 0..32 (R8).
 //! The kit (`docs/hooks-v2.md` §4) on chain, set up directly as `create_launch` will leave it (see
 //! `bordrless_program_tests::kit`): the binding of every account, each module alone and in every
 //! combination, wallets only, max wallet, the creator wallet lock and the early-buyer lock, and
@@ -44,8 +45,16 @@ mod anchor_err {
 }
 
 fn setup(modules: u8) -> (World, DirectKit) {
+    setup_in(modules, false)
+}
+
+/// Hookwars: `setup` with the kit as the single hook (upstream) or in a slot mint's Locked slot (R9).
+fn setup_in(modules: u8, in_slot: bool) -> (World, DirectKit) {
     let mut w = World::new();
-    let d = w.direct_kit(&KitSpec::new(modules));
+    let d = w.direct_kit(&KitSpec {
+        in_slot,
+        ..KitSpec::new(modules)
+    });
     (w, d)
 }
 
@@ -786,12 +795,19 @@ fn graduate_claim_and_share_bind_their_accounts() {
 
 /// What each module does, checked for one module set: each rule bites exactly when its module is
 /// on.
-fn run_module_set(m: u8) {
-    let (mut w, d) = setup(m);
+fn run_module_set(m: u8, in_slot: bool) {
+    let (mut w, d) = setup_in(m, in_slot);
     let t = d.token.clone();
     let on = |module: u8| m & module != 0;
     let c0 = config(&w, &d);
-    assert_eq!(w.env.read::<Mint>(&t.mint).hook_flags, mint_flags(m));
+    let mint_state = w.env.read::<Mint>(&t.mint);
+    if in_slot {
+        let (_, slot) = mint_state.locked_slot().expect("the kit's Locked slot");
+        assert_eq!((slot.program, slot.flags), (bordrless_kit::ID, mint_flags(m)));
+        assert!(bordrless_kit::mint_setup_ok(&mint_state, m, SUPPLY));
+    } else {
+        assert_eq!(mint_state.hook_flags, mint_flags(m));
+    }
     let (e, f, g) = (holder(&mut w, &d), holder(&mut w, &d), holder(&mut w, &d));
     let creator = d.creator.insecure_clone();
     w.holdings(&creator, w.sol, &[creator.pubkey()]);
@@ -884,8 +900,58 @@ fn run_module_set(m: u8) {
 fn every_module_set_runs_exactly_its_rules() {
     // Each module alone, each pair, each triple and all four.
     for m in 1..=modules::ALL {
-        run_module_set(m);
+        run_module_set(m, false);
     }
+}
+
+/// Hookwars R9: the same rules with the kit in a slot mint's Locked slot.
+#[test]
+fn every_module_set_runs_exactly_its_rules_in_a_locked_slot() {
+    for m in 1..=modules::ALL {
+        run_module_set(m, true);
+    }
+}
+
+/// Hookwars R8: in a Locked slot the kit keeps to bytes 0..32. Bytes 32..64 (another slot's range)
+/// stamped into every holding stay exactly as they were through buys, sends, a claim and a burn,
+/// while the kit's own bytes move.
+#[test]
+fn in_a_locked_slot_the_kit_never_writes_bytes_32_to_64() {
+    let (mut w, d) = setup_in(modules::ALL, true);
+    let t = d.token.clone();
+    let (a, b) = (holder(&mut w, &d), holder(&mut w, &d));
+    w.env.warp(61);
+    buy(&mut w, &d, &a.pubkey(), SUPPLY / 200).ok();
+    buy(&mut w, &d, &b.pubkey(), SUPPLY / 200).ok();
+    let stamp: [u8; 32] = core::array::from_fn(|i| 0xA0 ^ i as u8);
+    for owner in [a.pubkey(), b.pubkey(), t.pool] {
+        let key = token::holding_address(&t.mint, &owner);
+        let mut h: Holding = w.env.read(&key);
+        h.hook_data[32..].copy_from_slice(&stamp);
+        let mut data = Vec::new();
+        anchor_lang::AccountSerialize::try_serialize(&h, &mut data).unwrap();
+        let mut acc = w.env.account(&key).unwrap();
+        acc.data[..data.len()].copy_from_slice(&data);
+        w.env.put(key, acc);
+    }
+    let kit_bytes = |w: &World, o: &Pubkey| w.env.holding_state(&t.mint, o).1[..32].to_vec();
+    let before = kit_bytes(&w, &a.pubkey());
+    w.donate(&a, &t, SOL).ok();
+    w.env.warp(31 * 86_400);
+    w.send_tokens(&a, t.mint, &b.pubkey(), TOKEN).ok();
+    buy(&mut w, &d, &a.pubkey(), TOKEN).ok();
+    sell(&mut w, &d, &b, TOKEN).ok();
+    w.kit_claim(&a, &t).ok();
+    w.kit_burn(&b, t.mint, TOKEN).ok();
+    assert_ne!(kit_bytes(&w, &a.pubkey()), before, "the kit's own bytes moved");
+    for owner in [a.pubkey(), b.pubkey(), t.pool] {
+        assert_eq!(
+            &w.env.holding_state(&t.mint, &owner).1[32..],
+            &stamp[..],
+            "bytes 32..64 of {owner} untouched"
+        );
+    }
+    check_kit(&w.env, &t, &[a.pubkey(), b.pubkey()]);
 }
 
 #[test]

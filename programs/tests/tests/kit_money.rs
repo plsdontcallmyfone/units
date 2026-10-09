@@ -1,3 +1,4 @@
+// Changed by Hookwars: a seeded walk with the kit in a Locked slot (R9).
 //! The kit's money (`docs/hooks-v2.md` §4.7, §4.8, §4.11, §4.13) on chain: the economics review's
 //! hand example, a share streamed over its hour (and one made while another streams, waiting for
 //! it), donations, a holder who sells out, claims and closes, and seeded walks of every operation
@@ -485,8 +486,16 @@ fn a_holder_who_sells_out_claims_and_closes_the_holding() {
 }
 
 fn direct_walk(modules: u8, seed: u64, steps: usize) -> WalkReport {
+    direct_walk_in(modules, seed, steps, false)
+}
+
+/// Hookwars: `direct_walk` with the kit as the single hook or in a slot mint's Locked slot (R9).
+fn direct_walk_in(modules: u8, seed: u64, steps: usize, in_slot: bool) -> WalkReport {
     let mut w = World::new();
-    let d = w.direct_kit(&KitSpec::new(modules));
+    let d = w.direct_kit(&KitSpec {
+        in_slot,
+        ..KitSpec::new(modules)
+    });
     let payer = w.wallet_with_sol(10_000 * SOL);
     let mut market = DirectMarket {
         pool: d.pool.insecure_clone(),
@@ -557,4 +566,16 @@ fn a_walk_without_holder_rewards_keeps_the_counter() {
     let r = direct_walk(modules::MAX_WALLET | modules::EARLY_BUYER_LOCK, 21, 200);
     assert_eq!((r.inflows, r.claimed), (0, 0));
     assert!(r.ops.get("burn").copied().unwrap_or(0) > 0);
+}
+
+/// Hookwars R9: the seeded walk with every module, the kit in a slot mint's Locked slot: the vault
+/// stays solvent and every claim pays what the mirror computes, as with the single hook.
+#[test]
+fn a_seeded_walk_with_the_kit_in_a_locked_slot_keeps_the_vault_solvent() {
+    let r = direct_walk_in(modules::ALL, 14, 300, true);
+    assert!(r.claims > 10, "claims paid");
+    assert!(r.inflows > 0 && r.claimed > 0);
+    assert!(r.ops.get("share").copied().unwrap_or(0) > 0);
+    assert!(r.ops.get("burn").copied().unwrap_or(0) > 0);
+    assert!(!r.refused.is_empty(), "the rules refused something");
 }

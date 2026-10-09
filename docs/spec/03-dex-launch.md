@@ -528,3 +528,49 @@ seed (00 section 4.3); `init_equip` creates the `PoolCuts` accounting it needs, 
 From **05**: `init_war(mint)` as the third launch transaction; the chest's bridged-SOL holding
 address; `record_funding` counting companion transfers; `split_protocol_fees` sweeping both the
 prize vault's lamports and its quote holding (6.4); the siege restriction (R10).
+
+## Kit and companion implementation notes (2026-10-09, branch kitcomp)
+
+Built in `programs/bordrless_kit` (new `src/setup.rs`, `init`), `programs/bordrless_companion`
+(state, constants, error, events, `create`, `claim_fees`, client) and the tests. Where the build
+differs from the text above:
+
+1. **R9, the kit's mint check is one function**, `bordrless_kit::setup::mint_setup_ok(mint, modules,
+   supply)`, used by `init`. It accepts the upstream single-hook mint unchanged, or a slot mint with
+   no single hook and no hook authority whose `Locked` slot is the kit with exactly the kit's flags,
+   range offset 0 and two extras. The range length is `kit_data_len(flags)`: 32 when the kit keeps
+   hook data (holder rewards or the early-buyer lock), else 0, because the token program refuses a
+   Locked range for a program that never writes (`slot_table.rs`, the `writes` rule).
+2. **R10 helper**, `bordrless_kit::setup::holder_rewards_on(mint_key, mint, kit_config)`: true when
+   the kit runs on the mint (single hook or Locked slot) and the given `KitConfig` belongs to that
+   mint and has holder rewards on. War reads the rival's `KitConfig` at `KitConfig::address(mint)`
+   (owned by the kit) and passes `None` when it has none. Kit transfer rules are unchanged.
+3. **Companion `war_bps`.** `Split` gains `war_bps` as a fourth part; the four still add up to
+   10,000. `Companion` gains `war_total` and its `reserved` shrinks from 64 to 54 bytes, so
+   `Companion::LEN` is unchanged. `claim_fees` pays `floor(rest * war_bps / 10,000)` (rest = claimed
+   less the bounty) at once, as bridged SOL, from the creator's holding into the holding of
+   `PDA(["war-chest", mint], WAR_ID)`, creating that holding when missing (the cranker pays its
+   rent), and emits `CompanionWarFunded { companion, mint, war_chest, amount, war_total }`. Rounding
+   still goes to buybacks when there are any, else to the beneficiary. The client always passes the
+   war accounts (two more keys than upstream).
+4. **`WAR_BPS_MAX` is an owner value still to set** (00 section 6). The build uses the structural
+   bound, 10,000, and `create` refuses a larger `war_bps` with `WarShareTooHigh`. `WAR_ID` is a
+   constant in the companion (`5vJnBvr33jpsfYxMY2pvNf6tF9tkj8eaZ6goFtByUWA2`), not a crate
+   dependency, as upstream does for the kit's `COMPANION_ID`.
+5. **Presets.** The companion has no on-chain templates; every test split sets `war_bps: 0` except
+   the two new war tests.
+
+Measured (LiteSVM, `programs/tests/tests/companion.rs`, legacy transactions without lookup tables):
+
+| Path | Bytes | CU | Height |
+| --- | --- | --- | --- |
+| `claim_fees` with a war share (war holding created) | 873 | 191,390 | 4 |
+| companion launch (upstream path, unchanged) | 1,309 | 311,801 | 5 |
+| companion launch, v0 with the protocol table extended | 1,142 | 401,782 | 5 |
+
+Tests added: kit unit tests `setup::*` (5), `kit.rs`
+`every_module_set_runs_exactly_its_rules_in_a_locked_slot` and
+`in_a_locked_slot_the_kit_never_writes_bytes_32_to_64`, `kit_money.rs`
+`a_seeded_walk_with_the_kit_in_a_locked_slot_keeps_the_vault_solvent`, `companion.rs`
+`a_claim_pays_the_war_chest_its_share` and `no_war_share_no_war_payment_and_the_split_still_adds_up`.
+Suite: 203 passed, 0 failed, 2 ignored (the Studio fixtures).

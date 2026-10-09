@@ -1,3 +1,4 @@
+// Changed by Hookwars: claim_fees passes the war chest accounts.
 //! Builders for the companion's instructions, as the tests and the SDK build them. Each step's
 //! remaining accounts are the accounts of the instructions it invokes, built with the callees'
 //! own clients exactly as the program builds them on chain; the program looks them up by key. The
@@ -178,6 +179,24 @@ pub fn claim_fees(cranker: Pubkey, mint: Pubkey, author: Option<(Pubkey, Pubkey)
     };
     let mut extra = remaining(&claim, &[]);
     extra.extend(unwrap_accounts(creator));
+    // Hookwars: the war chest's holding (created when missing) and the transfer into it.
+    let war_chest = crate::instructions::war_chest_address(&mint);
+    extra.extend(remaining(
+        &token_client::create_holding(cranker, BRIDGED_SOL_MINT, war_chest),
+        &[],
+    ));
+    extra.extend(remaining(
+        &token_client::transfer(
+            creator,
+            token_client::holding_address(&BRIDGED_SOL_MINT, &creator),
+            token_client::holding_address(&BRIDGED_SOL_MINT, &war_chest),
+            BRIDGED_SOL_MINT,
+            None,
+            vec![],
+            0,
+        ),
+        &[],
+    ));
     build(
         step(cranker, mint),
         extra,

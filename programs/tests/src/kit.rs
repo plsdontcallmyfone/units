@@ -1,3 +1,4 @@
+// Changed by Hookwars: slot mints (the kit in a Locked slot, R9).
 //! The kit in tests (`docs/hooks-v2.md` §4).
 //!
 //! - [`World::direct_kit`] sets a kit token up as `create_launch` will leave it, without the
@@ -143,6 +144,9 @@ pub struct KitSpec {
     pub early_lock_secs: i64,
     /// Share of the supply the launch moves to the pool, in basis points.
     pub pool_bps: u64,
+    /// Hookwars: the kit in the `Locked` slot of a slot mint (R9) instead of the single hook, with
+    /// an empty item slot at bytes `KIT_DATA_LEN..64` after it.
+    pub in_slot: bool,
 }
 
 impl KitSpec {
@@ -158,6 +162,7 @@ impl KitSpec {
             early_window_secs: 60,
             early_lock_secs: 3_600,
             pool_bps: 7_500,
+            in_slot: false,
         }
     }
 }
@@ -271,6 +276,62 @@ impl World {
         // The mint as create_launch makes it: the kit as hook from the first instruction, no hook
         // authority, the whole supply to the launch, then no more minting ever.
         let reserve = token::holding_address(&mint, &launch.pubkey());
+        if spec.in_slot {
+            // Hookwars R9: the same mint as a slot mint, the kit Locked at bytes 0..32 with its two
+            // extras, an empty Fee item slot on the rest of the bytes, no single hook.
+            let slots = vec![
+                crate::slots::locked_slot(
+                    bordrless_kit::ID,
+                    mint_flags(m),
+                    bordrless_kit::kit_data_len(mint_flags(m)),
+                    bordrless_kit::setup::KIT_EXTRA_COUNT,
+                ),
+                crate::slots::item_slot(
+                    bordrless_hook::slot_kind::FEE,
+                    bordrless_hook::equip_rule::VOTE,
+                    100,
+                    64 - bordrless_kit::KIT_DATA_LEN,
+                    false,
+                ),
+            ];
+            let ixs = [
+                token::create_slot_mint(
+                    launch.pubkey(),
+                    mint,
+                    CreateMintArgs {
+                        decimals: spec.decimals,
+                        name: "Kit Token".to_string(),
+                        symbol: "KIT".to_string(),
+                        uri: String::new(),
+                        max_supply: spec.supply,
+                        mint_authority: Some(launch.pubkey()),
+                        freeze_authority: None,
+                        hook_program: None,
+                        hook_flags: 0,
+                        hook_authority: None,
+                        metadata_authority: None,
+                    },
+                    Some(crate::slots::authority_of(&mint)),
+                    slots,
+                ),
+                token::create_holding(launch.pubkey(), mint, launch.pubkey()),
+            ];
+            self.env.send_paid_by(&ixs, &launch, &[&mint_kp]).ok();
+            let extras = self.env.slot_mint_extras(
+                &mint,
+                bordrless_token::slots::SlotOp::Mint,
+                &mint,
+                &reserve,
+                &launch.pubkey(),
+                &Pubkey::default(),
+                &launch.pubkey(),
+            );
+            let ixs = [
+                token::mint_to(launch.pubkey(), mint, reserve, None, extras, spec.supply),
+                token::set_authority(launch.pubkey(), mint, AuthorityKind::Mint, None),
+            ];
+            self.env.send_paid_by(&ixs, &launch, &[]).ok();
+        }
         let ixs = [
             token::create_mint(
                 launch.pubkey(),
@@ -300,7 +361,9 @@ impl World {
             ),
             token::set_authority(launch.pubkey(), mint, AuthorityKind::Mint, None),
         ];
-        self.env.send_paid_by(&ixs, &launch, &[&mint_kp]).ok();
+        if !spec.in_slot {
+            self.env.send_paid_by(&ixs, &launch, &[&mint_kp]).ok();
+        }
         // The reward vault: the config's holding of bridged SOL, through the token program.
         if vault.is_some() {
             self.env
@@ -391,6 +454,18 @@ impl World {
         amount: u64,
     ) -> Instruction {
         let source = token::holding_address(&mint, owner);
+        if self.env.is_slot_mint(&mint) {
+            let extras = self.env.slot_mint_extras(
+                &mint,
+                bordrless_token::slots::SlotOp::Burn,
+                &source,
+                &mint,
+                &authority,
+                owner,
+                &Pubkey::default(),
+            );
+            return token::burn(authority, source, mint, None, extras, amount);
+        }
         let extras = self.env.token_hook_extras(
             &bordrless_kit::ID,
             &mint,

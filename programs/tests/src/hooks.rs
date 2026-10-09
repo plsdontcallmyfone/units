@@ -1,3 +1,4 @@
+// Changed by Hookwars: slot mints in the transfer helpers.
 //! Hooks in tests: mints and pools whose hook is the test-only `hook_tester` (answers scripted per
 //! callback), mints with `tax_hook`, the extra accounts a client resolves from a hook's registry
 //! (a token hook's, a pool hook's), and DEX swaps built from them as a client builds them.
@@ -88,6 +89,49 @@ impl Env {
             destination_owner,
         )
         .expect("registry resolves")
+    }
+
+    /// Hookwars: the remaining accounts of `op` on a slot mint, one slice per called slot in table
+    /// order. A `Locked` slot's extras come from its program's registry, resolved as a single
+    /// hook's are; an item slot's are the `slot_tester` layout ([`crate::slots::item_extras`]).
+    #[allow(clippy::too_many_arguments)]
+    pub fn slot_mint_extras(
+        &self,
+        mint: &Pubkey,
+        op: bordrless_token::slots::SlotOp,
+        source: &Pubkey,
+        destination: &Pubkey,
+        authority: &Pubkey,
+        source_owner: &Pubkey,
+        destination_owner: &Pubkey,
+    ) -> Vec<AccountMeta> {
+        let m: Mint = self.read(mint);
+        let mut v = Vec::new();
+        for (i, s) in m.active_slots().iter().enumerate() {
+            if !bordrless_token::slots::is_called(s, op) {
+                continue;
+            }
+            let extras = if s.is_locked() {
+                self.token_hook_extras(
+                    &s.program,
+                    mint,
+                    source,
+                    destination,
+                    authority,
+                    source_owner,
+                    destination_owner,
+                )
+            } else {
+                crate::slots::item_extras(mint, i as u8, &s.item, s.flags)
+            };
+            v.extend(token::slot_slice(s.program, extras));
+        }
+        v
+    }
+
+    /// Whether `mint` has a slot table (Hookwars).
+    pub fn is_slot_mint(&self, mint: &Pubkey) -> bool {
+        self.read::<Mint>(mint).uses_slots()
     }
 
     /// The hook data of a holding.
@@ -398,6 +442,18 @@ impl World {
             token::holding_address(&mint, from),
             token::holding_address(&mint, to),
         );
+        if self.env.is_slot_mint(&mint) {
+            let extras = self.env.slot_mint_extras(
+                &mint,
+                bordrless_token::slots::SlotOp::Transfer,
+                &source,
+                &destination,
+                &authority,
+                from,
+                to,
+            );
+            return token::transfer(authority, source, destination, mint, None, extras, amount);
+        }
         let extras =
             self.env
                 .token_hook_extras(&hook, &mint, &source, &destination, &authority, from, to);
@@ -543,6 +599,19 @@ impl World {
             token::holding_address(&mint, &from.pubkey()),
             token::holding_address(&mint, to),
         );
+        if self.env.is_slot_mint(&mint) {
+            let extras = self.env.slot_mint_extras(
+                &mint,
+                bordrless_token::slots::SlotOp::Transfer,
+                &source,
+                &destination,
+                &from.pubkey(),
+                &from.pubkey(),
+                to,
+            );
+            let ix = token::transfer(from.pubkey(), source, destination, mint, None, extras, amount);
+            return self.env.send_paid_by(&[ix], from, &[]);
+        }
         let hook = self.env.read::<Mint>(&mint).hook_program;
         let extras = match hook {
             Some(hook) => self.env.token_hook_extras(

@@ -1,3 +1,4 @@
+// Changed by Hookwars: Split gains war_bps (0 here).
 //! The companion audit's findings (2026-10-08), each kept as a regression test: every attack the
 //! audit demonstrated is now refused, or no longer pays.
 
@@ -34,11 +35,13 @@ const BUYBACK: Split = Split {
     buyback_bps: 10_000,
     holders_bps: 0,
     beneficiary_bps: 0,
+    war_bps: 0,
 };
 const HOLDERS: Split = Split {
     buyback_bps: 0,
     holders_bps: 10_000,
     beneficiary_bps: 0,
+    war_bps: 0,
 };
 
 fn code(e: CompanionError) -> u32 {

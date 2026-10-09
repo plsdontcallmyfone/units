@@ -1,3 +1,4 @@
+// Changed by Hookwars: Split gains war_bps; the war chest's share is tested at the end.
 //! Companions (`docs/companions.md`): a launch whose creator is the companion's creator address,
 //! so its creator fees are bought back and burned, streamed to holders or paid to its launcher by
 //! code, every step permissionless.
@@ -5,7 +6,7 @@
 use anchor_lang::prelude::Pubkey;
 use bordrless_companion::client as companion;
 use bordrless_companion::error::CompanionError;
-use bordrless_companion::events::{BoughtBack, FeesClaimed};
+use bordrless_companion::events::{BoughtBack, CompanionWarFunded, FeesClaimed};
 use bordrless_companion::instructions::CreateArgs;
 use bordrless_companion::state::{Companion, Split};
 use bordrless_core::policy;
@@ -126,6 +127,7 @@ fn the_token_that_buys_itself() {
         buyback_bps: 10_000,
         holders_bps: 0,
         beneficiary_bps: 0,
+        war_bps: 0,
     };
     let (mint, tx) = launch_through(&mut w, &launcher, split, 0, LaunchRules::NONE);
     tx.ok();
@@ -239,6 +241,7 @@ fn the_rug_proof_dev() {
         buyback_bps: 0,
         holders_bps: 5_000,
         beneficiary_bps: 5_000,
+        war_bps: 0,
     };
     let rules = presets::burn(); // holder rewards 0.5%, burn 0.5%
     let vest = 30 * 86_400;
@@ -360,6 +363,7 @@ fn what_a_companion_refuses() {
                 buyback_bps: 9_000,
                 holders_bps: 0,
                 beneficiary_bps: 0,
+                war_bps: 0,
             },
             50,
         ),
@@ -372,6 +376,7 @@ fn what_a_companion_refuses() {
                 buyback_bps: 10_000,
                 holders_bps: 0,
                 beneficiary_bps: 0,
+                war_bps: 0,
             },
             101,
         ),
@@ -386,6 +391,7 @@ fn what_a_companion_refuses() {
                     buyback_bps: 10_000,
                     holders_bps: 0,
                     beneficiary_bps: 0,
+                    war_bps: 0,
                 },
                 0,
             )
@@ -401,6 +407,7 @@ fn what_a_companion_refuses() {
             buyback_bps: 0,
             holders_bps: 10_000,
             beneficiary_bps: 0,
+            war_bps: 0,
         },
         0,
         LaunchRules::NONE,
@@ -413,6 +420,7 @@ fn what_a_companion_refuses() {
             buyback_bps: 10_000,
             holders_bps: 0,
             beneficiary_bps: 0,
+            war_bps: 0,
         },
         0,
         presets::rewards_and_cap(),
@@ -427,6 +435,7 @@ fn what_a_companion_refuses() {
             buyback_bps: 10_000,
             holders_bps: 0,
             beneficiary_bps: 0,
+            war_bps: 0,
         },
         0,
         LaunchRules::NONE,
@@ -490,6 +499,7 @@ fn a_companion_launch_fits_mainnet_limits() {
         buyback_bps: 5_000,
         holders_bps: 5_000,
         beneficiary_bps: 0,
+        war_bps: 0,
     };
     w.env
         .send_paid_by(
@@ -530,4 +540,146 @@ fn a_companion_launch_fits_mainnet_limits() {
     assert!(tx.size <= 1_232, "{} bytes", tx.size);
     assert!(tx.max_height() <= 5);
     assert_eq!(w.launch(&mint.pubkey()).creator, creator);
+}
+
+/// Hookwars: a companion whose split gives the war chest a share. Every claim pays it at once, as
+/// bridged SOL, into the holding of `PDA(["war-chest", mint], WAR_ID)` (created by the claim), with
+/// `CompanionWarFunded`; the other parts split what is left exactly as before, and the shares still
+/// add up to 10,000.
+#[test]
+fn a_claim_pays_the_war_chest_its_share() {
+    let mut w = World::new();
+    let launcher = w.wallet_with_sol(5 * SOL);
+    let split = Split {
+        buyback_bps: 5_000,
+        holders_bps: 0,
+        beneficiary_bps: 3_000,
+        war_bps: 2_000,
+    };
+    let (mint, tx) = launch_through(&mut w, &launcher, split, 0, LaunchRules::NONE);
+    tx.ok();
+    w.env.warp(31);
+    trade(&mut w, &mint, 4, 2 * SOL);
+    let accrued = w.env.holding(&w.sol, &launch::launch_address(&mint));
+    assert!(accrued > 0);
+
+    let war_chest = bordrless_companion::instructions::war_chest_address(&mint);
+    assert_eq!(
+        war_chest,
+        Pubkey::find_program_address(
+            &[b"war-chest", mint.as_ref()],
+            &bordrless_companion::constants::WAR_ID
+        )
+        .0
+    );
+    let war_holding = token::holding_address(&w.sol, &war_chest);
+    assert!(w.env.account(&war_holding).is_none(), "no war holding before the first claim");
+
+    let cranker = w.wallet_with_sol(SOL);
+    let tx = w.env.send_paid_by(
+        &[companion::claim_fees(cranker.pubkey(), mint, None)],
+        &cranker,
+        &[],
+    );
+    tx.ok();
+    println!(
+        "claim_fees with a war share: CU {} size {} height {}",
+        tx.cu(),
+        tx.size,
+        tx.max_height()
+    );
+    let ev: FeesClaimed = tx.event();
+    let war: CompanionWarFunded = tx.event();
+    assert_eq!(ev.claimed, accrued);
+    let bounty = accrued * 50 / 10_000;
+    let rest = accrued - bounty;
+    let to_war = rest * 2_000 / 10_000;
+    let to_beneficiary = rest * 3_000 / 10_000;
+    assert_eq!(ev.bounty, bounty);
+    assert_eq!(war.amount, to_war);
+    assert_eq!(war.war_chest, war_chest);
+    assert_eq!(war.mint, mint);
+    assert_eq!(war.war_total, to_war);
+    assert_eq!(ev.to_beneficiary, to_beneficiary);
+    assert_eq!(ev.to_buyback, rest - to_war - to_beneficiary, "rounding stays with buybacks");
+    assert_eq!(ev.to_holders, 0);
+    assert_eq!(w.env.holding(&w.sol, &war_chest), to_war);
+    let c = companion_of(&w, &mint);
+    assert_eq!(c.war_total, to_war);
+    assert_eq!(c.pending_beneficiary, to_beneficiary);
+    // The creator's holding keeps exactly what is set aside: the war share left it.
+    let creator = companion::creator_address(&mint);
+    assert_eq!(
+        w.env.holding(&w.sol, &creator),
+        c.pending_buyback + c.pending_holders + c.pending_beneficiary
+    );
+
+    // A second claim pays into the same holding and the total grows.
+    trade(&mut w, &mint, 2, SOL);
+    let accrued2 = w.env.holding(&w.sol, &launch::launch_address(&mint));
+    let tx = w.env.send_paid_by(
+        &[companion::claim_fees(cranker.pubkey(), mint, None)],
+        &cranker,
+        &[],
+    );
+    tx.ok();
+    let war2: CompanionWarFunded = tx.event();
+    let rest2 = accrued2 - accrued2 * 50 / 10_000;
+    assert_eq!(war2.amount, rest2 * 2_000 / 10_000);
+    assert_eq!(war2.war_total, to_war + war2.amount);
+    assert_eq!(w.env.holding(&w.sol, &war_chest), to_war + war2.amount);
+}
+
+/// Hookwars: without a war share a claim emits no `CompanionWarFunded` and creates no war holding;
+/// a split whose four parts do not add up to 10,000 is refused.
+#[test]
+fn no_war_share_no_war_payment_and_the_split_still_adds_up() {
+    let mut w = World::new();
+    let launcher = w.wallet_with_sol(5 * SOL);
+    let split = Split {
+        buyback_bps: 10_000,
+        holders_bps: 0,
+        beneficiary_bps: 0,
+        war_bps: 0,
+    };
+    let (mint, tx) = launch_through(&mut w, &launcher, split, 0, LaunchRules::NONE);
+    tx.ok();
+    w.env.warp(31);
+    trade(&mut w, &mint, 2, SOL);
+    let cranker = w.wallet_with_sol(SOL);
+    let tx = w.env.send_paid_by(
+        &[companion::claim_fees(cranker.pubkey(), mint, None)],
+        &cranker,
+        &[],
+    );
+    tx.ok();
+    assert!(tx.events::<CompanionWarFunded>().is_empty());
+    let war_chest = bordrless_companion::instructions::war_chest_address(&mint);
+    assert!(w.env.account(&token::holding_address(&w.sol, &war_chest)).is_none());
+
+    for bad in [
+        Split {
+            buyback_bps: 5_000,
+            holders_bps: 0,
+            beneficiary_bps: 3_000,
+            war_bps: 1_000,
+        },
+        Split {
+            buyback_bps: 5_000,
+            holders_bps: 0,
+            beneficiary_bps: 3_000,
+            war_bps: 3_000,
+        },
+    ] {
+        let mint = Keypair::new();
+        let ix = companion::create(
+            launcher.pubkey(),
+            launcher.pubkey(),
+            mint.pubkey(),
+            args(bad, 0),
+        );
+        w.env
+            .send_paid_by(&[ix], &launcher, &[&mint])
+            .expect_code(code(CompanionError::BadSplit));
+    }
 }

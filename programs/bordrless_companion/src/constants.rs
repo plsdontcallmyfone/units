@@ -1,3 +1,4 @@
+// Changed by Hookwars: WAR_ID, WAR_CHEST_SEED, WAR_BPS_MAX.
 //! Seeds, limits and the programs a companion calls (and nothing else).
 
 use anchor_lang::prelude::Pubkey;
@@ -38,6 +39,15 @@ pub const MAX_VEST_SECS: i64 = 365 * 86_400;
 pub const BUYBACK_AFTER_LAUNCH: i64 = 60;
 /// A buyback takes no less than the pool's own quote at that moment, less this (and the fees).
 pub const BUYBACK_SLIPPAGE_BPS: u64 = 200;
+/// Hookwars: the war program (`hookwars_war`), whose `["war-chest", mint]` PDA owns the bridged-SOL
+/// holding a claim pays `war_bps` into. A constant: the companion does not depend on the war crate.
+pub const WAR_ID: Pubkey = Pubkey::from_str_const("5vJnBvr33jpsfYxMY2pvNf6tF9tkj8eaZ6goFtByUWA2");
+/// Seed of a token's war chest under `WAR_ID`.
+pub const WAR_CHEST_SEED: &[u8] = b"war-chest";
+/// Hookwars `WAR_BPS_MAX` (spec 00 section 6, an owner value still to set). The build uses the
+/// structural bound, the whole split, until the owner sets it.
+pub const WAR_BPS_MAX: u16 = 10_000;
+
 /// The kit's id, as the kit names the companion (they must agree).
 pub const KIT_COMPANION_ID: Pubkey = bordrless_kit::constants::COMPANION_ID;
 
