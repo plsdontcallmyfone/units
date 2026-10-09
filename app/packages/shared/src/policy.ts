@@ -822,6 +822,21 @@ export function maxBuyWithin(r: Reserves, lpFeeBps: number, protocolShareBps: nu
 }
 
 /**
+ * Changed by Hookwars (fuzz audit 1, finding 1): the buy a client sends for `wanted` lamports on a
+ * curve. Near graduation the curve often has less left than a round buy needs, and such a buy is
+ * refused (`InsufficientLiquidity`) while `graduate` waits for the curve to fill; the buy to send is
+ * then exactly the remainder the curve can still fill. `remainder` is true when `wanted` was cut
+ * down; `amountIn` is 0 when no buy fits (the curve is full: graduate instead).
+ */
+export function remainderBuy(r: Reserves, wanted: bigint, lpFeeBps: number, protocolShareBps: number, p: LaunchFeeParams, allowance: bigint = U64_MAX): { amountIn: bigint; remainder: boolean } {
+  if (wanted <= 0n) return { amountIn: 0n, remainder: false };
+  const q = quoteLaunchSwap(r, 'buy', wanted, lpFeeBps, protocolShareBps, p);
+  if (q.failure === null && (q.delivered === null || q.delivered <= allowance)) return { amountIn: wanted, remainder: false };
+  const most = maxBuyWithin(r, lpFeeBps, protocolShareBps, p, allowance);
+  return most >= wanted ? { amountIn: wanted, remainder: false } : { amountIn: most, remainder: most > 0n };
+}
+
+/**
  * §8.2 `devBuyMaxLamports`: the largest first buy, in lamports, whose tokens after the buy burn stay
  * within max wallet at the opening reserves, with the fees of the creator's own first buy (the normal
  * LP fee, the creator fee and Bordrless's share of it; no holder fee, as nobody is eligible yet).

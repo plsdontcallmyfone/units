@@ -9,8 +9,8 @@ import {
   AddressLookupTableAccount, AddressLookupTableProgram, ComputeBudgetProgram, Connection, PublicKey, TransactionMessage, VersionedTransaction,
   type AccountMeta, type TransactionInstruction,
 } from '@solana/web3.js';
-import { hookwars, decodeLaunchConfig, launchHookExtras, launchPoolAddress, launchRulesFromInput, checkProtocolLookupTable, token, LAUNCH_CONFIG } from '@hookwars/sdk';
-import { FIXED_ADDRESSES, LP_FEE_BPS, MAX_VIRTUAL_QUOTE, MIN_VIRTUAL_QUOTE, NO_RULES, PROGRAM_IDS, TEMPLATES, type LaunchRulesInput, type PreparedTx } from '@hookwars/shared';
+import { hookwars, decodeLaunch, decodeKitConfig, decodePool, decodeLaunchConfig, launchHookExtras, launchPoolAddress, launchRulesFromInput, checkProtocolLookupTable, token, LAUNCH_CONFIG } from '@hookwars/sdk';
+import { FIXED_ADDRESSES, LP_FEE_BPS, remainderBuy, U64_MAX, MAX_VIRTUAL_QUOTE, MIN_VIRTUAL_QUOTE, NO_RULES, PROGRAM_IDS, TEMPLATES, type LaunchRulesInput, type PreparedTx } from '@hookwars/shared';
 
 export class PrepareError extends Error {
   readonly status: number;
@@ -212,6 +212,18 @@ export const PREPARES: Record<string, PrepareDef> = {
       return raidRoute(conn, owner, rival, target, amount, minOut);
     },
   },
+  // Changed by Hookwars (fuzz audit 1, finding 1): a buy on a launch pool, cut to the exact
+  // remainder the curve can still fill (graduation waits for that buy).
+  'buy/prepare': {
+    programs: ['swap', 'launch', 'items', 'token'], label: 'Buy', payer: (b) => pk(b, 'owner'),
+    build: async (b, conn) => {
+      const owner = pk(b, 'owner'); const mint = pk(b, 'mint');
+      const amount = big(b, 'amount'); const minOut = b.minOut === undefined ? 0n : big(b, 'minOut');
+      if (amount <= 0n) throw new PrepareError(400, 'BadRequest', '"amount" must be above zero.');
+      const { amountIn } = await remainderOf(conn, owner, mint, amount);
+      return [token.createHolding(owner, mint, owner), hookwars.swapRoute(owner, amountIn, minOut, [await launchHop(conn, owner, mint, 1)])];
+    },
+  },
   'launch/prepare': {
     programs: ['launch', 'armory', 'items', 'token', 'swap', 'war'], label: 'Launch', payer: (b) => pk(b, 'owner'),
     build: async () => { throw new PrepareError(400, 'UseStagedRoute', 'A launch is several transactions; it is prepared by the staged launch route.'); },
@@ -264,6 +276,34 @@ async function launchHop(conn: Connection, owner: PublicKey, mint: PublicKey, di
     inSlice: direction === 0 ? slices : [], outSlice: direction === 1 ? slices : [],
     poolExtras: hookwars.slotPoolExtras(mint, QUOTE, four, items.accounts),
   };
+}
+
+/** The buy to send for `wanted` lamports of `mint` on its launch pool: `wanted`, or the exact remainder
+ * the curve can still fill (and within max wallet). Pool items' cuts are not in the quote; they only
+ * lower what reaches the curve, so the remainder still fits. */
+export async function remainderOf(conn: Connection, owner: PublicKey, mint: PublicKey, wanted: bigint): Promise<{ amountIn: bigint; remainder: boolean }> {
+  const pool = launchPoolAddress(mint, QUOTE, LP_FEE_BPS);
+  const [pi, li] = await conn.getMultipleAccountsInfo([pool, hookwars.launchAddr(mint)], 'confirmed');
+  if (!pi || !li) throw new PrepareError(404, 'NoSuchToken', 'This is not a launch on this cluster.');
+  const p = decodePool(pi.data); const l = decodeLaunch(li.data);
+  let eligible = 0n; let minEligible = 0n; let allowance = U64_MAX;
+  if (l.modules !== 0) {
+    const ki = await conn.getAccountInfo(l.kitConfig, 'confirmed');
+    if (ki) {
+      const k = decodeKitConfig(ki.data);
+      eligible = k.eligible; minEligible = k.minEligible;
+      if (k.maxWalletBps > 0 && !k.graduated) {
+        const hi = await conn.getAccountInfo(holding(mint, owner), 'confirmed');
+        const held = hi ? (hookwars.holdingCodec.decode(hi.data) as { amount: bigint }).amount : 0n;
+        allowance = k.maxWalletAmount > held ? k.maxWalletAmount - held : 0n;
+      }
+    }
+  }
+  const r = { baseReserve: p.baseReserve, quoteReserve: p.quoteReserve, virtualBase: p.virtualBase, virtualQuote: p.virtualQuote };
+  const fees = { creatorFeeBps: l.creatorFeeBps, holderFeeBuyBps: l.rules.holderFeeBuyBps, holderFeeSellBps: l.rules.holderFeeSellBps, burnBuyBps: l.rules.burnBuyBps, burnSellBps: l.rules.burnSellBps, eligible, minEligible };
+  const out = remainderBuy(r, wanted, p.lpFeeBps, p.protocolShareBps, fees, allowance);
+  if (out.amountIn === 0n) throw new PrepareError(409, 'CurveFull', 'The curve has nothing left to buy (or your max wallet is reached): it is ready to graduate.');
+  return out;
 }
 
 /** A raid: sell the rival on its own launch pool and buy the target, in one `swap_route`. */

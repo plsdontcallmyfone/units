@@ -36,3 +36,12 @@ describe('API guards (app audit 1)', () => {
     for (const bad of ['-1', '1e3', 'x', '99999999999', '']) expect(() => intParam(bad, 'season', 0, 4_294_967_295)).toThrow(HttpError);
   });
 });
+
+// Fuzz audit 1, finding 4: `siege` succeeds when it only waits, so the feed keys on the event.
+import { KIND_OF } from './reads.ts';
+describe('battle feed kinds', () => {
+  it('maps SiegeWaited apart from SiegeExecuted', () => {
+    expect(KIND_OF.SiegeExecuted).toBe('siege');
+    expect(KIND_OF.SiegeWaited).toBe('siege_waited');
+  });
+});

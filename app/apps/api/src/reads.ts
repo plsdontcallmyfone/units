@@ -104,7 +104,8 @@ export async function proposals(db: Pool, mint: string, status?: string | null):
   }));
 }
 
-const KIND_OF: Record<string, BattleKind> = {
+/** Feed kinds by event: a siege that waited is its own kind (fuzz audit 1, finding 4). */
+export const KIND_OF: Record<string, BattleKind> = {
   RaidMarked: 'raid', SiegeExecuted: 'siege', SiegeWaited: 'siege_waited', CounterStrikeExecuted: 'counter_strike', Razed: 'raze',
   CapturedReturned: 'return', TreatyInflowShared: 'treaty_shared', EquipApplied: 'equip', ProposalCreated: 'proposal', EquipSettled: 'settle',
   BountyClaimed: 'bounty', RollRequested: 'roll', RollRevealed: 'loot', Forged: 'forge', QuestClaimed: 'quest', SeasonFinalized: 'season', PrizePaid: 'prize',
