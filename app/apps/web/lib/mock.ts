@@ -105,23 +105,31 @@ const launches: Page<Record<string, unknown>> = {
   next: null,
 };
 
-/** 24 hourly points per token: price in SOL, chest balance in SOL, raid volume in SOL. A fixed
- * pseudo-random walk so the chart renders the same on server and client. */
-export type MarketInfo = { priceSol: number; priceChange24h: number; volume1h: string; feesToChest: string; holders: number; series: { ts: number; price: number; chest: number; raids: number }[] };
+/** 96 candles of 15 minutes per token: open, high, low, close in SOL, volume in SOL, chest balance
+ * in SOL, raid volume in SOL. A fixed pseudo-random walk so the chart renders the same everywhere. */
+export type Candle = { ts: number; open: number; high: number; low: number; close: number; volume: number; chest: number; raids: number };
+export type MarketInfo = { priceSol: number; priceChange24h: number; volume1h: string; feesToChest: string; holders: number; series: Candle[] };
 function market(t: Tok, i: number): MarketInfo {
   let seed = 7 + i * 13;
   const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
   let price = [0.00042, 0.00019, 0.00011, 0.00004, 0.00088, 0.000009][i]!;
   let chest = Number(t.chestBalance) / 1e9 * 0.7;
-  const series = [];
-  for (let k = 23; k >= 0; k--) {
-    price = Math.max(price * (1 + (rnd() - 0.48) * 0.08), 1e-7);
-    const raids = rnd() > 0.6 ? Number((rnd() * 2.5).toFixed(2)) : 0;
-    chest += raids * 0.02 + rnd() * 0.3;
-    series.push({ ts: now - k * h, price: Number(price.toPrecision(4)), chest: Number(chest.toFixed(2)), raids });
+  const series: Candle[] = [];
+  const step = 900;
+  for (let k = 95; k >= 0; k--) {
+    const open = price;
+    const drift = (rnd() - 0.49) * 0.05;
+    const close = Math.max(open * (1 + drift), 1e-7);
+    const high = Math.max(open, close) * (1 + rnd() * 0.02);
+    const low = Math.min(open, close) * (1 - rnd() * 0.02);
+    const raids = rnd() > 0.85 ? Number((rnd() * 2.5).toFixed(2)) : 0;
+    const volume = Number((rnd() * 4 + raids * 3 + Math.abs(drift) * 60).toFixed(2));
+    chest += raids * 0.02 + rnd() * 0.08;
+    series.push({ ts: now - k * step, open: Number(open.toPrecision(4)), high: Number(high.toPrecision(4)), low: Number(low.toPrecision(4)), close: Number(close.toPrecision(4)), volume, chest: Number(chest.toFixed(2)), raids });
+    price = close;
   }
-  const first = series[0]!.price, last = series[23]!.price;
-  return { priceSol: last, priceChange24h: Number((((last - first) / first) * 100).toFixed(1)), volume1h: String(Math.round(series[23]!.raids * 1e9 + 1.3e9)), feesToChest: String(Math.round(Number(t.chestBalance) * 0.4)), holders: [2557, 1180, 640, 212, 3904, 58][i]!, series };
+  const first = series[0]!.open, last = series[95]!.close;
+  return { priceSol: last, priceChange24h: Number((((last - first) / first) * 100).toFixed(1)), volume1h: String(Math.round(series.slice(-4).reduce((a, c) => a + c.volume, 0) * 1e9)), feesToChest: String(Math.round(Number(t.chestBalance) * 0.4)), holders: [2557, 1180, 640, 212, 3904, 58][i]!, series };
 }
 
 /** The mock answer for a backend path, or undefined when the mock has none (the real backend answers). */

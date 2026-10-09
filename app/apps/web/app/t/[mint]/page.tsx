@@ -118,7 +118,7 @@ export default async function TokenPage({ params }: { params: Promise<{ mint: st
         </section>
 
         <div className="cv3-mid">
-          <Pn title="Chart" aside={m ? 'hourly, 24h' : 'no market data'} className="cv3-chart">
+          <Pn title="Chart" aside={m ? '15m candles, 24h' : 'no market data'} className="cv3-chart">
             {m ? <TokenChart series={m.series} symbol={symbol} /> : <Empty title="No market data for this mint" what="Price, chest balance and raid volume chart here once the indexer records swaps and chest moves for this token." />}
           </Pn>
           <div className="cv3-pair">
