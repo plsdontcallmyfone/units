@@ -8,7 +8,7 @@ publish.workspace = true
 # Host-only: no cdylib target, so cargo build-sbf never builds this crate.
 [dependencies]
 anchor-lang.workspace = true
-litesvm.workspace = true
+litesvm = { workspace = true, features = ["precompiles"] }
 bordrless-core = { path = "../../crates/bordrless-core" }
 bordrless-hook = { path = "../../crates/bordrless-hook" }
 bordrless-token = { path = "../bordrless_token", features = ["no-entrypoint"] }

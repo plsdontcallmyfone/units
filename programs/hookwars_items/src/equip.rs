@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M3b), the armory-facing entry points moved out of lib.rs (M2) and
+// Changed by Hookwars: new file (M3b), the armory-facing entry points moved out of lib.rs (M2) and; agents branch: template 42 takes no targets.
 // extended with the M3b registries and composites.
 //! The entry points the armory calls (02 section 4, 04 section 2.6).
 
@@ -61,7 +61,8 @@ pub fn check_module_targets(template_id: u16, targets: &[Pubkey], role: u8) -> R
         | template_id::LAUNCH_DECAY
         | template_id::MAX_TRANSACTION
         | template_id::DUST_GUARD
-        | template_id::SELL_BURN => n == 0,
+        | template_id::SELL_BURN
+        | template_id::SOULBOUND => n == 0,
         _ => false,
     };
     require!(ok, ItemsError::BadTargets);
