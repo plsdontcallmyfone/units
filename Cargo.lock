@@ -799,7 +799,13 @@ dependencies = [
  "bordrless-token",
  "half-life",
  "hook-tester",
+ "hookwars-armory",
+ "hookwars-common",
+ "hookwars-items",
+ "hookwars-war",
+ "launch-stub",
  "litesvm",
+ "randomness-stub",
  "slot-tester",
  "solana-account",
  "solana-hash",
@@ -810,6 +816,9 @@ dependencies = [
  "solana-signer",
  "solana-transaction",
  "tax-hook",
+ "war-armory-stub",
+ "war-items-stub",
+ "war-stub",
 ]
 
 [[package]]
@@ -1629,6 +1638,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "hookwars-war"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "bordrless-bridge",
+ "bordrless-companion",
+ "bordrless-core",
+ "bordrless-hook",
+ "bordrless-kit",
+ "bordrless-launch",
+ "bordrless-swap",
+ "bordrless-token",
+ "solana-security-txt",
+]
+
+[[package]]
 name = "hybrid-array"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2218,6 +2243,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d25bf25ec5ae4a3f1b92f929810509a2f53d7dca2f50b794ff57e3face536c8f"
 dependencies = [
  "rand_core 0.6.4",
+]
+
+[[package]]
+name = "randomness-stub"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
 ]
 
 [[package]]
@@ -4335,6 +4367,21 @@ name = "void"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
+
+[[package]]
+name = "war-armory-stub"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+]
+
+[[package]]
+name = "war-items-stub"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "bordrless-hook",
+]
 
 [[package]]
 name = "war-stub"

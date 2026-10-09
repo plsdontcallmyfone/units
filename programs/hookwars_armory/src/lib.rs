@@ -11,7 +11,7 @@
 use anchor_lang::prelude::*;
 use bordrless_token::state::Mint;
 use hookwars_common::{
-    ids, pda, seeds, shape, window_read, EquipConfig, Params, PerformanceRule, PARAM_FIELDS,
+    ids, pda, seeds, shape, window_read, EquipConfig, PerformanceRule, PARAM_FIELDS,
 };
 
 pub mod cpi;
@@ -43,8 +43,8 @@ pub struct RegisterTemplateArgs {
     pub code_hash: [u8; 32],
     pub kind: u8,
     pub field_count: u8,
-    pub field_min: Params,
-    pub field_max: Params,
+    pub field_min: [u32; PARAM_FIELDS],
+    pub field_max: [u32; PARAM_FIELDS],
     pub open_authoring: bool,
     pub loot_enabled: bool,
     pub forge_enabled: bool,
@@ -206,7 +206,7 @@ pub mod hookwars_armory {
     pub fn create_item(
         ctx: Context<CreateItem>,
         template_id: u16,
-        params: Params,
+        params: [u32; PARAM_FIELDS],
         royalty_bps: u16,
     ) -> Result<()> {
         process_create_item(ctx, template_id, params, royalty_bps)
@@ -216,7 +216,7 @@ pub mod hookwars_armory {
     pub fn mint_loot(
         ctx: Context<MintLoot>,
         template_id: u16,
-        params: Params,
+        params: [u32; PARAM_FIELDS],
     ) -> Result<()> {
         process_mint_loot(ctx, template_id, params)
     }
@@ -908,7 +908,7 @@ fn write_item(
     bump: u8,
     item_mint: Pubkey,
     template_id: u16,
-    params: Params,
+    params: [u32; PARAM_FIELDS],
     manifest: hookwars_common::Manifest,
     author: Pubkey,
     royalty_bps: u16,
@@ -935,7 +935,7 @@ fn write_item(
 fn process_create_item(
     ctx: Context<CreateItem>,
     template_id: u16,
-    params: Params,
+    params: [u32; PARAM_FIELDS],
     royalty_bps: u16,
 ) -> Result<()> {
     let a = &ctx.accounts;
@@ -999,7 +999,7 @@ fn process_create_item(
     Ok(())
 }
 
-fn process_mint_loot(ctx: Context<MintLoot>, template_id: u16, params: Params) -> Result<()> {
+fn process_mint_loot(ctx: Context<MintLoot>, template_id: u16, params: [u32; PARAM_FIELDS]) -> Result<()> {
     let a = &ctx.accounts;
     require!(a.template.loot_enabled, ArmoryError::TemplateClosed);
     let signer = a.armory_signer.to_account_info();

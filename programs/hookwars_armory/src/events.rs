@@ -2,7 +2,7 @@
 //! Events of the armory (docs/spec/02-armory.md section 13), by self-CPI.
 
 use anchor_lang::prelude::*;
-use hookwars_common::{Manifest, Params};
+use hookwars_common::{Manifest, PARAM_FIELDS};
 
 #[event]
 pub struct TemplateRegistered {
@@ -12,8 +12,8 @@ pub struct TemplateRegistered {
     pub deploy_slot: Option<u64>,
     pub kind: u8,
     pub field_count: u8,
-    pub field_min: Params,
-    pub field_max: Params,
+    pub field_min: [u32; PARAM_FIELDS],
+    pub field_max: [u32; PARAM_FIELDS],
     pub name: String,
     pub ts: i64,
 }
@@ -29,7 +29,7 @@ pub struct ItemCreated {
     pub item: Pubkey,
     pub item_mint: Pubkey,
     pub template_id: u16,
-    pub params: Params,
+    pub params: [u32; PARAM_FIELDS],
     pub manifest: Manifest,
     pub author: Pubkey,
     pub royalty_bps: u16,
@@ -43,7 +43,7 @@ pub struct LootMinted {
     pub item: Pubkey,
     pub owner: Pubkey,
     pub template_id: u16,
-    pub params: Params,
+    pub params: [u32; PARAM_FIELDS],
     pub ts: i64,
 }
 
@@ -52,7 +52,7 @@ pub struct Forged {
     pub burned: [Pubkey; 2],
     pub item: Pubkey,
     pub template_id: u16,
-    pub params: Params,
+    pub params: [u32; PARAM_FIELDS],
     pub level: u8,
     pub forger: Pubkey,
     pub ts: i64,
