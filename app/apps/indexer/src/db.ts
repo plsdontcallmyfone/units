@@ -1,7 +1,15 @@
 import pg from 'pg';
 import { allDdl } from './schema.ts';
 
-export function pool(url = process.env.DATABASE_URL ?? 'postgres://postgres:hookwars@127.0.0.1:5432/hookwars_app'): pg.Pool {
+/** The database URL, required: no default credentials live in code (app audit A-9). Give the API a
+ * read-only role and the indexer a writing one. */
+export function databaseUrl(env: Record<string, string | undefined> = process.env): string {
+  const url = env.DATABASE_URL;
+  if (!url) throw new Error('DATABASE_URL is not set; the indexer and the API need it (no default credentials).');
+  return url;
+}
+
+export function pool(url = databaseUrl()): pg.Pool {
   return new pg.Pool({ connectionString: url, max: 5 });
 }
 

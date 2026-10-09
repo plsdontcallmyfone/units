@@ -6,6 +6,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import type { BattleEvent, Page } from '@hookwars/shared';
 import { postFor } from './posts.ts';
+import { deliver } from './deliver.ts';
 
 const api = process.env.API_URL ?? 'http://127.0.0.1:9961';
 const state = process.env.BOTS_STATE ?? '/root/hw-app-bots-posted.json';
@@ -19,20 +20,31 @@ const cfg = {
 
 const posted = new Set<string>(existsSync(state) ? (JSON.parse(readFileSync(state, 'utf8')) as string[]) : []);
 
-async function send(text: string): Promise<void> {
-  if (tg) await fetch(`https://api.telegram.org/bot${tg.token}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: tg.chat, text, disable_web_page_preview: true }) });
-  if (x) await fetch('https://api.twitter.com/2/tweets', { method: 'POST', headers: { authorization: `Bearer ${x}`, 'content-type': 'application/json' }, body: JSON.stringify({ text }) });
+/** Sends to every enabled channel; true only when each answered 2xx (A-10). */
+async function send(text: string): Promise<boolean> {
+  let ok = true;
+  if (tg) {
+    const r = await fetch(`https://api.telegram.org/bot${tg.token}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: tg.chat, text, disable_web_page_preview: true }) });
+    ok &&= r.ok;
+  }
+  if (x) {
+    const r = await fetch('https://api.twitter.com/2/tweets', { method: 'POST', headers: { authorization: `Bearer ${x}`, 'content-type': 'application/json' }, body: JSON.stringify({ text }) });
+    ok &&= r.ok;
+  }
+  return ok;
 }
 
 const r = await fetch(`${api}/v1/feed`);
 const feed = (await r.json()) as Page<BattleEvent>;
-const fresh = feed.items.filter((e) => !posted.has(`${e.signature}:${e.ordinal}`)).reverse();
-for (const e of fresh) {
-  const text = postFor(e, cfg);
-  posted.add(`${e.signature}:${e.ordinal}`);
-  if (!text) continue;
-  if (!tg && !x) console.log(`[disabled, would post] ${text}`);
-  else await send(text);
-}
-writeFileSync(state, JSON.stringify([...posted]));
-console.log(JSON.stringify({ enabled: Boolean(tg || x), seen: feed.items.length, new: fresh.length }));
+const events = [...feed.items].reverse();
+const result = await deliver(
+  events,
+  posted,
+  (e) => postFor(e, cfg),
+  async (text) => {
+    if (!tg && !x) { console.log(`[disabled, would post] ${text}`); return true; }
+    return send(text);
+  },
+  (p) => writeFileSync(state, JSON.stringify([...p])),
+);
+console.log(JSON.stringify({ enabled: Boolean(tg || x), seen: feed.items.length, ...result }));

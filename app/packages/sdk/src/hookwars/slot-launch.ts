@@ -7,14 +7,17 @@
  * (`bordrless_launch::client::slots`, `bordrless_swap::client::swap_route`,
  * `programs/tests/tests/e2e.rs`).
  */
-import { PublicKey, TransactionInstruction, type AccountMeta } from '@solana/web3.js';
+import { PublicKey, TransactionInstruction, type AccountMeta, type Connection } from '@solana/web3.js';
+import { activeSlots, decodeSlotMint } from './accounts.ts';
+import { decodeHookAccountList, resolveHookAccounts } from '../hooks.ts';
 import { idlIx } from './from-idl.ts';
 import {
   ARMORY_ID, ITEMS_ID, LAUNCH_ID, SWAP_ID, TOKEN_ID,
   armoryCallerAddress, armoryConfigAddress, equipStateAddress, holdingAddr, itemRegistryAddress, launchAddr, poolCutsAddress,
-  preparedLaunchAddress, raidLedgerAddress, royaltyOwner, slotAuthority, slotStateAddress, templateAddress,
+  preparedLaunchAddress, raidLedgerAddress, royaltyOwner, slotAuthority, slotStateAddress, templateAddress, tokenHookSigner,
 } from './addresses.ts';
 import * as up from '../addresses.ts';
+import { PROGRAM_IDS } from '@hookwars/shared';
 import { launch as upLaunch, type CreateLaunchArgs } from '../instructions.ts';
 
 const ro = (pubkey: PublicKey): AccountMeta => ({ pubkey, isSigner: false, isWritable: false });
@@ -179,4 +182,52 @@ export function settleEquip(cranker: PublicKey, mint: PublicKey, slot: number, i
     crankerToken: holdingAddr(mint, cranker), crankerQuote: holdingAddr(quoteMint, cranker),
     armoryConfig: armoryConfigAddress(), tokenProgram: TOKEN_ID, tokenEventAuthority: up.TOKEN_EVENT_AUTHORITY,
   }, { slot }, dests.flatMap(([a, b]) => [rw(a), rw(b)]));
+}
+
+// ---------------------------------------------------------------- reading a launch's pool items --
+
+/** `bordrless_launch::instructions::forwards`: a filled Pool or Relation slot with pool callbacks. */
+export function forwards(slot: { kind: number; program: PublicKey; poolFlags: number }): boolean {
+  const ITEM_POOL_BEFORE = 1;
+  const ITEM_POOL_AFTER = 2;
+  return !slot.program.equals(PublicKey.default)
+    && (slot.kind === 4 || slot.kind === 3)
+    && (slot.poolFlags & (ITEM_POOL_BEFORE | ITEM_POOL_AFTER)) !== 0;
+}
+
+/** The pool items' accounts of a launch's swap, read from its mint and each forwarded item's
+ * registry (`[program, launchItemSigner(program), extras ...]` per forwarded slot, in slot order). */
+export async function fetchPoolItems(connection: Connection, mint: PublicKey): Promise<{ accounts: AccountMeta[]; registries: PublicKey[] }> {
+  const info = await connection.getAccountInfo(mint, 'confirmed');
+  if (!info) throw new Error('no such mint');
+  const m = decodeSlotMint(info.data);
+  const slots = activeSlots(m).filter((s) => forwards(s as unknown as { kind: number; program: PublicKey; poolFlags: number }));
+  const registries = slots.map((s) => itemRegistryAddress(mint, s.item));
+  const infos = registries.length ? await connection.getMultipleAccountsInfo(registries, 'confirmed') : [];
+  const accounts: AccountMeta[] = [];
+  slots.forEach((s, i) => {
+    const list = infos[i] ? decodeHookAccountList(infos[i]!.data) : null;
+    if (!list) throw new Error(`the item in a pool slot has no registry; refresh it first`);
+    const signer = tokenHookSigner(s.program);
+    const extras = resolveHookAccounts(list, [signer, mint, mint, mint, mint]);
+    accounts.push(ro(s.program), ro(launchItemSigner(s.program)), ...extras);
+  });
+  return { accounts, registries };
+}
+
+// ---------------------------------------------------------------- settlement destinations --
+
+const T = { RAID: 1, SHIELD: 2, SPY: 4, TREATY: 5, TRIBUTE: 6, HALF_LIFE: 7, TRANSFER_FEE: 8, SIZE_TIERS: 10, SIDE_SKEW: 11, LAUNCH_DECAY: 12 } as const;
+const warChestOf = (mint: PublicKey) => PublicKey.findProgramAddressSync([Buffer.from('war-chest'), mint.toBuffer()], new PublicKey(PROGRAM_IDS.war))[0];
+const treatyInboxOf = (mint: PublicKey) => PublicKey.findProgramAddressSync([Buffer.from('treaty-inbox'), mint.toBuffer()], new PublicKey(PROGRAM_IDS.war))[0];
+
+/** `settle_equip`'s destination pair of one module (`templates::token_destination`,
+ * `templates::pool_destination`): the holding a token-side cut goes to (the items program's id when
+ * it burns or has none) and the bridged-SOL holding a pool-side cut goes to. */
+export function settleDestination(templateId: number, mint: PublicKey, quoteMint: PublicKey, targets: PublicKey[]): [PublicKey, PublicKey] {
+  const token = templateId === T.TRANSFER_FEE && targets[0] ? holdingAddr(mint, targets[0]) : ITEMS_ID;
+  let owner: PublicKey | null = null;
+  if (([T.RAID, T.SHIELD, T.SPY, T.SIZE_TIERS, T.SIDE_SKEW, T.LAUNCH_DECAY] as number[]).includes(templateId)) owner = warChestOf(mint);
+  else if ((templateId === T.TREATY || templateId === T.TRIBUTE) && targets[0]) owner = treatyInboxOf(targets[0]);
+  return [token, owner ? holdingAddr(quoteMint, owner) : ITEMS_ID];
 }

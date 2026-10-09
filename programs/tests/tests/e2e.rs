@@ -498,7 +498,7 @@ fn the_launchs_own_deposit_is_never_cut_by_token_items() {
         &mut hw,
         &creator,
         vec![slot(slot_kind::FEE, 5_000, 0, false, false)],
-        vec![(0, fee, vec![])],
+        vec![(0, fee, vec![creator.pubkey()])],
     );
     let k = keys(&hw, &mint);
     let l: bordrless_launch::state::Launch = hw.w.env.read(&launch::launch_address(&mint));

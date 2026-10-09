@@ -193,7 +193,9 @@ pub fn process_launch<'info>(
     available.push(ctx.accounts.launch_program.to_account_info());
     available.push(ctx.accounts.creator.to_account_info());
     invoke_built(&ix, &available, &[&seeds.seeds()])?;
-    after_launch(&mut ctx.accounts.companion, creator, remaining)
+    let (companion, mint, now) = after_launch(&mut ctx.accounts.companion, creator, remaining)?;
+    emit_cpi!(CompanionLaunched { companion, mint, ts: now });
+    Ok(())
 }
 
 /// The rules a companion launch may have (upstream `launch`, unchanged).
@@ -217,7 +219,7 @@ fn after_launch<'info>(
     companion: &mut Box<Account<'info, Companion>>,
     creator: Pubkey,
     remaining: &[AccountInfo<'info>],
-) -> Result<()> {
+) -> Result<(Pubkey, Pubkey, i64)> {
     // The launch as created: its creator this companion's, no custom hook (not supported yet), no
     // config author paid (their claims would pay the companion outside its steps).
     let launch = Account::<Launch>::try_from(&remaining[LAUNCH_AT])?;
@@ -249,12 +251,7 @@ fn after_launch<'info>(
     c.launched_at = now;
     c.reference_price = reference;
     c.reference_at = now;
-    emit_cpi!(CompanionLaunched {
-        companion: c.key(),
-        mint: c.mint,
-        ts: now
-    });
-    Ok(())
+    Ok((c.key(), c.mint, now))
 }
 
 /// Hookwars: a slot launch through the companion (03 section 4.3, M3b's four steps). `data` is one
@@ -312,7 +309,8 @@ pub fn process_launch_slots<'info>(
     available.push(ctx.accounts.creator.to_account_info());
     invoke_built(&ix, &available, &[&seeds.seeds()])?;
     if final_step {
-        after_launch(&mut ctx.accounts.companion, creator, remaining)?;
+        let (companion, mint, now) = after_launch(&mut ctx.accounts.companion, creator, remaining)?;
+        emit_cpi!(CompanionLaunched { companion, mint, ts: now });
     }
     Ok(())
 }

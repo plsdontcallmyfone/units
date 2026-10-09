@@ -2,6 +2,7 @@
  * The read routes of docs/spec/06-app.md 3.3, built from the indexer's tables. Every figure comes
  * from a row or an account; what the backend cannot read is `null` (06 section 1 rule 3).
  */
+import { intParam } from './guard.ts';
 import type { Pool } from 'pg';
 import {
   TEMPLATES, decodeRange, itemSentence, PARAMS, SLOT_KINDS, EQUIP_RULES, rollingRaidVolume,
@@ -124,29 +125,36 @@ export async function feed(db: Pool, q: URLSearchParams): Promise<Page<BattleEve
   const args: unknown[] = [Object.keys(KIND_OF)];
   let sql = 'select * from events where name = any($1)';
   if (q.get('mint')) { args.push(q.get('mint')); sql += ` and (data->>'mint' = $${args.length} or data->>'rivalMint' = $${args.length})`; }
-  if (q.get('before')) { args.push(Number(q.get('before'))); sql += ` and slot < $${args.length}`; }
+  if (q.get('before') !== null) { args.push(intParam(q.get('before'), 'before', 0, Number.MAX_SAFE_INTEGER)); sql += ` and slot < $${args.length}`; }
   const rows = (await db.query(sql + ' order by slot desc, ordinal desc limit 100', args)).rows;
   const events = rows.map(battleRow).filter((x): x is BattleEvent => x !== null).filter((e) => !q.get('kind') || e.kind === q.get('kind'));
   return { items: events, next: rows.length === 100 ? String(rows[rows.length - 1].slot) : null };
 }
 
+/** How far back the war map looks, and how many edges of each kind it shows (A-7; operator settings). */
+const MAP_WINDOW_SECS = Number(process.env.MAP_WINDOW_SECS ?? 30 * 86_400);
+const MAP_EDGE_LIMIT = 500;
+/** Holdings scanned for generals per request (A-7). */
+const GENERALS_SCAN_LIMIT = 20_000;
+
 /** 06 2.4 war map. Edges come only from indexed rows; with none, the map is empty. */
 export async function warMap(db: Pool, now: number): Promise<WarMap> {
   const edges: WarMap['edges'] = [];
-  const raids = (await db.query(`select mint, rival, sum(volume)::text as v, min(ts) as since from raids group by mint, rival`)).rows;
+  // A-7: a bounded window and row count; the route also caches the answer.
+  const since = now - MAP_WINDOW_SECS;
+  const raids = (await db.query(`select mint, rival, sum(volume)::text as v, min(ts) as since from raids where ts >= $1 group by mint, rival order by sum(volume) desc limit ${MAP_EDGE_LIMIT}`, [since])).rows;
   for (const r of raids) edges.push({ kind: 'raid', from: r.mint, to: r.rival, weight: r.v, since: r.since === null ? null : num(r.since) });
-  const sieges = (await db.query(`select mint, rival_mint, max(ts) as at from ev_war_siege_executed group by mint, rival_mint`)).rows;
+  const sieges = (await db.query(`select mint, rival_mint, max(ts) as at from ev_war_siege_executed where ts >= $1 group by mint, rival_mint order by max(ts) desc limit ${MAP_EDGE_LIMIT}`, [since])).rows;
   for (const s of sieges) edges.push({ kind: 'siege', from: s.mint, to: s.rival_mint, weight: null, since: s.at === null ? null : num(s.at) });
   const mints = new Set<string>();
   for (const e of edges) { mints.add(e.from); mints.add(e.to); }
-  void now;
   return { nodes: [...mints].map((m) => ({ mint: m, symbol: m.slice(0, 4), image: null, chest: null, underSiege: false })), edges };
 }
 
 export async function generals(db: Pool, mint: string, currentSeason: number | null): Promise<General[]> {
   const s = (await db.query('select slot, kind, data_offset, data_len, data_epoch from slots where mint = $1', [mint])).rows;
   const specs: SlotRangeSpec[] = s.map((r) => ({ slot: r.slot, kind: num(r.kind), offset: num(r.data_offset), len: num(r.data_len), dataEpoch: num(r.data_epoch), templateId: null }));
-  const holdings = (await db.query('select owner, data from holding_hook_data where mint = $1', [mint])).rows;
+  const holdings = (await db.query('select owner, data from holding_hook_data where mint = $1 limit $2', [mint, GENERALS_SCAN_LIMIT])).rows;
   const vol = new Map((await db.query('select trader, sum(volume)::text as v from raids where mint = $1 group by trader', [mint])).rows.map((r) => [r.trader, r.v]));
   const out: General[] = [];
   for (const h of holdings) {
@@ -163,7 +171,7 @@ export const QUESTS: QuestInfo[] = [
   { questId: 2, name: 'Forge', sentence: 'Forge an item since your last Forge claim; claiming adds one loot ticket to the token you name. Once per QUEST_PERIOD_SECS.' },
 ];
 
-export async function status(db: Pool | null, rpc: { url: string; slot: () => Promise<number> }): Promise<HookwarsStatus> {
+export async function status(db: Pool | null, rpc: { cluster: string; slot: () => Promise<number> }): Promise<HookwarsStatus> {
   let slot: number | null = null;
   let rpcReachable = false;
   try { slot = await rpc.slot(); rpcReachable = true; } catch { /* unreachable */ }
@@ -179,7 +187,7 @@ export async function status(db: Pool | null, rpc: { url: string; slot: () => Pr
       database = true;
     } catch { database = false; }
   }
-  return { cluster: rpc.url, rpcReachable, slot, programs, indexer, database };
+  return { cluster: rpc.cluster, rpcReachable, slot, programs, indexer, database };
 }
 
 /** 05 2.5 rolling inbound volume per rival from the latest raid-ledger snapshot, when one exists. */
