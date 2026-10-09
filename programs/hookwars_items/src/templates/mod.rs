@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M3b).
+// Changed by Hookwars: new file (M3b); agents branch: template 42 Soulbound dispatch.
 //! Every template's behaviour (04 section 3, 08 section 4), one file per template. A template is a
 //! set of pure functions over an [`Env`] (who it is, its params and targets, its own extras) and
 //! the callback's arguments; the engine (`crate::engine`) checks signers and accounts, runs each
@@ -20,6 +20,7 @@ pub mod sell_burn;
 pub mod shield;
 pub mod side_skew;
 pub mod size_tiers;
+pub mod soulbound;
 pub mod spy;
 pub mod transfer_fee;
 pub mod treaty;
@@ -89,6 +90,7 @@ pub fn extras(template: u16, mint: &Pubkey, targets: &[Pubkey]) -> Vec<(Pubkey, 
             v.extend(targets.iter().map(launch));
         }
         t::WALL => v.push((pda::war_state(mint).0, false)),
+        t::SOULBOUND => v.push((*mint, false)),
         t::SPY => {
             for r in targets {
                 v.push(launch(r));
@@ -117,6 +119,7 @@ pub fn extra_count(template: u16, targets: usize) -> usize {
         t::RAID => 3 + targets,
         t::SHIELD => 4 + targets,
         t::WALL => 1,
+        t::SOULBOUND => 1,
         t::SPY => 2 * targets,
         t::TREATY | t::TRIBUTE => targets * (1 + bordrless_token::constants::MAX_SLOTS),
         t::HALF_LIFE | t::TRANSFER_FEE | t::LAUNCH_DECAY | t::MAX_TRANSACTION | t::DUST_GUARD => 1,
@@ -201,6 +204,7 @@ pub fn token_before(
         t::TRANSFER_FEE => transfer_fee::token(env, args),
         t::MAX_TRANSACTION => max_transaction::max_tx(env, args),
         t::DUST_GUARD => max_transaction::dust(env, args),
+        t::SOULBOUND => soulbound::token(env, args),
         _ => Ok(TokenOut::default()),
     }
 }

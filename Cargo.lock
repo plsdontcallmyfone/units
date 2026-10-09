@@ -83,6 +83,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "agents-caller-stub"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+]
+
+[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -787,6 +794,7 @@ dependencies = [
 name = "bordrless-program-tests"
 version = "0.1.0"
 dependencies = [
+ "agents-caller-stub",
  "anchor-lang",
  "armory-stub",
  "bordrless-bridge",
@@ -799,6 +807,7 @@ dependencies = [
  "bordrless-token",
  "half-life",
  "hook-tester",
+ "hookwars-agents",
  "hookwars-armory",
  "hookwars-common",
  "hookwars-items",
@@ -1610,6 +1619,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "hookwars-agents"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "bordrless-hook",
+ "bordrless-token",
+ "hookwars-armory",
+ "hookwars-common",
+ "solana-instructions-sysvar 3.0.1",
+ "solana-security-txt",
+ "solana-sha256-hasher",
+]
+
+[[package]]
 name = "hookwars-armory"
 version = "0.1.0"
 dependencies = [
@@ -1633,9 +1656,13 @@ name = "hookwars-items"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
+ "bordrless-core",
  "bordrless-hook",
+ "bordrless-swap",
  "bordrless-token",
+ "hookwars-armory",
  "hookwars-common",
+ "hookwars-war",
  "solana-security-txt",
 ]
 
@@ -1652,6 +1679,8 @@ dependencies = [
  "bordrless-launch",
  "bordrless-swap",
  "bordrless-token",
+ "hookwars-armory",
+ "hookwars-common",
  "solana-security-txt",
 ]
 
