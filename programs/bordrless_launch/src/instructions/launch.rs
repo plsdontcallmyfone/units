@@ -1203,7 +1203,8 @@ pub fn slot_registry_list(holder_vault: Pubkey, kit_config: Pubkey, pool_cuts: P
 /// Hookwars M3b, `create_prepared_launch` (spec 03 section 4.3, transaction 2): upstream's
 /// `create_launch` on a mint `prepare_launch` already made, whose items `equip_prepared` already
 /// equipped. The remaining accounts are `[prepared, pool_cuts_owner, pool_cuts_holding]`, then
-/// the mint's transfer slices for the deposit.
+/// one item registry per forwarded slot (Changed by Hookwars, security review 2 L-D: the pool
+/// registry is written whole here), then the mint's transfer slices for the deposit.
 pub fn process_create_prepared_launch<'info>(
     mut ctx: Context<'info, CreateLaunch<'info>>,
     args: CreateLaunchArgs,
@@ -1263,13 +1264,13 @@ pub fn process_create_prepared_launch<'info>(
         install_kit(&ctx, &plan)?;
     }
     create_pool_cuts(&ctx, &plan, &remaining[1], &remaining[2])?;
-    let slice = prepared_slice(&mint, &remaining[3..])?;
+    let forwarded = crate::instructions::slot_launch::forwarded_count(&mint);
+    require!(remaining.len() >= 3 + forwarded, LaunchError::ItemAccountsMissing);
+    let slice = prepared_slice(&mint, &remaining[3 + forwarded..])?;
     create_curve_pool(&ctx, &plan, slice)?;
-    write_pool_registry(
-        &ctx,
-        &plan,
-        &slot_registry_list(plan.holder_vault, plan.kit_config, *remaining[2].key),
-    )?;
+    let mut list = slot_registry_list(plan.holder_vault, plan.kit_config, *remaining[2].key);
+    crate::instructions::slot_launch::append_pool_items(&mut list, &mint, &mint_key, &remaining[3..3 + forwarded])?;
+    write_pool_registry(&ctx, &plan, &list)?;
     record_launch(&mut ctx, &plan, crate::constants::hookwars::SLOT_LAUNCH)?;
     prepared.launched = true;
     prepared.exit(&crate::ID)?;

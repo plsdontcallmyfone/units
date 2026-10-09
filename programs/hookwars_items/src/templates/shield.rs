@@ -1,4 +1,6 @@
-// Changed by Hookwars: new file (M3b).
+// Changed by Hookwars: new file (M3b); security review 2 L-B: the sell mark names who signed the
+// sell (owner or delegate, the swap's actor), and the origin travels to every destination but the
+// launch's own accounts.
 //! Shield (id 2, 04 section 3.2). Extras: `RaidLedger` (w), `WarConfig`, our `WarState`, our
 //! `Launch`, each target's `Launch`.
 //!
@@ -125,10 +127,12 @@ pub fn token(env: &Env, args: &TokenSlotArgs, src: &[u8], dst: &[u8]) -> Result<
         if so != 0 && env.now - i64::from(sat) < window {
             if let Some(mut l) = load_ledger(&x[0], &env.mint) {
                 let bit = 1u8.checked_shl(u32::from(env.slot)).unwrap_or(0);
-                if l.sell_mark.clock_slot != env.clock_slot || l.sell_mark.seller != args.source_owner {
+                // The swap's actor is whoever signed the input transfer: the owner, or a delegate
+                // selling the owner's tokens.
+                if l.sell_mark.clock_slot != env.clock_slot || l.sell_mark.seller != args.authority {
                     l.sell_mark = hookwars_common::raid::SellMark {
                         clock_slot: env.clock_slot,
-                        seller: args.source_owner,
+                        seller: args.authority,
                         marked_slots: 0,
                     };
                 }
@@ -136,8 +140,8 @@ pub fn token(env: &Env, args: &TokenSlotArgs, src: &[u8], dst: &[u8]) -> Result<
                 save_ledger(&x[0], &l)?;
             }
         }
-    } else if so != 0 && args.destination_owner.is_on_curve() {
-        // Between holders the origin travels with the tokens.
+    } else if so != 0 && args.destination_owner != pda::launch(&env.mint).0 {
+        // The origin travels with the tokens, to off-curve holders too.
         let at = blend(args.destination_balance, if dor == 0 { sat } else { dat }, args.amount, sat);
         out.destination = Some(write(so, at));
     }

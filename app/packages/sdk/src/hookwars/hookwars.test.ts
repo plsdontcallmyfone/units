@@ -3,9 +3,9 @@ import { Keypair, PublicKey } from '@solana/web3.js';
 import { FIXED_ADDRESSES, HOOK_SIGNERS, PROGRAM_IDS } from '@hookwars/shared';
 import { encodeHookAccountList } from '../hooks.ts';
 import {
-  ARMORY_ID, ITEMS_ID, LAUNCH_ID, MAX_SLOTS, PARAM_FIELDS, TOKEN_ID, WAR_ID, activeSlots, claimQuest, coderOf, decodeCpiEvent, decodeObservations,
-  decodeRaidLedger, decodeSlotMint, decodeWarState, discriminator, encode, encodeEventBody, EVENT_IX_TAG, EVENT_SPECS, forge, holdingCodec, hookwarsIx,
-  idlAccountCodec, isCalled, itemCodec, itemLogEvents, lockedAt, logsTruncated, resolveSlices, settleEquip, sliceAccounts, slotRegistryAddress, structFields,
+  ARMORY_ID, ITEMS_ID, LAUNCH_ID, MAX_SLOTS, PARAM_FIELDS, TOKEN_ID, WAR_ID, activeSlots, claimQuest, coderOf, decodeCpiEvent, decodePoolObservations, POOL_LEN, OBS_HEADER_LEN,
+  decodeRaidLedger, decodeSlotMint, decodeWarState, discriminator, encode, encodeEventBody, EVENT_IX_TAG, EVENT_SPECS, forge, holdingCodec,
+  idlAccountCodec, isCalled, itemCodec, itemLogEvents, lockedAt, logsTruncated, resolveSlices, settleEquip, sliceAccounts, swapRoute, SWAP_ID, slotRegistryAddress, structFields,
   tokenHookSigner, tyOf, vote, IDLS, type SlotData, type SlotMintData,
 } from './index.ts';
 
@@ -39,7 +39,7 @@ describe('fixed addresses', () => {
 
 const k = () => Keypair.generate().publicKey;
 const emptySlot = (): SlotData => ({
-  kind: 0, equipRule: 0, bounds: { maxCutBps: 0, mayRefuse: false, mayWriteData: false, mayAnswerTouch: false }, dataOffset: 0, dataLen: 0,
+  kind: 0, equipRule: 0, bounds: { maxCutBps: 0, mayRefuse: false, mayWriteData: false, mayAnswerTouch: false, mayBurn: false }, dataOffset: 0, dataLen: 0,
   item: PublicKey.default, program: PublicKey.default, flags: 0, poolFlags: 0, equipVault: PublicKey.default, signerBump: 0, launchSignerBump: 0, dataEpoch: 0, extraCount: 0,
 });
 
@@ -49,7 +49,7 @@ function mintBytes(m: SlotMintData, pad = 0): Buffer {
 
 describe('token Mint with slots (IDL)', () => {
   const kitSlot: SlotData = { ...emptySlot(), kind: 5, equipRule: 0, dataLen: 32, program: k(), flags: 1 | 64 | 128, extraCount: 0 };
-  const raidSlot: SlotData = { ...emptySlot(), kind: 4, equipRule: 1, dataOffset: 32, dataLen: 12, item: k(), program: ITEMS_ID, flags: 1, extraCount: 2, dataEpoch: 1, bounds: { maxCutBps: 300, mayRefuse: false, mayWriteData: true, mayAnswerTouch: true } };
+  const raidSlot: SlotData = { ...emptySlot(), kind: 4, equipRule: 1, dataOffset: 32, dataLen: 12, item: k(), program: ITEMS_ID, flags: 1, extraCount: 2, dataEpoch: 1, bounds: { maxCutBps: 300, mayRefuse: false, mayWriteData: true, mayAnswerTouch: true, mayBurn: false } };
   const warSlot: SlotData = { ...emptySlot(), kind: 6, item: k(), program: ITEMS_ID };
   const m: SlotMintData = {
     version: 1, decimals: 6, supply: 1_000_000_000_000_000n, maxSupply: 0n, mintAuthority: null, freezeAuthority: null, hookAuthority: null, metadataAuthority: k(),
@@ -64,8 +64,8 @@ describe('token Mint with slots (IDL)', () => {
     expect(d.slots[1]!.bounds.maxCutBps).toBe(300);
     expect(d.slots[1]!.item.equals(raidSlot.item)).toBe(true);
   });
-  it('a slot is 113 bytes (01 M1 notes)', () => {
-    expect(encode(tyOf(IDLS.token!, { defined: { name: 'Slot' } }), emptySlot()).length).toBe(113);
+  it('a slot is 114 bytes (01 M1 notes, plus SlotBounds.may_burn from M3b)', () => {
+    expect(encode(tyOf(IDLS.token!, { defined: { name: 'Slot' } }), emptySlot()).length).toBe(114);
   });
   it('calls slots as M1 does', () => {
     expect(isCalled(kitSlot, 'transfer')).toBe(true);
@@ -129,8 +129,13 @@ describe('IDL accounts', () => {
     expect(decodeWarState(data).captured.length).toBeGreaterThan(0);
   });
   it('spec-layout rings and tables are sized from the data', () => {
-    const OBS = Buffer.concat([discriminator('account', 'Observations'), Buffer.alloc(1 + 1 + 32 + 16 + 8 + 2 + 2), Buffer.alloc(48 * 7)]);
-    expect(decodeObservations(OBS).entries).toHaveLength(7);
+    // Changed by Hookwars: the ring is the tail of the pool account (M3a), read from POOL_LEN.
+    const head = Buffer.alloc(OBS_HEADER_LEN);
+    discriminator('account', 'Observations').copy(head, 0);
+    head[8] = 1; head.writeUInt16LE(7, 86);
+    const POOL = Buffer.concat([Buffer.alloc(POOL_LEN), head, Buffer.alloc(48 * 7)]);
+    expect(decodePoolObservations(POOL).entries).toHaveLength(7);
+    expect(() => decodePoolObservations(Buffer.alloc(POOL_LEN + OBS_HEADER_LEN))).toThrow();
     const RL = Buffer.concat([discriminator('account', 'RaidLedger'), Buffer.alloc(46), Buffer.alloc(56 * 5), Buffer.alloc(81), Buffer.alloc(32)]);
     expect(decodeRaidLedger(RL).inbound).toHaveLength(5);
   });
@@ -195,11 +200,20 @@ describe('instructions', () => {
     const itemMint = PublicKey.findProgramAddressSync([Buffer.from('item-mint'), Buffer.from([7, 0, 0, 0, 0, 0, 0, 0])], ARMORY_ID)[0];
     expect(ix.keys[names.indexOf('item_mint')]!.pubkey.equals(itemMint)).toBe(true);
   });
-  it('spec-layout builders for programs not on main', () => {
-    const ix = settleEquip(k(), k(), 1, k());
+  it('settle_equip and swap_route come from the items and DEX IDLs', () => {
+    const dest = k();
+    const ix = settleEquip(k(), k(), 1, { key: k(), tokenCuts: true, composite: false }, k(), [[k(), dest]]);
     expect(ix.programId.equals(ITEMS_ID)).toBe(true);
     expect(ix.data.subarray(0, 8)).toEqual(discriminator('global', 'settle_equip'));
-    expect(() => hookwarsIx('items', 'nope', {}, [])).toThrow();
+    expect(ix.keys.some((m) => m.pubkey.equals(dest))).toBe(true);
+  });
+  it('swap_route lays out each hop as nine fixed accounts then its slices', () => {
+    const hop = { pool: k(), baseMint: k(), quoteMint: k(), traderBase: k(), traderQuote: k(), hookProgram: null, baseMintWritable: true, quoteMintWritable: false, direction: 0 as const, inSlice: [{ pubkey: k(), isSigner: false, isWritable: false }], outSlice: [], poolExtras: [] };
+    const ix = swapRoute(k(), 10n, 1n, [hop, { ...hop, pool: k() }]);
+    expect(ix.programId.equals(SWAP_ID)).toBe(true);
+    expect(ix.data.subarray(0, 8)).toEqual(discriminator('global', 'swap_route'));
+    const fixed = coderOf('swap').accountsOf('swap_route').length;
+    expect(ix.keys.length).toBe(fixed + 2 * 10);
   });
   it('events of the IDL programs come from the IDLs', () => {
     const war = EVENT_SPECS.war!.map(([n]) => n);

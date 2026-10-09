@@ -1,4 +1,5 @@
-// Changed by Hookwars: program ids and derived addresses; observation ring (obs) and swap_route.
+// Changed by Hookwars: program ids and derived addresses; observation ring (obs) and swap_route; a heap
+// allocator that uses a requested heap frame (a route of slot launches needs more than 32 KiB).
 //! `bordrless_swap`: the Bordrless DEX.
 //!
 //! Constant-product pools between two Bordrless Token Standard mints. A pool has an LP fee that
@@ -21,6 +22,41 @@
 #![allow(unexpected_cfgs)]
 
 use anchor_lang::prelude::*;
+
+/// Changed by Hookwars: the bump allocator of `solana-program-entrypoint`, growing upward from the
+/// heap's start so that a transaction without a larger heap frame behaves as before up to 32 KiB,
+/// and one that requests a frame (`ComputeBudgetInstruction::RequestHeapFrame`, up to 256 KiB)
+/// can use all of it. A two-hop `swap_route` through slot launches with pool items allocates more
+/// than 32 KiB (each hop's CPIs carry the slices and the items' accounts).
+#[cfg(all(target_os = "solana", feature = "custom-heap", not(feature = "no-entrypoint")))]
+mod heap {
+    use core::alloc::{GlobalAlloc, Layout};
+    const START: usize = 0x300000000;
+    const LEN: usize = 256 * 1024;
+    struct Upward;
+    unsafe impl GlobalAlloc for Upward {
+        #[inline]
+        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+            let pos_ptr = START as *mut usize;
+            let mut pos = *pos_ptr;
+            if pos == 0 {
+                pos = START + core::mem::size_of::<usize>();
+            }
+            let align = layout.align().max(1);
+            let at = (pos + align - 1) & !(align - 1);
+            let end = match at.checked_add(layout.size()) {
+                Some(e) if e <= START + LEN => e,
+                _ => return core::ptr::null_mut(),
+            };
+            *pos_ptr = end;
+            at as *mut u8
+        }
+        #[inline]
+        unsafe fn dealloc(&self, _: *mut u8, _: Layout) {}
+    }
+    #[global_allocator]
+    static ALLOC: Upward = Upward;
+}
 
 pub mod client;
 pub mod constants;

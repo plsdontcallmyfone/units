@@ -1,3 +1,4 @@
+// Changed by Hookwars: windowRead walks the ring newest first with the cumulative price.
 /**
  * The Hookwars math the site and backend mirror, each function citing the spec section whose
  * formula it implements. All integer math is in bigint with floors, as the programs do. Once the
@@ -61,38 +62,39 @@ export function royaltyPosition(vaultBalance: bigint, poolOwed: bigint, poolSett
   };
 }
 
-/** 03 3.1 observation types. `priceCumulative` wraps at 2^128. */
+/** The observation ring in a pool account (03 3.1 as built in M3a, `bordrless_core::observations`).
+ * `cumulative` is the header's running sum; `priceCumulative` wraps at 2^128. */
 export interface Observation { ts: bigint; priceCumulative: bigint; quoteVolume: bigint; swapCount: bigint }
-export interface ObservationsView { lastPriceQ64: bigint; lastTs: bigint; index: number; filled: number; entries: Observation[] }
+export interface ObservationsView { cumulative: bigint; lastPriceQ64: bigint; lastTs: bigint; index: number; filled: number; entries: Observation[] }
 export interface WindowRead { twapQ64: bigint; quoteVolume: bigint; swaps: bigint }
 
 const U128 = 1n << 128n;
 
-/** 03 3.1 `window_read`. Returns null for "no signal" (too short a history, too short a window),
- * which every template and the Performance rule treat as no effect. */
+/** `bordrless_core::observations::window_read` on a decoded ring: null is "no signal" (window
+ * under the minimum, or no entry old enough), which every template and the Performance rule treat
+ * as no effect. Walks newest first and uses the first entry at or before `now - window`. */
 export function windowRead(obs: ObservationsView, poolQuoteVolume: bigint, poolSwapCount: bigint, now: bigint, window: bigint, minTwapSecs: bigint | null): WindowRead | null {
-  if (minTwapSecs !== null && window < minTwapSecs) return null;
-  if (obs.filled === 0) return null;
+  if (window <= 0n || (minTwapSecs !== null && window < minTwapSecs)) return null;
   const len = obs.entries.length;
-  const newestIdx = (obs.index - 1 + len) % len;
-  const newest = obs.entries[newestIdx];
-  if (!newest) return null;
-  const elapsed = now > obs.lastTs ? now - obs.lastTs : 0n;
-  const cumNow = (newest.priceCumulative + obs.lastPriceQ64 * elapsed) % U128;
+  if (len === 0 || obs.filled === 0) return null;
+  const cumNow = now > obs.lastTs ? (obs.cumulative + obs.lastPriceQ64 * (now - obs.lastTs)) % U128 : obs.cumulative;
   const target = now - window;
-  let best: Observation | null = null;
+  let i = (obs.index - 1 + len) % len;
   for (let k = 0; k < obs.filled; k++) {
-    const e = obs.entries[(newestIdx - k + len) % len];
-    if (!e) continue;
-    if (e.ts <= target && (best === null || e.ts > best.ts)) best = e;
+    const e = obs.entries[i];
+    if (e && e.ts <= target) {
+      const span = now - e.ts;
+      if (span <= 0n) return null;
+      const sat = (x: bigint): bigint => (x < 0n ? 0n : x);
+      return {
+        twapQ64: ((cumNow - e.priceCumulative) % U128 + U128) % U128 / span,
+        quoteVolume: sat(poolQuoteVolume - e.quoteVolume),
+        swaps: sat(poolSwapCount - e.swapCount),
+      };
+    }
+    i = (i - 1 + len) % len;
   }
-  if (best === null || now <= best.ts) return null;
-  const diff = (cumNow - best.priceCumulative + U128) % U128;
-  return {
-    twapQ64: diff / (now - best.ts),
-    quoteVolume: poolQuoteVolume - best.quoteVolume,
-    swaps: poolSwapCount - best.swapCount,
-  };
+  return null;
 }
 
 /** Q64.64 to a decimal string with `digits` decimals (for display only). */

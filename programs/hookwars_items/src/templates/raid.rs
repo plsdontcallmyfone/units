@@ -1,4 +1,5 @@
-// Changed by Hookwars: new file (M3b).
+// Changed by Hookwars: new file (M3b); security review 2 M-B: the season volume is net of raid
+// points that leave holders (a raider selling back), counted in whole point units.
 //! Raid (id 1, 04 section 3.1). Extras: `RaidLedger` (w), `WarConfig`, our `Launch`, each
 //! target's `Launch`.
 
@@ -77,6 +78,23 @@ pub fn raid_target(env: &Env, args: &PoolHookArgs, launches: &[AccountInfo]) -> 
     (pool == r.first_pool).then_some(i)
 }
 
+/// The part of a raid buy the season volume counts: whole point units, so that what a raider
+/// later sells back can be taken out exactly through the points it carries (M-B).
+pub fn counted_volume(amount_in: u64, war: WarView) -> u64 {
+    match war.point_unit_lamports {
+        0 => amount_in,
+        u => amount_in / u * u,
+    }
+}
+
+/// The season volume behind `points` raid points (the inverse of the stamp, rounding down).
+pub fn volume_of_points(points: u64, war: WarView, points_per_unit: u32) -> u64 {
+    if points_per_unit == 0 {
+        return 0;
+    }
+    (u128::from(points) * u128::from(war.point_unit_lamports) / u128::from(points_per_unit)).min(u128::from(u64::MAX)) as u64
+}
+
 /// Writes the mark (R4) and rolls the inbound window, when `count_inbound`.
 pub fn write_mark(env: &Env, ledger_info: &AccountInfo, war: WarView, args: &PoolHookArgs, rival: Pubkey, count_inbound: bool) -> Result<()> {
     let Some(mut l) = load_ledger(ledger_info, &env.mint) else {
@@ -85,7 +103,7 @@ pub fn write_mark(env: &Env, ledger_info: &AccountInfo, war: WarView, args: &Poo
     l.roll_season(war.season);
     if count_inbound {
         l.add_inbound(&rival, env.now, war.raid_window_secs, args.amount_in);
-        l.outbound_volume_season = l.outbound_volume_season.saturating_add(args.amount_in);
+        l.outbound_volume_season = l.outbound_volume_season.saturating_add(counted_volume(args.amount_in, war));
     }
     let fresh = l.mark.clock_slot != env.clock_slot || l.mark.recipient != args.recipient;
     if fresh || l.mark.quote_volume != args.amount_in {
@@ -135,6 +153,7 @@ pub fn token(env: &Env, args: &TokenSlotArgs, src: &[u8], dst: &[u8]) -> Result<
     let holder = |o: &Pubkey| Some(*o) != pool && *o != launch && o.is_on_curve();
 
     let mut stamped = false;
+    let mut stamped_pts = 0u32;
     if let (Some(mut l), Some(p)) = (load_ledger(&x[0], &env.mint), pool) {
         let bit = 1u8.checked_shl(u32::from(env.slot)).unwrap_or(0);
         if l.mark.clock_slot == env.clock_slot
@@ -149,6 +168,7 @@ pub fn token(env: &Env, args: &TokenSlotArgs, src: &[u8], dst: &[u8]) -> Result<
             d.raid_points = d.raid_points.saturating_add(pts);
             d.tickets = d.tickets.saturating_add(tik);
             l.mark.stamped_slots |= bit;
+            stamped_pts = pts;
             save_ledger(&x[0], &l)?;
             emit!(RaidMarked {
                 mint: env.mint,
@@ -179,6 +199,18 @@ pub fn token(env: &Env, args: &TokenSlotArgs, src: &[u8], dst: &[u8]) -> Result<
     }
     if args.source_balance == args.amount && holder(&args.source_owner) {
         s = RaidRange::default();
+    }
+    // M-B: points that left holders (sold back to the pool, or dropped) take their volume out of
+    // the season volume, so a raid bought and sold back nets to zero.
+    let before = u64::from(s0.raid_points) + u64::from(d0.raid_points) + u64::from(stamped_pts);
+    let after = u64::from(s.raid_points) + u64::from(d.raid_points);
+    if before > after {
+        if let Some(mut l) = load_ledger(&x[0], &env.mint) {
+            l.roll_season(war.season);
+            let v = volume_of_points(before - after, war, env.params[2]);
+            l.outbound_volume_season = l.outbound_volume_season.saturating_sub(v);
+            save_ledger(&x[0], &l)?;
+        }
     }
     Ok(TokenOut {
         cut: 0,

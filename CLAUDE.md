@@ -40,7 +40,7 @@ Program keypairs live outside the repo (`keys/` is git-ignored); back them up be
 
 Branch workflow (2026-10-09): parallel workers commit on their own branch in their own worktree; only the spec lead merges into main.
 | Claude (M3b items builder, fork of session d79dfc8e) | branch m3bi, worktree ~/hookwars-m3bi, server /root/hw-m3bi: programs/hookwars_items, crates/hookwars-common, armory (composites, settle bounty, Performance ring reader, sparse template ids), war integration, token (Pool slots may cut), tests | 2026-10-09 | done: 331 passed, 0 failed, 2 ignored on branch; notes at the end of docs/spec/04 |
-| Claude (integration pass after M3b + review 2 + app audit fixes, fork of session d79dfc8e) | branch integ, ~/hookwars-integ, server A /root/hw-integ; heavy builds inside that server's flock /root/build.lock | 2026-10-09 | active |
+| Claude (integration pass after M3b + review 2 + app audit fixes, fork of session d79dfc8e) | branch integ, server A | 2026-10-09 | done, merged into main: 362 Rust + 8 e2e + 208 app tests on branch |
 | Claude (security fixes (review 1 + review 2 war/armory parts), fork of session d79dfc8e) | branch secfix, ~/hookwars-secfix, server A /root/hw-secfix; heavy builds inside that server's flock /root/build.lock | 2026-10-09 | active |
 | Claude (agents program (09) + template 42, fork of session d79dfc8e) | branch agents, server B | 2026-10-09 | done, merged into main: 367 pass on branch; integration requests in 09 section 21 |
 | Claude (market + social programs, templates 43 to 45 (10), fork of session d79dfc8e) | branch expand, ~/hookwars-expand, server B /root/hw-expand | 2026-10-09 | done, merged into main: 371 pass on branch; integration requests I-1 to I-12 in spec 10 section 17 |

@@ -208,6 +208,13 @@ pub fn process_swap<'info>(ctx: Context<'info, Swap<'info>>, args: SwapArgs) -> 
 /// One hop: upstream's swap, steps 1 to 7, with the observation ring written before the reserves
 /// move and after, and the route in every pool callback. Answers the `Swapped` event and what the
 /// recipient's holding gained.
+/// A mint's single hook program, read in its own frame: a slot `Mint` is over a kilobyte, and
+/// keeping it out of `run_hop`'s frame keeps that frame under the 4,096-byte SBF stack limit.
+#[inline(never)]
+fn mint_hook_program(info: &AccountInfo) -> Result<Option<Pubkey>> {
+    Ok(bordrless_token::client::read_mint(info)?.hook_program)
+}
+
 pub fn run_hop<'a, 'info>(
     token: &TokenAccounts<'info>,
     hop: HopAccounts<'a, 'info>,
@@ -268,8 +275,8 @@ pub fn run_hop<'a, 'info>(
     if route.hop_count == 0 {
         route = RouteContext::single(*in_mint.key, *out_mint.key, pool_key, amount_in);
     }
-    let in_hook = bordrless_token::client::read_mint(&in_mint)?.hook_program;
-    let out_hook = bordrless_token::client::read_mint(&out_mint)?.hook_program;
+    let in_hook = mint_hook_program(&in_mint)?;
+    let out_hook = mint_hook_program(&out_mint)?;
     let recipient = read_holding(&trader_out)?.owner;
     // No delta may go to a vault or to either of the trader's holdings.
     let forbidden = [

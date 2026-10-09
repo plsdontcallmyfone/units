@@ -3,6 +3,7 @@
  * strings, `null` for anything not read, errors as upstream's `ApiErrorBody`.
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { Connection, PublicKey } from '@solana/web3.js';
 import type { Pool } from 'pg';
 import sharp from 'sharp';
@@ -10,6 +11,8 @@ import { hookwars } from '@hookwars/sdk';
 import { findBannedWords, PARAMS, type PrizeVaultInfo, type SeasonInfo } from '@hookwars/shared';
 import * as reads from './reads.ts';
 import { prepare, PrepareError } from './prepares.ts';
+import { submit } from './submit.ts';
+import { clientKey, clusterName, HttpError, intParam, RateLimiter, readJsonBody } from './guard.ts';
 
 export interface Deps { db: Pool | null; conn: Connection; rpcUrl: string }
 
@@ -19,11 +22,19 @@ const json = (res: ServerResponse, status: number, body: unknown): void => {
   res.end(text);
 };
 
-async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
-  const chunks: Buffer[] = [];
-  for await (const c of req) chunks.push(c as Buffer);
-  if (!chunks.length) return {};
-  try { return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>; } catch { throw new PrepareError(400, 'BadRequest', 'The body is not JSON.'); }
+/** Operator settings for the rate limits (A-4); none is a protocol parameter. */
+const envNum = (k: string, d: number): number => { const v = Number(process.env[k]); return Number.isFinite(v) && v > 0 ? v : d; };
+const prepareLimit = new RateLimiter(envNum('RATE_PREPARE_CAPACITY', 20), envNum('RATE_PREPARE_PER_SEC', 0.5));
+const readLimit = new RateLimiter(envNum('RATE_READ_CAPACITY', 120), envNum('RATE_READ_PER_SEC', 4));
+
+/** A short-lived cache for the aggregate reads (A-7). */
+const cache = new Map<string, { at: number; value: unknown }>();
+async function cached<T>(key: string, ttlMs: number, f: () => Promise<T>): Promise<T> {
+  const c = cache.get(key);
+  if (c && Date.now() - c.at < ttlMs) return c.value as T;
+  const value = await f();
+  cache.set(key, { at: Date.now(), value });
+  return value;
 }
 
 async function currentSeason(conn: Connection): Promise<number | null> {
@@ -85,11 +96,19 @@ export function handler(deps: Deps) {
     const q = url.searchParams;
     const db = deps.db;
     try {
+      const client = clientKey(req);
       if (req.method === 'POST' && p.startsWith('/v1/') && p.endsWith('/prepare')) {
-        return json(res, 200, await prepare(deps.conn, p.slice(4), await readBody(req)));
+        if (!prepareLimit.take(client)) return json(res, 429, { error: 'Too many requests; wait a little.', code: 'RateLimited' });
+        return json(res, 200, await prepare(deps.conn, p.slice(4), await readJsonBody(req)));
       }
+      // Changed by Hookwars: wallet-signed transactions go out through the API (A-2), limited as prepares are.
+      if (req.method === 'POST' && p === '/v1/submit') {
+        if (!prepareLimit.take(client)) return json(res, 429, { error: 'Too many requests; wait a little.', code: 'RateLimited' });
+        return json(res, 200, await submit(deps.conn, await readJsonBody(req)));
+      }
+      if (!readLimit.take(client)) return json(res, 429, { error: 'Too many requests; wait a little.', code: 'RateLimited' });
       if (req.method !== 'GET') return json(res, 405, { error: 'Method not allowed.' });
-      if (p === '/v1/status') return json(res, 200, await reads.status(db, { url: deps.rpcUrl, slot: () => deps.conn.getSlot('confirmed') }));
+      if (p === '/v1/status') return json(res, 200, await reads.status(db, { cluster: clusterName(deps.rpcUrl), slot: () => deps.conn.getSlot('confirmed') }));
       if (p === '/v1/params') return json(res, 200, PARAMS);
       if (p === '/v1/quests') return json(res, 200, reads.QUESTS);
       if (p === '/v1/prize-vault') return json(res, 200, await prizeVault(deps.conn));
@@ -98,9 +117,9 @@ export function handler(deps: Deps) {
         return json(res, 200, n === null || n === 0 ? null : await season(deps.conn, n));
       }
       let m: RegExpExecArray | null;
-      if ((m = /^\/v1\/seasons\/(\d+)$/.exec(p))) return json(res, 200, await season(deps.conn, Number(m[1])));
+      if ((m = /^\/v1\/seasons\/(\d+)$/.exec(p))) return json(res, 200, await season(deps.conn, intParam(m[1], 'season', 0, 4_294_967_295)));
       if ((m = /^\/v1\/seasons\/(\d+)\/loot$/.exec(p))) {
-        const info = await deps.conn.getAccountInfo(hookwars.lootTableAddress(Number(m[1])), 'confirmed');
+        const info = await deps.conn.getAccountInfo(hookwars.lootTableAddress(intParam(m[1], 'season', 0, 4_294_967_295)), 'confirmed');
         if (!info) return json(res, 200, null);
         const t = hookwars.decodeLootTable(info.data);
         return json(res, 200, { season: t.season, eta: Number(t.eta), entries: t.entries.filter((e) => e.weight > 0).map((e) => ({ templateId: e.templateId, templateName: String(e.templateId), weight: e.weight, ranges: e.ranges })) });
@@ -114,7 +133,7 @@ export function handler(deps: Deps) {
       }
       if ((m = /^\/v1\/launches\/(\w+)\/slots$/.exec(p))) return json(res, 200, await reads.slots(db, m[1]!));
       if ((m = /^\/v1\/launches\/(\w+)\/proposals$/.exec(p))) return json(res, 200, await reads.proposals(db, m[1]!, q.get('status')));
-      if ((m = /^\/v1\/launches\/(\w+)\/generals$/.exec(p))) return json(res, 200, await reads.generals(db, m[1]!, await currentSeason(deps.conn)));
+      if ((m = /^\/v1\/launches\/(\w+)\/generals$/.exec(p))) { const mint = m[1]!; return json(res, 200, await cached(`generals:${mint}`, 30_000, async () => reads.generals(db, mint, await currentSeason(deps.conn)))); }
       if ((m = /^\/v1\/launches\/(\w+)\/treaties$/.exec(p))) return json(res, 200, []);
       if ((m = /^\/v1\/launches\/(\w+)\/war$/.exec(p))) {
         const mint = new PublicKey(m[1]!);
@@ -125,7 +144,7 @@ export function handler(deps: Deps) {
         const rows = (await db.query(`select data from events where name = 'LaunchCreated' order by slot desc limit 100`)).rows;
         return json(res, 200, { items: rows.map((r) => r.data), next: null });
       }
-      if (p === '/v1/map') return json(res, 200, await reads.warMap(db, Math.floor(Date.now() / 1000)));
+      if (p === '/v1/map') return json(res, 200, await cached('map', 30_000, () => reads.warMap(db, Math.floor(Date.now() / 1000))));
       if (p === '/v1/feed') return json(res, 200, await reads.feed(db, q));
       if ((m = /^\/v1\/wallet\/(\w+)\/war$/.exec(p))) {
         const owner = m[1]!;
@@ -139,9 +158,11 @@ export function handler(deps: Deps) {
       }
       return json(res, 404, { error: 'Not found.' });
     } catch (e) {
-      if (e instanceof PrepareError) return json(res, e.status, { error: e.message, code: e.code });
-      const msg = e instanceof Error ? e.message : String(e);
-      return json(res, 500, { error: `The backend could not read this: ${msg}` });
+      if (e instanceof PrepareError || e instanceof HttpError) return json(res, e.status, { error: e.message, code: e.code });
+      // A-8: the detail stays in the server log; the client gets a request id.
+      const id = randomUUID();
+      console.error(`[api ${id}] ${req.method} ${p}:`, e instanceof Error ? e.stack ?? e.message : String(e));
+      return json(res, 500, { error: 'The backend could not read this.', requestId: id });
     }
   };
 }

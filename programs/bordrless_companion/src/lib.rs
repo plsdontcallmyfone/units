@@ -1,4 +1,4 @@
-// Changed by Hookwars: program ids and derived addresses.
+// Changed by Hookwars: program ids and derived addresses; launch_slots.
 //! `bordrless_companion`: a launch whose creator is a program (`docs/companions.md`).
 //!
 //! A companion is made for a mint before it exists (`create`), then creates the launch through the
@@ -55,6 +55,16 @@ pub mod bordrless_companion {
         args: CreateLaunchArgs,
     ) -> Result<()> {
         instructions::create::process_launch(ctx, args)
+    }
+
+    /// Hookwars: one step of a slot launch (`prepare_launch`, `equip_prepared` or
+    /// `create_prepared_launch`, its data in `data`), the creator address signing as the launch's
+    /// creator. The remaining accounts are that instruction's.
+    pub fn launch_slots<'info>(
+        ctx: Context<'info, LaunchIt<'info>>,
+        data: Vec<u8>,
+    ) -> Result<()> {
+        instructions::create::process_launch_slots(ctx, data)
     }
 
     /// The beneficiary's buy, held by the companion and vesting to them.

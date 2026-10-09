@@ -715,9 +715,6 @@
           "writable": true
         },
         {
-          "name": "observations"
-        },
-        {
           "name": "kit_config",
           "optional": true
         },
@@ -2161,9 +2158,6 @@
         {
           "name": "rival_pool",
           "writable": true
-        },
-        {
-          "name": "rival_observations"
         },
         {
           "name": "rival_war_state",
@@ -3613,6 +3607,15 @@
             "type": "u64"
           },
           {
+            "name": "slot_launch",
+            "docs": [
+              "Hookwars M3b: `constants::hookwars::SLOT_LAUNCH` when the launch was made with",
+              "`prepare_launch` and `create_prepared_launch` (its mint runs a slot table, its pool hook",
+              "forwards to pool items); 0 otherwise. Taken from `reserved`, so `Launch::LEN` is unchanged."
+            ],
+            "type": "u8"
+          },
+          {
             "name": "reserved",
             "docs": [
               "Reserved."
@@ -3620,7 +3623,7 @@
             "type": {
               "array": [
                 "u8",
-                22
+                21
               ]
             }
           }
@@ -4842,6 +4845,14 @@
               "Whether an item may answer `touch`."
             ],
             "type": "bool"
+          },
+          {
+            "name": "may_burn",
+            "docs": [
+              "Hookwars R21: Pool slots only: whether an item may burn part of a swap (through the",
+              "launchpad's pool-slot forwarding, M3b)."
+            ],
+            "type": "bool"
           }
         ]
       }
@@ -5180,6 +5191,20 @@
               "`SEASON_PRIZE_SHARE_BPS`: of the prize vault, to the last winner's chest."
             ],
             "type": "u16"
+          },
+          {
+            "name": "point_unit_lamports",
+            "docs": [
+              "`POINT_UNIT_LAMPORTS` (M3b): raid quote volume per raid point unit (the Raid item reads it)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "loot_min_raid_lamports",
+            "docs": [
+              "`LOOT_MIN_RAID_LAMPORTS` (M3b): the smallest raid buy that earns a loot ticket."
+            ],
+            "type": "u64"
           }
         ]
       }

@@ -112,7 +112,7 @@ describe('v2 accounts (programs-summary §3 and §6)', () => {
       version: 1, bump: 255, mint: mintKey, creator: k(), pool: a.launchPoolAddress(mintKey, SOL, 30), quoteMint: SOL, status: 0, creatorFeeBps: 50, lpFeeBps: 30, sniperWindowSecs: bn(30), sniperStartBps: 8_000,
       virtualQuote: bn(1), virtualBase: bn(2), graduationQuote: bn(3), curveTokens: bn(4), reserveTokens: bn(5), reserveHolding: k(), quoteHolding: k(), lpHolding: k(), createdAt: bn(1_800_000_000), graduatedAt: bn(0),
       creatorFeesAccrued: bn(6), creatorFeesClaimed: bn(7), graduationTopup: bn(0), graduationBurned: bn(0), rules: rulesRaw, modules: 15, kitConfig: a.kitConfigAddress(mintKey), holderVault: a.holderVaultAddress(mintKey, SOL), kitCallerBump: 253,
-      creatorUnlockAt: bn(1_800_000_000 + 30 * 86_400), earlyWindowEnd: bn(1_800_000_060), earlyUnlockAt: bn(1_800_003_600), creatorBought: true, holderFeesAccrued: bn(8), burnedOnTrades: bn(9), config: PublicKey.default, customHook: null, customHookFlags: 0, authorShareBps: 3_000, authorFeesPaid: bn(77), reserved: Array(22).fill(0),
+      creatorUnlockAt: bn(1_800_000_000 + 30 * 86_400), earlyWindowEnd: bn(1_800_000_060), earlyUnlockAt: bn(1_800_003_600), creatorBought: true, holderFeesAccrued: bn(8), burnedOnTrades: bn(9), config: PublicKey.default, customHook: null, customHookFlags: 0, authorShareBps: 3_000, authorFeesPaid: bn(77), slotLaunch: 0, reserved: Array(21).fill(0),
     };
     const launch = decodeLaunch(await encodeAccount('launch', 'launch', value));
     expect(launch.mint.toBase58()).toBe(mintKey.toBase58());
@@ -230,7 +230,7 @@ describe('errors are explained by the program that failed (codes overlap)', () =
     expect(explainProgramError('launch', 2006)).toMatchObject({ name: 'ConstraintSeeds' });
     expect(explainProgramError('kit', 6999).name).toBeNull();
     expect(explainProgramError('swap', 6037)).toMatchObject({ name: 'NotBridgedSol', message: "the pool's quote is not bridged SOL" });
-    expect([PROGRAM_ERRORS.kit.size, PROGRAM_ERRORS.launch.size, PROGRAM_ERRORS.swap.size, PROGRAM_ERRORS.token.size, PROGRAM_ERRORS.bridge.size, PROGRAM_ERRORS.taxHook.size]).toEqual([29, 44, 38, 45, 14, 6]); // Changed by Hookwars: the token program has the slot errors (M1)
+    expect([PROGRAM_ERRORS.kit.size, PROGRAM_ERRORS.launch.size, PROGRAM_ERRORS.swap.size, PROGRAM_ERRORS.token.size, PROGRAM_ERRORS.bridge.size, PROGRAM_ERRORS.taxHook.size]).toEqual([29, 58, 45, 45, 14, 6]); // Changed by Hookwars: the token program has the slot errors (M1); the launchpad's slot launch and the DEX's route errors (M3a, M3b, from the regenerated IDLs)
   });
 
   it('finds the innermost failure in the logs of a swap that the kit refused', () => {

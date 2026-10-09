@@ -6,16 +6,15 @@
  *   IDL's seeds. Remaining accounts follow the programs' own Rust clients
  *   (`programs/hookwars_war/src/client.rs`: slices first, then the token program and its event
  *   authority, then the accounts of inner instructions).
- * - `swap_route`, `prepare_launch`, `refresh_pool_registry` (M3a, M3b) and the items program's
- *   `settle_equip` and `init_raid_ledger` (M3b) are not on main yet: their argument schemas follow
- *   the spec and are listed in INTEGRATION.md section 3.
+ * - Slot launches, `swap_route`, `settle_equip` and `init_raid_ledger` are in `slot-launch.ts`, from
+ *   the launchpad's, the DEX's and the items program's IDLs.
+ * Changed by Hookwars: siege and counter_strike no longer pass an observations account (the ring is in the pool).
  */
 import { PublicKey, TransactionInstruction, type AccountMeta } from '@solana/web3.js';
-import { discriminator, encode, type Field, type Ty } from './codec.ts';
 import { idlIx } from './from-idl.ts';
 import {
   ITEMS_EVENT_AUTHORITY, ITEMS_ID, LAUNCH_ID, SWAP_ID, TOKEN_ID, TOKEN_ITEMS_SIGNER, WAR_ID,
-  equipStateAddress, forgeCounterAddress, holdingAddr, itemAddress, itemMintAddress, launchAddr, lootTableAddress, observationsAddress,
+  equipStateAddress, forgeCounterAddress, holdingAddr, itemAddress, itemMintAddress, launchAddr, lootTableAddress,
   poolCutsAddress, proposalAddress, questMarkAddress, raidLedgerAddress, rollAddress, royaltyOwner, seasonAddress, slotAuthority, slotStateAddress,
   templateAddress, tokenHookSigner, treatyInboxAddress, voteAddress, warChestAddress, warStateAddress,
 } from './addresses.ts';
@@ -35,48 +34,6 @@ export function accountsOf(ixs: TransactionInstruction[]): AccountMeta[] {
     out.push(ro(ix.programId));
   }
   return out;
-}
-
-// ---------------------------------------------------------------- spec-layout instructions (not on main) --
-
-const SLOT_BOUNDS: Ty = { struct: [['maxCutBps', 'u16'], ['mayRefuse', 'bool'], ['mayWriteData', 'bool'], ['mayAnswerTouch', 'bool']] };
-
-/** Argument schemas of the instructions still built from the spec (03 3.3, 4.3; 04 2.5, 2.9). */
-export const ARGS: Record<string, Record<string, Field[]>> = {
-  items: {
-    settle_equip: [['slot', 'u8']], // 04 2.5
-    init_raid_ledger: [], // 04 2.9
-  },
-  swap: {
-    swap_route: [['amountIn', 'u64'], ['minAmountOut', 'u64'], ['hops', { vec: { struct: [['direction', 'u8'], ['accounts', 'u8'], ['inHookAccounts', 'u8'], ['outHookAccounts', 'u8']] } }]],
-  },
-  launch: {
-    prepare_launch: [['name', 'string'], ['symbol', 'string'], ['uri', 'string'], ['slots', { vec: { struct: [
-      ['kind', 'u8'], ['equipRule', 'u8'], ['bounds', SLOT_BOUNDS], ['noticeSecs', 'u32'], ['dataLen', 'u8'], ['launchItem', { option: 'pubkey' }], ['ruleData', { vec: 'u8' }],
-    ] } }]],
-    refresh_pool_registry: [],
-  },
-};
-
-export const PROGRAMS: Record<string, PublicKey> = { items: ITEMS_ID, swap: SWAP_ID, launch: LAUNCH_ID };
-
-/** Builds a spec-layout `program::name(args)` with the given accounts (INTEGRATION.md section 3). */
-export function hookwarsIx(program: string, name: string, args: Record<string, unknown>, keys: AccountMeta[]): TransactionInstruction {
-  const fields = ARGS[program]?.[name];
-  const pid = PROGRAMS[program];
-  if (!fields || !pid) throw new Error(`unknown spec instruction ${program}::${name}`);
-  const data = Buffer.concat([discriminator('global', name), encode({ struct: fields }, args)]);
-  return new TransactionInstruction({ programId: pid, keys, data });
-}
-
-/** 04 2.5: `settle_equip(slot)`, permissionless with a bounty (spec layout until M3b). */
-export function settleEquip(cranker: PublicKey, mint: PublicKey, slot: number, item: PublicKey, extra: AccountMeta[] = []): TransactionInstruction {
-  const equip = equipStateAddress(mint, slot);
-  const w = (pubkey: PublicKey, isSigner = false): AccountMeta => ({ pubkey, isSigner, isWritable: true });
-  return hookwarsIx('items', 'settle_equip', { slot }, [
-    w(cranker, true), ro(mint), w(equip), w(holdingAddr(mint, equip)), ro(poolCutsAddress(mint)), ro(item), w(royaltyOwner(item)),
-    ro(TOKEN_ID), ...extra, ro(ITEMS_EVENT_AUTHORITY), ro(ITEMS_ID),
-  ]);
 }
 
 // ---------------------------------------------------------------- token (IDL) --
@@ -196,7 +153,7 @@ export function recordFunding(mint: PublicKey): TransactionInstruction {
 export function siege(cranker: PublicKey, mint: PublicKey, orders: Orders, rivalMint: PublicKey, rivalPool: PublicKey, rivalHasWar: boolean, rivalKitConfig: PublicKey | null, slice: AccountMeta[], inner: TransactionInstruction[]): TransactionInstruction {
   return idlIx('war', 'siege', {
     cranker, mint, warState: warStateAddress(mint), warChest: warChestAddress(mint), ordersItem: orders.item, ordersTemplate: orders.template, raidLedger: raidLedgerAddress(mint), rivalMint,
-    rivalLaunch: launchAddr(rivalMint), rivalPool, rivalObservations: observationsAddress(rivalPool),
+    rivalLaunch: launchAddr(rivalMint), rivalPool,
     rivalWarState: rivalHasWar ? warStateAddress(rivalMint) : null, rivalKitConfig,
   }, { args: { first: slice.length, second: 0 } }, [...slice, ...accountsOf(inner)]);
 }
@@ -204,7 +161,7 @@ export function siege(cranker: PublicKey, mint: PublicKey, orders: Orders, rival
 /** `counter_strike`: `buySlice` for the delivery, `burnSlice` for the burn. */
 export function counterStrike(cranker: PublicKey, mint: PublicKey, orders: Orders, pool: PublicKey, kitConfig: PublicKey | null, buySlice: AccountMeta[], burnSlice: AccountMeta[], inner: TransactionInstruction[]): TransactionInstruction {
   return idlIx('war', 'counter_strike', {
-    cranker, mint, warState: warStateAddress(mint), warChest: warChestAddress(mint), ordersItem: orders.item, ordersTemplate: orders.template, launch: launchAddr(mint), pool, observations: observationsAddress(pool), kitConfig,
+    cranker, mint, warState: warStateAddress(mint), warChest: warChestAddress(mint), ordersItem: orders.item, ordersTemplate: orders.template, launch: launchAddr(mint), pool, kitConfig,
   }, { args: { first: buySlice.length, second: burnSlice.length } }, [...buySlice, ...burnSlice, ...accountsOf(inner)]);
 }
 

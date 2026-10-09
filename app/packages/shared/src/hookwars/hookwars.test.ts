@@ -1,3 +1,4 @@
+// Changed by Hookwars: fixture with the ring's cumulative price.
 import { describe, expect, it } from 'vitest';
 import {
   bounty, counterStrikeDue, decodeRange, findBannedWords, forgeField, itemSentence, mergeSlotCuts, PARAMS, q64ToDecimal, raidWindowAdd,
@@ -41,7 +42,7 @@ describe('settle (04 2.5)', () => {
 describe('observations (03 3.1)', () => {
   const Q = 1n << 64n;
   const obs = {
-    lastPriceQ64: 2n * Q, lastTs: 200n, index: 2, filled: 2,
+    cumulative: 50n * Q, lastPriceQ64: 2n * Q, lastTs: 200n, index: 2, filled: 2,
     entries: [
       { ts: 100n, priceCumulative: 0n, quoteVolume: 10n, swapCount: 1n },
       { ts: 150n, priceCumulative: 50n * Q, quoteVolume: 30n, swapCount: 3n },

@@ -236,10 +236,22 @@ fn forward_items<'info>(
             &infos,
             &[&[HOOK_AUTHORITY_SEED, s.program.as_ref(), &bump]],
         )?;
-        let (from, ret) = get_return_data().ok_or(LaunchError::ForeignAnswer)?;
-        require_keys_eq!(from, s.program, LaunchError::ForeignAnswer);
-        let answer =
-            ItemPoolAnswer::try_from_slice(&ret).map_err(|_| error!(LaunchError::ForeignAnswer))?;
+        // Changed by Hookwars (security review 2 H-A): no return data, or empty data from the
+        // item's program, is the default answer, as the token program and the DEX read hooks
+        // (the runtime resets return data to (callee, []) at every invocation, so nothing stale
+        // survives). Data from any other program is still refused.
+        let answer = match get_return_data() {
+            None => ItemPoolAnswer::default(),
+            Some((from, ret)) => {
+                require_keys_eq!(from, s.program, LaunchError::ForeignAnswer);
+                if ret.is_empty() {
+                    ItemPoolAnswer::default()
+                } else {
+                    ItemPoolAnswer::try_from_slice(&ret)
+                        .map_err(|_| error!(LaunchError::ForeignAnswer))?
+                }
+            }
+        };
         require!(
             answer.discount_bps <= 10_000,
             LaunchError::ItemDiscountTooHigh

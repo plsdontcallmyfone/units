@@ -1,4 +1,4 @@
-// Changed by Hookwars: M3b slot launches pass the slot mint's transfer and burn slices.
+// Changed by Hookwars: M3b slot launches pass the slot mint's transfer and burn slices; large reads out of process_graduate's frame.
 //! Graduation (`docs/hooks-v2.md` §5.5): the reserve tops the pool up so the price is continuous,
 //! the DEX finalizes the curve and mints the LP to the launch, the rest of the reserve is burned,
 //! and for a launch with a kit the kit is told (which lifts max wallet). The top-up moves between
@@ -188,6 +188,26 @@ fn custom_hook_accounts<'info>(
 }
 
 /// `graduate`.
+/// Hookwars: the pool, read into the heap in its own frame (a full `Pool` and a slot `Mint` in
+/// `process_graduate`'s frame took it over the 4,096-byte SBF stack limit).
+#[inline(never)]
+fn boxed_pool(info: &AccountInfo) -> Result<Box<bordrless_swap::state::Pool>> {
+    Ok(Box::new(swap_client::read_pool(info)?))
+}
+
+/// Hookwars: a pool's two real reserves, read in their own frame.
+#[inline(never)]
+fn pool_reserves(info: &AccountInfo) -> Result<(u64, u64)> {
+    let p = swap_client::read_pool(info)?;
+    Ok((p.base_reserve, p.quote_reserve))
+}
+
+/// Hookwars: a mint's supply, read in its own frame (a slot `Mint` is over a kilobyte).
+#[inline(never)]
+fn mint_supply(info: &AccountInfo) -> Result<u64> {
+    Ok(token_client::read_mint(info)?.supply)
+}
+
 pub fn process_graduate<'info>(ctx: Context<'info, Graduate<'info>>) -> Result<()> {
     let clock = Clock::get()?;
     let launch_key = ctx.accounts.launch.key();
@@ -195,7 +215,7 @@ pub fn process_graduate<'info>(ctx: Context<'info, Graduate<'info>>) -> Result<(
     let pool_key = ctx.accounts.launch.pool;
     // The pool is the launch's (address-checked) and the DEX's (owner-checked), so its vaults
     // and LP mint are what it says.
-    let pool = swap_client::read_pool(&ctx.accounts.pool)?;
+    let pool = boxed_pool(&ctx.accounts.pool)?;
     require_keys_eq!(
         ctx.accounts.base_vault.key(),
         pool.base_vault,
@@ -398,9 +418,9 @@ pub fn process_graduate<'info>(ctx: Context<'info, Graduate<'info>>) -> Result<(
         )?;
     }
 
-    let pool_after = swap_client::read_pool(&ctx.accounts.pool)?;
+    let (after_base, after_quote) = pool_reserves(&ctx.accounts.pool)?;
     let lp_minted = token_client::read_holding(&ctx.accounts.launch_lp)?.amount;
-    let supply = token_client::read_mint(&ctx.accounts.mint)?.supply;
+    let supply = mint_supply(&ctx.accounts.mint)?;
     let launch = &mut ctx.accounts.launch;
     launch.status = STATUS_GRADUATED;
     launch.graduated_at = clock.unix_timestamp;
@@ -413,8 +433,8 @@ pub fn process_graduate<'info>(ctx: Context<'info, Graduate<'info>>) -> Result<(
         cranker: ctx.accounts.cranker.key(),
         topup,
         burned,
-        base_reserve: pool_after.base_reserve,
-        quote_reserve: pool_after.quote_reserve,
+        base_reserve: after_base,
+        quote_reserve: after_quote,
         lp_minted,
         supply,
         slot: clock.slot,

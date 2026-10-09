@@ -1,3 +1,4 @@
+// Changed by Hookwars: skipped without DATABASE_URL (app audit A-9).
 /**
  * Against a real Postgres (DATABASE_URL, the server's hookwars_app by default): migrations apply,
  * writing one transaction twice yields the same rows (idempotent), state handlers fill slots,
@@ -10,12 +11,15 @@ import { hookwars } from '@hookwars/sdk';
 import { allDdl } from './schema.ts';
 import { writeTransaction } from './indexer.ts';
 
-const url = process.env.DATABASE_URL ?? 'postgres://postgres:hookwars@127.0.0.1:5432/hookwars_app';
+/** A real Postgres from DATABASE_URL (no default credentials in code, app audit A-9); skipped without one. */
+const url = process.env.DATABASE_URL ?? '';
+const withDb = url ? describe : describe.skip;
 const schema = `test_${process.pid}`;
 let db: pg.Pool;
 let reachable = true;
 
 beforeAll(async () => {
+  if (!url) return;
   db = new pg.Pool({ connectionString: url, max: 1, options: `-c search_path=${schema}` });
   try {
     await db.query(`create schema if not exists ${schema}`);
@@ -26,6 +30,7 @@ beforeAll(async () => {
   }
 });
 afterAll(async () => {
+  if (!url) return;
   if (reachable) await db.query(`drop schema if exists ${schema} cascade`);
   await db.end();
 });

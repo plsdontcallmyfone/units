@@ -34,6 +34,7 @@ import {
   creatorAndHolderFees,
   curveImpactBps,
   curveMaxBuyIn,
+  remainderBuy,
   curveOutput,
   curveParams,
   decodeKitHookData,
@@ -602,6 +603,29 @@ describe('v2 max wallet', () => {
     expect(buyGraduates(last, all, 10n ** 18n)).toBe(true);
     expect(buyGraduates(last, quoteLaunchSwap(last, 'buy', 1_000_000n, 30, 100, rules), 10n ** 18n)).toBe(false);
     expect(buyGraduates(OPEN, quoteLaunchSwap(OPEN, 'buy', max + 1n, 30, 100, rules), 0n)).toBe(false);
+  });
+
+  // Changed by Hookwars (fuzz audit 1, finding 1): near graduation a round buy is refused, and the buy to send is the exact remainder.
+  it('offers the exact remainder when a round buy no longer fits the curve', () => {
+    const rules = fees({ burnBuyBps: 50 });
+    const max = curveMaxBuyIn(OPEN, 30, 100, rules);
+    // A curve with a few hundred thousand lamports of room left: buy all but that much first.
+    const pre = quoteLaunchSwap(OPEN, 'buy', max - 300_000n, 30, 100, rules);
+    expect(pre.failure).toBeNull();
+    const near = { ...OPEN, baseReserve: OPEN.baseReserve - pre.amountOut!, quoteReserve: OPEN.quoteReserve + launchSwapToReserve('buy', pre) };
+    const round = 1_000_000_000n;
+    expect(quoteLaunchSwap(near, 'buy', round, 30, 100, rules).failure).toBe('insufficient_liquidity');
+    const r = remainderBuy(near, round, 30, 100, rules);
+    expect(r.remainder).toBe(true);
+    expect(r.amountIn).toBe(curveMaxBuyIn(near, 30, 100, rules));
+    expect(r.amountIn).toBeLessThan(round);
+    const q = quoteLaunchSwap(near, 'buy', r.amountIn, 30, 100, rules);
+    expect(q.failure).toBeNull();
+    const graduation = curveParams(TOKEN_SUPPLY, CURVE_BPS, OPEN.virtualQuote)!.graduationQuote;
+    expect(buyGraduates(near, q, graduation)).toBe(true);
+    // A buy that fits is sent as asked; with no room (here: a max wallet already reached) nothing is sent.
+    expect(remainderBuy(OPEN, round, 30, 100, rules)).toEqual({ amountIn: round, remainder: false });
+    expect(remainderBuy(near, round, 30, 100, rules, 0n)).toEqual({ amountIn: 0n, remainder: false });
   });
 
   it('caps the creator first buy with its own fees, no holder fee, at the opening reserves (§8.2)', () => {

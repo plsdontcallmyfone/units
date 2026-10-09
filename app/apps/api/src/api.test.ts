@@ -1,3 +1,4 @@
+// Changed by Hookwars: DATABASE_URL required, no default credentials (app audit A-9).
 /** Starts the API on an ephemeral port against the server's Postgres (fresh schema, empty) and a
  * mocked RPC, and checks every read route answers with its empty shape and prepares refuse with a
  * sentence while the programs are not deployed. */
@@ -8,7 +9,9 @@ import { allDdl } from '@hookwars/indexer/schema.ts';
 import { findBannedWords } from '@hookwars/shared';
 import { serve } from './server.ts';
 
-const url = process.env.DATABASE_URL ?? 'postgres://postgres:hookwars@127.0.0.1:5432/hookwars_app';
+/** A real Postgres from DATABASE_URL (no default credentials in code, app audit A-9); skipped without one. */
+const url = process.env.DATABASE_URL ?? '';
+const withDb = url ? describe : describe.skip;
 const schema = `apitest_${process.pid}`;
 let db: pg.Pool; let base = ''; let server: ReturnType<typeof serve>;
 
@@ -19,6 +22,7 @@ const conn = {
 } as never;
 
 beforeAll(async () => {
+  if (!url) return;
   const admin = new pg.Pool({ connectionString: url, max: 1 });
   await admin.query(`create schema if not exists ${schema}`); await admin.end();
   db = new pg.Pool({ connectionString: url, max: 2, options: `-c search_path=${schema}` });
@@ -28,6 +32,7 @@ beforeAll(async () => {
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
 afterAll(async () => {
+  if (!url) return;
   server.close();
   await db.query(`drop schema if exists ${schema} cascade`);
   await db.end();
@@ -36,7 +41,7 @@ afterAll(async () => {
 const get = async (p: string) => { const r = await fetch(base + p); return { status: r.status, body: await r.json() }; };
 const M = 'So11111111111111111111111111111111111111112';
 
-describe('reads with an empty database', () => {
+withDb('reads with an empty database', () => {
   it('answers every route with its empty shape', async () => {
     expect((await get('/v1/status')).body).toMatchObject({ rpcReachable: true, slot: 123, database: true });
     expect((await get('/v1/templates')).body).toEqual([]);
@@ -58,7 +63,7 @@ describe('reads with an empty database', () => {
   });
 });
 
-describe('prepares before deployment', () => {
+withDb('prepares before deployment', () => {
   it('refuse with one sentence naming the missing programs', async () => {
     const r = await fetch(base + '/v1/votes/prepare', { method: 'POST', body: JSON.stringify({ owner: M, mint: M, slot: 1, nonce: 0, support: true, amount: 1 }) });
     expect(r.status).toBe(409);

@@ -941,8 +941,11 @@ pub mod slots {
         }
     }
 
-    /// `create_prepared_launch` with inline rules (they must be the prepared ones). `slices` is
+    /// `create_prepared_launch` with inline rules (they must be the prepared ones).
+    /// `item_registries` are the forwarded pool slots' item registries in slot order (Changed by
+    /// Hookwars, security review 2 L-D: the pool registry is written whole at launch); `slices` is
     /// the mint's transfer slices for the deposit (launch reserve to the pool's base vault).
+    #[allow(clippy::too_many_arguments)]
     pub fn create_prepared_launch(
         creator: Pubkey,
         mint: Pubkey,
@@ -950,6 +953,7 @@ pub mod slots {
         quote_mint: Pubkey,
         lp_fee_bps: u16,
         args: CreateLaunchArgs,
+        item_registries: Vec<Pubkey>,
         slices: Vec<AccountMeta>,
     ) -> Instruction {
         let mut ix = create_launch(creator, mint, treasury, quote_mint, lp_fee_bps, args.clone());
@@ -959,6 +963,11 @@ pub mod slots {
             .push(AccountMeta::new_readonly(pool_cuts_owner(&mint), false));
         ix.accounts
             .push(AccountMeta::new(pool_cuts_holding(&mint, &quote_mint), false));
+        ix.accounts.extend(
+            item_registries
+                .into_iter()
+                .map(|k| AccountMeta::new_readonly(k, false)),
+        );
         ix.accounts.extend(slices);
         ix
     }

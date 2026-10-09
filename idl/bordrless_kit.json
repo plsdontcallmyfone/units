@@ -1741,6 +1741,14 @@
               "Whether an item may answer `touch`."
             ],
             "type": "bool"
+          },
+          {
+            "name": "may_burn",
+            "docs": [
+              "Hookwars R21: Pool slots only: whether an item may burn part of a swap (through the",
+              "launchpad's pool-slot forwarding, M3b)."
+            ],
+            "type": "bool"
           }
         ]
       }

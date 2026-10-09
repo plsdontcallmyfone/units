@@ -1,4 +1,5 @@
-// Changed by Hookwars: new file (M3b).
+// Changed by Hookwars: new file (M3b); security review 2 M-A (stray tokens swept) and L-C (a missing
+// destination holding leaves only that module unsettled).
 //! `settle_equip` (04 section 2.5, 08 section 2.11): pays what a slot's item collected. For each
 //! module, token side and pool side apart: the royalty (`Item.royalty_bps`) to the item's royalty
 //! holding, the sender's bounty (the armory's `settle_bounty_bps`), the rest to the module's
@@ -138,6 +139,11 @@ impl<'a, 'info> Cpi<'a, 'info> {
     }
 }
 
+/// A destination holding that exists (L-C: one that does not is skipped, not failed).
+fn exists(d: &AccountInfo) -> bool {
+    *d.owner == bordrless_token::ID && d.data_len() > 0
+}
+
 /// `settle_equip`.
 pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Result<()> {
     let a = &ctx.accounts;
@@ -208,6 +214,10 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
 
     let token_owed: [u64; MAX_MODULES] = a.equip_state.token_unsettled;
     let pool_owed: [u64; MAX_MODULES] = a.equip_state.pool_unsettled;
+    // What stays owed: a module whose destination holding does not exist yet is skipped and keeps
+    // its counter (L-C); anyone can create the holding (`create_holding`) and settle again.
+    let mut token_left: [u64; MAX_MODULES] = [0; MAX_MODULES];
+    let mut pool_left: [u64; MAX_MODULES] = [0; MAX_MODULES];
     let (mut r_t, mut b_t, mut r_q, mut b_q, mut paid_t, mut paid_q, mut burned) = (0u64, 0u64, 0u64, 0u64, 0u64, 0u64, 0u64);
     let any_token = token_owed.iter().any(|x| *x > 0);
     let any_quote = pool_owed.iter().any(|x| *x > 0);
@@ -223,7 +233,17 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
     };
     if any_token {
         require!(a.equip_vault.is_some(), ItemsError::WrongAccount);
+    }
+    // M-A: tokens anyone sent to the vault beyond the recorded cuts would block `close_equip` for
+    // ever; they are burned here (no module recorded them, so no one is owed them).
+    let mut stray = 0u64;
+    if a.equip_vault.is_some() {
         require_keys_eq!(vault.key(), pda::holding(&mint_key, &state_key), ItemsError::WrongAccount);
+        if *vault.owner == bordrless_token::ID && vault.data_len() > 0 {
+            let balance = bordrless_token::client::read_holding(&vault)?.amount;
+            let recorded: u64 = token_owed.iter().try_fold(0u64, |s, x| s.checked_add(*x)).ok_or(ItemsError::Overflow)?;
+            stray = balance.saturating_sub(recorded);
+        }
     }
     for (i, m) in modules.iter().enumerate() {
         let start = usize::from(m.target_start);
@@ -232,18 +252,24 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
         let x = token_owed.get(i).copied().unwrap_or(0);
         if x > 0 {
             let (royalty, bounty, left) = split(x, royalty_bps, bounty_bps);
-            r_t += royalty;
-            b_t += bounty;
             match templates::token_destination(m.template_id, targets) {
                 Destination::Burn => {
                     cpi.burn(&state_info, &vault, &mint_info, left, state_seeds)?;
                     burned += left;
+                    r_t += royalty;
+                    b_t += bounty;
                 }
                 Destination::Owner(o) => {
                     let d = &dests[2 * i];
                     require_keys_eq!(d.key(), pda::holding(&mint_key, &o), ItemsError::WrongAccount);
-                    cpi.pay(&state_info, &vault, d, &mint_info, left, state_seeds, true)?;
-                    paid_t += left;
+                    if exists(d) {
+                        cpi.pay(&state_info, &vault, d, &mint_info, left, state_seeds, true)?;
+                        paid_t += left;
+                        r_t += royalty;
+                        b_t += bounty;
+                    } else {
+                        token_left[i] = x;
+                    }
                 }
                 Destination::None => return err!(ItemsError::WrongAccount),
             }
@@ -251,18 +277,26 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
         let y = pool_owed.get(i).copied().unwrap_or(0);
         if y > 0 {
             let (royalty, bounty, left) = split(y, royalty_bps, bounty_bps);
-            r_q += royalty;
-            b_q += bounty;
             match templates::pool_destination(m.template_id, &mint_key, targets) {
                 Destination::Owner(o) => {
                     let d = &dests[2 * i + 1];
                     require_keys_eq!(d.key(), pda::holding(&quote, &o), ItemsError::WrongAccount);
-                    cpi.pay(&pool_cuts_info, &a.pool_cuts_holding.to_account_info(), d, &quote_info, left, cuts_seeds, false)?;
-                    paid_q += left;
+                    if exists(d) {
+                        cpi.pay(&pool_cuts_info, &a.pool_cuts_holding.to_account_info(), d, &quote_info, left, cuts_seeds, false)?;
+                        paid_q += left;
+                        r_q += royalty;
+                        b_q += bounty;
+                    } else {
+                        pool_left[i] = y;
+                    }
                 }
                 _ => return err!(ItemsError::WrongAccount),
             }
         }
+    }
+    if stray > 0 {
+        cpi.burn(&state_info, &vault, &mint_info, stray, state_seeds)?;
+        burned += stray;
     }
     cpi.pay(&state_info, &vault, &a.royalty_token.to_account_info(), &mint_info, r_t, state_seeds, true)?;
     cpi.pay(&state_info, &vault, &a.cranker_token.to_account_info(), &mint_info, b_t, state_seeds, true)?;
@@ -270,10 +304,10 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
     cpi.pay(&pool_cuts_info, &cuts_holding, &a.royalty_quote.to_account_info(), &quote_info, r_q, cuts_seeds, false)?;
     cpi.pay(&pool_cuts_info, &cuts_holding, &a.cranker_quote.to_account_info(), &quote_info, b_q, cuts_seeds, false)?;
 
-    let total_quote: u64 = pool_owed.iter().sum();
+    let total_quote: u64 = pool_owed.iter().sum::<u64>() - pool_left.iter().sum::<u64>();
     let s = &mut ctx.accounts.equip_state;
-    s.token_unsettled = [0; MAX_MODULES];
-    s.pool_unsettled = [0; MAX_MODULES];
+    s.token_unsettled = token_left;
+    s.pool_unsettled = pool_left;
     s.pool_settled = s.pool_settled.checked_add(total_quote).ok_or(ItemsError::Overflow)?;
     emit!(EquipSettled {
         mint: mint_key,

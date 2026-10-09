@@ -198,3 +198,19 @@ issue_badge 551 bytes, height 3, 66,092 CU; link_social with its ed25519 instruc
 2, 31,511 CU; submit_attestation 639 bytes, 21,124 CU; endorse_attestation 419 bytes, 27,675 CU;
 record from a recorder 406 bytes, height 3, 13,389 CU; spend (one token transfer) 575 bytes, height 3,
 31,790 CU; post_bond 551 bytes, height 2, 40,906 CU. Full table in 09 section 20.1.
+
+## Integration measurements (branch integ, 2026-10-09)
+
+Changed by Hookwars: measured in `programs/tests/tests/e2e.rs` on the real programs (LiteSVM, build
+server).
+
+| Path | Keys | v0 bytes (one lookup table) | Trace | Height | CU |
+| --- | --- | --- | --- | --- | --- |
+| Companion `launch_slots` forwarding `create_prepared_launch`, 1 pool item | 34 | 559 | 38 | 5 | 332,405 |
+
+- The companion slot launch is at the call-depth limit (5), as 03 section 8 expected.
+- A two-hop `swap_route` through two slot launches with pool items allocates more than the default
+  32 KiB heap in the DEX. The DEX now has its own bump allocator (growing upward, so transactions
+  without a larger frame behave as before) and clients request a 256 KiB heap frame for DEX
+  transactions (`ComputeBudgetInstruction::RequestHeapFrame`).
+- `programs.sh build` fails on any stack frame over 4,096 bytes; the integ build reports none.

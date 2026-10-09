@@ -1,4 +1,6 @@
-// Changed by Hookwars: new file, a test-only pool item for the launchpad's forwarding (M3b).
+// Changed by Hookwars: new file, a test-only pool item for the launchpad's forwarding (M3b); since
+// security review 2 H-A it answers the default with no return data, so every stub suite runs the
+// launchpad's silent-item path.
 //! `pool_item_stub`: test-only, never deployed. A pool item with the launchpad's pool-item
 //! protocol (`bordrless_hook::pool_item`): `pool_before_swap` and `pool_after_swap` answer what a
 //! test scripted for the item and record what they were told. Replace with `hookwars_items`'
@@ -103,17 +105,29 @@ pub mod pool_item_stub {
         ctx: Context<Callback>,
         args: PoolHookArgs,
         item_ctx: ItemPoolContext,
-    ) -> Result<ItemPoolAnswer> {
-        answer(ctx, args, item_ctx, true)
+    ) -> Result<()> {
+        let a = answer(ctx, args, item_ctx, true)?;
+        silent_on_default(a)
     }
 
     pub fn pool_after_swap(
         ctx: Context<Callback>,
         args: PoolHookArgs,
         item_ctx: ItemPoolContext,
-    ) -> Result<ItemPoolAnswer> {
-        answer(ctx, args, item_ctx, false)
+    ) -> Result<()> {
+        let a = answer(ctx, args, item_ctx, false)?;
+        silent_on_default(a)
     }
+}
+
+/// Sets return data only for a non-default answer (a silent item, security review 2 H-A).
+fn silent_on_default(a: ItemPoolAnswer) -> Result<()> {
+    if a != ItemPoolAnswer::default() {
+        let mut v = Vec::new();
+        a.serialize(&mut v)?;
+        anchor_lang::solana_program::program::set_return_data(&v);
+    }
+    Ok(())
 }
 
 fn answer(

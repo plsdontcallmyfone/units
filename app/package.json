@@ -5,14 +5,29 @@
   "type": "module",
   "description": "Hookwars off chain: SDK, shared types and math, indexer, API, site and bots.",
   "packageManager": "pnpm@10.20.0",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "build:web": "pnpm -C apps/web build"
   },
   "pnpm": {
-    "overrides": { "@solana/web3.js": "1.98.4", "bn.js": "5.2.5" },
-    "onlyBuiltDependencies": ["esbuild", "sharp", "bufferutil", "utf-8-validate"]
+    "overrides": {
+      "@solana/web3.js": "1.98.4",
+      "bn.js": "5.2.5",
+      "sharp": ">=0.35.5",
+      "postcss": ">=8.5.23",
+      "toml": ">=4.2.0",
+      "uuid": ">=11.1.1",
+      "stream-json": ">=3.6.0"
+    },
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "bufferutil",
+      "utf-8-validate"
+    ]
   }
 }

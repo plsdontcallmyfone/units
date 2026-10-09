@@ -217,11 +217,8 @@
         {
           "name": "pool",
           "docs": [
-            "The launch pool."
+            "The launch pool (its observation ring is in its tail, 03 M3a notes)."
           ]
-        },
-        {
-          "name": "observations"
         },
         {
           "name": "open_proposal",
@@ -302,6 +299,13 @@
             {
               "name": "royalty_holding_quote",
               "writable": true,
+              "optional": true
+            },
+            {
+              "name": "new_composite",
+              "docs": [
+                "composite; read by the items program's `init_equip`."
+              ],
               "optional": true
             },
             {
@@ -498,6 +502,204 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "create_composite",
+      "docs": [
+        "Hookwars M3b: anyone authors a composite item (08 section 2) from open templates. The",
+        "remaining accounts are each module's `Template`, in module order."
+      ],
+      "discriminator": [
+        73,
+        48,
+        218,
+        60,
+        124,
+        185,
+        27,
+        60
+      ],
+      "accounts": [
+        {
+          "name": "author",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "template",
+          "docs": [
+            "The Composite template (id 41)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  101,
+                  109,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  41,
+                  0
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "minter",
+          "address": "GMD68dRY3cr58rLgwyNtxyGFjGRVg2RUzmeNo7X7CVPe"
+        },
+        {
+          "name": "item_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  116,
+                  101,
+                  109,
+                  45,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.items_minted",
+                "account": "ArmoryConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "item",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  116,
+                  101,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "composite",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient_holding",
+          "writable": true
+        },
+        {
+          "name": "token",
+          "accounts": [
+            {
+              "name": "token_program",
+              "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+            },
+            {
+              "name": "token_event_authority",
+              "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
+            },
+            {
+              "name": "system_program",
+              "address": "11111111111111111111111111111111"
+            }
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "modules",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "Module"
+              }
+            }
+          }
+        },
+        {
+          "name": "royalty_bps",
+          "type": "u16"
+        }
+      ]
     },
     {
       "name": "create_item",
@@ -794,6 +996,13 @@
               "optional": true
             },
             {
+              "name": "new_composite",
+              "docs": [
+                "composite; read by the items program's `init_equip`."
+              ],
+              "optional": true
+            },
+            {
               "name": "armory_signer",
               "address": "2NSNJ4W51G5ZZSc4wVqkjyR8yr5yzuEjquKv7iprzSHP"
             },
@@ -955,6 +1164,13 @@
             {
               "name": "royalty_holding_quote",
               "writable": true,
+              "optional": true
+            },
+            {
+              "name": "new_composite",
+              "docs": [
+                "composite; read by the items program's `init_equip`."
+              ],
               "optional": true
             },
             {
@@ -2136,6 +2352,19 @@
       ]
     },
     {
+      "name": "CompositeItem",
+      "discriminator": [
+        125,
+        98,
+        150,
+        196,
+        6,
+        74,
+        208,
+        41
+      ]
+    },
+    {
       "name": "ForgeCounter",
       "discriminator": [
         97,
@@ -2766,7 +2995,7 @@
             "type": {
               "array": [
                 "u8",
-                64
+                62
               ]
             }
           }
@@ -2857,6 +3086,54 @@
               "`ADMIN_TIMELOCK_SECS`: delay on every admin change, this one included."
             ],
             "type": "u32"
+          },
+          {
+            "name": "settle_bounty_bps",
+            "docs": [
+              "Hookwars M3b: the bounty `settle_equip` pays its sender, of what it settles",
+              "(`MAX_CRANK_BOUNTY_BPS` at most; 04 section 2.5)."
+            ],
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CompositeItem",
+      "docs": [
+        "Hookwars M3b: a composite's module list at `[\"composite\", item]` (08 section 2.2; the same",
+        "layout as `hookwars_common::composite::CompositeItem`)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "modules",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "Module"
+                }
+              }
+            }
+          },
+          {
+            "name": "provenance",
+            "type": {
+              "vec": "pubkey"
+            }
           }
         ]
       }
@@ -3292,6 +3569,64 @@
             "name": "reads_other_pools",
             "docs": [
               "Foreign accounts it reads."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Module",
+      "docs": [
+        "One module of a composite (08 2.2)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "template_id",
+            "docs": [
+              "A composable template."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "params",
+            "docs": [
+              "Its fields (written out: the IDL builder cannot follow the `Params` alias)."
+            ],
+            "type": {
+              "array": [
+                "u32",
+                11
+              ]
+            }
+          },
+          {
+            "name": "target_start",
+            "docs": [
+              "First of its targets in the equip's targets."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "target_count",
+            "docs": [
+              "How many targets."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "data_bytes",
+            "docs": [
+              "Its sub-range length (its manifest's `data_bytes`)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "reads_module",
+            "docs": [
+              "An earlier module whose bytes it may read, or [`NO_READ`]."
             ],
             "type": "u8"
           }
