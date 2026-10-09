@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import { PublicKey } from '@solana/web3.js';
 
 export type Ty =
-  | 'u8' | 'u16' | 'u32' | 'u64' | 'u128' | 'i64' | 'i128' | 'bool' | 'pubkey' | 'string'
+  | 'u8' | 'u16' | 'u32' | 'u64' | 'u128' | 'i8' | 'i16' | 'i32' | 'i64' | 'i128' | 'bool' | 'pubkey' | 'string'
   | { option: Ty }
   | { vec: Ty }
   | { array: [Ty, number] }
@@ -35,6 +35,9 @@ export class Reader {
     if (typeof ty === 'string') {
       switch (ty) {
         case 'u8': this.need(1); return b.readUInt8(this.off++);
+        case 'i8': this.need(1); return b.readInt8(this.off++);
+        case 'i16': { this.need(2); const v = b.readInt16LE(this.off); this.off += 2; return v; }
+        case 'i32': { this.need(4); const v = b.readInt32LE(this.off); this.off += 4; return v; }
         case 'bool': this.need(1); return b.readUInt8(this.off++) !== 0;
         case 'u16': { this.need(2); const v = b.readUInt16LE(this.off); this.off += 2; return v; }
         case 'u32': { this.need(4); const v = b.readUInt32LE(this.off); this.off += 4; return v; }
@@ -64,6 +67,9 @@ export class Writer {
     if (typeof ty === 'string') {
       switch (ty) {
         case 'u8': { const x = Buffer.alloc(1); x.writeUInt8(Number(v)); p.push(x); return; }
+        case 'i8': { const x = Buffer.alloc(1); x.writeInt8(Number(v)); p.push(x); return; }
+        case 'i16': { const x = Buffer.alloc(2); x.writeInt16LE(Number(v)); p.push(x); return; }
+        case 'i32': { const x = Buffer.alloc(4); x.writeInt32LE(Number(v)); p.push(x); return; }
         case 'bool': { const x = Buffer.alloc(1); x.writeUInt8(v ? 1 : 0); p.push(x); return; }
         case 'u16': { const x = Buffer.alloc(2); x.writeUInt16LE(Number(v)); p.push(x); return; }
         case 'u32': { const x = Buffer.alloc(4); x.writeUInt32LE(Number(v)); p.push(x); return; }
@@ -95,7 +101,7 @@ export function decode<T = Record<string, unknown>>(ty: Ty, buf: Buffer, offset 
 /** Byte size of a fixed-size type (no strings, vecs or options). */
 export function fixedSize(ty: Ty): number {
   if (typeof ty === 'string') {
-    const sizes: Record<string, number> = { u8: 1, bool: 1, u16: 2, u32: 4, u64: 8, i64: 8, u128: 16, i128: 16, pubkey: 32 };
+    const sizes: Record<string, number> = { u8: 1, i8: 1, bool: 1, u16: 2, i16: 2, u32: 4, i32: 4, u64: 8, i64: 8, u128: 16, i128: 16, pubkey: 32 };
     const s = sizes[ty]; if (s === undefined) throw new Error(`${ty} has no fixed size`); return s;
   }
   if ('array' in ty) return fixedSize(ty.array[0]) * ty.array[1];
