@@ -1,0 +1,35 @@
+[package]
+name = "hookwars-war"
+description = "Hookwars war chests: sieges, counter-strikes, razes, bounties, loot rolls, quests and seasons, every spend permissionless, capped and paid from a token's own war chest (docs/spec/05-war.md)."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "hookwars_war"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "bordrless-token/idl-build", "bordrless-swap/idl-build", "bordrless-kit/idl-build", "bordrless-launch/idl-build", "bordrless-bridge/idl-build", "bordrless-companion/idl-build", "bordrless-hook/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+solana-security-txt = { workspace = true }
+anchor-lang = { workspace = true, features = ["event-cpi"] }
+bordrless-core = { path = "../../crates/bordrless-core" }
+bordrless-hook = { path = "../../crates/bordrless-hook" }
+bordrless-token = { path = "../bordrless_token", features = ["no-entrypoint"] }
+bordrless-swap = { path = "../bordrless_swap", features = ["no-entrypoint"] }
+bordrless-kit = { path = "../bordrless_kit", features = ["no-entrypoint"] }
+bordrless-launch = { path = "../bordrless_launch", features = ["no-entrypoint"] }
+bordrless-bridge = { path = "../bordrless_bridge", features = ["no-entrypoint"] }
+bordrless-companion = { path = "../bordrless_companion", features = ["no-entrypoint"] }
+
+[lints]
+workspace = true

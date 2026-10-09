@@ -1,0 +1,26 @@
+[package]
+name = "randomness-stub"
+description = "Hookwars, test-only, never deployed: a randomness adapter in the war program's interface (src/oracle.rs). request_randomness records the request; fulfill writes a value the test chooses."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "randomness_stub"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+anchor-lang = { workspace = true }
+
+[lints]
+workspace = true

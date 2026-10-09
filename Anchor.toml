@@ -25,6 +25,10 @@ members = [
   "programs/hook_tester",
   "programs/slot_tester",
   "programs/armory_stub",
+  "programs/hookwars_war",
+  "programs/war_items_stub",
+  "programs/war_armory_stub",
+  "programs/randomness_stub",
 ]
 
 # One set of program IDs on every cluster (generated 2026-10-07; the keypairs are kept off the repo,
@@ -41,7 +45,11 @@ half_life = "67nAgW7h9wYmM1jLzrXVNy8UDNxgVFqGTqrTEPamtokh"
 hook_tester = "HCqwefEgryEDQo3hMqxirkmeAvaUhfFQSA8sCULDUdGt"
 slot_tester = "DxNYhg2wiqR27YtzKntfuPfxfRb7T1GaEVPaaQ52NxxP"
 armory_stub = "7xnkyX5B7Ywz86Cu2ofM5T2z2UPmy1qhpgrAuK9Kk5MU"
+war_items_stub = "8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv"
+war_armory_stub = "7xnkyX5B7Ywz86Cu2ofM5T2z2UPmy1qhpgrAuK9Kk5MU"
+randomness_stub = "6ESx6cA1Hu7BiESMddfBSMwXAp1rNomvmutMHjAHs4x8"
 bordrless_companion = "HzeAN8e7HbGx8wzgd5SpduF51c7rXCTqkQKcmw44YHkK"
+hookwars_war = "5vJnBvr33jpsfYxMY2pvNf6tF9tkj8eaZ6goFtByUWA2"
 
 [programs.devnet]
 bordrless_token = "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
@@ -52,6 +60,7 @@ bordrless_kit = "CLEEZe3v8Sqa45J1VdmfKkjxqFGSj44MxA5prQH3xTLG"
 tax_hook = "q9mMtM6vfJ8YMffnkUNW5XLz7xeVyyeo1HL8SA27AuX"
 half_life = "67nAgW7h9wYmM1jLzrXVNy8UDNxgVFqGTqrTEPamtokh"
 bordrless_companion = "HzeAN8e7HbGx8wzgd5SpduF51c7rXCTqkQKcmw44YHkK"
+hookwars_war = "5vJnBvr33jpsfYxMY2pvNf6tF9tkj8eaZ6goFtByUWA2"
 
 [programs.mainnet]
 bordrless_token = "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
@@ -62,6 +71,7 @@ bordrless_kit = "CLEEZe3v8Sqa45J1VdmfKkjxqFGSj44MxA5prQH3xTLG"
 tax_hook = "q9mMtM6vfJ8YMffnkUNW5XLz7xeVyyeo1HL8SA27AuX"
 half_life = "67nAgW7h9wYmM1jLzrXVNy8UDNxgVFqGTqrTEPamtokh"
 bordrless_companion = "HzeAN8e7HbGx8wzgd5SpduF51c7rXCTqkQKcmw44YHkK"
+hookwars_war = "5vJnBvr33jpsfYxMY2pvNf6tF9tkj8eaZ6goFtByUWA2"
 
 [provider]
 cluster = "localnet"
