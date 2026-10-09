@@ -1,4 +1,5 @@
-// Changed by Hookwars: new file, M1 measurements (docs/spec/07-budgets-tests.md section 3).
+// Changed by Hookwars: new file, M1 measurements (docs/spec/07-budgets-tests.md section 3); M2:
+// the armory's execute (an equip by vote) and forge.
 //! What slots cost: a wallet transfer, a DEX buy and a DEX sell of a slot mint with 0 to 3
 //! cutting item slots (each item answering one cut, the worst case), without and with a lookup
 //! table holding every account the message may load from one. Each line printed is one
@@ -194,4 +195,56 @@ fn the_slot_table_size_and_rent() {
         w.env.rent(upstream)
     );
     assert_eq!(len, upstream + 33 + 1 + 113 * bordrless_token::constants::MAX_SLOTS);
+}
+
+/// M2: `execute` of a passed vote that moves a slot from one item to another (close_equip,
+/// init_equip with its registry, set_slot_item), and `forge` of two items.
+#[test]
+fn armory_execute_and_forge() {
+    use bordrless_program_tests::armory::*;
+    use hookwars_common::{template_id as t, EquipConfig};
+    for (label, template, a_params, b_params, slot, cfg) in [
+        (
+            "execute equip, War orders (no vault, no royalty holding)",
+            t::WAR_ORDERS,
+            params(&[10, 100, 600, 500, 600, 3_600, 600, 100, 0, 1, 10]),
+            params(&[20, 100, 600, 500, 600, 3_600, 600, 100, 0, 1, 10]),
+            0u8,
+            EquipConfig::default(),
+        ),
+        (
+            "execute equip, Transfer Fee (equip vault, royalty holding)",
+            t::TRANSFER_FEE,
+            params(&[100, 0]),
+            params(&[200, 0]),
+            2u8,
+            EquipConfig {
+                targets: vec![Pubkey::new_unique()],
+                role: 0,
+            },
+        ),
+    ] {
+        let mut hw = Hw::new();
+        let owner = hw.w.env.funded(100 * SOL);
+        let mint = hw.slot_mint(&owner, test_slots());
+        let (_, a, _) = hw.item(template, a_params, 100);
+        hw.equip_launch(&owner, &mint, Hw::entry(slot, Some(a), cfg.clone())).ok();
+        let o = owner.pubkey();
+        hw.mint_to(&owner, &mint, &o, 1_000);
+        let (_, b, _) = hw.item(template, b_params, 100);
+        let (tx, proposal) = hw.propose(&owner, &mint, slot, Some(b), cfg);
+        tx.ok();
+        hw.vote(&owner, &mint, &proposal, true, 1_000).ok();
+        hw.w.env.warp(i64::from(TEST_PARAMS.vote_period_secs));
+        hw.finalize(&proposal).ok();
+        hw.w.env.warp(600);
+        let ix = hw.execute_ix(&o, &proposal);
+        measure(&mut hw.w, label, &owner, ix);
+    }
+    let mut hw = Hw::new();
+    let (forger, a, _) = hw.item(t::RAID, params(&[100, 100, 10]), 100);
+    let (other, b, b_mint) = hw.item(t::RAID, params(&[300, 50, 20]), 200);
+    hw.give_item(&other, &b_mint, &forger.pubkey());
+    let (ix, _) = hw.forge_ix(&forger.pubkey(), &a, &b);
+    measure(&mut hw.w, "forge, two Raid items", &forger, ix);
 }

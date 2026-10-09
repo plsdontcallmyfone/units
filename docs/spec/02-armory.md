@@ -635,3 +635,71 @@ All by self-CPI (`emit_cpi!`), as upstream.
 - **I-05-1** `mint_loot(owner, template_id, params)` is called only by `hookwars_war`, signing as
   `["loot-signer"]`.
 - **I-05-2** 05 reads `Item`, `Template` and `ForgeCounter` (2.10) directly.
+
+## M2 implementation notes (2026-10-09)
+
+Built in `programs/hookwars_armory`, `programs/hookwars_items` (the armory-facing entry points
+only), the shared crate `crates/hookwars-common`, test-only `programs/launch_stub` and
+`programs/war_stub`, tests `programs/tests/tests/{armory,votes,royalties,items_params}.rs` and the
+M2 lines of `budgets.rs`. Where the build differs from the text above, the build is what exists:
+
+1. **A shared crate instead of a crate cycle.** `hookwars-common` holds the params type, the
+   manifest, `EquipConfig`, each template's fields and forge rules (04 section 3), the seeds and
+   PDAs, the upgrade-authority check (00 rule 3, upstream `check_hook_authority` with
+   `HOOK_UPGRADE_AUTHORITIES`) and the observation reader (03 section 3.1). The armory calls the
+   items program with hand-built instructions (`sha256("global:<name>")[..8]`), so `hookwars_items`
+   may later depend on the armory crate (to read `Item`) without a cycle.
+2. **Template ids start at 1.** `register_template` takes the id and requires
+   `ArmoryConfig.templates + 1` (04 reserves 0 for "none"); for `<ITEMS_ID>` the id must name a
+   known template whose kind and field count match.
+3. **`Template.max_targets`.** What an item will read is known only when it is aimed (04 2.3), so
+   its manifest promises the most: Raid's and Shield's `reads_other_pools` is the template's
+   `max_targets`; `init_equip` refuses more targets (`BadTargets`).
+4. **`check_fits` against the slot table M1 built.** The token's `SlotBounds` has `max_cut_bps`,
+   `may_refuse`, `may_write_data`, `may_answer_touch`; the pool-side bounds 6.1 names (cut per side,
+   discount, foreign reads) are armory params instead: `max_pool_item_cut_bps`
+   (`MAX_POOL_ITEM_CUT_BPS`), `max_pool_item_discount_bps`, `max_item_reads`. No slot allows a burn,
+   so an item whose manifest may burn is refused (`OverBounds`).
+5. **Notice lives in `SlotState`.** The token's slot has no notice field; `equip_launch` records
+   `notice_secs` (inside `MIN_NOTICE_SECS..=MAX_NOTICE_SECS` for Vote and Performance slots) and
+   the slot's equip rule, fixed for life. `SlotState` is created for every slot `equip_launch`
+   touches.
+6. **`equip_launch` takes one slot per call** (`LaunchEquip { slot, item, config, notice_secs,
+   rule }`). "Fresh" means supply 0 and that slot still empty.
+7. **`Proposal` carries the equip's `EquipConfig`** (targets are chosen at equip, 04 2.3) and
+   `voters_open`; `close_proposal` waits until every `VoteLock` is closed.
+8. **Merging vote locks.** The token keeps one lock per holding; `vote` writes the larger amount
+   and the later end of the existing lock and the new vote (6.3).
+9. **Zero means off.** Transfer Fee's `max_wallet_bps` may be 0 below its floor
+   (`TemplateShape.zero_off`); forging it uses `TowardFloor` only when both are on.
+10. **Params behind the timelock.** `init` is signed by the armory's upgrade authority (as upstream
+    configs are) and names the admin. Every number the armory acts on is a field of
+    `ArmoryParams`, changed only by `propose_params` then `apply_params` after
+    `admin_timelock_secs`; the admin changes by `propose_admin` then `accept_admin` after the same
+    delay (D-9).
+11. **Two token-program changes** (`slot_table.rs`): a Fee slot's item may write hook data
+    (Half-Life, 04 3.7), and a Relation slot may carry pool flags and the launchpad's signer bump
+    (Treaty and Tribute have a pool half, 04 3.5 and 3.6).
+12. **Not yet called: `refresh_pool_registry`** (the launchpad's, M3).
+13. **Raw reads of M3 accounts.** `check_performance` reads `Observations` as the Borsh layout of
+    03 3.1 (`hookwars_common::obs_layout`) and the `Launch`'s pool at offset 74 (upstream SDK
+    offsets); if M3's `Observations` differs, the reader changes in that one place.
+14. **Items, M2 part.** `init_equip` writes the registry `[Item, EquipState, equip vault when it
+    cuts, then the template's extras as fixed keys]` and returns its length, which the armory
+    passes as the slot's `extra_count`; it does not create `RaidLedger` (M3, with its layout). Its
+    events are program logs (it is only called by CPI).
+15. **`finalize` without a launch account** (a token that did not launch through the launchpad)
+    counts the whole supply as eligible.
+16. **Test doubles.** `launch_stub` (at `<LAUNCH_ID>`, signs `["armory-caller", mint]`) and
+    `war_stub` (at `<WAR_ID>`, signs `["loot-signer"]`) are test-only; their keypairs are copies of
+    the launchpad's and the war program's.
+
+### Measured (M2, `programs/tests/tests/budgets.rs::armory_execute_and_forge`)
+
+| Path | Keys | v0 bytes | With table | Trace | Height | CU |
+| --- | --- | --- | --- | --- | --- | --- |
+| `execute` equip, War orders (no vault, no royalty holding) | 20 | 789 | 296 | 8 | 3 | 95,959 |
+| `execute` equip, Transfer Fee (equip vault, royalty holding) | 25 | 949 | 301 | 12 | 3 | 138,093 |
+| `forge`, two Raid items | 22 | 849 | 294 | 23 | 3 | 159,054 |
+
+All within mainnet's limits (1,232 bytes, 64 trace entries, height 5, 1,400,000 compute units).

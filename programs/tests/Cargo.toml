@@ -23,6 +23,12 @@ hook-tester = { path = "../hook_tester", features = ["no-entrypoint"] }
 # Hookwars: test-only slot programs.
 slot-tester = { path = "../slot_tester", features = ["no-entrypoint"] }
 armory-stub = { path = "../armory_stub", features = ["no-entrypoint"] }
+# Hookwars M2: the armory, the items program and their test-only callers.
+hookwars-common = { path = "../../crates/hookwars-common" }
+hookwars-armory = { path = "../hookwars_armory", features = ["no-entrypoint"] }
+hookwars-items = { path = "../hookwars_items", features = ["no-entrypoint"] }
+launch-stub = { path = "../launch_stub", features = ["no-entrypoint"] }
+war-stub = { path = "../war_stub", features = ["no-entrypoint"] }
 solana-account = "=4.7.0"
 solana-hash.workspace = true
 solana-keypair.workspace = true

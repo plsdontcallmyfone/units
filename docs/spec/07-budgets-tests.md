@@ -60,6 +60,15 @@ cutting slots 877 bytes (322 with a table), 10 trace entries, height 3, 106,733 
 slot table: 1,005 bytes, rent 7,885,680 lamports (upstream 519 bytes, 4,503,120). Launch-pool paths
 are still to measure (M3).
 
+Measured in M2 (`budgets.rs::armory_execute_and_forge`; "with table" puts every account the
+instruction names in one lookup table):
+
+| Path | Keys | v0 bytes | With table | Trace | Height | CU |
+| --- | --- | --- | --- | --- | --- | --- |
+| `execute` equip, War orders (no vault, no royalty holding) | 20 | 789 | 296 | 8 | 3 | 95,959 |
+| `execute` equip, Transfer Fee (equip vault, royalty holding) | 25 | 949 | 301 | 12 | 3 | 138,093 |
+| `forge`, two Raid items | 22 | 849 | 294 | 23 | 3 | 159,054 |
+
 These measurements set `MAX_SLOTS`, `MAX_CUTTING_SLOTS`, `MAX_ROUTE_HOPS`, `OBS_RING_LEN`,
 `PARAM_FIELDS`, `MAX_CAPTURED`, `RAID_TABLE_LEN` and `LOOT_TABLE_LEN` (00 section 6, set by M).
 

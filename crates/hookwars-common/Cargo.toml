@@ -1,0 +1,19 @@
+[package]
+name = "hookwars-common"
+description = "Hookwars: types and pure rules shared by hookwars_armory and hookwars_items (params, manifests, forge rules, seeds, the observation reader, the upgrade-authority check)."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }

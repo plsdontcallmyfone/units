@@ -1,0 +1,31 @@
+[package]
+name = "hookwars-armory"
+description = "Hookwars: the armory (docs/spec/02-armory.md). Templates, items as supply-1 tokens, royalties, equip rules (vote, performance, locked), equipping at launch, loot minting for the war program, forging."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "hookwars_armory"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "bordrless-hook/idl-build", "bordrless-token/idl-build", "bordrless-swap/idl-build", "hookwars-common/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+anchor-lang = { workspace = true, features = ["event-cpi", "init-if-needed"] }
+solana-security-txt = { workspace = true }
+bordrless-hook = { path = "../../crates/bordrless-hook" }
+bordrless-token = { path = "../bordrless_token", features = ["no-entrypoint"] }
+bordrless-swap = { path = "../bordrless_swap", features = ["no-entrypoint"] }
+hookwars-common = { path = "../../crates/hookwars-common" }
+
+[lints]
+workspace = true
