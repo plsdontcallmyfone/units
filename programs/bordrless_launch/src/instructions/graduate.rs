@@ -1,3 +1,4 @@
+// Changed by Hookwars: M3b slot launches pass the slot mint's transfer and burn slices.
 //! Graduation (`docs/hooks-v2.md` §5.5): the reserve tops the pool up so the price is continuous,
 //! the DEX finalizes the curve and mints the LP to the launch, the rest of the reserve is burned,
 //! and for a launch with a kit the kit is told (which lifts max wallet). The top-up moves between
@@ -215,12 +216,24 @@ pub fn process_graduate<'info>(ctx: Context<'info, Graduate<'info>>) -> Result<(
     // pool's LP fee is Bordrless's and does not compound, so the reserve reaches the threshold
     // exactly as the last curve token sells, and a hook's cut on buys (whose share leaves the
     // reserve) can keep it just below for good.
+    // Hookwars M3b: also when what is left on the curve is dust, worth less than one lamport at
+    // the curve's price: a 1-lamport buy would take more than the real reserve, so no buy can move
+    // the curve any more. Token-side items that cut a buy's delivery make the DEX set their
+    // protocol share aside from the quote reserve, which can leave the quote a few lamports short
+    // of the threshold with a few base units the DEX refuses to pay out (`InsufficientLiquidity`).
     require!(
-        pool.quote_reserve >= ctx.accounts.launch.graduation_quote || pool.base_reserve == 0,
+        pool.quote_reserve >= ctx.accounts.launch.graduation_quote
+            || pool.base_reserve == 0
+            || curve_is_dust(&pool),
         LaunchError::NotReady
     );
     let kit = kit_accounts(ctx.accounts)?;
-    let custom = custom_hook_accounts(&ctx.accounts.launch, ctx.remaining_accounts)?;
+    let slot_launch = ctx.accounts.launch.is_slot_launch();
+    let custom = if slot_launch {
+        None
+    } else {
+        custom_hook_accounts(&ctx.accounts.launch, ctx.remaining_accounts)?
+    };
 
     let launch_info = ctx.accounts.launch.to_account_info();
     let launch_seeds = LaunchSeeds::new(mint, ctx.accounts.launch.bump);
@@ -233,6 +246,14 @@ pub fn process_graduate<'info>(ctx: Context<'info, Graduate<'info>>) -> Result<(
     // for it and the kit's extras; or the custom hook, its signer and its extras; or the token
     // program's id for both hook slots without a hook.
     let (hook, hook_info, signer_info, extras, extra_infos) = match (&kit, &custom) {
+        // Hookwars M3b: a slot mint has no single hook; its slices are the remaining accounts.
+        _ if slot_launch => (
+            None,
+            token_program.clone(),
+            token_program.clone(),
+            vec![],
+            vec![],
+        ),
         (Some(k), _) => (
             Some(cpi::KIT_HOOK),
             k.program.clone(),
@@ -261,6 +282,26 @@ pub fn process_graduate<'info>(ctx: Context<'info, Graduate<'info>>) -> Result<(
             vec![],
             vec![],
         ),
+    };
+
+    // Hookwars M3b: on a slot launch the remaining accounts are the mint's transfer slices, then
+    // its burn slices, each as the slot table says (`StaleRegistry` otherwise).
+    let (extras, extra_infos, burn_extras, burn_infos) = if slot_launch {
+        let m = Box::new(token_client::read_mint(&ctx.accounts.mint)?);
+        let (t, b) = slot_slices(&m, ctx.remaining_accounts)?;
+        let metas = |v: &[AccountInfo<'info>]| -> Vec<AccountMeta> {
+            v.iter()
+                .map(|a| AccountMeta {
+                    pubkey: *a.key,
+                    is_signer: false,
+                    is_writable: a.is_writable,
+                })
+                .collect()
+        };
+        (metas(t), t.to_vec(), metas(b), b.to_vec())
+    } else {
+        let (e, i) = (extras, extra_infos);
+        (e.clone(), i.clone(), e, i)
     };
 
     // 1. Top the pool up from the reserve so the price is continuous without the virtual offsets.
@@ -326,7 +367,7 @@ pub fn process_graduate<'info>(ctx: Context<'info, Graduate<'info>>) -> Result<(
     // 3. The rest of the reserve is burned.
     let burned = reserve - topup;
     if burned > 0 {
-        let ix = cpi::token_burn(launch_key, reserve_info.key(), mint, hook, &extras, burned);
+        let ix = cpi::token_burn(launch_key, reserve_info.key(), mint, hook, &burn_extras, burned);
         let mut infos = vec![
             launch_info.clone(),
             reserve_info.clone(),
@@ -336,7 +377,7 @@ pub fn process_graduate<'info>(ctx: Context<'info, Graduate<'info>>) -> Result<(
             token_events.clone(),
             token_program.clone(),
         ];
-        infos.extend(extra_infos.iter().cloned());
+        infos.extend(burn_infos.iter().cloned());
         invoke_signed(&ix, &infos, &[&seeds])?;
     }
 
@@ -380,4 +421,33 @@ pub fn process_graduate<'info>(ctx: Context<'info, Graduate<'info>>) -> Result<(
         ts: clock.unix_timestamp,
     });
     Ok(())
+}
+
+/// Hookwars M3b: splits a slot launch's remaining accounts into the mint's transfer slices and its
+/// burn slices (each slot the table calls, in slot order, `[program, signer, extras]`).
+fn slot_slices<'a, 'info>(
+    mint: &bordrless_token::state::Mint,
+    remaining: &'a [AccountInfo<'info>],
+) -> Result<(&'a [AccountInfo<'info>], &'a [AccountInfo<'info>])> {
+    use bordrless_token::slots::{is_called, SlotOp};
+    let len = |op: SlotOp| -> usize {
+        mint.active_slots()
+            .iter()
+            .filter(|s| is_called(s, op))
+            .map(|s| 2 + usize::from(s.extra_count))
+            .sum()
+    };
+    let t = len(SlotOp::Transfer);
+    let b = len(SlotOp::Burn);
+    require!(remaining.len() == t + b, LaunchError::StaleRegistry);
+    Ok((&remaining[..t], &remaining[t..]))
+}
+
+/// Hookwars M3b: whether the base left on a curve pool is worth less than one lamport: the base a
+/// 1-lamport buy would take at the curve (`x * 1 / (y + 1)`, before fees) is at least the real base
+/// reserve.
+pub fn curve_is_dust(pool: &bordrless_swap::state::Pool) -> bool {
+    let x = u128::from(pool.base_reserve) + u128::from(pool.virtual_base);
+    let y = u128::from(pool.quote_reserve) + u128::from(pool.virtual_quote);
+    pool.base_reserve > 0 && x / (y + 1) >= u128::from(pool.base_reserve)
 }

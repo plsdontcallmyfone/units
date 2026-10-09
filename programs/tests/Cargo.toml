@@ -34,6 +34,7 @@ hookwars-war = { path = "../hookwars_war", features = ["no-entrypoint"] }
 war-items-stub = { path = "../war_items_stub", features = ["no-entrypoint"] }
 war-armory-stub = { path = "../war_armory_stub", features = ["no-entrypoint"] }
 randomness-stub = { path = "../randomness_stub", features = ["no-entrypoint"] }
+pool-item-stub = { path = "../pool_item_stub", features = ["no-entrypoint"] }
 items-stub = { path = "../items_stub", features = ["no-entrypoint"] }
 solana-account = "=4.7.0"
 solana-hash.workspace = true

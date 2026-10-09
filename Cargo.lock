@@ -806,6 +806,7 @@ dependencies = [
  "items-stub",
  "launch-stub",
  "litesvm",
+ "pool-item-stub",
  "randomness-stub",
  "slot-tester",
  "solana-account",
@@ -2094,6 +2095,14 @@ dependencies = [
  "cpufeatures 0.2.17",
  "opaque-debug",
  "universal-hash",
+]
+
+[[package]]
+name = "pool-item-stub"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "bordrless-hook",
 ]
 
 [[package]]

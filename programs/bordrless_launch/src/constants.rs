@@ -1,4 +1,4 @@
-// Changed by Hookwars: program ids and derived addresses.
+// Changed by Hookwars: program ids and derived addresses; M3b slot launches (armory, items, pool-item forwarding).
 //! Constants of the launchpad. Addresses this program compares against are constants rather than
 //! derived on chain (`docs/hooks-v2.md` §4.12); the unit tests check each against its derivation.
 
@@ -128,4 +128,44 @@ pub mod ceilings {
     pub const MIN_SUPPLY: u64 = bordrless_kit::constants::MIN_SUPPLY;
     /// The largest launch supply the kit installs on, which bounds its reward math.
     pub const MAX_SUPPLY: u64 = bordrless_kit::constants::MAX_SUPPLY;
+}
+
+/// Hookwars M3b (spec 03 sections 4 and 5): slot launches.
+pub mod hookwars {
+    use anchor_lang::prelude::Pubkey;
+
+    /// The armory: its `equip_launch` is the only instruction `equip_prepared` forwards.
+    pub const ARMORY_ID: Pubkey = bordrless_token::constants::ARMORY_ID;
+    /// The items program: owns `["pool-cuts", mint]`.
+    pub const ITEMS_ID: Pubkey = bordrless_token::constants::ITEMS_ID;
+    /// The war program: owns `["war-chest", mint]`.
+    pub const WAR_ID: Pubkey = bordrless_token::constants::WAR_ID;
+    /// `["prepared", mint]`: a prepared slot launch.
+    pub const PREPARED_SEED: &[u8] = b"prepared";
+    /// `["armory-caller", mint]`: signs the armory's `equip_launch`, and nothing else.
+    pub const ARMORY_CALLER_SEED: &[u8] = b"armory-caller";
+    /// `["pool-cuts", mint]` under the items program: owner of the holding that takes every
+    /// pool item's cut (R2).
+    pub const POOL_CUTS_SEED: &[u8] = b"pool-cuts";
+    /// `["war-chest", mint]` under the war program.
+    pub const WAR_CHEST_SEED: &[u8] = b"war-chest";
+    /// `sha256("global:equip_launch")[..8]`, the armory's instruction `equip_prepared` forwards
+    /// (checked against Anchor's derivation in the unit tests).
+    pub const EQUIP_LAUNCH_DISCRIMINATOR: [u8; 8] = [48, 11, 21, 138, 90, 194, 210, 75];
+    /// Index, in a slot launch's pool callback account list, of the `PoolCuts` quote holding
+    /// (prefix of 5, upstream's four extras at 5 to 8, then this one): every pool item's cut on a
+    /// side goes there as one delta.
+    pub const POOL_CUTS_INDEX: u8 = 9;
+    /// Pool flags of an item, as the armory writes them into a slot (`hookwars_common::pool_flags`):
+    /// `pool_before_swap`.
+    pub const ITEM_POOL_BEFORE: u16 = 1;
+    /// `pool_after_swap`.
+    pub const ITEM_POOL_AFTER: u16 = 1 << 1;
+    /// `sha256("global:pool_before_swap")[..8]`, the pool items' before-swap callback.
+    pub const POOL_BEFORE_SWAP_DISCRIMINATOR: [u8; 8] = [52, 167, 134, 185, 26, 179, 21, 24];
+    /// `sha256("global:pool_after_swap")[..8]`, the pool items' after-swap callback.
+    pub const POOL_AFTER_SWAP_DISCRIMINATOR: [u8; 8] = [216, 69, 224, 21, 151, 250, 159, 125];
+    /// `Launch.slot_launch`: a launch made with `prepare_launch` and `create_prepared_launch`,
+    /// whose mint runs a slot table.
+    pub const SLOT_LAUNCH: u8 = 1;
 }

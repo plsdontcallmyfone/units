@@ -1,3 +1,4 @@
+// Changed by Hookwars: M3b Launch.slot_launch and PreparedLaunch.
 //! Accounts of the launchpad, and the token rules a launch fixes ([`LaunchRules`]).
 
 use anchor_lang::prelude::*;
@@ -296,8 +297,12 @@ pub struct Launch {
     pub author_share_bps: u16,
     /// Creator fees paid to the config's author so far (quote).
     pub author_fees_paid: u64,
+    /// Hookwars M3b: `constants::hookwars::SLOT_LAUNCH` when the launch was made with
+    /// `prepare_launch` and `create_prepared_launch` (its mint runs a slot table, its pool hook
+    /// forwards to pool items); 0 otherwise. Taken from `reserved`, so `Launch::LEN` is unchanged.
+    pub slot_launch: u8,
     /// Reserved.
-    pub reserved: [u8; 22],
+    pub reserved: [u8; 21],
 }
 
 impl Launch {
@@ -329,4 +334,41 @@ impl Launch {
     pub fn rewards_on(&self) -> bool {
         self.modules & modules::HOLDER_REWARDS != 0
     }
+
+    /// Hookwars M3b: whether the launch's mint runs a slot table.
+    pub fn is_slot_launch(&self) -> bool {
+        self.slot_launch == crate::constants::hookwars::SLOT_LAUNCH
+    }
+}
+
+/// Hookwars M3b: a slot launch between `prepare_launch` and `create_prepared_launch`, at
+/// `["prepared", mint]`. It fixes who may equip and launch the mint and with which rules.
+#[account]
+#[derive(InitSpace, Debug)]
+pub struct PreparedLaunch {
+    /// Layout version.
+    pub version: u8,
+    /// Bump.
+    pub bump: u8,
+    /// The mint.
+    pub mint: Pubkey,
+    /// Who prepared it: the only signer `equip_prepared` and `create_prepared_launch` accept.
+    pub creator: Pubkey,
+    /// The token rules the launch will have (the kit's slot was made from their modules).
+    pub rules: LaunchRules,
+    /// The creator fee the launch will have.
+    pub creator_fee_bps: u16,
+    /// Slots in the mint's table (the kit's included).
+    pub slot_count: u8,
+    /// When it was prepared.
+    pub prepared_at: i64,
+    /// Set by `create_prepared_launch`; a prepared launch launches once.
+    pub launched: bool,
+    /// Reserved.
+    pub reserved: [u8; 32],
+}
+
+impl PreparedLaunch {
+    /// Account size.
+    pub const LEN: usize = DISCRIMINATOR_LEN + Self::INIT_SPACE;
 }

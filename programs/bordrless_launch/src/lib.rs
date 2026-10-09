@@ -1,4 +1,4 @@
-// Changed by Hookwars: program ids and derived addresses.
+// Changed by Hookwars: program ids and derived addresses; M3b slot launches (prepare_launch, equip_prepared, create_prepared_launch, refresh_pool_registry) and pool-item forwarding.
 //! `bordrless_launch`: the Bordrless launchpad (`docs/hooks-v2.md` §5).
 //!
 //! One transaction creates a Bordrless Token Standard mint with fixed metadata and the token rules
@@ -116,14 +116,52 @@ pub mod bordrless_launch {
         hooks::process_before_initialize(ctx, args)
     }
 
-    /// Pool hook: the anti-sniper LP fee; a buy's creator and holder fees, a sell's burn.
-    pub fn before_swap(ctx: Context<HookCallback>, args: PoolHookArgs) -> Result<HookReturn> {
+    /// Pool hook: the anti-sniper LP fee; a buy's creator and holder fees, a sell's burn. On a
+    /// slot launch, then each pool item (Hookwars M3b).
+    pub fn before_swap<'info>(
+        ctx: Context<'info, HookCallback<'info>>,
+        args: PoolHookArgs,
+    ) -> Result<HookReturn> {
         hooks::process_before_swap(ctx, args)
     }
 
     /// Pool hook: a buy's burn; a sell's creator and holder fees, from the output the DEX hands
-    /// on.
-    pub fn after_swap(ctx: Context<HookCallback>, args: PoolHookArgs) -> Result<HookReturn> {
+    /// on. On a slot launch, then each pool item (Hookwars M3b).
+    pub fn after_swap<'info>(
+        ctx: Context<'info, HookCallback<'info>>,
+        args: PoolHookArgs,
+    ) -> Result<HookReturn> {
         hooks::process_after_swap(ctx, args)
+    }
+
+    /// Hookwars M3b: the first step of a slot launch: the slot mint (the kit Locked in slot 0 when
+    /// the rules install a kit module), no supply, the launch PDA as its only mint authority.
+    pub fn prepare_launch(ctx: Context<PrepareLaunch>, args: PrepareLaunchArgs) -> Result<()> {
+        slot_launch::process_prepare_launch(ctx, args)
+    }
+
+    /// Hookwars M3b: equips one launch item through the armory's `equip_launch`, signed as
+    /// `["armory-caller", mint]`; the creator of a prepared launch only, before it launches.
+    pub fn equip_prepared<'info>(
+        ctx: Context<'info, EquipPrepared<'info>>,
+        data: Vec<u8>,
+    ) -> Result<()> {
+        slot_launch::process_equip_prepared(ctx, data)
+    }
+
+    /// Hookwars M3b: `create_launch` on a prepared slot mint. Remaining accounts: the
+    /// `PreparedLaunch`, the `PoolCuts` owner and holding, then the mint's transfer slices.
+    pub fn create_prepared_launch<'info>(
+        ctx: Context<'info, CreateLaunch<'info>>,
+        args: CreateLaunchArgs,
+    ) -> Result<()> {
+        launch::process_create_prepared_launch(ctx, args)
+    }
+
+    /// Hookwars M3b: rewrites a slot launch's pool registry from its slot table. Permissionless.
+    pub fn refresh_pool_registry<'info>(
+        ctx: Context<'info, RefreshPoolRegistry<'info>>,
+    ) -> Result<()> {
+        slot_launch::process_refresh_pool_registry(ctx)
     }
 }

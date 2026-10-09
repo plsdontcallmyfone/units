@@ -1,3 +1,4 @@
+// Changed by Hookwars: M3b slot launch events.
 //! Events of the launchpad, emitted by self-CPI.
 
 #![allow(missing_docs)]
@@ -132,5 +133,54 @@ pub struct CreatorFeesClaimed {
     pub amount: u64,
     pub claimed_total: u64,
     pub slot: u64,
+    pub ts: i64,
+}
+
+/// Hookwars M3b: a slot launch prepared (`prepare_launch`): the mint exists with its slot table
+/// and no supply.
+#[event]
+pub struct LaunchPrepared {
+    pub mint: Pubkey,
+    pub creator: Pubkey,
+    pub slot_count: u8,
+    pub kit_slot: bool,
+    pub slot: u64,
+    pub ts: i64,
+}
+
+/// Hookwars M3b: one pool item's part of a callback.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct PoolItemPart {
+    pub slot: u8,
+    pub item: Pubkey,
+    pub discount_bps: u16,
+    pub cut: u64,
+    pub burn: u64,
+}
+
+/// Hookwars M3b: what the pool items of a slot launch answered in one callback (side 0: input,
+/// 1: output). Logged (`emit!`), not a self-CPI, so a swap's trace grows only by the items' own
+/// calls. `pool_cuts_delta` is the one merged delta to the `PoolCuts` holding.
+#[event]
+pub struct PoolItemCuts {
+    pub launch: Pubkey,
+    pub pool: Pubkey,
+    pub mint: Pubkey,
+    pub side: u8,
+    pub discount_bps: u16,
+    pub parts: Vec<PoolItemPart>,
+    pub pool_cuts_delta: u64,
+    pub burned: u64,
+    pub slot: u64,
+    pub ts: i64,
+}
+
+/// Hookwars M3b: the pool registry of a slot launch rewritten from its slot table.
+#[event]
+pub struct PoolRegistryRefreshed {
+    pub mint: Pubkey,
+    pub pool: Pubkey,
+    pub items: Vec<Pubkey>,
+    pub accounts: u16,
     pub ts: i64,
 }

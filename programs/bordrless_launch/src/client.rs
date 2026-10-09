@@ -1,4 +1,4 @@
-// Changed by Hookwars: program ids and derived addresses.
+// Changed by Hookwars: program ids and derived addresses; M3b slot launch builders.
 //! Instruction builders for calling the launchpad (tests and the TypeScript SDK's reference). They
 //! derive every address they need, off chain.
 
@@ -13,7 +13,7 @@ use bordrless_token::client as token_client;
 
 use crate::constants::*;
 use crate::instructions::launch_config::programdata_address;
-use crate::instructions::{ConfigArgs, CreateConfigArgs, CreateLaunchArgs};
+use crate::instructions::{ConfigArgs, CreateConfigArgs, CreateLaunchArgs, PrepareLaunchArgs};
 use crate::state::{Launch, LaunchConfig, LaunchRules};
 
 /// This program's `["hook-authority"]` PDA.
@@ -865,5 +865,211 @@ mod tests {
                 .len(),
             m - 3
         );
+    }
+}
+
+/// Hookwars M3b: slot launch builders (spec 03 section 4.3).
+pub mod slots {
+    use super::*;
+    use crate::constants::hookwars::*;
+
+    /// `["prepared", mint]`.
+    pub fn prepared_address(mint: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(&[PREPARED_SEED, mint.as_ref()], &crate::ID).0
+    }
+
+    /// `["armory-caller", mint]`.
+    pub fn armory_caller_address(mint: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(&[ARMORY_CALLER_SEED, mint.as_ref()], &crate::ID).0
+    }
+
+    /// `["pool-cuts", mint]` under the items program.
+    pub fn pool_cuts_owner(mint: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(&[POOL_CUTS_SEED, mint.as_ref()], &ITEMS_ID).0
+    }
+
+    /// The `PoolCuts` holding of the quote.
+    pub fn pool_cuts_holding(mint: &Pubkey, quote_mint: &Pubkey) -> Pubkey {
+        token_client::holding_address(quote_mint, &pool_cuts_owner(mint))
+    }
+
+    /// This program's signer of the callbacks to `program`: `["hook-authority", program]`.
+    pub fn item_signer(program: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(&[HOOK_AUTHORITY_SEED, program.as_ref()], &crate::ID).0
+    }
+
+    /// `prepare_launch`.
+    pub fn prepare_launch(creator: Pubkey, mint: Pubkey, args: PrepareLaunchArgs) -> Instruction {
+        Instruction {
+            program_id: crate::ID,
+            accounts: with_events(vec![
+                AccountMeta::new(creator, true),
+                AccountMeta::new_readonly(config_address(), false),
+                AccountMeta::new(mint, true),
+                AccountMeta::new(prepared_address(&mint), false),
+                AccountMeta::new_readonly(bordrless_token::ID, false),
+                AccountMeta::new_readonly(bordrless_token::EVENT_AUTHORITY_AND_BUMP.0, false),
+                AccountMeta::new_readonly(system_program::ID, false),
+            ]),
+            data: crate::instruction::PrepareLaunch { args }.data(),
+        }
+    }
+
+    /// `equip_prepared` forwarding `armory_ix` (the armory's `equip_launch`, whose
+    /// `launch_caller` this program signs for).
+    pub fn equip_prepared(creator: Pubkey, mint: Pubkey, armory_ix: Instruction) -> Instruction {
+        let caller = armory_caller_address(&mint);
+        let mut accounts = vec![
+            AccountMeta::new_readonly(creator, true),
+            AccountMeta::new_readonly(prepared_address(&mint), false),
+            AccountMeta::new_readonly(mint, false),
+            AccountMeta::new_readonly(ARMORY_ID, false),
+        ];
+        accounts.extend(armory_ix.accounts.into_iter().map(|mut m| {
+            if m.pubkey == caller {
+                m.is_signer = false;
+            }
+            m
+        }));
+        Instruction {
+            program_id: crate::ID,
+            accounts,
+            data: crate::instruction::EquipPrepared {
+                data: armory_ix.data,
+            }
+            .data(),
+        }
+    }
+
+    /// `create_prepared_launch` with inline rules (they must be the prepared ones). `slices` is
+    /// the mint's transfer slices for the deposit (launch reserve to the pool's base vault).
+    pub fn create_prepared_launch(
+        creator: Pubkey,
+        mint: Pubkey,
+        treasury: Pubkey,
+        quote_mint: Pubkey,
+        lp_fee_bps: u16,
+        args: CreateLaunchArgs,
+        slices: Vec<AccountMeta>,
+    ) -> Instruction {
+        let mut ix = create_launch(creator, mint, treasury, quote_mint, lp_fee_bps, args.clone());
+        ix.data = crate::instruction::CreatePreparedLaunch { args }.data();
+        ix.accounts.push(AccountMeta::new(prepared_address(&mint), false));
+        ix.accounts
+            .push(AccountMeta::new_readonly(pool_cuts_owner(&mint), false));
+        ix.accounts
+            .push(AccountMeta::new(pool_cuts_holding(&mint, &quote_mint), false));
+        ix.accounts.extend(slices);
+        ix
+    }
+
+    /// `refresh_pool_registry`; `item_registries` are the forwarded pool slots' item registries,
+    /// in slot order.
+    pub fn refresh_pool_registry(
+        payer: Pubkey,
+        mint: Pubkey,
+        quote_mint: Pubkey,
+        lp_fee_bps: u16,
+        item_registries: Vec<Pubkey>,
+    ) -> Instruction {
+        let pool = pool_address(&mint, &quote_mint, lp_fee_bps);
+        let mut accounts = with_events(vec![
+            AccountMeta::new(payer, true),
+            AccountMeta::new_readonly(launch_address(&mint), false),
+            AccountMeta::new_readonly(mint, false),
+            AccountMeta::new(registry_address(&pool), false),
+            AccountMeta::new_readonly(system_program::ID, false),
+        ]);
+        accounts.extend(
+            item_registries
+                .into_iter()
+                .map(|k| AccountMeta::new_readonly(k, false)),
+        );
+        Instruction {
+            program_id: crate::ID,
+            accounts,
+            data: crate::instruction::RefreshPoolRegistry {}.data(),
+        }
+    }
+
+    /// The pool extras of a slot launch's swap after upstream's four: the `PoolCuts` holding,
+    /// then `items` (per forwarded pool slot, `[program, item_signer(program), extras]`).
+    pub fn pool_extras(mint: &Pubkey, quote_mint: &Pubkey, items: Vec<AccountMeta>) -> Vec<AccountMeta> {
+        let mut v = hook_extras(mint, quote_mint);
+        v.push(AccountMeta::new(pool_cuts_holding(mint, quote_mint), false));
+        v.extend(items);
+        v
+    }
+
+    /// A swap on a slot launch: `base_slice` is the mint's transfer slices for the base transfer,
+    /// `items` the pool items' accounts (see [`pool_extras`]).
+    #[allow(clippy::too_many_arguments)]
+    pub fn swap(
+        keys: &LaunchKeys,
+        trader: Pubkey,
+        recipient: Pubkey,
+        direction: u8,
+        amount_in: u64,
+        min_amount_out: u64,
+        base_slice: Vec<AccountMeta>,
+        items: Vec<AccountMeta>,
+    ) -> Instruction {
+        let buy = direction == 1;
+        let (trader_base, trader_quote) = if buy {
+            (
+                token_client::holding_address(&keys.mint, &recipient),
+                token_client::holding_address(&keys.quote_mint, &trader),
+            )
+        } else {
+            (
+                token_client::holding_address(&keys.mint, &trader),
+                token_client::holding_address(&keys.quote_mint, &recipient),
+            )
+        };
+        let (in_hook_accounts, out_hook_accounts) = if buy {
+            (0, base_slice.len() as u8)
+        } else {
+            (base_slice.len() as u8, 0)
+        };
+        let mut extras = base_slice;
+        extras.extend(pool_extras(&keys.mint, &keys.quote_mint, items));
+        swap_client::swap(
+            &swap_client::SwapKeys {
+                trader,
+                pool: keys.pool(),
+                base_mint: keys.mint,
+                quote_mint: keys.quote_mint,
+                trader_base,
+                trader_quote,
+                hook_program: Some(crate::ID),
+                base_mint_writable: keys.burns,
+                quote_mint_writable: false,
+            },
+            SwapArgs {
+                direction,
+                amount_in,
+                min_amount_out,
+                in_hook_accounts,
+                out_hook_accounts,
+                hook_data: vec![],
+            },
+            extras,
+        )
+    }
+
+    /// `graduate` of a slot launch: `transfer_slices` then `burn_slices` of its mint.
+    pub fn graduate(
+        cranker: Pubkey,
+        mint: Pubkey,
+        quote_mint: Pubkey,
+        lp_fee_bps: u16,
+        modules: u8,
+        transfer_slices: Vec<AccountMeta>,
+        burn_slices: Vec<AccountMeta>,
+    ) -> Instruction {
+        let mut ix = graduate_with(cranker, mint, quote_mint, lp_fee_bps, modules, None);
+        ix.accounts.extend(transfer_slices);
+        ix.accounts.extend(burn_slices);
+        ix
     }
 }

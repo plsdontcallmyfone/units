@@ -1,3 +1,4 @@
+// Changed by Hookwars: M3b slot launches (create_prepared_launch shares the steps; plan, mint_supply and create_curve_pool take the slice).
 //! Creating a launch (`docs/hooks-v2.md` §5.3, §5.7, §5.8): the mint (with the kit as its token
 //! hook when the rules install a kit module, with the creator's own hook when a `LaunchConfig`
 //! names one, else no hook), the supply to the launch, the kit, the curve pool, the pool hook's
@@ -462,6 +463,8 @@ fn check_custom_hook_accounts<'info>(
 fn plan<'info>(
     ctx: &Context<'info, CreateLaunch<'info>>,
     args: &CreateLaunchArgs,
+    custom_remaining: &[AccountInfo<'info>],
+    prepared: Option<&PreparedLaunch>,
 ) -> Result<Box<Plan<'info>>> {
     let clock = Clock::get()?;
     let config = &ctx.accounts.config;
@@ -478,6 +481,18 @@ fn plan<'info>(
     // arguments'. Bounds and the creator fee are checked either way: the config they were made
     // under may have changed.
     // A listed config's author shares the creator fee of every launch someone else makes from it.
+    // Hookwars M3b: a prepared slot launch takes its rules inline and they must be the ones the
+    // mint's kit slot was made from.
+    if let Some(p) = prepared {
+        require!(
+            ctx.accounts.launch_config.is_none(),
+            LaunchError::PreparedMismatch
+        );
+        require!(
+            args.rules == p.rules && args.creator_fee_bps == p.creator_fee_bps,
+            LaunchError::PreparedMismatch
+        );
+    }
     let (rules, creator_fee_bps, hook, config_key, author_share_bps) =
         match &ctx.accounts.launch_config {
             Some(lc) => {
@@ -537,7 +552,7 @@ fn plan<'info>(
     let holder_vault = token_client::holding_address(&quote_mint, &kit_config);
     let kit_caller_bump =
         check_kit_accounts(ctx.accounts, &mint, modules, &kit_config, &holder_vault)?;
-    let custom = check_custom_hook_accounts(ctx.remaining_accounts, hook, &mint)?;
+    let custom = check_custom_hook_accounts(custom_remaining, hook, &mint)?;
     let now = clock.unix_timestamp;
     let at = |secs: u32| -> i64 {
         if secs > 0 {
@@ -741,11 +756,14 @@ fn create_launch_holding<'info>(
 /// 4. The whole supply to the launch (the mint's hook passed; the kit does not subscribe to
 ///    mints, a custom hook may, so its extras go along), then no more minting ever.
 #[inline(never)]
-fn mint_supply<'info>(ctx: &Context<'info, CreateLaunch<'info>>, plan: &Plan<'info>) -> Result<()> {
+fn mint_supply<'info>(
+    ctx: &Context<'info, CreateLaunch<'info>>,
+    plan: &Plan<'info>,
+    slice: Slice<'info>,
+) -> Result<()> {
     let launch_seeds = LaunchSeeds::new(plan.mint, ctx.bumps.launch);
     let seeds = launch_seeds.seeds();
     let token_program = ctx.accounts.token_program.to_account_info();
-    let slice = slice_of(ctx, plan)?;
     let [hook_info, signer_info] = slice.hook_infos(&token_program);
     let extra_metas: &[AccountMeta] = if slice.on_mint {
         &slice.extra_metas
@@ -854,11 +872,11 @@ fn install_kit<'info>(ctx: &Context<'info, CreateLaunch<'info>>, plan: &Plan<'in
 fn create_curve_pool<'info>(
     ctx: &Context<'info, CreateLaunch<'info>>,
     plan: &Plan<'info>,
+    slice: Slice<'info>,
 ) -> Result<()> {
     let launch_seeds = LaunchSeeds::new(plan.mint, ctx.bumps.launch);
     let seeds = launch_seeds.seeds();
     let hook_seeds: &[&[u8]] = &[HOOK_AUTHORITY_SEED, &[HOOK_AUTHORITY_BUMP]];
-    let slice = slice_of(ctx, plan)?;
     let config = &ctx.accounts.config;
     let ix = cpi::dex_create_pool(
         &cpi::CreatePoolKeys {
@@ -915,8 +933,10 @@ fn create_curve_pool<'info>(
     if let Some((program, signer)) = &slice.hook {
         infos.push(program.clone());
         infos.push(signer.clone());
-        infos.extend(slice.extras.iter().cloned());
     }
+    // Hookwars M3b: a slot mint's slices (each slot's program, signer and extras) have no single
+    // hook; they go along as they are.
+    infos.extend(slice.extras.iter().cloned());
     invoke_signed(&ix, &infos, &[&seeds, hook_seeds])?;
     Ok(())
 }
@@ -926,6 +946,7 @@ fn create_curve_pool<'info>(
 fn write_pool_registry<'info>(
     ctx: &Context<'info, CreateLaunch<'info>>,
     plan: &Plan<'info>,
+    list: &HookAccountList,
 ) -> Result<()> {
     write_registry(
         &ctx.accounts.creator.to_account_info(),
@@ -934,7 +955,7 @@ fn write_pool_registry<'info>(
         &crate::ID,
         &plan.pool,
         plan.registry_bump,
-        &registry_list(plan.holder_vault, plan.kit_config),
+        list,
     )
 }
 
@@ -943,6 +964,7 @@ fn write_pool_registry<'info>(
 fn record_launch<'info>(
     ctx: &mut Context<'info, CreateLaunch<'info>>,
     plan: &Plan<'info>,
+    slot_launch: u8,
 ) -> Result<()> {
     let bump = ctx.bumps.launch;
     let reserve_holding = ctx.accounts.launch_reserve.key();
@@ -1001,7 +1023,8 @@ fn record_launch<'info>(
     launch.custom_hook_flags = plan.custom_hook_flags();
     launch.author_share_bps = plan.author_share_bps;
     launch.author_fees_paid = 0;
-    launch.reserved = [0; 22];
+    launch.slot_launch = slot_launch;
+    launch.reserved = [0; 21];
     Ok(())
 }
 
@@ -1056,7 +1079,7 @@ pub fn process_create_launch<'info>(
     mut ctx: Context<'info, CreateLaunch<'info>>,
     args: CreateLaunchArgs,
 ) -> Result<()> {
-    let plan = plan(&ctx, &args)?;
+    let plan = plan(&ctx, &args, ctx.remaining_accounts, None)?;
     pay_launch_fee(&ctx)?;
     create_mint(&ctx, &args, &plan)?;
     create_launch_holding(
@@ -1069,12 +1092,186 @@ pub fn process_create_launch<'info>(
         ctx.accounts.launch_quote.to_account_info(),
         ctx.accounts.quote_mint.to_account_info(),
     )?;
-    mint_supply(&ctx, &plan)?;
+    mint_supply(&ctx, &plan, slice_of(&ctx, &plan)?)?;
     if plan.modules != 0 {
         install_kit(&ctx, &plan)?;
     }
-    create_curve_pool(&ctx, &plan)?;
-    write_pool_registry(&ctx, &plan)?;
-    record_launch(&mut ctx, &plan)?;
+    create_curve_pool(&ctx, &plan, slice_of(&ctx, &plan)?)?;
+    write_pool_registry(
+        &ctx,
+        &plan,
+        &registry_list(plan.holder_vault, plan.kit_config),
+    )?;
+    record_launch(&mut ctx, &plan, 0)?;
+    emit_launch_created(&ctx, args, &plan)
+}
+
+/// Hookwars M3b: the slot mint's transfer slices as the remaining accounts carry them after
+/// `[prepared, pool_cuts_owner, pool_cuts_holding]`: each slot the mint calls on a transfer, in
+/// slot order, as `[program, the token program's signer for it, its extra_count extras]`, exactly
+/// as many as the table says (`StaleRegistry` otherwise). Answers them as the deposit's slice.
+fn prepared_slice<'info>(
+    mint: &bordrless_token::state::Mint,
+    accounts: &[AccountInfo<'info>],
+) -> Result<Slice<'info>> {
+    use bordrless_token::slots::{is_called, SlotOp};
+    let mut need = 0usize;
+    for s in mint.active_slots() {
+        if is_called(s, SlotOp::Transfer) {
+            need += 2 + usize::from(s.extra_count);
+        }
+    }
+    require!(accounts.len() == need, LaunchError::StaleRegistry);
+    let mut i = 0usize;
+    for s in mint.active_slots() {
+        if !is_called(s, SlotOp::Transfer) {
+            continue;
+        }
+        require_keys_eq!(*accounts[i].key, s.program, LaunchError::StaleRegistry);
+        i += 2 + usize::from(s.extra_count);
+    }
+    let metas: Vec<AccountMeta> = accounts
+        .iter()
+        .map(|a| AccountMeta {
+            pubkey: *a.key,
+            is_signer: false,
+            is_writable: a.is_writable,
+        })
+        .collect();
+    Ok(Slice {
+        hook: None,
+        extras: accounts.to_vec(),
+        extra_metas: vec![],
+        metas,
+        on_mint: false,
+    })
+}
+
+/// Hookwars M3b: the `PoolCuts` quote holding of the mint, created with the launch so every pool
+/// item's cut has somewhere to go from the first swap (R2).
+#[inline(never)]
+fn create_pool_cuts<'info>(
+    ctx: &Context<'info, CreateLaunch<'info>>,
+    plan: &Plan<'info>,
+    owner: &AccountInfo<'info>,
+    holding: &AccountInfo<'info>,
+) -> Result<()> {
+    use crate::constants::hookwars::{ITEMS_ID, POOL_CUTS_SEED};
+    let (expected, _) =
+        Pubkey::find_program_address(&[POOL_CUTS_SEED, plan.mint.as_ref()], &ITEMS_ID);
+    require_keys_eq!(*owner.key, expected, LaunchError::WrongPoolCuts);
+    require_keys_eq!(
+        *holding.key,
+        token_client::holding_address(&plan.quote_mint, &expected),
+        LaunchError::WrongPoolCuts
+    );
+    if holding.data_is_empty() {
+        let ix = cpi::token_create_holding(
+            ctx.accounts.creator.key(),
+            plan.quote_mint,
+            expected,
+            *holding.key,
+        );
+        invoke_signed(
+            &ix,
+            &[
+                ctx.accounts.creator.to_account_info(),
+                ctx.accounts.quote_mint.to_account_info(),
+                owner.clone(),
+                holding.clone(),
+                ctx.accounts.system_program.to_account_info(),
+                ctx.accounts.token_event_authority.to_account_info(),
+                ctx.accounts.token_program.to_account_info(),
+            ],
+            &[],
+        )?;
+    }
+    Ok(())
+}
+
+/// Hookwars M3b: the pool registry of a slot launch: upstream's four extras, then the `PoolCuts`
+/// holding (index 9). `refresh_pool_registry` appends the equipped pool items' accounts.
+pub fn slot_registry_list(holder_vault: Pubkey, kit_config: Pubkey, pool_cuts: Pubkey) -> HookAccountList {
+    let mut list = registry_list(holder_vault, kit_config);
+    list.accounts.push(ExtraAccount {
+        writable: true,
+        source: AccountSource::Key(pool_cuts),
+    });
+    list
+}
+
+/// Hookwars M3b, `create_prepared_launch` (spec 03 section 4.3, transaction 2): upstream's
+/// `create_launch` on a mint `prepare_launch` already made, whose items `equip_prepared` already
+/// equipped. The remaining accounts are `[prepared, pool_cuts_owner, pool_cuts_holding]`, then
+/// the mint's transfer slices for the deposit.
+pub fn process_create_prepared_launch<'info>(
+    mut ctx: Context<'info, CreateLaunch<'info>>,
+    args: CreateLaunchArgs,
+) -> Result<()> {
+    let remaining = ctx.remaining_accounts;
+    require!(remaining.len() >= 3, LaunchError::NotPrepared);
+    let prepared_info = &remaining[0];
+    let mint_key = ctx.accounts.mint.key();
+    let (prepared_key, _) = Pubkey::find_program_address(
+        &[crate::constants::hookwars::PREPARED_SEED, mint_key.as_ref()],
+        &crate::ID,
+    );
+    require_keys_eq!(*prepared_info.key, prepared_key, LaunchError::NotPrepared);
+    require_keys_eq!(*prepared_info.owner, crate::ID, LaunchError::NotPrepared);
+    let mut prepared: Account<PreparedLaunch> = Account::try_from(prepared_info)?;
+    require!(!prepared.launched, LaunchError::NotPrepared);
+    require_keys_eq!(
+        prepared.creator,
+        ctx.accounts.creator.key(),
+        LaunchError::WrongCreator
+    );
+    let mint = Box::new(token_client::read_mint(&ctx.accounts.mint.to_account_info())?);
+    require!(
+        mint.uses_slots() && mint.supply == 0 && mint.max_supply == ctx.accounts.config.supply,
+        LaunchError::NotPrepared
+    );
+    let plan = plan(&ctx, &args, &[], Some(&prepared))?;
+    require!(
+        mint.mint_authority == Some(plan.launch),
+        LaunchError::NotPrepared
+    );
+    pay_launch_fee(&ctx)?;
+    create_launch_holding(
+        &ctx,
+        ctx.accounts.launch_reserve.to_account_info(),
+        ctx.accounts.mint.to_account_info(),
+    )?;
+    create_launch_holding(
+        &ctx,
+        ctx.accounts.launch_quote.to_account_info(),
+        ctx.accounts.quote_mint.to_account_info(),
+    )?;
+    // No item slot is called on a mint (R12), and prepare_launch makes no Locked slot but the
+    // kit's, which does not subscribe to mints: the supply goes in with no slice.
+    mint_supply(
+        &ctx,
+        &plan,
+        Slice {
+            hook: None,
+            extras: vec![],
+            extra_metas: vec![],
+            metas: vec![],
+            on_mint: false,
+        },
+    )?;
+    if plan.modules != 0 {
+        install_kit(&ctx, &plan)?;
+    }
+    create_pool_cuts(&ctx, &plan, &remaining[1], &remaining[2])?;
+    let slice = prepared_slice(&mint, &remaining[3..])?;
+    create_curve_pool(&ctx, &plan, slice)?;
+    write_pool_registry(
+        &ctx,
+        &plan,
+        &slot_registry_list(plan.holder_vault, plan.kit_config, *remaining[2].key),
+    )?;
+    record_launch(&mut ctx, &plan, crate::constants::hookwars::SLOT_LAUNCH)?;
+    prepared.launched = true;
+    prepared.exit(&crate::ID)?;
     emit_launch_created(&ctx, args, &plan)
 }
