@@ -1,3 +1,4 @@
+// Changed by Hookwars: M3b slot launch errors.
 //! Errors of the launchpad.
 
 use anchor_lang::prelude::*;
@@ -95,4 +96,33 @@ pub enum LaunchError {
     HookUpgradeable,
     #[msg("the custom hook's program data account is missing or wrong")]
     HookProgramDataMissing,
+    // Hookwars M3b: slot launches (spec 03 sections 4 and 5).
+    #[msg("the slot table is not one a launch can make (an item slot of the Locked kind, too many slots)")]
+    InvalidSlots,
+    #[msg("this mint has no prepared launch, or it has already launched")]
+    NotPrepared,
+    #[msg("only the creator who prepared the launch may equip or launch it")]
+    WrongCreator,
+    #[msg("the arguments do not match the prepared launch")]
+    PreparedMismatch,
+    #[msg("equip_prepared forwards only the armory's equip_launch")]
+    NotEquipLaunch,
+    #[msg("a pool slot's accounts are not its program, the launchpad's signer for it and its extras")]
+    WrongItemProgram,
+    #[msg("a pool item's accounts are missing")]
+    ItemAccountsMissing,
+    #[msg("the pool registry does not match the mint's slot table")]
+    StaleRegistry,
+    #[msg("a pool item may cut only the quote: a buy's input or a sell's output")]
+    ItemCutWrongSide,
+    #[msg("a pool item may burn only the base, and only where its slot allows a burn")]
+    ItemBurnWrongSide,
+    #[msg("a pool item answered more than its slot's bound")]
+    ItemCutOutOfBounds,
+    #[msg("a pool item's discount is above 10,000 basis points")]
+    ItemDiscountTooHigh,
+    #[msg("the answer is not the pool item's own")]
+    ForeignAnswer,
+    #[msg("the pool cuts holding is not the items program's for this mint")]
+    WrongPoolCuts,
 }

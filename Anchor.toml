@@ -34,6 +34,7 @@ members = [
   "programs/war_items_stub",
   "programs/war_armory_stub",
   "programs/randomness_stub",
+  "programs/pool_item_stub",
 ]
 
 # One set of program IDs on every cluster (generated 2026-10-07; the keypairs are kept off the repo,
@@ -58,6 +59,7 @@ hookwars_items = "8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv"
 war_items_stub = "8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv"
 war_armory_stub = "7xnkyX5B7Ywz86Cu2ofM5T2z2UPmy1qhpgrAuK9Kk5MU"
 randomness_stub = "6ESx6cA1Hu7BiESMddfBSMwXAp1rNomvmutMHjAHs4x8"
+pool_item_stub = "BGeLKiiaGRyz7WTWh1Zf9CHgo7v92rmikCP3BARzv4HT"
 bordrless_companion = "HzeAN8e7HbGx8wzgd5SpduF51c7rXCTqkQKcmw44YHkK"
 hookwars_war = "5vJnBvr33jpsfYxMY2pvNf6tF9tkj8eaZ6goFtByUWA2"
 
