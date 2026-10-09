@@ -144,6 +144,13 @@ pub fn token_before<'info>(ctx: Context<'info, TokenCallback<'info>>, args: Toke
         return Ok(());
     }
     let mint = ctx.accounts.mint.key();
+    // The launch's own movements (the supply deposit into the curve pool, the graduation top-up,
+    // anything else out of `["launch", mint]`) are never cut, refused or stamped by an item: they
+    // are the curve itself (04 section 3.7, m3bl notes). Wallets are on the curve, so the
+    // derivation only runs for program addresses.
+    if !args.source_owner.is_on_curve() && args.source_owner == pda::launch(&mint).0 {
+        return Ok(());
+    }
     let mut l = load(ctx.remaining_accounts, &mint, args.slot, &args.item)?;
     let clock = Clock::get()?;
     let total_bytes: usize = l.modules.iter().map(|m| usize::from(m.data_bytes)).sum();

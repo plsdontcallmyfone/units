@@ -77,48 +77,62 @@ export function combine(id: number, min: number[], max: number[], gainBps: numbe
   return { out };
 }
 
-/** `hookwars_common::obs_layout`: byte offsets in an `Observations` account. */
-export const OBS_LAYOUT = { LAST_PRICE: 42, LAST_TS: 58, INDEX: 66, FILLED: 68, ENTRIES: 70, ENTRY: 48 } as const;
+/** `bordrless_core::observations`: the ring at the tail of a pool account (M3a). Offsets from the
+ * start of the ring: discriminator 0..8, version 8, bump 9, pool 10..42, cumulative 42..58,
+ * last price 58..74, last ts 74..82, index 82..84, filled 84..86, len 86..88, spacing 88..92,
+ * entries from 96, 48 bytes each (ts i64, price cumulative u128, quote volume u128, swap count u64). */
+export const OBS_LAYOUT = { VERSION: 8, CUMULATIVE: 42, LAST_PRICE: 58, LAST_TS: 74, INDEX: 82, FILLED: 84, LEN: 86, SPACING: 88, HEADER: 96, ENTRY: 48 } as const;
+/** `bordrless_swap::obs::OBSERVATIONS_DISCRIMINATOR`. */
+export const OBS_DISCRIMINATOR = Uint8Array.from([119, 205, 13, 6, 93, 29, 178, 203]);
+/** `bordrless_swap::state::Pool::LEN`: where the ring starts in a pool account. */
+export const POOL_LEN = 411;
 
 export interface ExactWindowRead { twapQ64: bigint; quoteVolume: bigint; swaps: bigint; seconds: bigint }
 
 const dv = (d: Uint8Array) => new DataView(d.buffer, d.byteOffset, d.byteLength);
 const u128At = (d: Uint8Array, o: number): bigint => (dv(d).getBigUint64(o + 8, true) << 64n) | dv(d).getBigUint64(o, true);
 
-/** `hookwars_common::window_read` over the raw account bytes. Null is "no signal". */
-export function windowReadRaw(data: Uint8Array, poolQuoteVolume: bigint, poolSwapCount: bigint, now: bigint, window: bigint): ExactWindowRead | null {
+/** The ring bytes inside a pool account's data. */
+export function ringOf(poolData: Uint8Array): Uint8Array {
+  return poolData.length > POOL_LEN ? poolData.subarray(POOL_LEN) : new Uint8Array(0);
+}
+
+/** `bordrless_core::observations::window_read` over the ring bytes, exactly: null is "no signal"
+ * (window under `minWindow`, malformed ring, or no entry old enough). */
+export function windowReadRaw(ring: Uint8Array, poolQuoteVolume: bigint, poolSwapCount: bigint, now: bigint, window: bigint, minWindow = 1n): ExactWindowRead | null {
   const L = OBS_LAYOUT;
-  if (window <= 0n || data.length < L.ENTRIES) return null;
-  const ring = Math.floor((data.length - L.ENTRIES) / L.ENTRY);
-  const v = dv(data);
-  const filled = Math.min(v.getUint16(L.FILLED, true), ring);
-  if (filled === 0) return null;
-  const index = v.getUint16(L.INDEX, true) % Math.max(ring, 1);
-  const lastPrice = u128At(data, L.LAST_PRICE);
+  if (window < minWindow || window <= 0n) return null;
+  if (ring.length < L.HEADER || ring[L.VERSION] !== 1) return null;
+  for (let i = 0; i < 8; i++) if (ring[i] !== OBS_DISCRIMINATOR[i]) return null;
+  const v = dv(ring);
+  const len = v.getUint16(L.LEN, true);
+  const filled = v.getUint16(L.FILLED, true);
+  const index = v.getUint16(L.INDEX, true);
+  if (len === 0 || ring.length < L.HEADER + L.ENTRY * len || filled > len || index >= len) return null;
+  const cumulative = u128At(ring, L.CUMULATIVE);
+  const lastPrice = u128At(ring, L.LAST_PRICE);
   const lastTs = v.getBigInt64(L.LAST_TS, true);
-  const entry = (i: number) => {
-    const o = L.ENTRIES + i * L.ENTRY;
-    return { ts: v.getBigInt64(o, true), priceCumulative: u128At(data, o + 8), quoteVolume: u128At(data, o + 24), swapCount: v.getBigUint64(o + 40, true) };
-  };
-  const newest = entry((index + ring - 1) % ring);
-  const dtTail = now - lastTs > 0n ? now - lastTs : 0n;
-  const cumNow = (newest.priceCumulative + ((lastPrice * dtTail) & U128_MAX)) & U128_MAX;
+  const cumNow = now > lastTs ? (cumulative + ((lastPrice * (now - lastTs)) & U128_MAX)) & U128_MAX : cumulative;
   const target = now - window;
-  let best: ReturnType<typeof entry> | null = null;
-  for (let i = 0; i < filled; i++) {
-    const e = entry(i);
-    if (e.ts <= target && (best === null || e.ts > best.ts)) best = e;
+  let i = (index + len - 1) % len;
+  for (let k = 0; k < filled; k++) {
+    const o = L.HEADER + L.ENTRY * i;
+    const ts = v.getBigInt64(o, true);
+    if (ts <= target) {
+      const span = now - ts;
+      if (span <= 0n) return null;
+      const pc = u128At(ring, o + 8);
+      const sat = (x: bigint): bigint => (x < 0n ? 0n : x);
+      return {
+        twapQ64: (((cumNow - pc) % U128) + U128) % U128 / span,
+        quoteVolume: sat(poolQuoteVolume - u128At(ring, o + 24)),
+        swaps: sat(poolSwapCount - v.getBigUint64(o + 40, true)),
+        seconds: span,
+      };
+    }
+    i = (i + len - 1) % len;
   }
-  if (!best) return null;
-  const secs = now - best.ts;
-  if (secs <= 0n) return null;
-  const sat = (x: bigint): bigint => (x < 0n ? 0n : x);
-  return {
-    twapQ64: (((cumNow - best.priceCumulative) % U128) + U128) % U128 / secs,
-    quoteVolume: sat(poolQuoteVolume - best.quoteVolume),
-    swaps: sat(poolSwapCount - best.swapCount),
-    seconds: secs,
-  };
+  return null;
 }
 
 const satMul128 = (a: bigint, b: bigint): bigint => { const p = a * b; return p > U128_MAX ? U128_MAX : p; };

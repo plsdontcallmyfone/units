@@ -1,6 +1,6 @@
 //! Vectors for the app's TypeScript mirror of the units math (app/INTEGRATION.md section 4):
 //! `programs/tests/vectors/hookwars-math.json`, copied to `app/packages/shared/vectors/`. Rendered
-//! from the Rust the programs run: `hookwars_common::{shape, combine, manifest, window_read,
+//! from the Rust the programs run: `bordrless_core::observations::window_read`, `hookwars_common::{shape, combine, manifest,
 //! PerformanceRule::holds}` and `hookwars_war::{state::Season::score, instructions::loot::draw,
 //! state::bps_of}`. As in `vectors.rs`, when a file differs from what the Rust computes the test
 //! rewrites it and fails, so a stale file never passes.
@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use anchor_lang::prelude::Pubkey;
 use hookwars_common::{
-    combine, manifest, obs_layout, shape, window_read, ForgeRule, ParamsError, PerformanceRule, WindowRead, PARAM_FIELDS,
+    combine, manifest, shape, ForgeRule, ParamsError, PerformanceRule, WindowRead, PARAM_FIELDS,
 };
 use anchor_lang::solana_program::instruction::{AccountMeta, Instruction};
 use hookwars_war::client as war;
@@ -147,42 +147,42 @@ fn render() -> String {
         }
     }
 
-    // ---- window_read and the performance rule over raw Observations bytes
+    // ---- window_read and the performance rule over the observation ring in a pool account
+    // (bordrless_core::observations, the bytes after the `Pool` fields; M3a). Built with the
+    // program's own init / accumulate / set_price, read with the program's own window_read.
     out += "],\n\"windowRead\":[";
     first = true;
+    let disc = bordrless_swap::obs::OBSERVATIONS_DISCRIMINATOR;
+    let ring_read = |data: &[u8], now: i64, w: i64, vol: u128, swaps: u64| {
+        bordrless_core::observations::window_read(data, &disc, now, w, 1, vol, swaps)
+            .ok()
+            .map(|r| WindowRead { twap_q64: r.twap_q64, quote_volume: r.quote_volume, swaps: r.swaps, seconds: r.span_secs })
+    };
     for case in 0..24 {
-        let ring = 2 + rng.below(6) as usize;
-        let mut data = vec![0u8; obs_layout::ENTRIES + ring * obs_layout::ENTRY];
-        let filled = 1 + rng.below(ring as u64) as usize;
-        // The program fills the ring from 0; once full, `index` is the next slot to overwrite.
-        let index = if filled < ring { filled as u16 } else { rng.below(ring as u64) as u16 };
+        let len = 2 + rng.below(6) as u16;
+        let spacing = 1 + rng.below(120) as u32;
+        let mut data = vec![0u8; bordrless_core::observations::account_len(len)];
         let mut ts = 1_000_000 + rng.below(1_000) as i64;
-        let mut cum: u128 = u128::from(rng.next());
-        let mut vol: u128 = 0;
-        let mut swaps: u64 = 0;
-        for i in 0..filled {
-            ts += 1 + rng.below(600) as i64;
-            cum = cum.wrapping_add(u128::from(rng.next()) << 20);
+        let mut vol: u128 = u128::from(rng.below(1_000_000));
+        let mut swaps: u64 = rng.below(10);
+        let price0 = (u128::from(rng.next()) << 8) | 1;
+        bordrless_core::observations::init(&mut data, &disc, 0, [7u8; 32], len, spacing, ts, price0, vol, swaps).unwrap();
+        let steps = 1 + rng.below(3 * u64::from(len));
+        for _ in 0..steps {
+            ts += 1 + rng.below(400) as i64;
             vol += u128::from(rng.below(5_000_000_000));
-            swaps += rng.below(40);
-            let o = obs_layout::ENTRIES + ((usize::from(index) + ring - filled + i) % ring) * obs_layout::ENTRY;
-            data[o..o + 8].copy_from_slice(&ts.to_le_bytes());
-            data[o + 8..o + 24].copy_from_slice(&cum.to_le_bytes());
-            data[o + 24..o + 40].copy_from_slice(&vol.to_le_bytes());
-            data[o + 40..o + 48].copy_from_slice(&swaps.to_le_bytes());
+            swaps += 1 + rng.below(5);
+            bordrless_core::observations::accumulate(&mut data, &disc, ts, vol, swaps).unwrap();
+            let p = (u128::from(rng.next()) << 8) | 1;
+            bordrless_core::observations::set_price(&mut data, &disc, p).unwrap();
         }
-        let last_price = u128::from(rng.next()) << 8;
-        data[obs_layout::LAST_PRICE..obs_layout::LAST_PRICE + 16].copy_from_slice(&last_price.to_le_bytes());
-        data[obs_layout::LAST_TS..obs_layout::LAST_TS + 8].copy_from_slice(&ts.to_le_bytes());
-        data[obs_layout::INDEX..obs_layout::INDEX + 2].copy_from_slice(&index.to_le_bytes());
-        data[obs_layout::FILLED..obs_layout::FILLED + 2].copy_from_slice(&(filled as u16).to_le_bytes());
         let pool_vol = vol + u128::from(rng.below(1_000_000_000));
         let pool_swaps = swaps + rng.below(10);
         let now = ts + rng.below(900) as i64;
         let window = if case % 7 == 0 { 0 } else { 1 + rng.below(3_000) as i64 };
         let base = window + 1 + rng.below(3_000) as i64;
-        let short_read = window_read(&data, pool_vol, pool_swaps, now, window);
-        let base_read = window_read(&data, pool_vol, pool_swaps, now, base);
+        let short_read = ring_read(&data, now, window, pool_vol, pool_swaps);
+        let base_read = ring_read(&data, now, base, pool_vol, pool_swaps);
         let rule = PerformanceRule {
             metric: rng.below(3) as u8,
             window_secs: window.max(0) as u32,

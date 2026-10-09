@@ -114,26 +114,34 @@ export function activeLoot(t: LootTableData): LootEntryData[] { return t.entries
 export const rollRequestCodec = idlAccountCodec<War.RollRequest>('war', 'RollRequest');
 export const questMarkCodec = idlAccountCodec<War.QuestMark>('war', 'QuestMark');
 
-// ---------------------------------------------------------------- DEX (03 3.1, spec layout until M3a merges) --
+// ---------------------------------------------------------------- DEX observation ring (03 3.1, M3a: in the pool account) --
 
 export interface ObservationData { ts: bigint; priceCumulative: bigint; quoteVolume: bigint; swapCount: bigint }
 export interface ObservationsData {
-  version: number; bump: number; pool: PublicKey; lastPriceQ64: bigint; lastTs: bigint; index: number; filled: number; entries: ObservationData[];
+  version: number; bump: number; pool: PublicKey; cumulative: bigint; lastPriceQ64: bigint; lastTs: bigint;
+  index: number; filled: number; len: number; spacing: number; entries: ObservationData[];
 }
-const OBS_HEADER: Field[] = [['version', 'u8'], ['bump', 'u8'], ['pool', 'pubkey'], ['lastPriceQ64', 'u128'], ['lastTs', 'i64'], ['index', 'u16'], ['filled', 'u16']];
+const OBS_HEADER: Field[] = [
+  ['version', 'u8'], ['bump', 'u8'], ['pool', 'pubkey'], ['cumulative', 'u128'], ['lastPriceQ64', 'u128'], ['lastTs', 'i64'],
+  ['index', 'u16'], ['filled', 'u16'], ['len', 'u16'], ['spacing', 'u32'],
+];
 const OBS_ENTRY: Ty = { struct: [['ts', 'i64'], ['priceCumulative', 'u128'], ['quoteVolume', 'u128'], ['swapCount', 'u64']] };
 const OBS_DISC = discriminator('account', 'Observations');
+/** `bordrless_swap::state::Pool::LEN`: the ring starts right after the `Pool` fields. */
+export const POOL_LEN = 411;
+/** Ring header length (`bordrless_core::observations::HEADER_LEN`). */
+export const OBS_HEADER_LEN = 96;
 
-/** 03 3.1: header then `OBS_RING_LEN` entries of 48 bytes; the ring length is read from the data.
- * The same byte layout `hookwars_common::obs_layout` reads (shared `exact.windowReadRaw`). */
-export function decodeObservations(data: Buffer): ObservationsData {
-  if (!data.subarray(0, 8).equals(OBS_DISC)) throw new Error('not an Observations account');
+/** Decodes the observation ring at the tail of a pool account (`bordrless_swap::obs::ring_of`);
+ * the same bytes `exact.windowReadRaw` reads. */
+export function decodePoolObservations(poolData: Buffer): ObservationsData {
+  const data = poolData.subarray(POOL_LEN);
+  if (data.length < OBS_HEADER_LEN || !data.subarray(0, 8).equals(OBS_DISC)) throw new Error('no observation ring in this pool account');
   const r = new Reader(data); r.off = 8;
   const h = r.read({ struct: OBS_HEADER }) as Omit<ObservationsData, 'entries'>;
-  const size = fixedSize(OBS_ENTRY);
-  const n = Math.floor((data.length - r.off) / size);
+  r.off = OBS_HEADER_LEN;
   const entries: ObservationData[] = [];
-  for (let i = 0; i < n; i++) entries.push(r.read(OBS_ENTRY) as ObservationData);
+  for (let i = 0; i < h.len; i++) entries.push(r.read(OBS_ENTRY) as ObservationData);
   return { ...h, entries };
 }
 
