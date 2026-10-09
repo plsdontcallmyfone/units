@@ -1,3 +1,4 @@
+// Changed by Hookwars: unit tests of the R9 mint setup and the R10 holder-rewards read.
 //! Host tests of the kit's pure parts: the reward math (§4.7, §4.8), the callbacks' rules in the
 //! order of §4.9, and the mirror (§4.13) against the program's own sync.
 
