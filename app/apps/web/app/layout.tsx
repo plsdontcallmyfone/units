@@ -5,6 +5,7 @@ import './globals.css';
 import { Nav, NavSheet } from '@/components/nav';
 import { read } from '@/lib/api';
 import type { HookwarsStatus } from '@hookwars/shared';
+import { MOCK } from '@/lib/mock';
 
 const sans = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
 const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' });
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <a href="/" className="nav-logo" aria-label="units home">units</a>
             <Nav />
             <div className="nav-end">
+              {MOCK ? <span className="chip warn" title="MOCK_DATA=1: the site shows invented tokens and events, not the chain">mock data</span> : null}
               <ClusterBadge />
               <a className="btn sm primary" href="/launch">Launch</a>
             </div>

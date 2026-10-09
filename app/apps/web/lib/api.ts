@@ -1,12 +1,14 @@
 /** Server-side reads from the backend (06: the browser talks only to the site's /api routes; server
  * components read the backend directly). A failed read is reported, never replaced by a figure. */
 import 'server-only';
+import { MOCK, mock } from './mock';
 
 export const API_URL = process.env.API_URL ?? 'http://127.0.0.1:9961';
 
 export type Read<T> = { ok: true; data: T } | { ok: false; error: string };
 
 export async function read<T>(path: string): Promise<Read<T>> {
+  if (MOCK) { const m = mock(path); if (m !== undefined) return { ok: true, data: m as T }; }
   try {
     const r = await fetch(API_URL + path, { cache: 'no-store', signal: AbortSignal.timeout(8000) });
     const body = (await r.json()) as unknown;
