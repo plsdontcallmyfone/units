@@ -1,3 +1,4 @@
+// Changed by Hookwars: enums with data (`tagged`), for the agents, market and social IDLs.
 /**
  * A small Borsh codec driven by field schemas, used for the Hookwars accounts, events and
  * instruction arguments whose IDLs are not generated yet (the programs are being built on other
@@ -15,7 +16,9 @@ export type Ty =
   | { array: [Ty, number] }
   | { bytes: number }
   | { struct: Field[] }
-  | { enum: string[] };
+  | { enum: string[] }
+  /** An enum with data (Borsh: u8 variant index, then the variant's fields); values are `{ name, ...fields }` as `IdlCoder` decodes them. */
+  | { tagged: [name: string, fields: Field[]][] };
 
 export type Field = [name: string, ty: Ty];
 
@@ -54,6 +57,12 @@ export class Reader {
     if ('array' in ty) { const out: unknown[] = []; for (let i = 0; i < ty.array[1]; i++) out.push(this.read(ty.array[0])); return out; }
     if ('bytes' in ty) { this.need(ty.bytes); const v = Buffer.from(b.subarray(this.off, this.off + ty.bytes)); this.off += ty.bytes; return v; }
     if ('enum' in ty) { const i = this.read('u8') as number; const name = ty.enum[i]; if (name === undefined) throw new RangeError(`bad enum index ${i}`); return name; }
+    if ('tagged' in ty) {
+      const i = this.read('u8') as number; const v = ty.tagged[i]; if (v === undefined) throw new RangeError(`bad enum index ${i}`);
+      const o: Record<string, unknown> = { name: v[0] };
+      for (const [n, t] of v[1]) o[n] = this.read(t);
+      return o;
+    }
     const o: Record<string, unknown> = {};
     for (const [n, t] of ty.struct) o[n] = this.read(t);
     return o;
@@ -89,6 +98,14 @@ export class Writer {
     if ('array' in ty) { const a = v as unknown[]; if (a.length !== ty.array[1]) throw new RangeError(`array length ${a.length} != ${ty.array[1]}`); for (const e of a) this.write(ty.array[0], e); return; }
     if ('bytes' in ty) { const x = Buffer.from(v as Uint8Array); if (x.length !== ty.bytes) throw new RangeError(`bytes ${x.length} != ${ty.bytes}`); p.push(x); return; }
     if ('enum' in ty) { const i = ty.enum.indexOf(String(v)); if (i < 0) throw new RangeError(`bad enum ${String(v)}`); this.write('u8', i); return; }
+    if ('tagged' in ty) {
+      const o = v as Record<string, unknown>;
+      const i = ty.tagged.findIndex(([n]) => n === o.name);
+      if (i < 0) throw new RangeError(`bad enum ${String(o.name)}`);
+      this.write('u8', i);
+      for (const [n, t] of ty.tagged[i]![1]) this.write(t, o[n]);
+      return;
+    }
     const o = v as Record<string, unknown>;
     for (const [n, t] of ty.struct) this.write(t, o[n]);
   }

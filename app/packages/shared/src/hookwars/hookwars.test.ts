@@ -119,9 +119,16 @@ describe('hook data ranges (00 4.4, 04 2.4)', () => {
 });
 
 describe('templates and words', () => {
-  it('nine templates, War orders uses 11 fields', () => {
-    expect(TEMPLATES.map((t) => t.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  it('templates 1 to 45, War orders uses 11 fields', () => {
+    // Changed by Hookwars: the arsenal (08), the soulbound badge (09) and the expansion templates (10).
+    expect(TEMPLATES.map((t) => t.id)).toEqual(Array.from({ length: 45 }, (_, i) => i + 1));
     expect(TEMPLATES.find((t) => t.id === 9)!.fields).toHaveLength(11);
+  });
+  it('every arsenal template has its own sentence and field indices in order', () => {
+    for (const t of TEMPLATES) {
+      expect(itemSentence(t.id, t.fields.map(() => 1), { target: 'RIVAL' })).not.toBe(t.name);
+      expect(t.fields.map((f) => f.index)).toEqual(t.fields.map((_, i) => i));
+    }
   });
   it('every sentence is clean of banned words and em dashes', () => {
     for (const t of TEMPLATES) {

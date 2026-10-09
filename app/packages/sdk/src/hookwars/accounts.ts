@@ -1,4 +1,5 @@
-// Changed by Hookwars: the observation ring decoded from the pool account (M3a).
+// Changed by Hookwars: the observation ring decoded from the pool account (M3a); agents, market,
+// social and arsenal payout accounts from their IDLs; RaidLedger as built.
 /**
  * Account decoders for units.
  *
@@ -13,7 +14,7 @@
 import { PublicKey } from '@solana/web3.js';
 import { decode, discriminator, fixedSize, Reader, type Field, type Ty } from './codec.ts';
 import { idlAccountCodec, structFields } from './from-idl.ts';
-import type { Armory, Items, Token, War } from './idl-types.gen.ts';
+import type { Agents, Armory, Items, Market, Social, Token, War } from './idl-types.gen.ts';
 
 /** PARAM_FIELDS of the armory build (crates/hookwars-common `PARAM_FIELDS`), read from the IDL. */
 export const PARAM_FIELDS: number = (() => {
@@ -82,11 +83,21 @@ export const slotStateCodec = idlAccountCodec<Armory.SlotState>('armory', 'SlotS
 export const proposalCodec = idlAccountCodec<Armory.Proposal>('armory', 'Proposal');
 export const voteLockCodec = idlAccountCodec<Armory.VoteLock>('armory', 'VoteLock');
 export const forgeCounterCodec = idlAccountCodec<Armory.ForgeCounter>('armory', 'ForgeCounter');
+export type CompositeItemData = Armory.CompositeItem;
+/** A composite's module list (`["composite", item]`, R19). */
+export const compositeItemCodec = idlAccountCodec<Armory.CompositeItem>('armory', 'CompositeItem');
 
 // ---------------------------------------------------------------- items (04, IDL) --
 
 export type EquipStateData = Items.EquipState;
 export const equipStateCodec = idlAccountCodec<Items.EquipState>('items', 'EquipState');
+// Arsenal payout accounts (08 waves D and E).
+export type ReferredData = Items.Referred;
+export type FirstBloodData = Items.FirstBlood;
+export type LoyaltyPotData = Items.LoyaltyPot;
+export const referredCodec = idlAccountCodec<Items.Referred>('items', 'Referred');
+export const firstBloodCodec = idlAccountCodec<Items.FirstBlood>('items', 'FirstBlood');
+export const loyaltyPotCodec = idlAccountCodec<Items.LoyaltyPot>('items', 'LoyaltyPot');
 
 // ---------------------------------------------------------------- war (05, IDL) --
 
@@ -146,25 +157,79 @@ export function decodePoolObservations(poolData: Buffer): ObservationsData {
   return { ...h, entries };
 }
 
-// ---------------------------------------------------------------- items RaidLedger (04 2.9, spec layout until M3b) --
+// ---------------------------------------------------------------- items RaidLedger (04 2.9; crates/hookwars-common `raid::RaidLedger`, not an Anchor account in the IDL) --
 
 export interface RaidWindowData { rivalMint: PublicKey; windowStart: bigint; volume: bigint; prevVolume: bigint }
 export interface MarkData { clockSlot: bigint; recipient: PublicKey; rival: PublicKey; quoteVolume: bigint; stampedSlots: number }
+export interface SellMarkData { clockSlot: bigint; seller: PublicKey; markedSlots: number }
 export interface RaidLedgerData {
-  version: number; bump: number; mint: PublicKey; seasonId: number; outboundVolumeSeason: bigint; inbound: RaidWindowData[]; mark: MarkData;
+  version: number; bump: number; mint: PublicKey; seasonId: number; outboundVolumeSeason: bigint; inbound: RaidWindowData[]; mark: MarkData; sellMark: SellMarkData;
 }
+/** `raid::RAID_TABLE_LEN`. */
+export const RAID_TABLE_LEN = 8;
 const RAID_WINDOW: Ty = { struct: [['rivalMint', 'pubkey'], ['windowStart', 'i64'], ['volume', 'u64'], ['prevVolume', 'u64']] };
 const MARK: Ty = { struct: [['clockSlot', 'u64'], ['recipient', 'pubkey'], ['rival', 'pubkey'], ['quoteVolume', 'u64'], ['stampedSlots', 'u8']] };
+const SELL_MARK: Ty = { struct: [['clockSlot', 'u64'], ['seller', 'pubkey'], ['markedSlots', 'u8']] };
 const RAID_LEDGER_DISC = discriminator('account', 'RaidLedger');
 
-/** 04 2.9 field names, which the war program's reader uses too (05 M4/M5 notes: 04's names
- * `season_id`, `outbound_volume_season`); `RAID_TABLE_LEN` is read from the data length. */
+/** Decodes a `RaidLedger` (`raid::RaidLedger::decode`: version, bump, mint, season id, outbound
+ * season volume, `RAID_TABLE_LEN` inbound windows, the raid mark, the Shield sell mark, reserved). */
 export function decodeRaidLedger(data: Buffer): RaidLedgerData {
   if (!data.subarray(0, 8).equals(RAID_LEDGER_DISC)) throw new Error('not a RaidLedger account');
-  const head = 1 + 1 + 32 + 4 + 8;
-  const n = Math.floor((data.length - 8 - head - fixedSize(MARK) - 32) / fixedSize(RAID_WINDOW));
   return decode<RaidLedgerData>({ struct: [
     ['version', 'u8'], ['bump', 'u8'], ['mint', 'pubkey'], ['seasonId', 'u32'], ['outboundVolumeSeason', 'u64'],
-    ['inbound', { array: [RAID_WINDOW, Math.max(0, n)] }], ['mark', MARK],
+    ['inbound', { array: [RAID_WINDOW, RAID_TABLE_LEN] }], ['mark', MARK], ['sellMark', SELL_MARK],
   ] }, data, 8);
 }
+/** `raid::RaidLedger::LEN`. */
+export const RAID_LEDGER_LEN = 8 + 1 + 1 + 32 + 4 + 8 + RAID_TABLE_LEN * fixedSize(RAID_WINDOW) + fixedSize(MARK) + fixedSize(SELL_MARK) + 32;
+
+// ---------------------------------------------------------------- agents (09, IDL) --
+
+export type AgentsConfigData = Agents.AgentsConfig;
+export type PassportData = Agents.Passport;
+export type TrackRecordData = Agents.TrackRecord;
+export type AgentKeyData = Agents.AgentKey;
+export type LinkData = Agents.Link;
+export type AttestationData = Agents.Attestation;
+export type EndorsementData = Agents.Endorsement;
+export type PolicyData = Agents.Policy;
+export type BondData = Agents.Bond;
+export const agentsConfigCodec = idlAccountCodec<Agents.AgentsConfig>('agents', 'AgentsConfig');
+export const passportCodec = idlAccountCodec<Agents.Passport>('agents', 'Passport');
+export const agentKeyCodec = idlAccountCodec<Agents.AgentKey>('agents', 'AgentKey');
+export const operatorIndexCodec = idlAccountCodec<Agents.OperatorIndex>('agents', 'OperatorIndex');
+export const linkCodec = idlAccountCodec<Agents.Link>('agents', 'Link');
+export const attestationCodec = idlAccountCodec<Agents.Attestation>('agents', 'Attestation');
+export const endorsementCodec = idlAccountCodec<Agents.Endorsement>('agents', 'Endorsement');
+export const policyCodec = idlAccountCodec<Agents.Policy>('agents', 'Policy');
+export const bondCodec = idlAccountCodec<Agents.Bond>('agents', 'Bond');
+export const bondMarkCodec = idlAccountCodec<Agents.BondMark>('agents', 'BondMark');
+
+// ---------------------------------------------------------------- market (10, IDL) --
+
+export type MarketConfigData = Market.MarketConfig;
+export type ListingData = Market.Listing;
+export type CollectionData = Market.Collection;
+export type LeaseData = Market.Lease;
+export type CommissionData = Market.Commission;
+export type SubmissionData = Market.Submission;
+export const marketConfigCodec = idlAccountCodec<Market.MarketConfig>('market', 'MarketConfig');
+export const listingCodec = idlAccountCodec<Market.Listing>('market', 'Listing');
+export const collectionCodec = idlAccountCodec<Market.Collection>('market', 'Collection');
+export const leaseCodec = idlAccountCodec<Market.Lease>('market', 'Lease');
+export const commissionCodec = idlAccountCodec<Market.Commission>('market', 'Commission');
+export const submissionCodec = idlAccountCodec<Market.Submission>('market', 'Submission');
+
+// ---------------------------------------------------------------- social (10, IDL) --
+
+export type SocialConfigData = Social.SocialConfig;
+export type BadgeTypeData = Social.BadgeType;
+export type BadgeAwardData = Social.BadgeAward;
+export type GuildData = Social.Guild;
+export type GuildActionData = Social.GuildAction;
+export const socialConfigCodec = idlAccountCodec<Social.SocialConfig>('social', 'SocialConfig');
+export const badgeTypeCodec = idlAccountCodec<Social.BadgeType>('social', 'BadgeType');
+export const badgeAwardCodec = idlAccountCodec<Social.BadgeAward>('social', 'BadgeAward');
+export const guildCodec = idlAccountCodec<Social.Guild>('social', 'Guild');
+export const guildActionCodec = idlAccountCodec<Social.GuildAction>('social', 'GuildAction');

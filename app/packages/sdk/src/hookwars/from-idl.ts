@@ -1,4 +1,4 @@
-// Changed by Hookwars: registers the launch and swap IDLs.
+// Changed by Hookwars: registers the launch, swap, agents, market and social IDLs.
 /**
  * Turns the generated IDLs into the field schemas `codec.ts` runs (camelCase names), so accounts,
  * events and instruction arguments of the programs on main come from the programs themselves
@@ -17,6 +17,9 @@ import kitIdl from '../../idl/bordrless_kit.json' with { type: 'json' };
 import companionIdl from '../../idl/bordrless_companion.json' with { type: 'json' };
 import launchIdl from '../../idl/bordrless_launch.json' with { type: 'json' };
 import swapIdl from '../../idl/bordrless_swap.json' with { type: 'json' };
+import agentsIdl from '../../idl/hookwars_agents.json' with { type: 'json' };
+import marketIdl from '../../idl/hookwars_market.json' with { type: 'json' };
+import socialIdl from '../../idl/hookwars_social.json' with { type: 'json' };
 
 /** The IDLs of the programs whose interfaces are final on main, by the program names the app uses. */
 export const IDLS: Record<string, Idl> = {
@@ -28,6 +31,9 @@ export const IDLS: Record<string, Idl> = {
   companion: companionIdl as unknown as Idl,
   launch: launchIdl as unknown as Idl,
   swap: swapIdl as unknown as Idl,
+  agents: agentsIdl as unknown as Idl,
+  market: marketIdl as unknown as Idl,
+  social: socialIdl as unknown as Idl,
 };
 
 const coders = new Map<string, IdlCoder>();
@@ -67,7 +73,9 @@ export function tyOf(idl: Idl, t: IdlType): Ty {
   const k = def.type;
   if (k.kind === 'struct') return { struct: fieldsOf(idl, k.fields) };
   if (k.kind === 'type') return tyOf(idl, k.alias);
-  if (k.variants.some((v) => v.fields && v.fields.length > 0)) throw new Error(`${def.name}: enums with data are not used in these interfaces`);
+  if (k.variants.some((v) => v.fields && v.fields.length > 0)) {
+    return { tagged: k.variants.map((v) => [v.name, fieldsOf(idl, v.fields as IdlFields | undefined)] as [string, Field[]]) };
+  }
   return { enum: k.variants.map((v) => v.name) };
 }
 

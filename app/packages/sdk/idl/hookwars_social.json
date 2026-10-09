@@ -1,0 +1,1897 @@
+{
+  "address": "CKf4SjuiYxy4C2eSjk6oSQb2AnqC3ADoDTm8d323jWAx",
+  "metadata": {
+    "name": "hookwars_social",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Hookwars (units): achievement badges and guild halls (docs/spec/10-expansion.md sections 3, 6, 7)."
+  },
+  "instructions": [
+    {
+      "name": "apply_params",
+      "docs": [
+        "Anyone applies a ready params change."
+      ],
+      "discriminator": [
+        188,
+        203,
+        86,
+        124,
+        178,
+        34,
+        133,
+        116
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  99,
+                  105,
+                  97,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  99,
+                  105,
+                  97,
+                  108,
+                  45,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "approve_action",
+      "docs": [
+        "An officer approves a pending action."
+      ],
+      "discriminator": [
+        200,
+        117,
+        44,
+        13,
+        133,
+        139,
+        131,
+        36
+      ],
+      "accounts": [
+        {
+          "name": "officer",
+          "signer": true
+        },
+        {
+          "name": "guild",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  105,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "guild.id",
+                "account": "Guild"
+              }
+            ]
+          }
+        },
+        {
+          "name": "action",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  105,
+                  108,
+                  100,
+                  45,
+                  97,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "guild.id",
+                "account": "Guild"
+              },
+              {
+                "kind": "account",
+                "path": "action.nonce",
+                "account": "GuildAction"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_badge",
+      "docs": [
+        "Anyone claims a badge for a recipient that meets its criterion (the recipient is the",
+        "claimant's wallet, or a token's war chest for `FirstSiege`). The badge is minted into the",
+        "recipient's holding, which is then frozen: it cannot move."
+      ],
+      "discriminator": [
+        111,
+        30,
+        18,
+        17,
+        228,
+        252,
+        239,
+        102
+      ],
+      "accounts": [
+        {
+          "name": "claimant",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "badge",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  100,
+                  103,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "badge_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "award",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  119,
+                  97,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "badge_id"
+              },
+              {
+                "kind": "arg",
+                "path": "recipient_key"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient"
+        },
+        {
+          "name": "badge_mint",
+          "writable": true
+        },
+        {
+          "name": "recipient_holding",
+          "writable": true
+        },
+        {
+          "name": "minter"
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "badge_id",
+          "type": "u32"
+        },
+        {
+          "name": "recipient_key",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "create_badge",
+      "docs": [
+        "The admin creates a badge type and its mint; claims open after `admin_timelock_secs`, so a",
+        "new badge is public before anyone can earn it."
+      ],
+      "discriminator": [
+        25,
+        191,
+        79,
+        235,
+        98,
+        119,
+        184,
+        59
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  99,
+                  105,
+                  97,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "badge",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  100,
+                  103,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.badges",
+                "account": "SocialConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "badge_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  100,
+                  103,
+                  101,
+                  45,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.badges",
+                "account": "SocialConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "criterion",
+          "type": {
+            "defined": {
+              "name": "Criterion"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "create_guild",
+      "docs": [
+        "Creates a guild; the founder is its only officer with threshold 1."
+      ],
+      "discriminator": [
+        163,
+        27,
+        97,
+        167,
+        132,
+        198,
+        53,
+        168
+      ],
+      "accounts": [
+        {
+          "name": "founder",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  99,
+                  105,
+                  97,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "guild",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  105,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.guilds",
+                "account": "SocialConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "deposit_sol",
+      "docs": [
+        "Anyone deposits SOL into a guild treasury. (Units tokens are deposited by an ordinary",
+        "transfer to the treasury's holding.)"
+      ],
+      "discriminator": [
+        108,
+        81,
+        78,
+        117,
+        125,
+        155,
+        56,
+        200
+      ],
+      "accounts": [
+        {
+          "name": "from",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "guild",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  105,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "guild.id",
+                "account": "Guild"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  105,
+                  108,
+                  100,
+                  45,
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "guild.id",
+                "account": "Guild"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "lamports",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "execute_action",
+      "docs": [
+        "Anyone executes an approved action after its delay. `SpendToken` passes the mint's slot",
+        "slices (if any) as remaining accounts, as a token transfer of that mint takes them."
+      ],
+      "discriminator": [
+        246,
+        137,
+        105,
+        113,
+        247,
+        6,
+        223,
+        174
+      ],
+      "accounts": [
+        {
+          "name": "guild",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  105,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "guild.id",
+                "account": "Guild"
+              }
+            ]
+          }
+        },
+        {
+          "name": "action",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  105,
+                  108,
+                  100,
+                  45,
+                  97,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "guild.id",
+                "account": "Guild"
+              },
+              {
+                "kind": "account",
+                "path": "action.nonce",
+                "account": "GuildAction"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  105,
+                  108,
+                  100,
+                  45,
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "guild.id",
+                "account": "Guild"
+              }
+            ]
+          }
+        },
+        {
+          "name": "to",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "init",
+      "docs": [
+        "Creates the config; the program's upgrade authority signs."
+      ],
+      "discriminator": [
+        220,
+        59,
+        207,
+        236,
+        108,
+        250,
+        47,
+        100
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  99,
+                  105,
+                  97,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program_data"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "admin",
+          "type": "pubkey"
+        },
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "SocialParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "propose_action",
+      "docs": [
+        "An officer proposes a guild action; it can execute after `guild_timelock_secs` with the",
+        "threshold of approvals. The proposer's approval is counted."
+      ],
+      "discriminator": [
+        49,
+        249,
+        251,
+        197,
+        25,
+        74,
+        36,
+        5
+      ],
+      "accounts": [
+        {
+          "name": "officer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  99,
+                  105,
+                  97,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "guild",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  105,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "guild.id",
+                "account": "Guild"
+              }
+            ]
+          }
+        },
+        {
+          "name": "action",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  105,
+                  108,
+                  100,
+                  45,
+                  97,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "guild.id",
+                "account": "Guild"
+              },
+              {
+                "kind": "account",
+                "path": "guild.actions",
+                "account": "Guild"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "kind",
+          "type": {
+            "defined": {
+              "name": "GuildActionKind"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "propose_params",
+      "docs": [
+        "The admin proposes new params; they apply after `admin_timelock_secs`."
+      ],
+      "discriminator": [
+        94,
+        141,
+        220,
+        182,
+        171,
+        53,
+        52,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  99,
+                  105,
+                  97,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  99,
+                  105,
+                  97,
+                  108,
+                  45,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "SocialParams"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "BadgeAward",
+      "discriminator": [
+        93,
+        2,
+        59,
+        238,
+        84,
+        60,
+        10,
+        145
+      ]
+    },
+    {
+      "name": "BadgeType",
+      "discriminator": [
+        250,
+        120,
+        198,
+        98,
+        129,
+        29,
+        36,
+        160
+      ]
+    },
+    {
+      "name": "Guild",
+      "discriminator": [
+        74,
+        176,
+        57,
+        164,
+        195,
+        188,
+        156,
+        237
+      ]
+    },
+    {
+      "name": "GuildAction",
+      "discriminator": [
+        165,
+        67,
+        224,
+        247,
+        151,
+        221,
+        71,
+        164
+      ]
+    },
+    {
+      "name": "PendingSocialParams",
+      "discriminator": [
+        76,
+        14,
+        162,
+        163,
+        248,
+        192,
+        53,
+        147
+      ]
+    },
+    {
+      "name": "SocialConfig",
+      "discriminator": [
+        124,
+        151,
+        0,
+        201,
+        144,
+        9,
+        106,
+        215
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "BadgeAwarded",
+      "discriminator": [
+        153,
+        87,
+        158,
+        115,
+        220,
+        200,
+        52,
+        1
+      ]
+    },
+    {
+      "name": "BadgeCreated",
+      "discriminator": [
+        107,
+        1,
+        231,
+        247,
+        164,
+        84,
+        81,
+        23
+      ]
+    },
+    {
+      "name": "GuildActionApproved",
+      "discriminator": [
+        33,
+        53,
+        77,
+        149,
+        48,
+        22,
+        140,
+        219
+      ]
+    },
+    {
+      "name": "GuildActionExecuted",
+      "discriminator": [
+        13,
+        19,
+        66,
+        135,
+        150,
+        77,
+        213,
+        9
+      ]
+    },
+    {
+      "name": "GuildActionProposed",
+      "discriminator": [
+        164,
+        163,
+        162,
+        90,
+        97,
+        42,
+        34,
+        68
+      ]
+    },
+    {
+      "name": "GuildCreated",
+      "discriminator": [
+        219,
+        42,
+        51,
+        202,
+        70,
+        172,
+        132,
+        145
+      ]
+    },
+    {
+      "name": "GuildDeposit",
+      "discriminator": [
+        48,
+        36,
+        158,
+        168,
+        254,
+        14,
+        71,
+        229
+      ]
+    },
+    {
+      "name": "SocialParamsProposed",
+      "discriminator": [
+        134,
+        205,
+        184,
+        163,
+        26,
+        69,
+        93,
+        196
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "NotUpgradeAuthority",
+      "msg": "the signer is not this program's upgrade authority"
+    },
+    {
+      "code": 6001,
+      "name": "NotAdmin",
+      "msg": "only the social admin may do this"
+    },
+    {
+      "code": 6002,
+      "name": "BadParams",
+      "msg": "a parameter is out of bounds"
+    },
+    {
+      "code": 6003,
+      "name": "NotReady",
+      "msg": "no params change is pending, or it is not ready yet"
+    },
+    {
+      "code": 6004,
+      "name": "WrongAccount",
+      "msg": "an account is not the one expected"
+    },
+    {
+      "code": 6005,
+      "name": "BadName",
+      "msg": "a name is empty or too long"
+    },
+    {
+      "code": 6006,
+      "name": "ClaimsNotOpen",
+      "msg": "claims for this badge are not open yet"
+    },
+    {
+      "code": 6007,
+      "name": "CriterionNotMet",
+      "msg": "the badge's criterion is not met"
+    },
+    {
+      "code": 6008,
+      "name": "NotOfficer",
+      "msg": "the signer is not an officer of this guild"
+    },
+    {
+      "code": 6009,
+      "name": "BadOfficers",
+      "msg": "officers or threshold out of bounds"
+    },
+    {
+      "code": 6010,
+      "name": "AlreadyExecuted",
+      "msg": "the action already executed"
+    },
+    {
+      "code": 6011,
+      "name": "NotEnoughApprovals",
+      "msg": "the action needs more approvals"
+    },
+    {
+      "code": 6012,
+      "name": "TooEarly",
+      "msg": "the action's delay has not passed"
+    },
+    {
+      "code": 6013,
+      "name": "StaleAction",
+      "msg": "the officers changed since this action was proposed"
+    },
+    {
+      "code": 6014,
+      "name": "ZeroAmount",
+      "msg": "amount must be above zero"
+    },
+    {
+      "code": 6015,
+      "name": "Overflow",
+      "msg": "arithmetic overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "BadgeAward",
+      "docs": [
+        "`BadgeAward` at `[\"award\", badge_id, recipient]`: one badge of a type per recipient."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "badge_id",
+            "type": "u32"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "awarded_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BadgeAwarded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u32"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "claimant",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BadgeCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u32"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "criterion",
+            "type": {
+              "defined": {
+                "name": "Criterion"
+              }
+            }
+          },
+          {
+            "name": "claims_open_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BadgeType",
+      "docs": [
+        "`BadgeType` at `[\"badge\", id]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "mint_bump",
+            "type": "u8"
+          },
+          {
+            "name": "id",
+            "type": "u32"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "criterion",
+            "type": {
+              "defined": {
+                "name": "Criterion"
+              }
+            }
+          },
+          {
+            "name": "claims_open_at",
+            "docs": [
+              "Claims open at this time (`admin_timelock_secs` after creation)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "awarded",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Criterion",
+      "docs": [
+        "What earns a badge: on-chain facts only, each read in O(1) (10 section 3.2). Criteria that would",
+        "need history the chain does not keep are not badges."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "FirstSiege",
+            "fields": [
+              {
+                "name": "mint",
+                "type": "pubkey"
+              }
+            ]
+          },
+          {
+            "name": "RaidPoints",
+            "fields": [
+              {
+                "name": "mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "min",
+                "type": "u32"
+              }
+            ]
+          },
+          {
+            "name": "ForgeLevel",
+            "fields": [
+              {
+                "name": "min_level",
+                "type": "u8"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Guild",
+      "docs": [
+        "`Guild` at `[\"guild\", id]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "treasury_bump",
+            "type": "u8"
+          },
+          {
+            "name": "id",
+            "type": "u32"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "officers",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "threshold",
+            "type": "u8"
+          },
+          {
+            "name": "officers_version",
+            "docs": [
+              "Changes whenever the officers change; pending actions of an older version cannot execute."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "actions",
+            "docs": [
+              "Actions proposed (the next nonce)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GuildAction",
+      "docs": [
+        "`GuildAction` at `[\"guild-action\", guild_id, nonce]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "guild_id",
+            "type": "u32"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "kind",
+            "type": {
+              "defined": {
+                "name": "GuildActionKind"
+              }
+            }
+          },
+          {
+            "name": "approvals",
+            "docs": [
+              "Bit i: officer i approved."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "officers_version",
+            "type": "u32"
+          },
+          {
+            "name": "proposed_at",
+            "type": "i64"
+          },
+          {
+            "name": "eta",
+            "type": "i64"
+          },
+          {
+            "name": "executed",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GuildActionApproved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u32"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "officer",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GuildActionExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u32"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "kind",
+            "type": {
+              "defined": {
+                "name": "GuildActionKind"
+              }
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GuildActionKind",
+      "docs": [
+        "What a guild action does."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "SpendSol",
+            "fields": [
+              {
+                "name": "to",
+                "type": "pubkey"
+              },
+              {
+                "name": "lamports",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "name": "SpendToken",
+            "fields": [
+              {
+                "name": "mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "to",
+                "type": "pubkey"
+              },
+              {
+                "name": "amount",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "name": "SetOfficers",
+            "fields": [
+              {
+                "name": "officers",
+                "type": {
+                  "vec": "pubkey"
+                }
+              },
+              {
+                "name": "threshold",
+                "type": "u8"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "GuildActionProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u32"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "kind",
+            "type": {
+              "defined": {
+                "name": "GuildActionKind"
+              }
+            }
+          },
+          {
+            "name": "eta",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GuildCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u32"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "founder",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GuildDeposit",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u32"
+          },
+          {
+            "name": "from",
+            "type": "pubkey"
+          },
+          {
+            "name": "lamports",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PendingSocialParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "SocialParams"
+              }
+            }
+          },
+          {
+            "name": "ready_at",
+            "type": "i64"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SocialConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "SocialParams"
+              }
+            }
+          },
+          {
+            "name": "badges",
+            "docs": [
+              "Badge types created (the next id)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "guilds",
+            "docs": [
+              "Guilds created (the next id)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "SocialParams",
+      "docs": [
+        "Parameters (10 section 13; all to set)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "guild_max_officers",
+            "docs": [
+              "`GUILD_MAX_OFFICERS`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "guild_timelock_secs",
+            "docs": [
+              "`GUILD_TIMELOCK_SECS`: delay between a guild action's proposal and its execution."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "admin_timelock_secs",
+            "docs": [
+              "`ADMIN_TIMELOCK_SECS` (00): delay on params changes and before a new badge can be claimed."
+            ],
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SocialParamsProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ready_at",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}

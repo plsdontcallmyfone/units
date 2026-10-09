@@ -1,3 +1,4 @@
+// Changed by Hookwars: log events of items and the launchpad, attributed to their program.
 /**
  * Every event of one transaction, in execution order (06 2.1): self-CPI events of every program
  * (Hookwars schemas first, then the upstream IDL coders) and `hookwars_items` log events, numbered
@@ -8,7 +9,7 @@ import { PublicKey } from '@solana/web3.js';
 import bs58 from 'bs58';
 import { decodeEventPayload, flatten, programNameOf as upstreamProgramNameOf, type RawInnerInstruction } from '../events.ts';
 import { eventAuthority } from '../addresses.ts';
-import { decodeCpiEvent, itemLogEvents, logsTruncated, programNameOf, EVENT_IX_TAG } from './events.ts';
+import { decodeCpiEvent, programLogEvents, logsTruncated, programNameOf, EVENT_IX_TAG, PROGRAM_OF } from './events.ts';
 
 export interface TxEvent { ordinal: number; program: string; programId: string; name: string; data: Record<string, unknown>; via: 'cpi' | 'log' }
 
@@ -40,7 +41,7 @@ export function decodeTransactionEvents(tx: TxInput): { events: TxEvent[]; trunc
     }
     if (ev) cpi.push({ ordinal: 0, program: hw ?? up!, programId, name: ev.name, data: ev.data, via: 'cpi' });
   }
-  const logs = itemLogEvents(tx.logs).map((e) => ({ ordinal: 0, program: 'items', programId: '', name: e.name, data: flatten(e.data) as Record<string, unknown>, via: 'log' as const }));
+  const logs = programLogEvents(tx.logs).map((e) => ({ ordinal: 0, program: e.program, programId: PROGRAM_OF[e.program]?.toBase58() ?? '', name: e.name, data: flatten(e.data) as Record<string, unknown>, via: 'log' as const }));
   const events = [...cpi, ...logs].map((e, i) => ({ ...e, ordinal: i }));
   return { events, truncated: logsTruncated(tx.logs) };
 }

@@ -1,3 +1,4 @@
+// Changed by Hookwars: addresses of the agents, market and social programs and the items payouts.
 /**
  * Hookwars addresses (docs/spec/00-overview.md 4.3, 06 4.4). Every seed is the spec's; the fixed
  * ones are pinned in `@hookwars/shared` FIXED_ADDRESSES and derived again in the tests.
@@ -14,6 +15,9 @@ export const COMPANION_ID = new PublicKey(PROGRAM_IDS.companion);
 export const ARMORY_ID = new PublicKey(PROGRAM_IDS.armory);
 export const ITEMS_ID = new PublicKey(PROGRAM_IDS.items);
 export const WAR_ID = new PublicKey(PROGRAM_IDS.war);
+export const AGENTS_ID = new PublicKey(PROGRAM_IDS.agents);
+export const MARKET_ID = new PublicKey(PROGRAM_IDS.market);
+export const SOCIAL_ID = new PublicKey(PROGRAM_IDS.social);
 
 export const ARMORY_EVENT_AUTHORITY = new PublicKey(FIXED_ADDRESSES.armoryEventAuthority);
 export const ARMORY_SIGNER = new PublicKey(FIXED_ADDRESSES.armorySigner);
@@ -72,3 +76,44 @@ export const launchMintAuthority = (mint: PublicKey) => pda([s('launch-mint'), m
 export const launchAddr = (mint: PublicKey) => pda([s('launch'), mint.toBuffer()], LAUNCH_ID);
 /** The token program's signer of a slot program's callbacks: `["hook-authority", program]` (01). */
 export const tokenHookSigner = (program: PublicKey) => pda([s('hook-authority'), program.toBuffer()], TOKEN_ID);
+
+// items payouts (08 arsenal waves D and E: `crates/hookwars-common` `arsenal2::seeds`)
+export const referredAddress = (mint: PublicKey, buyer: PublicKey) => pda([s('referred'), mint.toBuffer(), buyer.toBuffer()], ITEMS_ID);
+export const referralVaultOwner = (mint: PublicKey) => pda([s('referral'), mint.toBuffer()], ITEMS_ID);
+export const loyaltyPotAddress = (mint: PublicKey) => pda([s('loyalty'), mint.toBuffer()], ITEMS_ID);
+export const loyaltyClaimAddress = (mint: PublicKey, holder: PublicKey) => pda([s('loyalty-claim'), mint.toBuffer(), holder.toBuffer()], ITEMS_ID);
+export const firstBloodAddress = (mint: PublicKey) => pda([s('first-blood'), mint.toBuffer()], ITEMS_ID);
+// armory composites (R19)
+export const compositeAddress = (item: PublicKey) => pda([s('composite'), item.toBuffer()], ARMORY_ID);
+// agents (09: programs/hookwars_agents/src/constants.rs)
+export const agentsConfigAddress = () => pda([s('agents-config')], AGENTS_ID);
+export const passportAddress = (operator: PublicKey, index: number) => pda([s('passport'), operator.toBuffer(), u32(index)], AGENTS_ID);
+export const agentKeyAddress = (key: PublicKey) => pda([s('agent-key'), key.toBuffer()], AGENTS_ID);
+export const operatorIndexAddress = (operator: PublicKey) => pda([s('operator'), operator.toBuffer()], AGENTS_ID);
+export const linkAddress = (passport: PublicKey, platform: number) => pda([s('link'), passport.toBuffer(), u8(platform)], AGENTS_ID);
+export const attestationAddress = (passport: PublicKey) => pda([s('attest'), passport.toBuffer()], AGENTS_ID);
+export const endorsementAddress = (attestation: PublicKey, verifier: PublicKey) => pda([s('endorse'), attestation.toBuffer(), verifier.toBuffer()], AGENTS_ID);
+export const policyAddress = (passport: PublicKey) => pda([s('policy'), passport.toBuffer()], AGENTS_ID);
+export const agentVaultAddress = (passport: PublicKey) => pda([s('agent-vault'), passport.toBuffer()], AGENTS_ID);
+export const bondAddress = (passport: PublicKey, proposalA: PublicKey) => pda([s('bond'), passport.toBuffer(), proposalA.toBuffer()], AGENTS_ID);
+export const bondMarkAddress = (proposal: PublicKey) => pda([s('bond-mark'), proposal.toBuffer()], AGENTS_ID);
+export const agentsSignerAddress = () => pda([s('agents-signer')], AGENTS_ID);
+// market (10: programs/hookwars_market/src/state.rs `seeds`)
+export const marketConfigAddress = () => pda([s('market-config')], MARKET_ID);
+export const listingAddress = (itemMint: PublicKey) => pda([s('listing'), itemMint.toBuffer()], MARKET_ID);
+export const marketEscrowAddress = (itemMint: PublicKey) => pda([s('escrow'), itemMint.toBuffer()], MARKET_ID);
+export const collectionAddress = (id: number) => pda([s('collection'), u32(id)], MARKET_ID);
+export const leaseAddress = (item: PublicKey) => pda([s('lease'), item.toBuffer()], MARKET_ID);
+export const leaseEscrowAddress = (itemMint: PublicKey) => pda([s('lease-escrow'), itemMint.toBuffer()], MARKET_ID);
+export const commissionAddress = (tokenMint: PublicKey, nonce: bigint | number) => pda([s('commission'), tokenMint.toBuffer(), u64(nonce)], MARKET_ID);
+export const commissionVaultAddress = (commission: PublicKey) => pda([s('commission-vault'), commission.toBuffer()], MARKET_ID);
+export const submissionAddress = (commission: PublicKey, item: PublicKey) => pda([s('submission'), commission.toBuffer(), item.toBuffer()], MARKET_ID);
+// social (10: programs/hookwars_social/src/lib.rs `seeds`)
+export const socialConfigAddress = () => pda([s('social-config')], SOCIAL_ID);
+export const badgeTypeAddress = (id: number) => pda([s('badge'), u32(id)], SOCIAL_ID);
+export const badgeMintAddress = (id: number) => pda([s('badge-mint'), u32(id)], SOCIAL_ID);
+export const badgeAwardAddress = (id: number, recipient: PublicKey) => pda([s('award'), u32(id), recipient.toBuffer()], SOCIAL_ID);
+export const badgeMinterAddress = () => pda([s('badge-minter')], SOCIAL_ID);
+export const guildAddress = (id: number) => pda([s('guild'), u32(id)], SOCIAL_ID);
+export const guildTreasuryAddress = (id: number) => pda([s('guild-treasury'), u32(id)], SOCIAL_ID);
+export const guildActionAddress = (id: number, nonce: bigint | number) => pda([s('guild-action'), u32(id), u64(nonce)], SOCIAL_ID);

@@ -1,10 +1,11 @@
 /**
- * The nine templates of docs/spec/04-templates.md section 3: ids, slot kinds, fields with their
+ * The templates (docs/spec/04-templates.md section 3, then the arsenal in arsenal.ts): ids, slot kinds, fields with their
  * floor and ceiling parameter names and forge rules, and the one fixed site sentence per template
  * (04 2.7: "Nothing else is said about an item's behaviour"). Floors and ceilings are parameter
  * names; their values come from the on-chain `Template` record (02 2.3), never from this file.
  */
 import type { SlotKind } from './api.ts';
+import { ARSENAL, arsenalSentence } from './arsenal.ts';
 
 export type ForgeRule = 'towardCeiling' | 'towardFloor' | 'keep' | 'floorWhenBothOn' | 'none';
 export type FieldFormat = 'bps' | 'ppm' | 'secs' | 'count' | 'flag' | 'mode' | 'units' | 'lamports';
@@ -36,7 +37,7 @@ export interface TemplateDef {
 const f = (index: number, name: string, floor: string | number, ceiling: string | number, forge: ForgeRule, format: FieldFormat): TemplateField =>
   ({ index, name, floor, ceiling, forge, format });
 
-export const TEMPLATES: readonly TemplateDef[] = [
+const BASE_TEMPLATES: readonly TemplateDef[] = [
   {
     id: 1, name: 'Raid', kind: 'pool', callbacks: ['pool_before_swap', 'pool_after_swap', 'before_transfer', 'on_touch'],
     targets: 'rival mints, 1 to RAID_MAX_RIVALS', dataBytes: 11, forgeable: true, spec: '04 3.1',
@@ -120,6 +121,9 @@ export const TEMPLATES: readonly TemplateDef[] = [
   },
 ];
 
+/** Every template the items program runs: 04's nine, then the arsenal (08, 09, 10). */
+export const TEMPLATES: readonly TemplateDef[] = [...BASE_TEMPLATES, ...ARSENAL];
+
 export function templateById(id: number): TemplateDef | undefined {
   return TEMPLATES.find((t) => t.id === id);
 }
@@ -200,6 +204,6 @@ export function itemSentence(templateId: number, params: readonly number[], ctx:
     case 9:
       return `Siege a rival once ${v(0)} units of its holders' SOL have raided us, spending up to ${v(1)} of the chest; counter-strike when our price falls ${v(3)} between ${v(4)} and ${v(5)}, at most every ${v(6)}, spending up to ${v(7)}; bounties pay ${v(9)} per raid point${params[8] ? '; captured bags may be razed' : ''}.`;
     default:
-      return t.name;
+      return arsenalSentence(templateId, v, target, params) ?? t.name;
   }
 }

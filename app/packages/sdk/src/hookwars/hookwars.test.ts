@@ -4,7 +4,7 @@ import { FIXED_ADDRESSES, HOOK_SIGNERS, PROGRAM_IDS } from '@hookwars/shared';
 import { encodeHookAccountList } from '../hooks.ts';
 import {
   ARMORY_ID, ITEMS_ID, LAUNCH_ID, MAX_SLOTS, PARAM_FIELDS, TOKEN_ID, WAR_ID, activeSlots, claimQuest, coderOf, decodeCpiEvent, decodePoolObservations, POOL_LEN, OBS_HEADER_LEN,
-  decodeRaidLedger, decodeSlotMint, decodeWarState, discriminator, encode, encodeEventBody, EVENT_IX_TAG, EVENT_SPECS, forge, holdingCodec,
+  decodeRaidLedger, RAID_LEDGER_LEN, RAID_TABLE_LEN, decodeSlotMint, decodeWarState, discriminator, encode, encodeEventBody, EVENT_IX_TAG, EVENT_SPECS, forge, holdingCodec,
   idlAccountCodec, isCalled, itemCodec, itemLogEvents, lockedAt, logsTruncated, resolveSlices, settleEquip, sliceAccounts, swapRoute, SWAP_ID, slotRegistryAddress, structFields,
   tokenHookSigner, tyOf, vote, IDLS, type SlotData, type SlotMintData,
 } from './index.ts';
@@ -136,8 +136,10 @@ describe('IDL accounts', () => {
     const POOL = Buffer.concat([Buffer.alloc(POOL_LEN), head, Buffer.alloc(48 * 7)]);
     expect(decodePoolObservations(POOL).entries).toHaveLength(7);
     expect(() => decodePoolObservations(Buffer.alloc(POOL_LEN + OBS_HEADER_LEN))).toThrow();
-    const RL = Buffer.concat([discriminator('account', 'RaidLedger'), Buffer.alloc(46), Buffer.alloc(56 * 5), Buffer.alloc(81), Buffer.alloc(32)]);
-    expect(decodeRaidLedger(RL).inbound).toHaveLength(5);
+    // Changed by Hookwars: the RaidLedger as built (raid::RaidLedger, RAID_TABLE_LEN windows and the Shield sell mark).
+    const RL = Buffer.concat([discriminator('account', 'RaidLedger'), Buffer.alloc(RAID_LEDGER_LEN - 8)]);
+    expect(decodeRaidLedger(RL).inbound).toHaveLength(RAID_TABLE_LEN);
+    expect(decodeRaidLedger(RL).sellMark.markedSlots).toBe(0);
   });
 });
 

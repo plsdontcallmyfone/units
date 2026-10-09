@@ -183,6 +183,113 @@
       ]
     },
     {
+      "name": "claim_loyalty",
+      "docs": [
+        "Loyalty Pot: the holder's claim for the epoch (08 4.3)."
+      ],
+      "discriminator": [
+        163,
+        135,
+        254,
+        229,
+        63,
+        156,
+        167,
+        143
+      ],
+      "accounts": [
+        {
+          "name": "holder",
+          "docs": [
+            "The holder (pays the receipt's rent on the first claim)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "pot",
+          "docs": [
+            "The pot."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  121,
+                  97,
+                  108,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pot_vault",
+          "writable": true
+        },
+        {
+          "name": "equip_state",
+          "docs": [
+            "The pot slot's `EquipState`."
+          ]
+        },
+        {
+          "name": "item"
+        },
+        {
+          "name": "composite"
+        },
+        {
+          "name": "holder_token"
+        },
+        {
+          "name": "holder_quote",
+          "writable": true
+        },
+        {
+          "name": "receipt",
+          "writable": true
+        },
+        {
+          "name": "launch"
+        },
+        {
+          "name": "pool_token"
+        },
+        {
+          "name": "launch_token"
+        },
+        {
+          "name": "quote_mint"
+        },
+        {
+          "name": "token_program",
+          "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "close_equip",
       "docs": [
         "Empties the slot's `EquipState`; refused while its vaults hold anything unsettled."
@@ -393,6 +500,131 @@
         },
         {
           "name": "max_targets",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "init_first_blood",
+      "docs": [
+        "First Blood: creates its state (permissionless)."
+      ],
+      "discriminator": [
+        155,
+        185,
+        130,
+        190,
+        169,
+        11,
+        192,
+        96
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "first_blood",
+          "docs": [
+            "Created here."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  114,
+                  115,
+                  116,
+                  45,
+                  98,
+                  108,
+                  111,
+                  111,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "init_loyalty",
+      "docs": [
+        "Loyalty Pot: creates its state for the item in `slot` (permissionless)."
+      ],
+      "discriminator": [
+        87,
+        147,
+        245,
+        194,
+        229,
+        229,
+        36,
+        127
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "pot",
+          "docs": [
+            "Created here."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  121,
+                  97,
+                  108,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "slot",
           "type": "u8"
         }
       ]
@@ -623,6 +855,77 @@
       ]
     },
     {
+      "name": "set_referrer",
+      "docs": [
+        "Referral: the buyer names its referrer, once (08 4.7)."
+      ],
+      "discriminator": [
+        115,
+        251,
+        55,
+        0,
+        166,
+        189,
+        25,
+        74
+      ],
+      "accounts": [
+        {
+          "name": "buyer",
+          "docs": [
+            "The buyer (pays rent)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "referred",
+          "docs": [
+            "Created here, once."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  102,
+                  101,
+                  114,
+                  114,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              },
+              {
+                "kind": "account",
+                "path": "buyer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "referrer",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "settle_equip",
       "docs": [
         "Pays what a slot's item collected (04 section 2.5, 08 section 2.11): the royalty, the",
@@ -721,6 +1024,111 @@
       ]
     },
     {
+      "name": "settle_referral",
+      "docs": [
+        "Referral: pays a buyer's owed referral from the Referral vault (permissionless)."
+      ],
+      "discriminator": [
+        32,
+        125,
+        220,
+        59,
+        20,
+        19,
+        46,
+        88
+      ],
+      "accounts": [
+        {
+          "name": "cranker",
+          "docs": [
+            "Sends the instruction, receives the bounty."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "referred",
+          "docs": [
+            "The buyer's record."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  102,
+                  101,
+                  114,
+                  114,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              },
+              {
+                "kind": "account",
+                "path": "referred.buyer",
+                "account": "Referred"
+              }
+            ]
+          }
+        },
+        {
+          "name": "equip_state",
+          "docs": [
+            "The Referral slot's `EquipState`."
+          ]
+        },
+        {
+          "name": "item"
+        },
+        {
+          "name": "armory_config"
+        },
+        {
+          "name": "referral_owner"
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "referrer_quote",
+          "writable": true
+        },
+        {
+          "name": "cranker_quote",
+          "writable": true
+        },
+        {
+          "name": "quote_mint"
+        },
+        {
+          "name": "token_program",
+          "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+        },
+        {
+          "name": "token_event_authority"
+        }
+      ],
+      "args": [
+        {
+          "name": "slot",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "validate_params",
       "docs": [
         "Template rules beyond floor and ceiling (also re-checks floor and ceiling)."
@@ -793,6 +1201,45 @@
         39,
         28
       ]
+    },
+    {
+      "name": "FirstBlood",
+      "discriminator": [
+        126,
+        9,
+        145,
+        198,
+        96,
+        188,
+        88,
+        193
+      ]
+    },
+    {
+      "name": "LoyaltyPot",
+      "discriminator": [
+        169,
+        48,
+        160,
+        139,
+        86,
+        96,
+        90,
+        128
+      ]
+    },
+    {
+      "name": "Referred",
+      "discriminator": [
+        125,
+        158,
+        120,
+        63,
+        207,
+        109,
+        112,
+        69
+      ]
     }
   ],
   "events": [
@@ -849,6 +1296,32 @@
       ]
     },
     {
+      "name": "LoyaltyClaimed",
+      "discriminator": [
+        188,
+        133,
+        132,
+        84,
+        73,
+        94,
+        206,
+        201
+      ]
+    },
+    {
+      "name": "LoyaltyRolled",
+      "discriminator": [
+        247,
+        111,
+        190,
+        118,
+        205,
+        23,
+        131,
+        42
+      ]
+    },
+    {
       "name": "RaidMarked",
       "discriminator": [
         218,
@@ -859,6 +1332,19 @@
         189,
         142,
         18
+      ]
+    },
+    {
+      "name": "ReferralPaid",
+      "discriminator": [
+        70,
+        190,
+        133,
+        42,
+        145,
+        213,
+        87,
+        197
       ]
     },
     {
@@ -975,6 +1461,56 @@
       "code": 6019,
       "name": "RangeTooShort",
       "msg": "the slot's range is shorter than the item's bytes"
+    },
+    {
+      "code": 6020,
+      "name": "CooldownActive",
+      "msg": "the wallet bought too recently to sell or send"
+    },
+    {
+      "code": 6021,
+      "name": "FlashSellTooSoon",
+      "msg": "the tokens were bought too few slots ago to sell"
+    },
+    {
+      "code": 6022,
+      "name": "DailyCapExceeded",
+      "msg": "the wallet has sold or sent its daily cap"
+    },
+    {
+      "code": 6023,
+      "name": "NotHolder",
+      "msg": "only the holding's owner may set this"
+    },
+    {
+      "code": 7100,
+      "name": "GuestListClosed",
+      "msg": "the opening is for holders of the target mint only"
+    },
+    {
+      "code": 7101,
+      "name": "NotEligible",
+      "msg": "not eligible for this epoch's loyalty claim"
+    },
+    {
+      "code": 7102,
+      "name": "NothingToPay",
+      "msg": "nothing to pay"
+    },
+    {
+      "code": 7103,
+      "name": "NoLoyaltyPot",
+      "msg": "the slot does not hold a Loyalty Pot"
+    },
+    {
+      "code": 7104,
+      "name": "SelfReferral",
+      "msg": "a buyer cannot refer itself"
+    },
+    {
+      "code": 7000,
+      "name": "SoulboundTransfer",
+      "msg": "this badge cannot be sent or sold"
     }
   ],
   "types": [
@@ -1247,6 +1783,52 @@
       }
     },
     {
+      "name": "FirstBlood",
+      "docs": [
+        "First Blood's state (`[\"first-blood\", mint]`)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Layout version."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "docs": [
+              "The token."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "last_day",
+            "docs": [
+              "UTC day (`unix / 86_400`) of the last prize."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "taken",
+            "docs": [
+              "Whether `last_day`'s prize was given."
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
       "name": "ItemCut",
       "docs": [
         "Any item cut. `side`: 0 token, 1 pool on a buy, 2 pool on a sell."
@@ -1323,6 +1905,131 @@
               "The amount this callback acts on after the launch's cuts: before, the input; after, the",
               "output it was told. On a quote side this is the quote the item's cut is computed on."
             ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LoyaltyClaimed",
+      "docs": [
+        "A loyalty claim."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "holder",
+            "type": "pubkey"
+          },
+          {
+            "name": "epoch",
+            "type": "u32"
+          },
+          {
+            "name": "balance",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LoyaltyPot",
+      "docs": [
+        "The Loyalty Pot's state (`[\"loyalty\", mint]`), also the owner of its quote vault."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Layout version."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "docs": [
+              "The token."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "docs": [
+              "The slot whose item is the pot (or holds it as a module)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "epoch",
+            "docs": [
+              "The epoch being claimed (0 before the first roll)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "payable",
+            "docs": [
+              "What the epoch pays, fixed at the roll (the vault's balance then)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "claimed",
+            "docs": [
+              "Claimed of `payable`."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "eligible_supply",
+            "docs": [
+              "Supply outside the pool and the launch at the roll."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LoyaltyRolled",
+      "docs": [
+        "A loyalty epoch rolled."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "epoch",
+            "type": "u32"
+          },
+          {
+            "name": "payable",
+            "type": "u64"
+          },
+          {
+            "name": "eligible_supply",
             "type": "u64"
           }
         ]
@@ -1503,7 +2210,7 @@
           {
             "name": "direction",
             "docs": [
-              "Swap direction: 0 base → quote (a sell), 1 quote → base (a buy)."
+              "Swap direction: 0 base \u2192 quote (a sell), 1 quote \u2192 base (a buy)."
             ],
             "type": "u8"
           },
@@ -1662,6 +2369,101 @@
           {
             "name": "loot_ticket",
             "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReferralPaid",
+      "docs": [
+        "A referral settled."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "referrer",
+            "type": "pubkey"
+          },
+          {
+            "name": "gross",
+            "type": "u64"
+          },
+          {
+            "name": "paid",
+            "type": "u64"
+          },
+          {
+            "name": "bounty",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Referred",
+      "docs": [
+        "A buyer's chosen referrer (`[\"referred\", mint, buyer]`)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Layout version."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "docs": [
+              "The token."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "docs": [
+              "The buyer."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "referrer",
+            "docs": [
+              "Who is paid."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "owed",
+            "docs": [
+              "Gross cuts recorded and not yet settled."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "paid",
+            "docs": [
+              "Paid to the referrer, all time."
+            ],
+            "type": "u64"
           }
         ]
       }

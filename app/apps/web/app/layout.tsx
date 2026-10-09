@@ -55,7 +55,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               <p>Tokens whose hooks are owned items. Holders vote what fills each slot, aim raids at rivals and fund a war chest from their own fees. Spot only.</p>
             </div>
             <div className="foot-col"><div className="label">PLATFORM</div><a href="/launch">Launch</a><a href="/">Projects</a><a href="/war">War room</a><a href="/armory">Armory</a></div>
-            <div className="foot-col"><div className="label">DOCS</div><a href="/docs">How units works</a><a href="/docs#templates">Templates</a><a href="/docs#parameters">Parameters</a></div>
+            <div className="foot-col"><div className="label">DOCS</div><a href="/docs">How units works</a><a href="/docs/protocol#templates">Templates</a><a href="/docs/protocol#parameters">Parameters</a></div>
             <div className="foot-col"><div className="label">NETWORK</div><span>Solana</span><span>Spot only</span><span>Bordrless standard</span></div>
           </div>
         </footer>

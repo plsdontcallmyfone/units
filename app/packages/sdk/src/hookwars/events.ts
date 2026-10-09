@@ -1,3 +1,4 @@
+// Changed by Hookwars: every program's events from its IDL; log events for items and the launchpad.
 /**
  * Hookwars events (06 2.1). Self-CPI events (`emit_cpi!`) arrive as inner instructions to the
  * program's event authority: `EVENT_IX_TAG` (Anchor's `sha256("anchor:event")[..8]`), then the
@@ -5,49 +6,26 @@
  * (R18): `Program data: <base64>` log lines, attributed to the program by the invoke and success
  * lines around them.
  *
- * Events of the token program, the armory, the items program, the war program and the companion
- * come from their generated IDLs (`from-idl.ts`). The DEX's and the launchpad's new events (M3a,
- * M3b) and the items callback events (M3b) are still spec tables, in table order; an IDL event of
- * the same name replaces the spec one (INTEGRATION.md section 2).
+ * Every program's events come from its generated IDL (`from-idl.ts`): token, armory, items, war,
+ * companion, launchpad, DEX, agents, market and social.
  */
 import { PublicKey } from '@solana/web3.js';
 import { EVENT_IX_TAG as UPSTREAM_EVENT_IX_TAG } from '../events.ts';
-import { eventCodec, type EventCodec, type Field, type Ty } from './codec.ts';
+import { eventCodec, type EventCodec, type Field } from './codec.ts';
 import { idlEventSpecs } from './from-idl.ts';
-import { ARMORY_ID, ITEMS_ID, LAUNCH_ID, SWAP_ID, TOKEN_ID, WAR_ID, COMPANION_ID } from './addresses.ts';
+import { AGENTS_ID, ARMORY_ID, ITEMS_ID, LAUNCH_ID, MARKET_ID, SOCIAL_ID, SWAP_ID, TOKEN_ID, WAR_ID, COMPANION_ID } from './addresses.ts';
 
 /** `sha256("anchor:event")[..8]` as Anchor writes it (little-endian u64), upstream's constant. */
 export const EVENT_IX_TAG = UPSTREAM_EVENT_IX_TAG;
 
-const slotAmount: Ty = { struct: [['slot', 'u8'], ['item', 'pubkey'], ['amount', 'u64']] };
-const SLOT_BOUNDS: Ty = { struct: [['maxCutBps', 'u16'], ['mayRefuse', 'bool'], ['mayWriteData', 'bool'], ['mayAnswerTouch', 'bool']] };
-const slotSpec: Ty = {
-  struct: [['kind', 'u8'], ['equipRule', 'u8'], ['bounds', SLOT_BOUNDS], ['noticeSecs', 'u32'], ['dataLen', 'u8'], ['launchItem', { option: 'pubkey' }], ['ruleData', { vec: 'u8' }]],
-};
-
 type Spec = [name: string, fields: Field[]];
 
-/** Spec tables for programs and events not on main yet (DEX M3a, launchpad M3b, items callbacks M3b). */
-const SPEC_ONLY: Record<string, Spec[]> = {
-  swap: [
-    ['RouteSwapped', [['trader', 'pubkey'], ['routeInputMint', 'pubkey'], ['routeOutputMint', 'pubkey'], ['amountIn', 'u64'], ['amountOut', 'u64'], ['pools', { vec: 'pubkey' }], ['slot', 'u64'], ['ts', 'i64']]],
-    ['ObservationsCreated', [['pool', 'pubkey'], ['observations', 'pubkey'], ['len', 'u16']]],
-  ],
-  launch: [
-    ['PoolItemCuts', [['launch', 'pubkey'], ['pool', 'pubkey'], ['mint', 'pubkey'], ['side', 'u8'], ['discountBps', 'u16'], ['cuts', { vec: slotAmount }], ['burns', { vec: slotAmount }], ['poolCutsDelta', 'u64'], ['slot', 'u64'], ['ts', 'i64']]],
-    ['LaunchPrepared', [['mint', 'pubkey'], ['creator', 'pubkey'], ['slots', { vec: slotSpec }]]],
-    ['PoolRegistryRefreshed', [['mint', 'pubkey'], ['pool', 'pubkey'], ['items', { vec: { struct: [['slot', 'u8'], ['item', 'pubkey']] } }]]],
-  ],
-  items: [
-    ['RaidMarked', [['mint', 'pubkey'], ['rival', 'pubkey'], ['trader', 'pubkey'], ['volume', 'u64'], ['points', 'u32'], ['lootTicket', 'bool']]],
-    ['ShieldTaken', [['mint', 'pubkey'], ['owner', 'pubkey'], ['cut', 'u64']]],
-    ['ItemCut', [['mint', 'pubkey'], ['slot', 'u8'], ['item', 'pubkey'], ['side', 'u8'], ['amount', 'u64']]],
-    ['EquipSettled', [['mint', 'pubkey'], ['slot', 'u8'], ['item', 'pubkey'], ['royaltyToken', 'u64'], ['royaltyQuote', 'u64'], ['destination', 'pubkey'], ['amountToken', 'u64'], ['amountQuote', 'u64'], ['bounty', 'u64']]],
-  ],
-};
+/** Spec tables for events not in any IDL. Every program on main now has its IDL, so this is empty;
+ * kept so a future spec-only event has a place to go (INTEGRATION.md). */
+const SPEC_ONLY: Record<string, Spec[]> = {};
 
 /** The programs whose events come from their IDLs. */
-const IDL_PROGRAMS = ['token', 'armory', 'items', 'war', 'companion'] as const;
+const IDL_PROGRAMS = ['token', 'armory', 'items', 'war', 'companion', 'launch', 'swap', 'agents', 'market', 'social'] as const;
 
 function buildSpecs(): Record<string, Spec[]> {
   const out: Record<string, Spec[]> = {};
@@ -69,6 +47,7 @@ export const SPEC_EVENTS: Record<string, string[]> = Object.fromEntries(
 
 export const PROGRAM_OF: Record<string, PublicKey> = {
   token: TOKEN_ID, armory: ARMORY_ID, swap: SWAP_ID, launch: LAUNCH_ID, companion: COMPANION_ID, items: ITEMS_ID, war: WAR_ID,
+  agents: AGENTS_ID, market: MARKET_ID, social: SOCIAL_ID,
 };
 
 export interface HookwarsEvent { program: string; name: string; data: Record<string, unknown>; ordinal: number; via: 'cpi' | 'log' }
@@ -101,23 +80,34 @@ export function encodeEventBody(program: string, name: string, data: Record<stri
   return eventCodec<Record<string, unknown>>(name, fields).encode(data);
 }
 
-/** Item log events (R18) from a transaction's log lines: `Program data:` lines emitted while
- * `hookwars_items` is the innermost running program. */
-export function itemLogEvents(logs: readonly string[], items: PublicKey = ITEMS_ID): { name: string; data: Record<string, unknown>; line: number }[] {
+/** Programs that emit some events with `emit!` (program logs): `hookwars_items` callbacks (R18)
+ * and the launchpad's `PoolItemCuts` (03 M3b notes). */
+export const LOG_EVENT_PROGRAMS = ['items', 'launch'] as const;
+
+/** Log events from a transaction's log lines: `Program data:` lines emitted while one of
+ * `programs` is the innermost running program, attributed to it. */
+export function programLogEvents(logs: readonly string[], programs: readonly string[] = LOG_EVENT_PROGRAMS): { program: string; name: string; data: Record<string, unknown>; line: number }[] {
+  const ids = new Map(programs.map((p) => [PROGRAM_OF[p]!.toBase58(), p]));
   const stack: string[] = [];
-  const out: { name: string; data: Record<string, unknown>; line: number }[] = [];
-  const id = items.toBase58();
+  const out: { program: string; name: string; data: Record<string, unknown>; line: number }[] = [];
   logs.forEach((line, i) => {
     const inv = /^Program (\w+) invoke \[\d+\]$/.exec(line);
     if (inv) { stack.push(inv[1]!); return; }
     if (/^Program (\w+) (success|failed)/.test(line)) { stack.pop(); return; }
     const data = /^Program data: (.+)$/.exec(line);
-    if (data && stack[stack.length - 1] === id) {
-      const ev = decodeEventBody('items', Buffer.from(data[1]!, 'base64'));
-      if (ev) out.push({ ...ev, line: i });
+    const program = data ? ids.get(stack[stack.length - 1] ?? '') : undefined;
+    if (data && program) {
+      const ev = decodeEventBody(program, Buffer.from(data[1]!, 'base64'));
+      if (ev) out.push({ program, ...ev, line: i });
     }
   });
   return out;
+}
+
+/** Item log events (R18); `programLogEvents` restricted to `hookwars_items`. */
+export function itemLogEvents(logs: readonly string[], items: PublicKey = ITEMS_ID): { name: string; data: Record<string, unknown>; line: number }[] {
+  void items;
+  return programLogEvents(logs, ['items']).map(({ name, data, line }) => ({ name, data, line }));
 }
 
 /** True when the runtime truncated the logs (06 2.1: item log events are then hints only). */

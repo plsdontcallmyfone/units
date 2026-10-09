@@ -23,6 +23,12 @@ export const PROGRAM_IDS = {
   items: '8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv',
   /** hookwars_war (docs/spec/05-war.md). */
   war: '5vJnBvr33jpsfYxMY2pvNf6tF9tkj8eaZ6goFtByUWA2',
+  /** hookwars_agents (docs/spec/09-agents.md): passports, badges, proof levels, policy wallets, bonds. */
+  agents: 'GUTwa3zv83CKoq3TNYL9W1bJeUSEBVxR3MkGdxiXnZJ9',
+  /** hookwars_market (docs/spec/10-expansion.md): item listings, collections, rentals, commissions. */
+  market: 'FikEwNXoXqRWteX4kpCT8dJ34o8hWQ8w49whhZiqS2vv',
+  /** hookwars_social (docs/spec/10-expansion.md): achievement badges, guild halls. */
+  social: 'CKf4SjuiYxy4C2eSjk6oSQb2AnqC3ADoDTm8d323jWAx',
 } as const;
 
 /** The two authorities the launchpad lets hold a template program's upgrade key (00 rule 3). */
