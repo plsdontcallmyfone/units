@@ -177,8 +177,15 @@ fn launch_token(hw: &mut Hw, creator: &Keypair, slots: Vec<SlotInit>, equips: Ve
     let regs = pool_registries(hw, &mint);
     let ix = sl::refresh_pool_registry(c, mint, hw.w.sol, policy::LP_FEE_BPS, regs);
     send(&mut hw.w.env, &[ix], creator, &[]).ok();
-    send(&mut hw.w.env, &[hookwars_war::client::init_war(c, mint)], creator, &[])
-        .ok();
+    let m: Mint = hw.w.env.read(&mint);
+    if m.active_slots().iter().any(|s| s.kind == slot_kind::WAR) {
+        send(&mut hw.w.env, &[hookwars_war::client::init_war(c, mint)], creator, &[]).ok();
+    } else {
+        // No War slot, so no `init_war`: the chest's bridged SOL holding, where pool cuts settle,
+        // is created directly (anyone may).
+        let chest = hookwars_war::state::chest_address(&mint).0;
+        send(&mut hw.w.env, &[token::create_holding(c, hw.w.sol, chest)], creator, &[]).ok();
+    }
     init_ledger(hw, creator, &mint).ok();
     mint
 }
@@ -489,12 +496,12 @@ fn a_raid_through_the_rivals_pool_counts_and_a_forged_first_hop_does_not() {
 
 #[test]
 fn the_launchs_own_deposit_is_never_cut_by_token_items() {
-    // A token-side item (Transfer Fee, 10%) equipped before the supply: the launch's deposit of the
+    // A token-side item (Transfer Fee, 3%) equipped before the supply: the launch's deposit of the
     // curve tokens into its pool is not cut (the pool holds exactly the curve allocation), and a
     // wallet transfer afterwards is.
     let mut hw = world();
     let creator = hw.w.env.funded(1_000 * SOL);
-    let fee = hw.item(T::TRANSFER_FEE, params(&[1_000, 0]), 0).1;
+    let fee = hw.item(T::TRANSFER_FEE, params(&[300, 10_000]), 0).1;
     let mint = launch_token(
         &mut hw,
         &creator,
@@ -716,13 +723,13 @@ fn l_b_the_raid_origin_follows_tokens_to_an_off_curve_owner() {
 
 #[test]
 fn m_a_and_l_c_stray_tokens_and_a_missing_destination_do_not_freeze_a_slot() {
-    // Transfer Fee (10%) to the creator. A stranger sends tokens straight to the slot's equip
+    // Transfer Fee (3%) to the creator. A stranger sends tokens straight to the slot's equip
     // vault; settling burns what no module recorded (M-A). The creator's holding does not exist at
     // first, so that module stays owed and the rest settles (L-C); once it exists, all settles and
     // the vault is empty, which is what `close_equip` requires.
     let mut hw = world();
     let creator = hw.w.env.funded(1_000 * SOL);
-    let fee = hw.item(T::TRANSFER_FEE, params(&[1_000, 0]), 0).1;
+    let fee = hw.item(T::TRANSFER_FEE, params(&[300, 10_000]), 0).1;
     let mint = launch_token(
         &mut hw,
         &creator,

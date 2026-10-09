@@ -19,10 +19,10 @@ export namespace Token {
   export interface MintCreated { mint: PublicKey; creator: PublicKey; decimals: number; maxSupply: bigint; mintAuthority: PublicKey | null; freezeAuthority: PublicKey | null; hookAuthority: PublicKey | null; metadataAuthority: PublicKey | null; hookProgram: PublicKey | null; hookFlags: number; name: string; symbol: string; uri: string; ts: bigint; }
   export interface Minted { mint: PublicKey; destination: PublicKey; destinationOwner: PublicKey; authority: PublicKey; amount: bigint; destinationPost: bigint; supplyPost: bigint; slot: bigint; ts: bigint; }
   export interface Slot { kind: number; equipRule: number; bounds: SlotBounds; dataOffset: number; dataLen: number; item: PublicKey; program: PublicKey; flags: number; poolFlags: number; equipVault: PublicKey; signerBump: number; launchSignerBump: number; dataEpoch: number; extraCount: number; }
-  export interface SlotBounds { maxCutBps: number; mayRefuse: boolean; mayWriteData: boolean; mayAnswerTouch: boolean; }
+  export interface SlotBounds { maxCutBps: number; mayRefuse: boolean; mayWriteData: boolean; mayAnswerTouch: boolean; mayBurn: boolean; }
   export interface SlotCut { slot: number; item: PublicKey; cut: bigint; }
   export interface SlotEquipped { mint: PublicKey; slot: number; oldItem: PublicKey; newItem: PublicKey; program: PublicKey; flags: number; poolFlags: number; dataEpoch: number; ts: bigint; }
-  export interface SlotInfo { kind: number; equipRule: number; maxCutBps: number; mayRefuse: boolean; mayWriteData: boolean; mayAnswerTouch: boolean; dataOffset: number; dataLen: number; equipVault: PublicKey; lockedProgram: PublicKey; }
+  export interface SlotInfo { kind: number; equipRule: number; maxCutBps: number; mayRefuse: boolean; mayWriteData: boolean; mayAnswerTouch: boolean; mayBurn: boolean; dataOffset: number; dataLen: number; equipVault: PublicKey; lockedProgram: PublicKey; }
   export interface SlotInit { kind: number; equipRule: number; bounds: SlotBounds; dataLen: number; lockedProgram: PublicKey | null; lockedFlags: number; lockedExtraCount: number; }
   export interface SlotsInitialized { mint: PublicKey; slotAuthority: PublicKey | null; slots: (SlotInfo)[]; }
   export interface Transferred { mint: PublicKey; source: PublicKey; destination: PublicKey; sourceOwner: PublicKey; destinationOwner: PublicKey; authority: PublicKey; amount: bigint; deltas: (DeltaApplied)[]; sourcePost: bigint; destinationPost: bigint; slot: bigint; ts: bigint; slotCuts: (SlotCut)[]; }
@@ -33,7 +33,8 @@ export namespace Armory {
   export interface AdminAccepted { admin: PublicKey; ts: bigint; }
   export interface AdminProposed { admin: PublicKey; readyAt: bigint; }
   export interface ArmoryConfig { version: number; bump: number; admin: PublicKey; pendingAdmin: PublicKey | null; pendingAdminAt: bigint; itemsMinted: bigint; templates: number; params: ArmoryParams; reserved: Buffer; }
-  export interface ArmoryParams { maxRoyaltyBps: number; votePeriodSecs: number; voteQuorumBps: number; minNoticeSecs: number; maxNoticeSecs: number; forgeGainBps: number; minTwapSecs: number; maxPoolItemCutBps: number; maxPoolItemDiscountBps: number; maxItemReads: number; adminTimelockSecs: number; }
+  export interface ArmoryParams { maxRoyaltyBps: number; votePeriodSecs: number; voteQuorumBps: number; minNoticeSecs: number; maxNoticeSecs: number; forgeGainBps: number; minTwapSecs: number; maxPoolItemCutBps: number; maxPoolItemDiscountBps: number; maxItemReads: number; adminTimelockSecs: number; settleBountyBps: number; }
+  export interface CompositeItem { version: number; bump: number; item: PublicKey; modules: (Module)[]; provenance: (PublicKey)[]; }
   export interface EquipApplied { mint: PublicKey; slot: number; oldItem: PublicKey | null; newItem: PublicKey | null; by: number; ts: bigint; }
   export interface EquipConfig { targets: (PublicKey)[]; role: number; }
   export interface ForgeCounter { wallet: PublicKey; count: bigint; bump: number; }
@@ -43,6 +44,7 @@ export namespace Armory {
   export interface LaunchEquip { slot: number; item: PublicKey | null; config: EquipConfig; noticeSecs: number; rule: PerformanceRule | null; }
   export interface LootMinted { item: PublicKey; owner: PublicKey; templateId: number; params: (number)[]; ts: bigint; }
   export interface Manifest { kind: number; tokenFlags: number; poolFlags: number; maxCutBuyBps: number; maxCutSellBps: number; maxCutTransferBps: number; maxDiscountBps: number; mayRefuse: boolean; mayBurn: boolean; dataBytes: number; readsOtherPools: number; }
+  export interface Module { templateId: number; params: (number)[]; targetStart: number; targetCount: number; dataBytes: number; readsModule: number; }
   export interface ParamsApplied { params: ArmoryParams; ts: bigint; }
   export interface ParamsProposed { params: ArmoryParams; readyAt: bigint; }
   export interface PendingParams { bump: number; params: ArmoryParams; readyAt: bigint; }
@@ -68,8 +70,19 @@ export namespace Items {
   export interface EquipClosed { mint: PublicKey; slot: number; item: PublicKey; }
   export interface EquipConfig { targets: (PublicKey)[]; role: number; }
   export interface EquipInitialized { mint: PublicKey; slot: number; item: PublicKey; config: EquipConfig; }
-  export interface EquipState { version: number; bump: number; mint: PublicKey; slot: number; item: PublicKey; templateId: number; config: EquipConfig; equippedAt: bigint; runs: bigint; collectedToken: bigint; poolOwed: bigint; poolSettled: bigint; reserved: Buffer; }
+  export interface EquipSettled { mint: PublicKey; slot: number; item: PublicKey; royaltyToken: bigint; royaltyQuote: bigint; amountToken: bigint; amountQuote: bigint; burned: bigint; bountyToken: bigint; bountyQuote: bigint; }
+  export interface EquipState { version: number; bump: number; mint: PublicKey; slot: number; item: PublicKey; templateId: number; config: EquipConfig; equippedAt: bigint; runs: bigint; collectedToken: bigint; poolOwed: bigint; poolSettled: bigint; tokenUnsettled: (bigint)[]; poolUnsettled: (bigint)[]; reserved: Buffer; }
+  export interface ItemCut { mint: PublicKey; slot: number; item: PublicKey; module: number; side: number; amount: bigint; }
+  export interface ItemPoolContext { slot: number; item: PublicKey; launchFeeBps: number; launchCut: bigint; sideAmount: bigint; }
   export interface Manifest { kind: number; tokenFlags: number; poolFlags: number; maxCutBuyBps: number; maxCutSellBps: number; maxCutTransferBps: number; maxDiscountBps: number; mayRefuse: boolean; mayBurn: boolean; dataBytes: number; readsOtherPools: number; }
+  export type Phase = 'Before' | 'After';
+  export interface PoolHookArgs { op: PoolOp; phase: Phase; pool: PublicKey; baseMint: PublicKey; quoteMint: PublicKey; actor: PublicKey; recipient: PublicKey; direction: number; amountIn: bigint; amountOut: bigint; baseReserve: bigint; quoteReserve: bigint; virtualBase: bigint; virtualQuote: bigint; lpFeeBps: number; protocolFeeBps: number; swapCount: bigint; createdAt: bigint; lpAmount: bigint; hookData: Buffer; route: RouteContext; }
+  export type PoolOp = 'Initialize' | 'AddLiquidity' | 'RemoveLiquidity' | 'Swap';
+  export interface RaidMarked { mint: PublicKey; rival: PublicKey; trader: PublicKey; volume: bigint; points: number; lootTicket: boolean; }
+  export interface RouteContext { routeInputMint: PublicKey; routeOutputMint: PublicKey; firstPool: PublicKey; routeAmountIn: bigint; hopIndex: number; hopCount: number; }
+  export interface ShieldTaken { mint: PublicKey; owner: PublicKey; cut: bigint; }
+  export interface TokenSlotArgs { op: TokenSlotOp; phase: Phase; slot: number; item: PublicKey; mint: PublicKey; source: PublicKey; destination: PublicKey; sourceOwner: PublicKey; destinationOwner: PublicKey; authority: PublicKey; authorityIsDelegate: boolean; amount: bigint; delta: bigint; totalDelta: bigint; sourceBalance: bigint; destinationBalance: bigint; decimals: number; supply: bigint; sourceData: Buffer; destinationData: Buffer; payload: Buffer; }
+  export type TokenSlotOp = 'Transfer' | 'Burn' | 'Touch';
 }
 
 export namespace War {
@@ -83,7 +96,7 @@ export namespace War {
   export interface ConfigChange { admin: PublicKey; protocolTreasury: PublicKey; randomnessProgram: PublicKey; treatyTemplateId: number | null; params: WarParams; }
   export interface ConfigProposed { change: ConfigChange; eta: bigint; }
   export interface CounterStrikeExecuted { mint: PublicKey; spent: bigint; burned: bigint; bounty: bigint; cranker: PublicKey; }
-  export interface Launch { version: number; bump: number; mint: PublicKey; creator: PublicKey; pool: PublicKey; quoteMint: PublicKey; status: number; creatorFeeBps: number; lpFeeBps: number; sniperWindowSecs: bigint; sniperStartBps: number; virtualQuote: bigint; virtualBase: bigint; graduationQuote: bigint; curveTokens: bigint; reserveTokens: bigint; reserveHolding: PublicKey; quoteHolding: PublicKey; lpHolding: PublicKey; createdAt: bigint; graduatedAt: bigint; creatorFeesAccrued: bigint; creatorFeesClaimed: bigint; graduationTopup: bigint; graduationBurned: bigint; rules: LaunchRules; modules: number; kitConfig: PublicKey; holderVault: PublicKey; kitCallerBump: number; creatorUnlockAt: bigint; earlyWindowEnd: bigint; earlyUnlockAt: bigint; creatorBought: boolean; holderFeesAccrued: bigint; burnedOnTrades: bigint; config: PublicKey; customHook: PublicKey | null; customHookFlags: number; authorShareBps: number; authorFeesPaid: bigint; reserved: Buffer; }
+  export interface Launch { version: number; bump: number; mint: PublicKey; creator: PublicKey; pool: PublicKey; quoteMint: PublicKey; status: number; creatorFeeBps: number; lpFeeBps: number; sniperWindowSecs: bigint; sniperStartBps: number; virtualQuote: bigint; virtualBase: bigint; graduationQuote: bigint; curveTokens: bigint; reserveTokens: bigint; reserveHolding: PublicKey; quoteHolding: PublicKey; lpHolding: PublicKey; createdAt: bigint; graduatedAt: bigint; creatorFeesAccrued: bigint; creatorFeesClaimed: bigint; graduationTopup: bigint; graduationBurned: bigint; rules: LaunchRules; modules: number; kitConfig: PublicKey; holderVault: PublicKey; kitCallerBump: number; creatorUnlockAt: bigint; earlyWindowEnd: bigint; earlyUnlockAt: bigint; creatorBought: boolean; holderFeesAccrued: bigint; burnedOnTrades: bigint; config: PublicKey; customHook: PublicKey | null; customHookFlags: number; authorShareBps: number; authorFeesPaid: bigint; slotLaunch: number; reserved: Buffer; }
   export interface LaunchRules { holderFeeBuyBps: number; holderFeeSellBps: number; burnBuyBps: number; burnSellBps: number; maxWalletBps: number; creatorLockSecs: number; earlyWindowSecs: number; earlyLockSecs: number; }
   export interface LootEntry { templateId: number; weight: number; ranges: (ParamRange)[]; }
   export interface LootTable { version: number; bump: number; season: number; count: number; entries: (LootEntry)[]; eta: bigint; }
@@ -111,13 +124,13 @@ export namespace War {
   export interface SiegeWaited { mint: PublicKey; rivalMint: PublicKey; rivalPrice: bigint; rivalTwap: bigint; }
   export interface SliceArgs { first: number; second: number; }
   export interface Slot { kind: number; equipRule: number; bounds: SlotBounds; dataOffset: number; dataLen: number; item: PublicKey; program: PublicKey; flags: number; poolFlags: number; equipVault: PublicKey; signerBump: number; launchSignerBump: number; dataEpoch: number; extraCount: number; }
-  export interface SlotBounds { maxCutBps: number; mayRefuse: boolean; mayWriteData: boolean; mayAnswerTouch: boolean; }
+  export interface SlotBounds { maxCutBps: number; mayRefuse: boolean; mayWriteData: boolean; mayAnswerTouch: boolean; mayBurn: boolean; }
   export interface TreatyInflowShared { mint: PublicKey; amount: bigint; bounty: bigint; cranker: PublicKey; }
   export interface TreatyTimeAccrued { mint: PublicKey; treatyItem: PublicKey; secs: bigint; season: number; }
   export interface WarChestCreated { mint: PublicKey; chest: PublicKey; treatyInbox: PublicKey; warState: PublicKey; }
   export interface WarConfig { version: number; bump: number; prizeVaultBump: number; admin: PublicKey; protocolTreasury: PublicKey; randomnessProgram: PublicKey; treatyTemplateId: number | null; currentSeason: number; lastWinner: PublicKey | null; lastWinnerSeason: number; params: WarParams; pending: PendingConfig | null; reserved: Buffer; }
   export interface WarFunded { mint: PublicKey; amount: bigint; balance: bigint; fundedTotal: bigint; }
-  export interface WarParams { adminTimelockSecs: bigint; maxCrankBountyBps: number; siegeIntervalSecs: bigint; siegeMaxSpendBps: number; siegeMaxPremiumBps: number; siegeSlippageBps: number; siegeUnitLamports: bigint; counterMaxSpendBps: number; counterMinIntervalSecs: bigint; razeMaxBpsPerInterval: number; razeIntervalSecs: bigint; bountyMaxPerClaim: bigint; minTwapSecs: bigint; raidWindowSecs: bigint; rollExpirySecs: bigint; questPeriodSecs: bigint; questRaidPoints: number; seasonSecs: bigint; challengeSecs: bigint; seasonPrizeShareBps: number; }
+  export interface WarParams { adminTimelockSecs: bigint; maxCrankBountyBps: number; siegeIntervalSecs: bigint; siegeMaxSpendBps: number; siegeMaxPremiumBps: number; siegeSlippageBps: number; siegeUnitLamports: bigint; counterMaxSpendBps: number; counterMinIntervalSecs: bigint; razeMaxBpsPerInterval: number; razeIntervalSecs: bigint; bountyMaxPerClaim: bigint; minTwapSecs: bigint; raidWindowSecs: bigint; rollExpirySecs: bigint; questPeriodSecs: bigint; questRaidPoints: number; seasonSecs: bigint; challengeSecs: bigint; seasonPrizeShareBps: number; pointUnitLamports: bigint; lootMinRaidLamports: bigint; }
   export interface WarState { version: number; bump: number; chestBump: number; inboxBump: number; mint: PublicKey; launch: PublicKey; lastSeenBalance: bigint; fundedTotal: bigint; spentSiege: bigint; spentCounter: bigint; paidBounties: bigint; paidCranks: bigint; razedProceeds: bigint; treatySharedTotal: bigint; lastSiegeAt: bigint; lastCounterAt: bigint; lastTreatyTick: bigint; underSiegeUntil: bigint; siegeByChest: PublicKey; captured: (Captured)[]; seasonId: number; season: SeasonCounters; prevSeason: SeasonCounters; reserved: Buffer; }
 }
 
@@ -134,7 +147,7 @@ export namespace Kit {
   export interface RewardsClaimed { mint: PublicKey; owner: PublicKey; amount: bigint; owedLeft: bigint; totalClaimed: bigint; }
   export interface RewardsShared { mint: PublicKey; from: PublicKey; amount: bigint; totalShared: bigint; }
   export interface Slot { kind: number; equipRule: number; bounds: SlotBounds; dataOffset: number; dataLen: number; item: PublicKey; program: PublicKey; flags: number; poolFlags: number; equipVault: PublicKey; signerBump: number; launchSignerBump: number; dataEpoch: number; extraCount: number; }
-  export interface SlotBounds { maxCutBps: number; mayRefuse: boolean; mayWriteData: boolean; mayAnswerTouch: boolean; }
+  export interface SlotBounds { maxCutBps: number; mayRefuse: boolean; mayWriteData: boolean; mayAnswerTouch: boolean; mayBurn: boolean; }
   export interface TokenHookArgs { op: TokenOp; phase: Phase; mint: PublicKey; source: PublicKey; destination: PublicKey; sourceOwner: PublicKey; destinationOwner: PublicKey; authority: PublicKey; authorityIsDelegate: boolean; amount: bigint; delta: bigint; sourceBalance: bigint; destinationBalance: bigint; decimals: number; supply: bigint; sourceHookData: Buffer; destinationHookData: Buffer; }
   export type TokenOp = 'Transfer' | 'Mint' | 'Burn';
 }
@@ -152,7 +165,7 @@ export namespace Companion {
   export interface DevBought { companion: PublicKey; lamports: bigint; tokens: bigint; devTokens: bigint; }
   export interface DevReleased { companion: PublicKey; tokens: bigint; released: bigint; }
   export interface FeesClaimed { companion: PublicKey; claimed: bigint; bounty: bigint; toBuyback: bigint; toHolders: bigint; toBeneficiary: bigint; cranker: PublicKey; }
-  export interface Launch { version: number; bump: number; mint: PublicKey; creator: PublicKey; pool: PublicKey; quoteMint: PublicKey; status: number; creatorFeeBps: number; lpFeeBps: number; sniperWindowSecs: bigint; sniperStartBps: number; virtualQuote: bigint; virtualBase: bigint; graduationQuote: bigint; curveTokens: bigint; reserveTokens: bigint; reserveHolding: PublicKey; quoteHolding: PublicKey; lpHolding: PublicKey; createdAt: bigint; graduatedAt: bigint; creatorFeesAccrued: bigint; creatorFeesClaimed: bigint; graduationTopup: bigint; graduationBurned: bigint; rules: LaunchRules; modules: number; kitConfig: PublicKey; holderVault: PublicKey; kitCallerBump: number; creatorUnlockAt: bigint; earlyWindowEnd: bigint; earlyUnlockAt: bigint; creatorBought: boolean; holderFeesAccrued: bigint; burnedOnTrades: bigint; config: PublicKey; customHook: PublicKey | null; customHookFlags: number; authorShareBps: number; authorFeesPaid: bigint; reserved: Buffer; }
+  export interface Launch { version: number; bump: number; mint: PublicKey; creator: PublicKey; pool: PublicKey; quoteMint: PublicKey; status: number; creatorFeeBps: number; lpFeeBps: number; sniperWindowSecs: bigint; sniperStartBps: number; virtualQuote: bigint; virtualBase: bigint; graduationQuote: bigint; curveTokens: bigint; reserveTokens: bigint; reserveHolding: PublicKey; quoteHolding: PublicKey; lpHolding: PublicKey; createdAt: bigint; graduatedAt: bigint; creatorFeesAccrued: bigint; creatorFeesClaimed: bigint; graduationTopup: bigint; graduationBurned: bigint; rules: LaunchRules; modules: number; kitConfig: PublicKey; holderVault: PublicKey; kitCallerBump: number; creatorUnlockAt: bigint; earlyWindowEnd: bigint; earlyUnlockAt: bigint; creatorBought: boolean; holderFeesAccrued: bigint; burnedOnTrades: bigint; config: PublicKey; customHook: PublicKey | null; customHookFlags: number; authorShareBps: number; authorFeesPaid: bigint; slotLaunch: number; reserved: Buffer; }
   export interface LaunchRules { holderFeeBuyBps: number; holderFeeSellBps: number; burnBuyBps: number; burnSellBps: number; maxWalletBps: number; creatorLockSecs: number; earlyWindowSecs: number; earlyLockSecs: number; }
   export interface SharedWithHolders { companion: PublicKey; amount: bigint; bounty: bigint; cranker: PublicKey; }
   export interface Split { buybackBps: number; holdersBps: number; beneficiaryBps: number; warBps: number; }

@@ -885,6 +885,72 @@
           }
         }
       ]
+    },
+    {
+      "name": "swap_route",
+      "docs": [
+        "Hookwars: a multi-hop swap. Hops run in order inside this instruction; each hop's input is",
+        "what the previous one delivered; every hop's pool hook is told the route."
+      ],
+      "discriminator": [
+        86,
+        183,
+        163,
+        144,
+        0,
+        50,
+        173,
+        28
+      ],
+      "accounts": [
+        {
+          "name": "trader",
+          "docs": [
+            "The trader: owner (or delegate) of every input holding."
+          ],
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SwapRouteArgs"
+            }
+          }
+        }
+      ]
     }
   ],
   "accounts": [
@@ -992,6 +1058,19 @@
         86,
         99,
         191
+      ]
+    },
+    {
+      "name": "RouteSwapped",
+      "discriminator": [
+        140,
+        63,
+        76,
+        190,
+        65,
+        98,
+        212,
+        129
       ]
     },
     {
@@ -1198,6 +1277,41 @@
       "code": 6037,
       "name": "NotBridgedSol",
       "msg": "the pool's quote is not bridged SOL"
+    },
+    {
+      "code": 6038,
+      "name": "EmptyRoute",
+      "msg": "a route needs at least one hop"
+    },
+    {
+      "code": 6039,
+      "name": "RouteTooLong",
+      "msg": "the route has more hops than allowed"
+    },
+    {
+      "code": 6040,
+      "name": "RouteBroken",
+      "msg": "a hop's output does not feed the next hop's input"
+    },
+    {
+      "code": 6041,
+      "name": "RoutePoolRepeated",
+      "msg": "a pool appears twice in the route"
+    },
+    {
+      "code": 6042,
+      "name": "TwapWindowTooShort",
+      "msg": "the TWAP window is shorter than the minimum"
+    },
+    {
+      "code": 6043,
+      "name": "ObservationTooOld",
+      "msg": "no observation is old enough for the window"
+    },
+    {
+      "code": 6044,
+      "name": "WrongObservations",
+      "msg": "the observations account is not this pool's"
     }
   ],
   "types": [
@@ -1590,6 +1704,45 @@
           {
             "name": "amount",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HopArgs",
+      "docs": [
+        "One hop of a route."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "direction",
+            "docs": [
+              "0 sell (base in), 1 buy (quote in), of this hop's pool."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "accounts",
+            "docs": [
+              "Remaining accounts this hop takes, the fixed ten included (`HOP_FIXED_ACCOUNTS`)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "in_hook_accounts",
+            "docs": [
+              "Of those, the input mint's token-hook slice."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "out_hook_accounts",
+            "docs": [
+              "And the output mint's."
+            ],
+            "type": "u8"
           }
         ]
       }
@@ -2292,6 +2445,113 @@
       }
     },
     {
+      "name": "RouteContext",
+      "docs": [
+        "Hookwars: the route of a swap, as the DEX tells each hop's pool hook (spec 03 section 3.2)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "route_input_mint",
+            "docs": [
+              "The mint the trader started with (the first hop's input)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "route_output_mint",
+            "docs": [
+              "The mint the trader ends with (the last hop's output)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "first_pool",
+            "docs": [
+              "The pool of the first hop."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "route_amount_in",
+            "docs": [
+              "What the first hop took from the trader, in `route_input_mint` units."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "hop_index",
+            "docs": [
+              "This hop, from 0."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "hop_count",
+            "docs": [
+              "How many hops; 0 on liquidity and initialize callbacks (not a swap)."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RouteSwapped",
+      "docs": [
+        "Hookwars: one `swap_route`, after each hop's own `Swapped`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trader",
+            "type": "pubkey"
+          },
+          {
+            "name": "route_input_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "route_output_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount_in",
+            "docs": [
+              "What the first hop took from the trader."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "amount_out",
+            "docs": [
+              "What the trader's final holding gained."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "pools",
+            "docs": [
+              "The pools, in hop order."
+            ],
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "Slot",
       "docs": [
         "One slot of a mint (docs/spec/01-token-slots.md section 1.1)."
@@ -2440,6 +2700,14 @@
               "Whether an item may answer `touch`."
             ],
             "type": "bool"
+          },
+          {
+            "name": "may_burn",
+            "docs": [
+              "Hookwars R21: Pool slots only: whether an item may burn part of a swap (through the",
+              "launchpad's pool-slot forwarding, M3b)."
+            ],
+            "type": "bool"
           }
         ]
       }
@@ -2492,6 +2760,51 @@
             "name": "hook_data",
             "docs": [
               "Opaque data for the pool hook."
+            ],
+            "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SwapRouteArgs",
+      "docs": [
+        "Hookwars: arguments of `swap_route` (spec 03 section 3.3)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount_in",
+            "docs": [
+              "Exact input of the first hop."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "min_amount_out",
+            "docs": [
+              "The least the trader's final holding must gain."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "hops",
+            "docs": [
+              "Per hop, in order; 1 ..= `MAX_ROUTE_HOPS`."
+            ],
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "HopArgs"
+                }
+              }
+            }
+          },
+          {
+            "name": "hook_data",
+            "docs": [
+              "Opaque data for every hop's pool hook (never read for the route)."
             ],
             "type": "bytes"
           }
@@ -2666,6 +2979,17 @@
           {
             "name": "ts",
             "type": "i64"
+          },
+          {
+            "name": "route",
+            "docs": [
+              "Hookwars (spec 03 section 9): the route this swap was a hop of; a plain swap is one hop."
+            ],
+            "type": {
+              "defined": {
+                "name": "RouteContext"
+              }
+            }
           }
         ]
       }

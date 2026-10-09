@@ -4,12 +4,184 @@
     "name": "hookwars_items",
     "version": "0.1.0",
     "spec": "0.1.0",
-    "description": "Hookwars: one program implementing every template (docs/spec/04-templates.md). M2: the entry points the armory calls (validate_params, manifest, combine_params, init_equip, close_equip); the hook callbacks and settle_equip are M3."
+    "description": "Hookwars: one program implementing every template (docs/spec/04-templates.md, 08-arsenal.md): the armory-facing entry points (M2), the token and pool callbacks, composites, the raid ledger and settle_equip (M3b)."
   },
   "docs": [
     "Instructions."
   ],
   "instructions": [
+    {
+      "name": "after_burn",
+      "docs": [
+        "Token slot callback (answers nothing)."
+      ],
+      "discriminator": [
+        6,
+        153,
+        69,
+        120,
+        1,
+        248,
+        63,
+        0
+      ],
+      "accounts": [
+        {
+          "name": "hook_signer"
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "source"
+        },
+        {
+          "name": "destination"
+        },
+        {
+          "name": "authority"
+        }
+      ],
+      "args": [
+        {
+          "name": "_args",
+          "type": {
+            "defined": {
+              "name": "TokenSlotArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "after_transfer",
+      "docs": [
+        "Token slot callback (answers nothing)."
+      ],
+      "discriminator": [
+        153,
+        128,
+        220,
+        5,
+        209,
+        90,
+        39,
+        89
+      ],
+      "accounts": [
+        {
+          "name": "hook_signer"
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "source"
+        },
+        {
+          "name": "destination"
+        },
+        {
+          "name": "authority"
+        }
+      ],
+      "args": [
+        {
+          "name": "_args",
+          "type": {
+            "defined": {
+              "name": "TokenSlotArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "before_burn",
+      "docs": [
+        "Token slot callback (answers nothing)."
+      ],
+      "discriminator": [
+        7,
+        177,
+        19,
+        160,
+        28,
+        229,
+        57,
+        73
+      ],
+      "accounts": [
+        {
+          "name": "hook_signer"
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "source"
+        },
+        {
+          "name": "destination"
+        },
+        {
+          "name": "authority"
+        }
+      ],
+      "args": [
+        {
+          "name": "_args",
+          "type": {
+            "defined": {
+              "name": "TokenSlotArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "before_transfer",
+      "docs": [
+        "Token slot callback."
+      ],
+      "discriminator": [
+        23,
+        118,
+        189,
+        23,
+        179,
+        222,
+        94,
+        146
+      ],
+      "accounts": [
+        {
+          "name": "hook_signer"
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "source"
+        },
+        {
+          "name": "destination"
+        },
+        {
+          "name": "authority"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "TokenSlotArgs"
+            }
+          }
+        }
+      ]
+    },
     {
       "name": "close_equip",
       "docs": [
@@ -132,8 +304,8 @@
       "name": "init_equip",
       "docs": [
         "Creates or resets the slot's `EquipState`, writes the item's registry, creates the equip",
-        "vault for an item that may cut on the token side. Return data: the registry length (`u8`),",
-        "which the armory passes to the token program as the slot's `extra_count`."
+        "vault for an item that may cut on the token side. Return data: the registry length (`u8`).",
+        "For a composite, the module list is the first remaining account."
       ],
       "discriminator": [
         244,
@@ -175,9 +347,6 @@
         },
         {
           "name": "equip_vault",
-          "docs": [
-            "cut on the token side."
-          ],
           "writable": true,
           "optional": true
         },
@@ -229,6 +398,41 @@
       ]
     },
     {
+      "name": "init_raid_ledger",
+      "docs": [
+        "Creates a mint's `RaidLedger` (permissionless; the payer pays rent)."
+      ],
+      "discriminator": [
+        142,
+        15,
+        31,
+        107,
+        117,
+        32,
+        114,
+        229
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "raid_ledger",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "manifest",
       "docs": [
         "The item's manifest, as return data (16 bytes)."
@@ -269,6 +473,249 @@
         },
         {
           "name": "max_targets",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "on_touch",
+      "docs": [
+        "`touch` of one holding (war payloads, 04 section 2.10)."
+      ],
+      "discriminator": [
+        233,
+        147,
+        223,
+        93,
+        0,
+        49,
+        250,
+        80
+      ],
+      "accounts": [
+        {
+          "name": "hook_signer"
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "source"
+        },
+        {
+          "name": "destination"
+        },
+        {
+          "name": "authority"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "TokenSlotArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "pool_after_swap",
+      "docs": [
+        "Pool-item callback after a launch-pool swap."
+      ],
+      "discriminator": [
+        216,
+        69,
+        224,
+        21,
+        151,
+        250,
+        159,
+        125
+      ],
+      "accounts": [
+        {
+          "name": "hook_signer"
+        },
+        {
+          "name": "pool"
+        },
+        {
+          "name": "base_mint"
+        },
+        {
+          "name": "quote_mint"
+        },
+        {
+          "name": "actor"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "PoolHookArgs"
+            }
+          }
+        },
+        {
+          "name": "item_ctx",
+          "type": {
+            "defined": {
+              "name": "ItemPoolContext"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "pool_before_swap",
+      "docs": [
+        "Pool-item callback before a launch-pool swap."
+      ],
+      "discriminator": [
+        52,
+        167,
+        134,
+        185,
+        26,
+        179,
+        21,
+        24
+      ],
+      "accounts": [
+        {
+          "name": "hook_signer"
+        },
+        {
+          "name": "pool"
+        },
+        {
+          "name": "base_mint"
+        },
+        {
+          "name": "quote_mint"
+        },
+        {
+          "name": "actor"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "PoolHookArgs"
+            }
+          }
+        },
+        {
+          "name": "item_ctx",
+          "type": {
+            "defined": {
+              "name": "ItemPoolContext"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "settle_equip",
+      "docs": [
+        "Pays what a slot's item collected (04 section 2.5, 08 section 2.11): the royalty, the",
+        "sender's bounty, the rest to each module's destination. Permissionless."
+      ],
+      "discriminator": [
+        4,
+        67,
+        111,
+        187,
+        224,
+        195,
+        215,
+        29
+      ],
+      "accounts": [
+        {
+          "name": "cranker",
+          "docs": [
+            "Sends the instruction, pays any holding it creates, receives the bounty."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint",
+          "writable": true
+        },
+        {
+          "name": "item"
+        },
+        {
+          "name": "composite"
+        },
+        {
+          "name": "equip_state",
+          "docs": [
+            "The slot's `EquipState`."
+          ],
+          "writable": true
+        },
+        {
+          "name": "equip_vault",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "pool_cuts"
+        },
+        {
+          "name": "pool_cuts_holding",
+          "writable": true
+        },
+        {
+          "name": "quote_mint"
+        },
+        {
+          "name": "royalty_owner"
+        },
+        {
+          "name": "royalty_token",
+          "writable": true
+        },
+        {
+          "name": "royalty_quote",
+          "writable": true
+        },
+        {
+          "name": "cranker_token",
+          "writable": true
+        },
+        {
+          "name": "cranker_quote",
+          "writable": true
+        },
+        {
+          "name": "armory_config"
+        },
+        {
+          "name": "token_program",
+          "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "slot",
           "type": "u8"
         }
       ]
@@ -374,6 +821,58 @@
         194,
         213
       ]
+    },
+    {
+      "name": "EquipSettled",
+      "discriminator": [
+        152,
+        26,
+        75,
+        255,
+        4,
+        174,
+        16,
+        98
+      ]
+    },
+    {
+      "name": "ItemCut",
+      "discriminator": [
+        130,
+        101,
+        106,
+        118,
+        133,
+        186,
+        139,
+        1
+      ]
+    },
+    {
+      "name": "RaidMarked",
+      "discriminator": [
+        218,
+        159,
+        154,
+        34,
+        2,
+        189,
+        142,
+        18
+      ]
+    },
+    {
+      "name": "ShieldTaken",
+      "discriminator": [
+        235,
+        142,
+        89,
+        210,
+        253,
+        83,
+        68,
+        94
+      ]
     }
   ],
   "errors": [
@@ -416,6 +915,66 @@
       "code": 6007,
       "name": "WrongAccount",
       "msg": "a wrong account"
+    },
+    {
+      "code": 6008,
+      "name": "BadHookSigner",
+      "msg": "the hook signer is not the caller's signer for this program"
+    },
+    {
+      "code": 6009,
+      "name": "WrongItem",
+      "msg": "the item in the arguments is not the one its accounts name"
+    },
+    {
+      "code": 6010,
+      "name": "WallHolds",
+      "msg": "the wall holds: the wallet would hold too much while under siege"
+    },
+    {
+      "code": 6011,
+      "name": "WalletTooLarge",
+      "msg": "the wallet would hold more than the cap"
+    },
+    {
+      "code": 6012,
+      "name": "NotWarSigner",
+      "msg": "only the war program may touch raid points and tickets"
+    },
+    {
+      "code": 6013,
+      "name": "NotEnoughPoints",
+      "msg": "not enough raid points this season"
+    },
+    {
+      "code": 6014,
+      "name": "NoTicket",
+      "msg": "no loot ticket"
+    },
+    {
+      "code": 6015,
+      "name": "Overflow",
+      "msg": "arithmetic overflow"
+    },
+    {
+      "code": 6016,
+      "name": "TransferTooLarge",
+      "msg": "the transfer moves more of the supply than one transfer may"
+    },
+    {
+      "code": 6017,
+      "name": "DustRefused",
+      "msg": "the send is under the minimum"
+    },
+    {
+      "code": 6018,
+      "name": "BadComposite",
+      "msg": "the composite's module list does not match the item"
+    },
+    {
+      "code": 6019,
+      "name": "RangeTooShort",
+      "msg": "the slot's range is shorter than the item's bytes"
     }
   ],
   "types": [
@@ -429,23 +988,14 @@
         "fields": [
           {
             "name": "mint",
-            "docs": [
-              "The token."
-            ],
             "type": "pubkey"
           },
           {
             "name": "slot",
-            "docs": [
-              "The slot."
-            ],
             "type": "u8"
           },
           {
             "name": "item",
-            "docs": [
-              "The item that left."
-            ],
             "type": "pubkey"
           }
         ]
@@ -488,30 +1038,18 @@
         "fields": [
           {
             "name": "mint",
-            "docs": [
-              "The token."
-            ],
             "type": "pubkey"
           },
           {
             "name": "slot",
-            "docs": [
-              "The slot."
-            ],
             "type": "u8"
           },
           {
             "name": "item",
-            "docs": [
-              "The item."
-            ],
             "type": "pubkey"
           },
           {
             "name": "config",
-            "docs": [
-              "Targets and role."
-            ],
             "type": {
               "defined": {
                 "name": "EquipConfig"
@@ -522,9 +1060,61 @@
       }
     },
     {
+      "name": "EquipSettled",
+      "docs": [
+        "`settle_equip` (04 section 5)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "royalty_token",
+            "type": "u64"
+          },
+          {
+            "name": "royalty_quote",
+            "type": "u64"
+          },
+          {
+            "name": "amount_token",
+            "type": "u64"
+          },
+          {
+            "name": "amount_quote",
+            "type": "u64"
+          },
+          {
+            "name": "burned",
+            "type": "u64"
+          },
+          {
+            "name": "bounty_token",
+            "type": "u64"
+          },
+          {
+            "name": "bounty_quote",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "EquipState",
       "docs": [
-        "One equip of a mint's slot (04 section 4). Also the owner of the slot's equip vault."
+        "One equip of a mint's slot (04 section 4, 08 section 2.11). Also the owner of the slot's",
+        "equip vault."
       ],
       "type": {
         "kind": "struct",
@@ -592,30 +1182,54 @@
           {
             "name": "runs",
             "docs": [
-              "Callbacks run (M3)."
+              "Callbacks run (informational)."
             ],
             "type": "u64"
           },
           {
             "name": "collected_token",
             "docs": [
-              "Token-side cuts taken (M3)."
+              "Token-side cuts taken, all time."
             ],
             "type": "u64"
           },
           {
             "name": "pool_owed",
             "docs": [
-              "Pool-side cuts recorded (M3)."
+              "Pool-side cuts recorded, all time."
             ],
             "type": "u64"
           },
           {
             "name": "pool_settled",
             "docs": [
-              "Pool-side cuts settled (M3)."
+              "Pool-side cuts settled, all time."
             ],
             "type": "u64"
+          },
+          {
+            "name": "token_unsettled",
+            "docs": [
+              "Unsettled token-side cuts per module (index 0 for a plain item)."
+            ],
+            "type": {
+              "array": [
+                "u64",
+                4
+              ]
+            }
+          },
+          {
+            "name": "pool_unsettled",
+            "docs": [
+              "Unsettled pool-side cuts per module."
+            ],
+            "type": {
+              "array": [
+                "u64",
+                4
+              ]
+            }
           },
           {
             "name": "reserved",
@@ -628,6 +1242,88 @@
                 32
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ItemCut",
+      "docs": [
+        "Any item cut. `side`: 0 token, 1 pool on a buy, 2 pool on a sell."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "module",
+            "type": "u8"
+          },
+          {
+            "name": "side",
+            "type": "u8"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ItemPoolContext",
+      "docs": [
+        "What the launchpad tells a pool item, besides the DEX's `PoolHookArgs` (route included)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "slot",
+            "docs": [
+              "The slot index the item is equipped in."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "docs": [
+              "The item the slot holds (the callback checks it is the first extra account)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "launch_fee_bps",
+            "docs": [
+              "The launch's own creator plus holder fee rate on this side, in basis points."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "launch_cut",
+            "docs": [
+              "What the launch's own rules cut on this side, in the side's unit."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "side_amount",
+            "docs": [
+              "The amount this callback acts on after the launch's cuts: before, the input; after, the",
+              "output it was told. On a quote side this is the quote the item's cut is computed on."
+            ],
+            "type": "u64"
           }
         ]
       }
@@ -716,6 +1412,519 @@
               "Foreign accounts it reads."
             ],
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Phase",
+      "docs": [
+        "Before or after the operation."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Before"
+          },
+          {
+            "name": "After"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolHookArgs",
+      "docs": [
+        "Arguments of a pool hook callback."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "op",
+            "docs": [
+              "The operation."
+            ],
+            "type": {
+              "defined": {
+                "name": "PoolOp"
+              }
+            }
+          },
+          {
+            "name": "phase",
+            "docs": [
+              "Before or after it."
+            ],
+            "type": {
+              "defined": {
+                "name": "Phase"
+              }
+            }
+          },
+          {
+            "name": "pool",
+            "docs": [
+              "The pool."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "base_mint",
+            "docs": [
+              "Base mint."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "quote_mint",
+            "docs": [
+              "Quote mint."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "actor",
+            "docs": [
+              "The trader or liquidity provider."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "docs": [
+              "Who receives: for a swap the owner of the holding the output is delivered to; for liquidity",
+              "the owner of the receiving holding (the LP holding on add, the base holding on remove); the",
+              "default key on initialize."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "direction",
+            "docs": [
+              "Swap direction: 0 base → quote (a sell), 1 quote → base (a buy)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "amount_in",
+            "docs": [
+              "Swap input (after any before-delta, before fees); liquidity base amount."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "amount_out",
+            "docs": [
+              "Swap output (known after); liquidity quote amount."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "base_reserve",
+            "docs": [
+              "Real base reserve."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "quote_reserve",
+            "docs": [
+              "Real quote reserve."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "virtual_base",
+            "docs": [
+              "Virtual base offset."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "virtual_quote",
+            "docs": [
+              "Virtual quote offset."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "lp_fee_bps",
+            "docs": [
+              "The pool's LP fee (after a swap: the fee actually applied)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "protocol_fee_bps",
+            "docs": [
+              "The pool's protocol fee."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "swap_count",
+            "docs": [
+              "Swaps so far (before this one)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Pool creation time."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "lp_amount",
+            "docs": [
+              "LP amount of a liquidity operation."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "hook_data",
+            "docs": [
+              "Opaque data from the caller (v4's `hookData`). The trader writes it freely: never read a",
+              "route or any fact from it."
+            ],
+            "type": "bytes"
+          },
+          {
+            "name": "route",
+            "docs": [
+              "Hookwars (spec 03 section 3.2, R5): the route of the swap this callback is part of, filled",
+              "only by the DEX. A plain swap is a one-hop route; liquidity and initialize callbacks carry",
+              "`hop_count` 0."
+            ],
+            "type": {
+              "defined": {
+                "name": "RouteContext"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolOp",
+      "docs": [
+        "What a pool hook is being told about."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Initialize"
+          },
+          {
+            "name": "AddLiquidity"
+          },
+          {
+            "name": "RemoveLiquidity"
+          },
+          {
+            "name": "Swap"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RaidMarked",
+      "docs": [
+        "A raid buy stamped on its buyer's holding (04 section 5; 06's name and fields)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "rival",
+            "type": "pubkey"
+          },
+          {
+            "name": "trader",
+            "type": "pubkey"
+          },
+          {
+            "name": "volume",
+            "type": "u64"
+          },
+          {
+            "name": "points",
+            "type": "u32"
+          },
+          {
+            "name": "loot_ticket",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RouteContext",
+      "docs": [
+        "Hookwars: the route of a swap, as the DEX tells each hop's pool hook (spec 03 section 3.2)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "route_input_mint",
+            "docs": [
+              "The mint the trader started with (the first hop's input)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "route_output_mint",
+            "docs": [
+              "The mint the trader ends with (the last hop's output)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "first_pool",
+            "docs": [
+              "The pool of the first hop."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "route_amount_in",
+            "docs": [
+              "What the first hop took from the trader, in `route_input_mint` units."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "hop_index",
+            "docs": [
+              "This hop, from 0."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "hop_count",
+            "docs": [
+              "How many hops; 0 on liquidity and initialize callbacks (not a swap)."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ShieldTaken",
+      "docs": [
+        "A Shield's sell cut."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "cut",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokenSlotArgs",
+      "docs": [
+        "Arguments of a slot item callback (the slot convention): like [`TokenHookArgs`], but each side's",
+        "data is only the slot's own range, without the epoch byte."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "op",
+            "docs": [
+              "The operation."
+            ],
+            "type": {
+              "defined": {
+                "name": "TokenSlotOp"
+              }
+            }
+          },
+          {
+            "name": "phase",
+            "docs": [
+              "Before or after it."
+            ],
+            "type": {
+              "defined": {
+                "name": "Phase"
+              }
+            }
+          },
+          {
+            "name": "slot",
+            "docs": [
+              "Which slot is calling."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "docs": [
+              "The item equipped in it."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "docs": [
+              "The mint."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "source",
+            "docs": [
+              "Source holding (the holding for a touch)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "destination",
+            "docs": [
+              "Destination holding (the mint for a burn; the holding for a touch)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "source_owner",
+            "docs": [
+              "Source owner."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "destination_owner",
+            "docs": [
+              "Destination owner (default for a burn)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "docs": [
+              "Who signed (the caller, for a touch)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "authority_is_delegate",
+            "docs": [
+              "Whether the signer acted as a delegate."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "The amount (0 for a touch)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "delta",
+            "docs": [
+              "This slot's own cut (After phase; 0 before)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_delta",
+            "docs": [
+              "All slots' cuts together (After phase; 0 before)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "source_balance",
+            "docs": [
+              "Source balance."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "destination_balance",
+            "docs": [
+              "Destination balance."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "decimals",
+            "docs": [
+              "Decimals."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "supply",
+            "docs": [
+              "Supply."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "source_data",
+            "docs": [
+              "The source holding's bytes of this slot's range (`data_len - 1` bytes; zeros when stale)."
+            ],
+            "type": "bytes"
+          },
+          {
+            "name": "destination_data",
+            "docs": [
+              "The destination holding's bytes (zeros for a burn)."
+            ],
+            "type": "bytes"
+          },
+          {
+            "name": "payload",
+            "docs": [
+              "`touch` only: the caller's payload."
+            ],
+            "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokenSlotOp",
+      "docs": [
+        "What a slot item is told about."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Transfer"
+          },
+          {
+            "name": "Burn"
+          },
+          {
+            "name": "Touch"
           }
         ]
       }

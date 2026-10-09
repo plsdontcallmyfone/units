@@ -505,6 +505,98 @@
       ]
     },
     {
+      "name": "launch_slots",
+      "docs": [
+        "Hookwars: one step of a slot launch (`prepare_launch`, `equip_prepared` or",
+        "`create_prepared_launch`, its data in `data`), the creator address signing as the launch's",
+        "creator. The remaining accounts are that instruction's."
+      ],
+      "discriminator": [
+        129,
+        230,
+        156,
+        252,
+        240,
+        247,
+        206,
+        152
+      ],
+      "accounts": [
+        {
+          "name": "launcher",
+          "signer": true
+        },
+        {
+          "name": "companion",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  97,
+                  110,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "companion.mint",
+                "account": "Companion"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "companion.mint",
+                "account": "Companion"
+              }
+            ]
+          }
+        },
+        {
+          "name": "launch_program",
+          "address": "fBvY7neytvwSuJLF1Sur5tHk7vkWyPzjyfDVDm1m2qD"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
       "name": "release",
       "docs": [
         "Anyone: sends the beneficiary the dev bag's vested tokens."
@@ -1040,6 +1132,11 @@
       "code": 6022,
       "name": "WarShareTooHigh",
       "msg": "the war chest's share is above WAR_BPS_MAX"
+    },
+    {
+      "code": 6023,
+      "name": "NotALaunchStep",
+      "msg": "only the launchpad's prepare_launch, equip_prepared and create_prepared_launch go through launch_slots"
     }
   ],
   "types": [
@@ -1883,6 +1980,15 @@
             "type": "u64"
           },
           {
+            "name": "slot_launch",
+            "docs": [
+              "Hookwars M3b: `constants::hookwars::SLOT_LAUNCH` when the launch was made with",
+              "`prepare_launch` and `create_prepared_launch` (its mint runs a slot table, its pool hook",
+              "forwards to pool items); 0 otherwise. Taken from `reserved`, so `Launch::LEN` is unchanged."
+            ],
+            "type": "u8"
+          },
+          {
             "name": "reserved",
             "docs": [
               "Reserved."
@@ -1890,7 +1996,7 @@
             "type": {
               "array": [
                 "u8",
-                22
+                21
               ]
             }
           }

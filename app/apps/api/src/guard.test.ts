@@ -5,7 +5,7 @@ import type { IncomingMessage } from 'node:http';
 import { clusterName, HttpError, intParam, RateLimiter, readJsonBody, redactUrl } from './guard.ts';
 
 const req = (body: string, headers: Record<string, string> = {}) =>
-  Object.assign(Readable.from([Buffer.from(body)]), { headers, destroy: () => undefined }) as unknown as IncomingMessage;
+  Object.assign(Readable.from([Buffer.from(body)]), { headers }) as unknown as IncomingMessage;
 
 describe('API guards (app audit 1)', () => {
   it('A-2: names a cluster, never the URL, and redacts keys from logs', () => {

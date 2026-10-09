@@ -39,7 +39,7 @@ describe('fixed addresses', () => {
 
 const k = () => Keypair.generate().publicKey;
 const emptySlot = (): SlotData => ({
-  kind: 0, equipRule: 0, bounds: { maxCutBps: 0, mayRefuse: false, mayWriteData: false, mayAnswerTouch: false }, dataOffset: 0, dataLen: 0,
+  kind: 0, equipRule: 0, bounds: { maxCutBps: 0, mayRefuse: false, mayWriteData: false, mayAnswerTouch: false, mayBurn: false }, dataOffset: 0, dataLen: 0,
   item: PublicKey.default, program: PublicKey.default, flags: 0, poolFlags: 0, equipVault: PublicKey.default, signerBump: 0, launchSignerBump: 0, dataEpoch: 0, extraCount: 0,
 });
 
@@ -49,7 +49,7 @@ function mintBytes(m: SlotMintData, pad = 0): Buffer {
 
 describe('token Mint with slots (IDL)', () => {
   const kitSlot: SlotData = { ...emptySlot(), kind: 5, equipRule: 0, dataLen: 32, program: k(), flags: 1 | 64 | 128, extraCount: 0 };
-  const raidSlot: SlotData = { ...emptySlot(), kind: 4, equipRule: 1, dataOffset: 32, dataLen: 12, item: k(), program: ITEMS_ID, flags: 1, extraCount: 2, dataEpoch: 1, bounds: { maxCutBps: 300, mayRefuse: false, mayWriteData: true, mayAnswerTouch: true } };
+  const raidSlot: SlotData = { ...emptySlot(), kind: 4, equipRule: 1, dataOffset: 32, dataLen: 12, item: k(), program: ITEMS_ID, flags: 1, extraCount: 2, dataEpoch: 1, bounds: { maxCutBps: 300, mayRefuse: false, mayWriteData: true, mayAnswerTouch: true, mayBurn: false } };
   const warSlot: SlotData = { ...emptySlot(), kind: 6, item: k(), program: ITEMS_ID };
   const m: SlotMintData = {
     version: 1, decimals: 6, supply: 1_000_000_000_000_000n, maxSupply: 0n, mintAuthority: null, freezeAuthority: null, hookAuthority: null, metadataAuthority: k(),
@@ -64,8 +64,8 @@ describe('token Mint with slots (IDL)', () => {
     expect(d.slots[1]!.bounds.maxCutBps).toBe(300);
     expect(d.slots[1]!.item.equals(raidSlot.item)).toBe(true);
   });
-  it('a slot is 113 bytes (01 M1 notes)', () => {
-    expect(encode(tyOf(IDLS.token!, { defined: { name: 'Slot' } }), emptySlot()).length).toBe(113);
+  it('a slot is 114 bytes (01 M1 notes, plus SlotBounds.may_burn from M3b)', () => {
+    expect(encode(tyOf(IDLS.token!, { defined: { name: 'Slot' } }), emptySlot()).length).toBe(114);
   });
   it('calls slots as M1 does', () => {
     expect(isCalled(kitSlot, 'transfer')).toBe(true);
