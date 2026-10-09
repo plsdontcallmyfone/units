@@ -1,0 +1,5 @@
+Hookwars app
+packages/sdk and packages/shared are derived from the Bordrless SDK
+(https://github.com/BordrlessDex/bordrless-sdk), licensed under the Apache License 2.0 (see LICENSE).
+Files changed from the original carry a "Changed by Hookwars" line, as section 4(b) of the License
+requires.
