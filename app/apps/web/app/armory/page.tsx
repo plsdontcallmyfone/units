@@ -12,7 +12,7 @@ export default async function Armory() {
   return (
     <>
       <Head eyebrow="Armory" title="Hooks are items" lede="Each item is a registered template with its own parameters. Its owner earns a royalty from what it collects, every time it runs, on any token that equips it." />
-      <div className="stats" style={{ marginBottom: 16 }}>
+      <div className="stats">
         <Stat label="Templates defined" value={9} sub="04 section 3" />
         <Stat label="Registered here" value={templates.ok ? reg.length : '-'} sub="on this cluster" />
         <Stat label="Items" value={items.ok ? list.length : '-'} sub="not forged away" />

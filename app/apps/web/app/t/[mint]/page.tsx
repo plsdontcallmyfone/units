@@ -22,7 +22,7 @@ export default async function TokenPage({ params }: { params: Promise<{ mint: st
   return (
     <>
       <Head eyebrow="Token" title={short(mint, 6)} lede="Slots, the items in them, proposals, the war chest and its treaties. Bounds were fixed at launch; only the items change." right={<Link className="btn" href={`/t/${mint}/generals`}>Generals</Link>} />
-      <div className="stats" style={{ marginBottom: 16 }}>
+      <div className="stats">
         <Stat label="Slots" value={slots.ok ? s.length : '-'} sub={slots.ok ? `${s.filter((x) => x.item).length} filled` : undefined} />
         <Stat label="Open proposals" value={proposals.ok ? proposals.data.filter((p) => p.status === 'open').length : '-'} />
         <Stat label="War chest" value={war.ok ? (war.data ? 'open' : 'none') : '-'} sub={war.ok && war.data?.chest ? short(war.data.chest) : 'opened by init_war'} />

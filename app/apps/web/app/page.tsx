@@ -24,7 +24,7 @@ export default async function Projects() {
         lede="Every token here runs hooks that are owned items. Its holders vote what fills each slot, aim raids at rivals, and fund a war chest from their own fees."
         right={<Link className="btn primary" href="/launch">Launch a token</Link>}
       />
-      <div className="stats" style={{ marginBottom: 16 }}>
+      <div className="stats">
         <Stat label="Launches indexed" value={launches.ok ? int(launches.data.items.length) : DASH} sub="LaunchCreated events" />
         <Stat label="Programs live" value={status.ok ? `${deployed} of ${programs.length}` : DASH} sub={status.ok ? (status.data.cluster.includes('devnet') ? 'devnet' : status.data.cluster) : 'backend unreachable'} />
         <Stat label="Battle events" value={feed.ok ? int(feed.data.items.length) : DASH} sub="raids, sieges, forges" />
@@ -38,7 +38,7 @@ export default async function Projects() {
             <Empty
               title="No launches on this cluster yet"
               what="A launch appears here once its create_launch lands and the indexer reads its LaunchCreated event. Each card will show its slots, war chest and whether it is under siege."
-              next={<>Start one from <Link href="/launch" style={{ color: 'var(--accent)' }}>Launch</Link>. It needs the launchpad, armory and items programs on this cluster (see Network).</>}
+              next={<>Start one from <Link href="/launch">Launch</Link>. It needs the launchpad, armory and items programs on this cluster (see Network).</>}
             />
           ) : (
             <table>
