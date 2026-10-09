@@ -1,3 +1,4 @@
+// Changed by Hookwars: R20 protocol transfers, protocol vaults and item cuts.
 //! What the callbacks do (`docs/hooks-v2.md` §4.9), as pure functions of the config, the token
 //! program's arguments, the reward vault's balance and the time, so the order of the rules is
 //! the same on chain and in host tests. The callbacks bind the accounts first
@@ -62,8 +63,25 @@ pub fn before_transfer(
         KitError::UnsupportedOperation
     );
     let vault = vault_of(config, vault_amount)?;
-    let source_excluded = config.is_excluded(&args.source_owner);
-    let destination_excluded = config.is_excluded(&args.destination_owner);
+    // Hookwars R20: in a verified protocol transfer (R16) the token program tells the marker as
+    // the authority. Its source is a protocol vault, and a program-owned destination is a protocol
+    // vault too (a royalty holding, a partner's treaty inbox): both excluded. Protocol programs
+    // move what they hold only through `transfer_from_protocol` (R24), so these owners are
+    // excluded on every movement and never counted in `eligible`.
+    let protocol = args.authority == crate::constants::PROTOCOL_TRANSFER_MARKER;
+    let source_excluded = protocol || config.is_excluded(&args.source_owner);
+    let destination_basic = config.is_excluded_basic(&args.destination_owner);
+    // A wallet is a key on the curve; computed once (it is not cheap) and only when needed.
+    let destination_on_curve = !destination_basic && args.destination_owner.is_on_curve();
+    let destination_excluded = destination_basic
+        || (!destination_on_curve
+            && (protocol || crate::state::is_protocol_vault_of(&config.mint, &args.destination_owner)));
+    // Hookwars R20: the item slots' cuts on this transfer, all paid into equip vaults (excluded).
+    let items_cut = args.delta;
+    let received = args
+        .amount
+        .checked_sub(items_cut)
+        .ok_or(KitError::MathOverflow)?;
 
     // 1. Where the token may go.
     require!(
@@ -72,10 +90,7 @@ pub fn before_transfer(
     );
     if config.rewards_on() && !destination_excluded {
         // Wallets only: no program-owned account can hold the token.
-        require!(
-            args.destination_owner.is_on_curve(),
-            KitError::DestinationNotAllowed
-        );
+        require!(destination_on_curve, KitError::DestinationNotAllowed);
     }
 
     // 2. What arrived for holders, at the eligible supply before this transfer.
@@ -101,7 +116,7 @@ pub fn before_transfer(
         .ok_or(KitError::MathOverflow)?;
     let destination_after = args
         .destination_balance
-        .checked_add(args.amount)
+        .checked_add(received)
         .ok_or(KitError::MathOverflow)?;
     let early = config.has(modules::EARLY_BUYER_LOCK);
 
@@ -148,7 +163,7 @@ pub fn before_transfer(
         {
             destination.early_locked = destination
                 .early_locked
-                .checked_add(args.amount)
+                .checked_add(received)
                 .ok_or(KitError::MathOverflow)?;
         }
         if now >= config.early_unlock_at {
@@ -161,12 +176,13 @@ pub fn before_transfer(
         }
     }
 
-    // 9. The eligible supply: the kit answers no deltas, so what leaves is what arrives.
+    // 9. The eligible supply. The kit answers no deltas; the item slots' cuts (Hookwars R20) go
+    //    to equip vaults, which are excluded, so a holder destination receives `amount - cut`.
     match (source_excluded, destination_excluded) {
         (true, false) => {
             config.eligible = config
                 .eligible
-                .checked_add(args.amount)
+                .checked_add(received)
                 .ok_or(KitError::MathOverflow)?;
         }
         (false, true) => {
@@ -175,7 +191,13 @@ pub fn before_transfer(
                 .checked_sub(args.amount)
                 .ok_or(KitError::MathOverflow)?;
         }
-        _ => {}
+        (false, false) => {
+            config.eligible = config
+                .eligible
+                .checked_sub(items_cut)
+                .ok_or(KitError::MathOverflow)?;
+        }
+        (true, true) => {}
     }
 
     // 10. The data of each holder side that changed. Excluded owners' data is never written.

@@ -27,6 +27,7 @@ members = [
   "programs/armory_stub",
   "programs/launch_stub",
   "programs/war_stub",
+  "programs/items_stub",
   "programs/hookwars_armory",
   "programs/hookwars_items",
   "programs/hookwars_war",
@@ -51,6 +52,7 @@ slot_tester = "DxNYhg2wiqR27YtzKntfuPfxfRb7T1GaEVPaaQ52NxxP"
 armory_stub = "7xnkyX5B7Ywz86Cu2ofM5T2z2UPmy1qhpgrAuK9Kk5MU"
 launch_stub = "fBvY7neytvwSuJLF1Sur5tHk7vkWyPzjyfDVDm1m2qD"
 war_stub = "5vJnBvr33jpsfYxMY2pvNf6tF9tkj8eaZ6goFtByUWA2"
+items_stub = "8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv"
 hookwars_armory = "7xnkyX5B7Ywz86Cu2ofM5T2z2UPmy1qhpgrAuK9Kk5MU"
 hookwars_items = "8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv"
 war_items_stub = "8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv"

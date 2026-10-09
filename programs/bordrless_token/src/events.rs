@@ -1,4 +1,4 @@
-// Changed by Hookwars: slot events; Transferred gains slot_cuts.
+// Changed by Hookwars: slot events; Transferred gains slot_cuts; R21 SlotInfo.may_burn.
 //! Events of the token standard, emitted by self-CPI. Transfers, mints and burns carry the
 //! post-balances of the holdings they touched, so an indexer keeps exact balances.
 
@@ -81,6 +81,8 @@ pub struct SlotInfo {
     pub may_refuse: bool,
     pub may_write_data: bool,
     pub may_answer_touch: bool,
+    /// Hookwars R21.
+    pub may_burn: bool,
     pub data_offset: u8,
     pub data_len: u8,
     pub equip_vault: Pubkey,

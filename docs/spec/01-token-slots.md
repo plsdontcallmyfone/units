@@ -125,7 +125,7 @@ pub struct Mint {
 ```
 
 Size: `Mint::LEN = 519 + 33 + 1 + 112 * MAX_SLOTS` bytes (M1 built 113 per slot, see M1 notes;
-measured: 1,005 bytes at `MAX_SLOTS` 4, rent 7,885,680 lamports against 4,503,120 upstream,
+measured: 1,005 bytes at `MAX_SLOTS` 4, rent 7,885,680 lamports against 4,503,120 upstream (R21 adds `may_burn`: 1,009 bytes, rent 7,913,520, measured on branch r20),
 `budgets.rs::the_slot_table_size_and_rent`) (upstream `Mint` is 519 bytes including
 the 8-byte discriminator: 511 from the fields of `state.rs:10-50` plus 8; the SDK's integration
 guide `docs/integration/01-the-standard.md` lists the same 519). Every mint pays this size, slots or

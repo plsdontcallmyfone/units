@@ -1,4 +1,4 @@
-// Changed by Hookwars: slot constants and the Hookwars program ids the token program checks.
+// Changed by Hookwars: R20 protocol-transfer marker; slot constants and the Hookwars program ids the token program checks.
 //! Constants of the token standard.
 
 /// Seed of a holding: `["holding", mint, owner]`.
@@ -38,3 +38,11 @@ pub const LAUNCH_ID: Pubkey = Pubkey::from_str_const("fBvY7neytvwSuJLF1Sur5tHk7v
 pub const BRIDGE_ID: Pubkey = Pubkey::from_str_const("5TzyKXK6tzSrkkRdximMebWoV4rRjuyzEwCnisS6DKwj");
 /// Programs whose PDAs may send protocol payouts that skip item slots (R16).
 pub const PROTOCOL_SOURCE_PROGRAMS: [Pubkey; 3] = [ITEMS_ID, ARMORY_ID, WAR_ID];
+/// Seed of [`PROTOCOL_TRANSFER_MARKER`].
+pub const PROTOCOL_TRANSFER_SEED: &[u8] = b"protocol-transfer";
+/// Hookwars R20: in a `transfer_from_protocol` the Locked slot is told this as `authority`. It is
+/// `["protocol-transfer"]` under this program, a PDA this program never signs for, so no ordinary
+/// transfer can carry it: a Locked hook (the kit) reads it as "the source is a verified protocol
+/// vault (R16)". Checked against its derivation in the tests.
+pub const PROTOCOL_TRANSFER_MARKER: Pubkey =
+    Pubkey::from_str_const("HHwFz2okVQVyTE3HLsKSM2a7u4Y2DW729MbmkSeNoWEG");

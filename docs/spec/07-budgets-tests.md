@@ -57,7 +57,7 @@ Measured in M1 (`budgets.rs::transfers_buys_and_sells_with_zero_to_three_cutting
 pool, `slot_tester` items; full table in `01-token-slots.md`, M1 notes): wallet transfer with 3
 cutting slots 631 v0 bytes (293 with a table), 6 trace entries, height 2, 62,856 CU; DEX buy with 3
 cutting slots 877 bytes (322 with a table), 10 trace entries, height 3, 106,733 CU. Mint with the
-slot table: 1,005 bytes, rent 7,885,680 lamports (upstream 519 bytes, 4,503,120). Launch-pool paths
+slot table: 1,005 bytes, rent 7,885,680 lamports (upstream 519 bytes, 4,503,120); with R21 `may_burn`, 1,009 bytes, rent 7,913,520 (`budgets.rs::the_slot_table_size_and_rent`, branch r20). Launch-pool paths
 are still to measure (M3).
 
 Measured in M2 (`budgets.rs::armory_execute_and_forge`; "with table" puts every account the

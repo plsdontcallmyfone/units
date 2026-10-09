@@ -799,6 +799,11 @@ dependencies = [
  "bordrless-token",
  "half-life",
  "hook-tester",
+ "hookwars-armory",
+ "hookwars-common",
+ "hookwars-items",
+ "items-stub",
+ "launch-stub",
  "litesvm",
  "slot-tester",
  "solana-account",
@@ -810,6 +815,7 @@ dependencies = [
  "solana-signer",
  "solana-transaction",
  "tax-hook",
+ "war-stub",
 ]
 
 [[package]]
@@ -1660,6 +1666,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "879f10e63c20629ecabbb64a8010319738c66a5cd0c29b02d63d272b03751d01"
 dependencies = [
  "generic-array",
+]
+
+[[package]]
+name = "items-stub"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "bordrless-token",
 ]
 
 [[package]]

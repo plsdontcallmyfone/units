@@ -25,6 +25,19 @@ pub const BRIDGE_ID: Pubkey =
     Pubkey::from_str_const("5TzyKXK6tzSrkkRdximMebWoV4rRjuyzEwCnisS6DKwj");
 /// The token program (`bordrless_token`).
 pub const TOKEN_ID: Pubkey = bordrless_token::ID;
+/// Hookwars R20: the items program (owner of equip vaults and the pool-cuts vault).
+pub const ITEMS_ID: Pubkey = bordrless_token::constants::ITEMS_ID;
+/// Hookwars R20: the war program (owner of war chests and treaty inboxes).
+pub const WAR_ID: Pubkey = bordrless_token::constants::WAR_ID;
+/// Hookwars R20: the `authority` the token program tells a Locked hook in a verified
+/// `transfer_from_protocol` (R16).
+pub const PROTOCOL_TRANSFER_MARKER: Pubkey = bordrless_token::constants::PROTOCOL_TRANSFER_MARKER;
+/// Hookwars R20: slots per mint (equip vaults are derived for each index).
+pub const MAX_SLOTS: usize = bordrless_token::constants::MAX_SLOTS;
+/// Hookwars R20: seeds of the protocol vaults derivable from a mint.
+pub const POOL_CUTS_SEED: &[u8] = b"pool-cuts";
+pub const WAR_CHEST_SEED: &[u8] = b"war-chest";
+pub const TREATY_INBOX_SEED: &[u8] = b"treaty-inbox";
 /// The token program's signer of every callback to the kit: `["hook-authority", KIT_ID]` under
 /// the token program. The token program signs each hook's callbacks with a PDA of that hook's
 /// id, so a signer another hook received and passed on in a CPI of its own is never this one.

@@ -1,5 +1,5 @@
 // Changed by Hookwars: new file, M1 measurements (docs/spec/07-budgets-tests.md section 3); M2:
-// the armory's execute (an equip by vote) and forge; M3a route and observation ring measurements.
+// the armory's execute (an equip by vote) and forge; M3a route and observation ring measurements; R21 slot size.
 //! What slots cost: a wallet transfer, a DEX buy and a DEX sell of a slot mint with 0 to 3
 //! cutting item slots (each item answering one cut, the worst case), without and with a lookup
 //! table holding every account the message may load from one. Each line printed is one
@@ -194,7 +194,8 @@ fn the_slot_table_size_and_rent() {
         w.env.rent(len),
         w.env.rent(upstream)
     );
-    assert_eq!(len, upstream + 33 + 1 + 113 * bordrless_token::constants::MAX_SLOTS);
+    // Hookwars R21: a `Slot` is 114 bytes since `SlotBounds.may_burn` (was 113 at M1).
+    assert_eq!(len, upstream + 33 + 1 + 114 * bordrless_token::constants::MAX_SLOTS);
 }
 
 /// M2: `execute` of a passed vote that moves a slot from one item to another (close_equip,

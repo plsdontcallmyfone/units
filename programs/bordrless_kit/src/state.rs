@@ -1,3 +1,4 @@
+// Changed by Hookwars: R20 protocol vaults are excluded owners.
 //! Accounts and per-holder state of the kit: [`KitConfig`] (one per token, at `["kit", mint]`),
 //! the arguments `init` takes ([`KitInitArgs`]) and the 64 bytes the kit keeps in every holding
 //! ([`HolderData`]).
@@ -258,9 +259,25 @@ impl KitConfig {
     /// creator, holding a vesting dev bag or what it buys back to burn): never settled, capped,
     /// counted in `eligible`, and never able to claim. Any other creator is a holder like anyone.
     pub fn is_excluded(&self, owner: &Pubkey) -> bool {
+        self.is_excluded_basic(owner) || self.is_protocol_vault(owner)
+    }
+
+    /// The upstream exclusions: the pool, the launch and a companion creator.
+    pub fn is_excluded_basic(&self, owner: &Pubkey) -> bool {
         *owner == self.pool
             || *owner == self.launch
             || (self.creator_is_companion && *owner == self.creator)
+    }
+
+    /// Hookwars R20: whether `owner` is one of this mint's protocol vault owners, derived from the
+    /// mint: each `["equip", mint, slot]` and `["pool-cuts", mint]` under the items program,
+    /// `["war-chest", mint]` and `["treaty-inbox", mint]` under the war program. A wallet (a key on
+    /// the curve) is never one, so the derivations run only for program addresses.
+    pub fn is_protocol_vault(&self, owner: &Pubkey) -> bool {
+        if owner.is_on_curve() {
+            return false;
+        }
+        is_protocol_vault_of(&self.mint, owner)
     }
 
     /// Whether the token may never be sent to `owner` (§4.5): the launch, this config (at
@@ -275,6 +292,16 @@ impl KitConfig {
             || *owner == LAUNCH_ID
             || *owner == crate::ID
     }
+}
+
+/// Hookwars R20: whether `owner` (a program address) is one of `mint`'s protocol vault owners.
+pub fn is_protocol_vault_of(mint: &Pubkey, owner: &Pubkey) -> bool {
+    let m = mint.as_ref();
+    (0..MAX_SLOTS as u8).any(|slot| {
+        Pubkey::find_program_address(&[bordrless_hook::EQUIP_SEED, m, &[slot]], &ITEMS_ID).0 == *owner
+    }) || Pubkey::find_program_address(&[POOL_CUTS_SEED, m], &ITEMS_ID).0 == *owner
+        || Pubkey::find_program_address(&[WAR_CHEST_SEED, m], &WAR_ID).0 == *owner
+        || Pubkey::find_program_address(&[TREATY_INBOX_SEED, m], &WAR_ID).0 == *owner
 }
 
 /// The kit's 64 bytes in a holding, little-endian (§4.4): `snapshot` (bytes 0..16) and `owed`
