@@ -1,6 +1,7 @@
 // Changed by Hookwars: new file (M2), the armory; M3b: composites (create_composite, the module
 // list passed to init_equip), the Performance reader on the pool's ring, settle_bounty_bps;
-// security review 1: H-1 fail_stale, H-2 royalty recipients, M-1 finalize, M-2 proposal threshold, I-3.
+// security review 1: H-1 fail_stale, H-2 royalty recipients, M-1 finalize, M-2 proposal threshold, I-3;
+// security review 2, L-D: execute and the performance revert refresh a slot launch's pool registry.
 //! `hookwars_armory` (docs/spec/02-armory.md): templates, items as supply-1 tokens on the token
 //! standard, royalties and their claims, equip rules (holder vote with notice, performance revert,
 //! locked), equipping at launch (signed by the launchpad), loot minting (signed by the war program),
@@ -269,7 +270,7 @@ pub mod hookwars_armory {
     }
 
     /// Applies a passed proposal after its notice (02 section 6.4).
-    pub fn execute(ctx: Context<Execute>) -> Result<()> {
+    pub fn execute<'info>(ctx: Context<'info, Execute<'info>>) -> Result<()> {
         process_execute(ctx)
     }
 
@@ -334,7 +335,7 @@ pub mod hookwars_armory {
     }
 
     /// Checks a `Performance` slot's condition and reverts it when due (02 section 6.7).
-    pub fn check_performance(ctx: Context<CheckPerformance>) -> Result<()> {
+    pub fn check_performance<'info>(ctx: Context<'info, CheckPerformance<'info>>) -> Result<()> {
         process_check_performance(ctx)
     }
 
@@ -1827,7 +1828,76 @@ fn process_finalize(ctx: Context<Finalize>) -> Result<()> {
     Ok(())
 }
 
-fn process_execute(ctx: Context<Execute>) -> Result<()> {
+/// `sha256("global:refresh_pool_registry")[..8]`, the launchpad's instruction (checked in a unit
+/// test against the hash).
+pub const REFRESH_POOL_REGISTRY_DISCRIMINATOR: [u8; 8] = [191, 148, 145, 179, 73, 189, 85, 221];
+
+/// Security review 2, L-D: after an equip of a `Pool` or `Relation` slot, refresh the launch pool's
+/// registry in the same instruction, so no swap runs against a registry that does not list the
+/// slot's new item (the launchpad refuses such swaps). The remaining accounts of the equip are
+/// `[launch program, launch, pool registry, then each forwarded pool slot's item registry in slot
+/// order]`; the first two are always required for these slots. A token that is not a slot launch
+/// (no launch account yet, or an upstream launch) has no pool items to forward: nothing to refresh.
+fn refresh_after_equip<'info>(
+    equip: &EquipCtx<'info>,
+    slot: u8,
+    remaining: &[AccountInfo<'info>],
+) -> Result<()> {
+    let mint = read_mint(&equip.token_mint.to_account_info())?;
+    let kind = mint.slots[usize::from(slot)].kind;
+    if kind != hookwars_common::kind::POOL && kind != hookwars_common::kind::RELATION {
+        return Ok(());
+    }
+    require!(remaining.len() >= 2, ArmoryError::WrongAccount);
+    let mint_key = equip.token_mint.key();
+    require_keys_eq!(remaining[0].key(), ids::LAUNCH_ID, ArmoryError::WrongAccount);
+    require_keys_eq!(remaining[1].key(), pda::launch(&mint_key).0, ArmoryError::WrongAccount);
+    let launch = &remaining[1];
+    if *launch.owner != ids::LAUNCH_ID || launch.data_is_empty() {
+        return Ok(());
+    }
+    let slot_launch = bordrless_launch::state::Launch::try_deserialize(&mut &launch.try_borrow_data()?[..])
+        .map(|l| l.is_slot_launch())
+        .unwrap_or(false);
+    if !slot_launch {
+        return Ok(());
+    }
+    require!(remaining.len() >= 3, ArmoryError::WrongAccount);
+    let payer = equip.payer.to_account_info();
+    let system = equip.token.system_program.to_account_info();
+    let mut metas = vec![
+        AccountMeta::new(payer.key(), true),
+        AccountMeta::new_readonly(launch.key(), false),
+        AccountMeta::new_readonly(mint_key, false),
+        AccountMeta::new(remaining[2].key(), false),
+        AccountMeta::new_readonly(system.key(), false),
+    ];
+    let mut infos = vec![
+        payer,
+        launch.clone(),
+        equip.token_mint.to_account_info(),
+        remaining[2].clone(),
+        system,
+    ];
+    for r in &remaining[3..] {
+        metas.push(AccountMeta {
+            pubkey: r.key(),
+            is_signer: false,
+            is_writable: r.is_writable,
+        });
+        infos.push(r.clone());
+    }
+    infos.push(remaining[0].clone());
+    let ix = anchor_lang::solana_program::instruction::Instruction {
+        program_id: ids::LAUNCH_ID,
+        accounts: metas,
+        data: REFRESH_POOL_REGISTRY_DISCRIMINATOR.to_vec(),
+    };
+    anchor_lang::solana_program::program::invoke(&ix, &infos)?;
+    Ok(())
+}
+
+fn process_execute<'info>(ctx: Context<'info, Execute<'info>>) -> Result<()> {
     let ts = now()?;
     let p = &ctx.accounts.proposal;
     require!(
@@ -1850,6 +1920,7 @@ fn process_execute(ctx: Context<Execute>) -> Result<()> {
         .accounts
         .equip
         .equip_to(&params, slot, item, &config, false, false)?;
+    refresh_after_equip(&ctx.accounts.equip, slot, ctx.remaining_accounts)?;
     ctx.accounts.proposal.status = proposal_status::EXECUTED;
     ctx.accounts.slot_state.open_proposal = None;
     emit_cpi!(EquipApplied {
@@ -1944,7 +2015,7 @@ fn process_fail_stale(ctx: Context<FailStale>) -> Result<()> {
     Ok(())
 }
 
-fn process_check_performance(ctx: Context<CheckPerformance>) -> Result<()> {
+fn process_check_performance<'info>(ctx: Context<'info, CheckPerformance<'info>>) -> Result<()> {
     let ts = now()?;
     let st = &ctx.accounts.slot_state;
     let mint_key = ctx.accounts.equip.token_mint.key();
@@ -2018,6 +2089,7 @@ fn process_check_performance(ctx: Context<CheckPerformance>) -> Result<()> {
         .accounts
         .equip
         .equip_to(&params, slot, launch_item, &config, false, true)?;
+    refresh_after_equip(&ctx.accounts.equip, slot, ctx.remaining_accounts)?;
     ctx.accounts.slot_state.condition_since = None;
     emit_cpi!(PerformanceReverted {
         mint: mint_key,
@@ -2195,5 +2267,14 @@ mod tests {
         assert_eq!(bordrless_swap::ID, ids::SWAP_ID);
         assert_eq!(bordrless_token::constants::LAUNCH_ID, ids::LAUNCH_ID);
         assert_eq!(bordrless_swap::constants::BRIDGED_SOL_MINT, ids::BRIDGED_SOL_MINT);
+    }
+}
+
+#[cfg(test)]
+mod security_review_tests {
+    #[test]
+    fn the_refresh_discriminator_is_the_launchpads() {
+        let h = anchor_lang::solana_program::hash::hash(b"global:refresh_pool_registry");
+        assert_eq!(&h.to_bytes()[..8], &super::REFRESH_POOL_REGISTRY_DISCRIMINATOR);
     }
 }

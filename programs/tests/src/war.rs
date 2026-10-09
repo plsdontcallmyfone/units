@@ -56,6 +56,8 @@ pub const TEST_PARAMS: WarParams = WarParams {
     // stand, and `tests/security.rs` sets a tight one.
     raze_max_discount_bps: 1_000,
     bounty_max_point_bps: 10_000,
+    // Security review 2, M-B: TEST, raid volume scored per lamport the chest received in the season.
+    raid_volume_per_funded: 1_000,
 };
 
 /// TEST template ids (the armory numbers its templates densely; these are the suites').

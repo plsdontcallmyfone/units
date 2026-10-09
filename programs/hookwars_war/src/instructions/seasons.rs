@@ -1,3 +1,4 @@
+// Changed by Hookwars: security review 2: raid volume capped by season funding (M-B)
 //! Seasons (05 section 10): opening, king of the hill in O(1) per call, and the prize, a share of
 //! protocol fees that already exist (R14).
 
@@ -106,7 +107,13 @@ pub fn process_submit_candidate(ctx: Context<SubmitCandidate>, number: u32) -> R
                 .max(ledger.season_volume(number));
         }
     }
-    let counters = state.counters_of(number);
+    let mut counters = state.counters_of(number);
+    // Security review 2, M-B: self-raid loops wash raid volume for only their fees, so the score
+    // counts raid volume only up to `raid_volume_per_funded` times what the chest received in the
+    // season (real money, which stays in the token's chest).
+    counters.raid_volume_won = counters
+        .raid_volume_won
+        .min(counters.funded.saturating_mul(params.raid_volume_per_funded));
     let mint = state.mint;
     let score = ctx
         .accounts

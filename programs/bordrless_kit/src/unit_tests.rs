@@ -1,4 +1,4 @@
-// Changed by Hookwars: unit tests of the R9 mint setup and the R10 holder-rewards read.
+// Changed by Hookwars: unit tests of the R9 mint setup and the R10 holder-rewards read; security review 1: the H-2 source rule.
 //! Host tests of the kit's pure parts: the reward math (§4.7, §4.8), the callbacks' rules in the
 //! order of §4.9, and the mirror (§4.13) against the program's own sync.
 
@@ -1136,6 +1136,45 @@ fn wallets_only_with_holder_rewards() {
     );
     l.send(a, wallet(), 1).unwrap();
     l.send(a, c.pool, 1).unwrap();
+}
+
+/// Security review 1, H-2: a program address that received in a protocol transfer (excluded, never
+/// stamped, never in `eligible`) may not move the token as a holder: neither an ordinary transfer
+/// nor a burn, so it can never settle rewards since launch on that balance.
+#[test]
+fn an_unstamped_program_address_cannot_move_as_a_holder() {
+    let mut l = Ledger::new(modules::HOLDER_REWARDS);
+    let c = l.kit.config.clone();
+    let a = wallet();
+    l.send(c.pool, a, 1_000_000).unwrap();
+    l.share(5_000).unwrap();
+    l.now += 7_200;
+    // A protocol vault (a royalty owner, say) holds some; it pays a program address (the
+    // attacker's PDA claimant) through a protocol transfer: both excluded.
+    let vault_owner = pda();
+    l.balances.insert(vault_owner, (10_000, [0; 64]));
+    let attacker = pda();
+    let mut args = transfer(&l.kit.config, vault_owner, attacker, 10_000, 10_000, 0, [0; 64], [0; 64]);
+    args.authority = PROTOCOL_TRANSFER_MARKER;
+    let mut config = l.kit.config.clone();
+    let ret = rules::before_transfer(&mut config, &l.kit.key, &args, Some(l.vault), l.now).unwrap();
+    assert!(ret.destination_hook_data.is_none(), "an excluded destination is never stamped");
+    assert_eq!(config.eligible, l.kit.config.eligible, "nothing entered eligible");
+    l.kit.config = config;
+    l.balances.insert(vault_owner, (0, [0; 64]));
+    l.balances.insert(attacker, (10_000, [0; 64]));
+    // The attack: an ordinary transfer (the program signs as its PDA) to a wallet. Refused.
+    assert_eq!(code(l.send(attacker, wallet(), 10_000)), kit(KitError::SourceNotAllowed));
+    // Nor a burn.
+    assert_eq!(code(l.burn(attacker, 1)), kit(KitError::SourceNotAllowed));
+    // A wallet whose data was never stamped (it bought before any reward) still moves freely.
+    let early = wallet();
+    let mut fresh = Ledger::new(modules::HOLDER_REWARDS);
+    let fc = fresh.kit.config.clone();
+    fresh.send(fc.pool, early, 500).unwrap();
+    assert_eq!(fresh.get(&early).1, [0; 64]);
+    fresh.send(early, wallet(), 100).unwrap();
+    fresh.check();
 }
 
 #[test]

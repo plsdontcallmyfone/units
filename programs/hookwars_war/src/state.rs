@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M4/M5); M3b: POINT_UNIT_LAMPORTS and LOOT_MIN_RAID_LAMPORTS in WarParams; security review 1: raze_max_discount_bps (M-3), bounty_max_point_bps (M-6)
+// Changed by Hookwars: new file (M4/M5); M3b: POINT_UNIT_LAMPORTS and LOOT_MIN_RAID_LAMPORTS in WarParams; security review 1: raze_max_discount_bps (M-3), bounty_max_point_bps (M-6); security review 2: SeasonCounters.funded, raid_volume_per_funded (M-B)
 //! Accounts of the war program (05 section 2).
 
 use anchor_lang::prelude::*;
@@ -58,6 +58,10 @@ pub struct WarParams {
     /// Security review 1, M-6: one raid point never pays more than this share of the quote volume
     /// it stands for (`point_unit_lamports`), in basis points, whatever the War orders' rate. To set.
     pub bounty_max_point_bps: u16,
+    /// Security review 2, M-B: raid volume a season score counts per lamport the chest received in
+    /// the season. Washed raid volume costs nothing but fees; real chest funding is real money, so
+    /// the score can only be bought at this price. 0 leaves raid volume out of the score. To set.
+    pub raid_volume_per_funded: u64,
 }
 
 impl WarParams {
@@ -167,6 +171,9 @@ pub struct SeasonCounters {
     pub times_besieged: u32,
     pub counter_strikes: u32,
     pub treaty_secs: u64,
+    /// Security review 2, M-B: what the chest received in this season (bridged SOL, from
+    /// `note_funding`). The score counts raid volume only up to `raid_volume_per_funded` times this.
+    pub funded: u64,
 }
 
 /// `WarState` at `["war", mint]`: war-side facts only (05 section 2.4).

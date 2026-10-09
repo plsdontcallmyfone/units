@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file, helpers for the armory and items programs (M2).
+// Changed by Hookwars: new file, helpers for the armory and items programs (M2); security review 1 and 2: propose and finalize accounts, TEST threshold, refresh_tail.
 //! The armory in the LiteSVM suites: loads `hookwars_armory`, `hookwars_items`, and the test-only
 //! `launch_stub` (at the launchpad's id: signs `["armory-caller", mint]`) and `war_stub` (at the
 //! war program's id: signs `["loot-signer"]`); initializes the armory with [`TEST_PARAMS`] and
@@ -569,7 +569,7 @@ impl Hw {
         let current = m.slots[usize::from(p.slot)].item;
         let old = (current != Pubkey::default()).then_some(current);
         let equip = self.equip_accounts(payer, &p.mint, p.slot, old, p.item);
-        armory_ix(
+        let ix = armory_ix(
             hookwars_armory::accounts::Execute {
                 config: pda::config().0,
                 proposal: *proposal,
@@ -579,7 +579,37 @@ impl Hw {
                 program: ids::ARMORY_ID,
             },
             hookwars_armory::instruction::Execute {},
-        )
+        );
+        let mut ix = ix;
+        ix.accounts.extend(self.refresh_tail(&p.mint, p.slot));
+        ix
+    }
+
+    /// Security review 2, L-D: the accounts an equip of slot `slot` appends for the pool registry
+    /// refresh (`[launch program, launch, pool registry]`, no item registries: the stand-in
+    /// launchpad of these suites makes no slot launches). Empty for other slot kinds.
+    pub fn refresh_tail(&self, mint: &Pubkey, slot: u8) -> Vec<AccountMeta> {
+        let m: bordrless_token::state::Mint = self.w.env.read(mint);
+        let kind = m.slots[usize::from(slot)].kind;
+        if kind != slot_kind::POOL && kind != slot_kind::RELATION {
+            return vec![];
+        }
+        let launch = pda::launch(mint).0;
+        let registry = self
+            .w
+            .env
+            .account(&launch)
+            .filter(|a| a.data.len() >= 106)
+            .map(|a| {
+                let pool = Pubkey::new_from_array(a.data[74..106].try_into().unwrap());
+                bordrless_hook::hook_accounts_address(&ids::LAUNCH_ID, &pool).0
+            })
+            .unwrap_or_default();
+        vec![
+            AccountMeta::new_readonly(ids::LAUNCH_ID, false),
+            AccountMeta::new_readonly(launch, false),
+            AccountMeta::new(registry, false),
+        ]
     }
 
     /// The `forge` instruction of items `a` and `b` by `forger` (who must hold both).

@@ -1,5 +1,5 @@
 // Changed by Hookwars: new file (M2), equip rules: holder votes locked in place, quorum, notice,
-// execute, cancel, closing, Locked slots, and the Performance revert (docs/spec/02-armory.md 6).
+// execute, cancel, closing, Locked slots, and the Performance revert (docs/spec/02-armory.md 6); security review 2: the registry refresh accounts on a revert.
 
 use anchor_lang::prelude::Pubkey;
 use anchor_lang::AccountSerialize;
@@ -317,7 +317,7 @@ fn a_performance_slot_reverts_to_its_launch_item() {
         let data = hw.w.env.account(&launch).unwrap().data;
         let pool = Pubkey::new_from_array(data[74..106].try_into().unwrap());
         let equip = hw.equip_accounts(&o, &mint, 3, Some(t2), Some(t1));
-        armory_ix(
+        let ix = armory_ix(
             hookwars_armory::accounts::CheckPerformance {
                 config: pda::config().0,
                 slot_state: pda::slot_state(&mint, 3).0,
@@ -329,7 +329,11 @@ fn a_performance_slot_reverts_to_its_launch_item() {
                 program: ids::ARMORY_ID,
             },
             hookwars_armory::instruction::CheckPerformance {},
-        )
+        );
+        // Security review 2, L-D: the registry refresh's accounts.
+        let mut ix = ix;
+        ix.accounts.extend(hw.refresh_tail(&mint, 3));
+        ix
     };
     let ix = check(&hw);
     hw.w.env.send_paid_by(&[ix], &owner, &[]).ok();

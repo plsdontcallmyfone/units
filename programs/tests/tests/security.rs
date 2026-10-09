@@ -11,7 +11,7 @@ use bordrless_program_tests::war::{self as wh, OrdersSpec, WarWorld};
 use bordrless_token::state::Holding;
 use hookwars_armory::error::ArmoryError as E;
 use hookwars_armory::state::{proposal_status as S, Proposal};
-use hookwars_common::{ids, pda, template_id as T, EquipConfig};
+use hookwars_common::{ids, pda, template_id as T, EquipConfig, PerformanceRule};
 use hookwars_war::error::WarError;
 use hookwars_war::events::*;
 use hookwars_war::state::WarState;
@@ -373,4 +373,57 @@ fn m6_a_bounty_point_never_pays_more_than_its_cap() {
     let cap = params.point_unit_lamports * u64::from(params.bounty_max_point_bps) / 10_000;
     assert_eq!((e.points, e.paid), (300, 300 * cap));
     ww.assert_solvent(&t.mint);
+}
+
+// ------------------------------------------------------------------------- review 2, L-D
+
+/// An equip of a `Relation` (or `Pool`) slot names the launch so the armory can refresh the slot
+/// launch's pool registry in the same instruction; without those accounts the equip is refused,
+/// with them it runs (here the token never launched: nothing to refresh).
+#[test]
+fn l_d_an_equip_of_a_pool_kind_slot_names_the_launch_for_the_registry_refresh() {
+    let mut hw = Hw::new();
+    let owner = hw.w.env.funded(10_000_000_000);
+    let mint = hw.slot_mint(&owner, test_slots());
+    let cfg = EquipConfig {
+        targets: vec![Pubkey::new_unique()],
+        role: 0,
+    };
+    let (_, t1, _) = hw.item(T::TREATY, params(&[50, 50, 0]), 0);
+    let (_, t2, _) = hw.item(T::TREATY, params(&[100, 100, 1]), 0);
+    let mut e = Hw::entry(3, Some(t1), cfg.clone());
+    e.rule = Some(PerformanceRule {
+        metric: 2,
+        window_secs: 60,
+        base_window_secs: 600,
+        op: 0,
+        ratio_bps: 10_000,
+        hold_secs: 120,
+    });
+    hw.equip_launch(&owner, &mint, e).ok();
+    let o = owner.pubkey();
+    hw.mint_to(&owner, &mint, &o, 1_000);
+    let (tx, proposal) = hw.propose(&owner, &mint, 3, Some(t2), cfg);
+    tx.ok();
+    hw.vote(&owner, &mint, &proposal, true, 1_000).ok();
+    hw.w.env.warp(i64::from(TEST_PARAMS.vote_period_secs));
+    hw.finalize(&proposal).ok();
+    hw.w.env.warp(600);
+    let full = hw.execute_ix(&o, &proposal);
+    let tail = hw.refresh_tail(&mint, 3).len();
+    assert_eq!(tail, 3);
+    let mut bare = full.clone();
+    bare.accounts.truncate(bare.accounts.len() - tail);
+    hw.w.env
+        .send_paid_by(&[bare], &owner, &[])
+        .expect_code(armory_code(E::WrongAccount));
+    // A wrong launch address: refused too.
+    let mut wrong = full.clone();
+    let n = wrong.accounts.len();
+    wrong.accounts[n - 2].pubkey = Pubkey::new_unique();
+    hw.w.env
+        .send_paid_by(&[wrong], &owner, &[])
+        .expect_code(armory_code(E::WrongAccount));
+    hw.w.env.send_paid_by(&[full], &owner, &[]).ok();
+    assert_eq!(hw.slot_item(&mint, 3), t2);
 }

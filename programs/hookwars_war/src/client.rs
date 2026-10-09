@@ -1,4 +1,4 @@
-// Changed by Hookwars: security review 1: siege always names the rival war state (M-4).
+// Changed by Hookwars: security review 1: siege always names the rival war state (M-4); security review 2: record_funding takes the config (M-B).
 //! Instruction builders for clients and the LiteSVM suites. The steps that call other programs take
 //! a `slice` (the token slice the client resolved, as the token program checks it) and `inner`:
 //! the instructions the step will build on chain, whose accounts must be present (see
@@ -176,6 +176,7 @@ pub fn record_funding(mint: Pubkey) -> Instruction {
     let chest = chest_address(&mint).0;
     ix(
         crate::accounts::RecordFunding {
+            config: config_address(),
             war_state: WarState::address(&mint).0,
             chest_holding: token_client::holding_address(&BRIDGED_SOL_MINT, &chest),
             event_authority: event_authority(),
