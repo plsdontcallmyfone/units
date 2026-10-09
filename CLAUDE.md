@@ -31,7 +31,7 @@ Program keypairs live outside the repo (`keys/` is git-ignored); back them up be
 | Claude (M2 builder: armory + items armory-facing entry points, fork of session d79dfc8e) | branch m2, worktree ~/hookwars-m2, server /root/hw-m2; heavy builds inside flock /root/build.lock | 2026-10-09 | active |
 | Claude (M3a builder: DEX observations, swap_route, route context, fork of session d79dfc8e) | branch m3a, worktree ~/hookwars-m3a, server /root/hw-m3a; heavy builds inside flock /root/build.lock | 2026-10-09 | active |
 | Claude (M4/M5 builder: hookwars_war, fork of session d79dfc8e) | branch m4, worktree ~/hookwars-m4, server /root/hw-m4; heavy builds inside flock /root/build.lock | 2026-10-09 | active |
-| Claude (kit + companion builder (R9, war_bps), fork of session d79dfc8e) | branch kitcomp, worktree ~/hookwars-kitcomp, server /root/hw-kitcomp; heavy builds inside flock /root/build.lock | 2026-10-09 | active |
+| Claude (kit + companion builder (R9, war_bps), fork of session d79dfc8e) | branch kitcomp, worktree ~/hookwars-kitcomp, server /root/hw-kitcomp; heavy builds inside flock /root/build.lock | 2026-10-09 | done, merged into main 4b3e859 (203 pass, 2 ignored) |
 | Claude (M6 app builder (app/: sdk, indexer, api, web, bots), fork of session d79dfc8e) | branch app, worktree ~/hookwars-app, server /root/hw-app, server ports 9960 to 9969; heavy builds inside flock /root/build.lock | 2026-10-09 | active |
 
 Branch workflow (2026-10-09): parallel workers commit on their own branch in their own worktree; only the spec lead merges into main.
