@@ -98,7 +98,10 @@ const SEASON: SeasonInfo = {
 const PRIZE: PrizeVaultInfo = { vault: 'PrzV1aB2cD3eF4gH5jK6lM7nP8qR9sT1uV2wX3yZ4aB5c', lamports: '12400000000', quoteHolding: null, lastWinner: null, shareBps: 1000 };
 
 const launches: Page<Record<string, unknown>> = {
-  items: TOKENS.map((t, i) => ({ launch: `Lnc${t.mint.slice(3)}`, mint: t.mint, creator: t.creator, name: t.name, symbol: t.symbol, supply: '1000000000000000', decimals: 6, creator_fee_bps: 100, lp_fee_bps: 30, slot: 509000000 - i * 40000 })),
+  items: TOKENS.map((t, i) => {
+    const equipped = (SLOTS[t.mint] ?? []).find((s) => s.item)?.item ?? null;
+    return { launch: `Lnc${t.mint.slice(3)}`, mint: t.mint, creator: t.creator, name: t.name, symbol: t.symbol, supply: '1000000000000000', decimals: 6, creator_fee_bps: 100, lp_fee_bps: 30, slot: 509000000 - i * 40000, image: `/agency/coins/${String(i + 1).padStart(3, '0')}.webp`, item: equipped?.paramsText ?? null, itemKind: equipped?.templateName ?? null };
+  }),
   next: null,
 };
 
