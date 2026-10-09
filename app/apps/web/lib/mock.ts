@@ -105,6 +105,25 @@ const launches: Page<Record<string, unknown>> = {
   next: null,
 };
 
+/** 24 hourly points per token: price in SOL, chest balance in SOL, raid volume in SOL. A fixed
+ * pseudo-random walk so the chart renders the same on server and client. */
+export type MarketInfo = { priceSol: number; priceChange24h: number; volume1h: string; feesToChest: string; holders: number; series: { ts: number; price: number; chest: number; raids: number }[] };
+function market(t: Tok, i: number): MarketInfo {
+  let seed = 7 + i * 13;
+  const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+  let price = [0.00042, 0.00019, 0.00011, 0.00004, 0.00088, 0.000009][i]!;
+  let chest = Number(t.chestBalance) / 1e9 * 0.7;
+  const series = [];
+  for (let k = 23; k >= 0; k--) {
+    price = Math.max(price * (1 + (rnd() - 0.48) * 0.08), 1e-7);
+    const raids = rnd() > 0.6 ? Number((rnd() * 2.5).toFixed(2)) : 0;
+    chest += raids * 0.02 + rnd() * 0.3;
+    series.push({ ts: now - k * h, price: Number(price.toPrecision(4)), chest: Number(chest.toFixed(2)), raids });
+  }
+  const first = series[0]!.price, last = series[23]!.price;
+  return { priceSol: last, priceChange24h: Number((((last - first) / first) * 100).toFixed(1)), volume1h: String(Math.round(series[23]!.raids * 1e9 + 1.3e9)), feesToChest: String(Math.round(Number(t.chestBalance) * 0.4)), holders: [2557, 1180, 640, 212, 3904, 58][i]!, series };
+}
+
 /** The mock answer for a backend path, or undefined when the mock has none (the real backend answers). */
 export function mock(path: string): unknown {
   const [p, qs] = path.split('?');
@@ -117,6 +136,7 @@ export function mock(path: string): unknown {
   if ((m = /^\/v1\/items\/(\w+)$/.exec(p!))) { const it = ITEMS.find((x) => x.item === m![1]); return it ? { ...it, history: FEED.filter((e) => e.actor === it.owner) } : undefined; }
   if (p === '/v1/seasons/current') return SEASON;
   if (p === '/v1/prize-vault') return PRIZE;
+  if ((m = /^\/v1\/launches\/(\w+)\/market$/.exec(p!))) { const i = TOKENS.findIndex((t) => t.mint === m![1]); return i < 0 ? undefined : market(TOKENS[i]!, i); }
   if ((m = /^\/v1\/launches\/(\w+)\/(slots|proposals|war|treaties|generals)$/.exec(p!))) {
     const t = by[m[1]!]; if (!t) return undefined;
     return { slots: SLOTS[t.mint] ?? [], proposals: PROPOSALS[t.mint] ?? [], war: war(t), treaties: TREATIES[t.mint] ?? [], generals: GENERALS }[m[2]!];

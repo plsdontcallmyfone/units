@@ -25,3 +25,19 @@ export function ago(ts: number | null | undefined, now = Date.now() / 1000): str
   if (d < 86400) return `${Math.floor(d / 3600)} h ago`;
   return `${Math.floor(d / 86400)} d ago`;
 }
+
+/** Time until a future timestamp; a past one reads as "now". */
+export function until(ts: number | null | undefined, now = Date.now() / 1000): string {
+  if (!ts) return DASH;
+  const d = Math.round(ts - now);
+  if (d <= 0) return 'now';
+  if (d < 3600) return `in ${Math.max(1, Math.floor(d / 60))} min`;
+  if (d < 86400) return `in ${Math.floor(d / 3600)} h`;
+  return `in ${Math.floor(d / 86400)} d`;
+}
+
+/** A token amount in base units, compact: 1.25T, 310B. */
+export function compact(v: string | number | null | undefined): string {
+  if (v === null || v === undefined || v === '') return DASH;
+  return Number(v).toLocaleString('en-US', { notation: 'compact', maximumFractionDigits: 2 });
+}
