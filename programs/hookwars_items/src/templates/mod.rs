@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M3b).
+// Changed by Hookwars: new file (M3b); expansion templates 43 to 45 (10).
 //! Every template's behaviour (04 section 3, 08 section 4), one file per template. A template is a
 //! set of pure functions over an [`Env`] (who it is, its params and targets, its own extras) and
 //! the callback's arguments; the engine (`crate::engine`) checks signers and accounts, runs each
@@ -12,10 +12,13 @@ use bordrless_hook::pool_item::ItemPoolContext;
 use bordrless_hook::{PoolHookArgs, TokenSlotArgs};
 use hookwars_common::{ids, pda, template_id as t, Params};
 
+pub mod boss;
+pub mod coalition;
 pub mod half_life;
 pub mod launch_decay;
 pub mod max_transaction;
 pub mod raid;
+pub mod rivalry;
 pub mod sell_burn;
 pub mod shield;
 pub mod side_skew;
@@ -89,6 +92,10 @@ pub fn extras(template: u16, mint: &Pubkey, targets: &[Pubkey]) -> Vec<(Pubkey, 
             v.extend(targets.iter().map(launch));
         }
         t::WALL => v.push((pda::war_state(mint).0, false)),
+        t::BOSS => {
+            v.push((pda::raid_ledger(mint).0, true));
+            v.push((pda::war_config().0, false));
+        }
         t::SPY => {
             for r in targets {
                 v.push(launch(r));
@@ -117,6 +124,7 @@ pub fn extra_count(template: u16, targets: usize) -> usize {
         t::RAID => 3 + targets,
         t::SHIELD => 4 + targets,
         t::WALL => 1,
+        t::BOSS => 2,
         t::SPY => 2 * targets,
         t::TREATY | t::TRIBUTE => targets * (1 + bordrless_token::constants::MAX_SLOTS),
         t::HALF_LIFE | t::TRANSFER_FEE | t::LAUNCH_DECAY | t::MAX_TRANSACTION | t::DUST_GUARD => 1,
@@ -230,6 +238,7 @@ pub fn pool(
         t::SIDE_SKEW => side_skew::pool(env, args, ctx, before),
         t::LAUNCH_DECAY => launch_decay::pool(env, args, ctx, before),
         t::SELL_BURN => sell_burn::pool(env, args, ctx, before),
+        t::BOSS => boss::pool(env, args, ctx, before),
         _ => Ok(PoolOut::default()),
     }
 }

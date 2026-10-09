@@ -31,6 +31,8 @@ members = [
   "programs/hookwars_armory",
   "programs/hookwars_items",
   "programs/hookwars_war",
+  "programs/hookwars_market",
+  "programs/hookwars_social",
   "programs/war_items_stub",
   "programs/war_armory_stub",
   "programs/randomness_stub",
@@ -62,6 +64,8 @@ randomness_stub = "6ESx6cA1Hu7BiESMddfBSMwXAp1rNomvmutMHjAHs4x8"
 pool_item_stub = "BGeLKiiaGRyz7WTWh1Zf9CHgo7v92rmikCP3BARzv4HT"
 bordrless_companion = "HzeAN8e7HbGx8wzgd5SpduF51c7rXCTqkQKcmw44YHkK"
 hookwars_war = "5vJnBvr33jpsfYxMY2pvNf6tF9tkj8eaZ6goFtByUWA2"
+hookwars_market = "FikEwNXoXqRWteX4kpCT8dJ34o8hWQ8w49whhZiqS2vv"
+hookwars_social = "CKf4SjuiYxy4C2eSjk6oSQb2AnqC3ADoDTm8d323jWAx"
 
 [programs.devnet]
 bordrless_token = "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
@@ -73,6 +77,8 @@ tax_hook = "q9mMtM6vfJ8YMffnkUNW5XLz7xeVyyeo1HL8SA27AuX"
 half_life = "67nAgW7h9wYmM1jLzrXVNy8UDNxgVFqGTqrTEPamtokh"
 bordrless_companion = "HzeAN8e7HbGx8wzgd5SpduF51c7rXCTqkQKcmw44YHkK"
 hookwars_war = "5vJnBvr33jpsfYxMY2pvNf6tF9tkj8eaZ6goFtByUWA2"
+hookwars_market = "FikEwNXoXqRWteX4kpCT8dJ34o8hWQ8w49whhZiqS2vv"
+hookwars_social = "CKf4SjuiYxy4C2eSjk6oSQb2AnqC3ADoDTm8d323jWAx"
 
 [programs.mainnet]
 bordrless_token = "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
@@ -84,6 +90,8 @@ tax_hook = "q9mMtM6vfJ8YMffnkUNW5XLz7xeVyyeo1HL8SA27AuX"
 half_life = "67nAgW7h9wYmM1jLzrXVNy8UDNxgVFqGTqrTEPamtokh"
 bordrless_companion = "HzeAN8e7HbGx8wzgd5SpduF51c7rXCTqkQKcmw44YHkK"
 hookwars_war = "5vJnBvr33jpsfYxMY2pvNf6tF9tkj8eaZ6goFtByUWA2"
+hookwars_market = "FikEwNXoXqRWteX4kpCT8dJ34o8hWQ8w49whhZiqS2vv"
+hookwars_social = "CKf4SjuiYxy4C2eSjk6oSQb2AnqC3ADoDTm8d323jWAx"
 
 [provider]
 cluster = "localnet"

@@ -21,7 +21,7 @@ set -euo pipefail
 TOOLS_VERSION="v1.57"
 SBF_ARCH="v3"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-PROGRAMS=(bordrless_token bordrless_swap bordrless_bridge bordrless_launch bordrless_kit tax_hook half_life bordrless_companion hookwars_armory hookwars_items hook_tester slot_tester armory_stub launch_stub war_stub hookwars_war war_items_stub war_armory_stub randomness_stub items_stub pool_item_stub)
+PROGRAMS=(bordrless_token bordrless_swap bordrless_bridge bordrless_launch bordrless_kit tax_hook half_life bordrless_companion hookwars_armory hookwars_items hook_tester slot_tester armory_stub launch_stub war_stub hookwars_war hookwars_market hookwars_social war_items_stub war_armory_stub randomness_stub items_stub pool_item_stub)
 # Changed by Hookwars: every *_tester and *_stub program is test-only.
 TEST_ONLY=(hook_tester slot_tester armory_stub launch_stub war_stub war_items_stub war_armory_stub randomness_stub items_stub pool_item_stub)
 DEPLOY_DIR="$ROOT/target/deploy"
