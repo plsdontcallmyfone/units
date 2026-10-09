@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file, M1 measurements (docs/spec/07-budgets-tests.md section 3).
+// Changed by Hookwars: new file, M1 measurements; M3a route and observation ring measurements (docs/spec/07-budgets-tests.md section 3).
 //! What slots cost: a wallet transfer, a DEX buy and a DEX sell of a slot mint with 0 to 3
 //! cutting item slots (each item answering one cut, the worst case), without and with a lookup
 //! table holding every account the message may load from one. Each line printed is one
@@ -194,4 +194,94 @@ fn the_slot_table_size_and_rent() {
         w.env.rent(upstream)
     );
     assert_eq!(len, upstream + 33 + 1 + 113 * bordrless_token::constants::MAX_SLOTS);
+}
+
+/// Hookwars M3a: what a multi-hop route costs (`swap_route`, spec 03 section 3.3): 2 and 3 hops of
+/// plain pools, and 2 hops whose last delivery is a slot mint with 3 cutting items. Also the
+/// observation ring's size and rent.
+#[test]
+fn route_budgets() {
+    use bordrless_swap::constants::{MAX_ROUTE_HOPS, OBS_RING_LEN};
+    let mut w = World::with_slots();
+    let owner = w.env.funded(100 * SOL);
+    let me = owner.pubkey();
+    let plain: Vec<Pubkey> = (0..4).map(|i| w.mint_to_owner(&owner, 6, SUPPLY, &format!("M{i}"))).collect();
+    let slot = mint_with(&mut w, &owner, 3);
+    let pool_of = |w: &mut World, base: Pubkey, quote: Pubkey| {
+        let slice = if base == slot { extras(w, &base, 3) } else { vec![] };
+        let args = CreatePoolArgs {
+            lp_fee_bps: 30,
+            hook_program: Pubkey::default(),
+            hook_flags: 0,
+            virtual_base: 0,
+            virtual_quote: 0,
+            base_amount: 100_000_000_000,
+            quote_amount: 100_000_000_000,
+            base_hook_accounts: slice.len() as u8,
+            quote_hook_accounts: 0,
+            hook_data: vec![],
+        };
+        let keys = swap::CreatePoolKeys {
+            payer: me,
+            authority: me,
+            treasury: w.env.treasury.pubkey(),
+            base_mint: base,
+            quote_mint: quote,
+            hook_caller: None,
+        };
+        w.env
+            .send_paid_by(&[swap::create_pool(&keys, args, slice)], &owner, &[])
+            .ok();
+        swap::pool_address(&base, &quote, 30, None)
+    };
+    let p01 = pool_of(&mut w, plain[0], plain[1]);
+    let p12 = pool_of(&mut w, plain[1], plain[2]);
+    let p23 = pool_of(&mut w, plain[2], plain[3]);
+    let ps1 = pool_of(&mut w, slot, plain[1]);
+    let hop = |w: &World, pool: Pubkey, base: Pubkey, quote: Pubkey, direction: u8| {
+        let out_is_slot = direction == 1 && base == slot;
+        swap::RouteHop {
+            keys: swap::SwapKeys {
+                trader: me,
+                pool,
+                base_mint: base,
+                quote_mint: quote,
+                trader_base: token::holding_address(&base, &me),
+                trader_quote: token::holding_address(&quote, &me),
+                hook_program: None,
+                base_mint_writable: false,
+                quote_mint_writable: false,
+            },
+            direction,
+            in_slice: vec![],
+            out_slice: if out_is_slot { extras(w, &base, 3) } else { vec![] },
+            pool_extras: vec![],
+        }
+    };
+    let routes: Vec<(&str, Vec<swap::RouteHop>)> = vec![
+        ("route, 2 hops, plain pools", vec![hop(&w, p01, plain[0], plain[1], 0), hop(&w, p12, plain[1], plain[2], 0)]),
+        (
+            "route, 3 hops, plain pools",
+            vec![
+                hop(&w, p01, plain[0], plain[1], 0),
+                hop(&w, p12, plain[1], plain[2], 0),
+                hop(&w, p23, plain[2], plain[3], 0),
+            ],
+        ),
+        (
+            "route, 2 hops, delivering a 3-cutting-slot mint",
+            vec![hop(&w, p01, plain[0], plain[1], 0), hop(&w, ps1, slot, plain[1], 1)],
+        ),
+    ];
+    assert_eq!(MAX_ROUTE_HOPS, 3);
+    for (label, hops) in routes {
+        let ix = swap::swap_route(me, 1_000_000_000, 0, hops, vec![]);
+        measure(&mut w, label, &owner, ix);
+    }
+    let len = bordrless_core::observations::account_len(OBS_RING_LEN);
+    println!(
+        "budget | observation ring | {OBS_RING_LEN} entries | {len} bytes | rent {} lamports | per entry {} bytes",
+        w.env.rent(len),
+        bordrless_core::observations::ENTRY_LEN
+    );
 }
