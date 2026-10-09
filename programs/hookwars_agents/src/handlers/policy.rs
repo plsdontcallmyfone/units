@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (09).
+// Changed by Hookwars: new file (09); apply_limits visible to directives (11 section 4.3).
 //! The policy wallet (09 section 7): a vault PDA the agent key spends from through `spend`, within
 //! per-action and per-day limits and a target allowlist; the operator freezes and withdraws.
 
@@ -15,7 +15,7 @@ use crate::handlers::common::*;
 use crate::state::*;
 
 /// Checks `limits` against the config and the caps and writes them into `policy`.
-fn apply_limits(policy: &mut Policy, config: &AgentsConfig, limits: &PolicyLimits) -> Result<()> {
+pub(crate) fn apply_limits(policy: &mut Policy, config: &AgentsConfig, limits: &PolicyLimits) -> Result<()> {
     require!(
         limits.tracked.len() <= TRACKED_CAP && limits.targets.len() <= TARGETS_CAP,
         AgentsError::InvalidParams

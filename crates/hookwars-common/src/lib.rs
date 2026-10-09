@@ -1747,3 +1747,187 @@ pub mod arsenal2 {
         }
     }
 }
+
+/// Hookwars hook economy (docs/spec/11-hook-economy.md): program ids, caller seeds, the counters
+/// levels are computed from, the level function and the fee splits every economy program uses.
+/// Appended for the economy branch; nothing above changes.
+pub mod economy {
+    use anchor_lang::prelude::*;
+
+    /// `hookwars_craft` (11 section 5).
+    pub const CRAFT_ID: Pubkey = Pubkey::from_str_const("39LXQBGqZtg591jkGnZi9BELQ9hp1ZngbAxu6K1cC29Y");
+    /// `hookwars_book` (11 section 6).
+    pub const BOOK_ID: Pubkey = Pubkey::from_str_const("C4k2QquxzDdgHf74tnvyyWQyGUR8xvhPo1i1gFYb639g");
+    /// `hookwars_market` (10).
+    pub const MARKET_ID: Pubkey = Pubkey::from_str_const("FikEwNXoXqRWteX4kpCT8dJ34o8hWQ8w49whhZiqS2vv");
+    /// `hookwars_social` (10).
+    pub const SOCIAL_ID: Pubkey = Pubkey::from_str_const("CKf4SjuiYxy4C2eSjk6oSQb2AnqC3ADoDTm8d323jWAx");
+    /// The SPL Memo program, version 2 (11 section 4.1).
+    pub const MEMO_PROGRAM_ID: Pubkey =
+        Pubkey::from_str_const("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+
+    /// Seed of the PDA a protocol program signs with when it calls craft `drop` or `wear` (R42).
+    pub const CRAFT_CALLER_SEED: &[u8] = b"craft-caller";
+    /// Seed of the PDA a protocol program signs with when it calls social `record_wallet` (R43).
+    pub const SOCIAL_CALLER_SEED: &[u8] = b"social-caller";
+
+    /// `PDA([seed], program)`: the caller PDA of `program`.
+    pub fn caller_pda(seed: &[u8], program: &Pubkey) -> (Pubkey, u8) {
+        Pubkey::find_program_address(&[seed], program)
+    }
+
+    /// Indexes of the wallet counters levels are computed from (11 section 3.3).
+    pub mod counter {
+        pub const ITEMS_AUTHORED: u8 = 0;
+        pub const TEMPLATES_REGISTERED: u8 = 1;
+        pub const LICENCES_SOLD: u8 = 2;
+        pub const LICENCE_REVENUE_LAMPORTS: u8 = 3;
+        pub const ITEMS_SOLD: u8 = 4;
+        pub const ITEMS_CRAFTED: u8 = 5;
+        pub const REPAIRS: u8 = 6;
+        pub const BOOK_FILLS: u8 = 7;
+        pub const TREATIES_HELD: u8 = 8;
+        pub const RAIDS: u8 = 9;
+        /// Number of counters a `Profile` keeps (layout constant).
+        pub const COUNT: usize = 16;
+    }
+
+    /// Skill ids (11 section 3.3).
+    pub mod skill {
+        pub const BUILDER: u8 = 0;
+        pub const CRAFTER: u8 = 1;
+        pub const TRADER: u8 = 2;
+        pub const DIPLOMAT: u8 = 3;
+    }
+
+    /// Thresholds per skill (layout constant).
+    pub const MAX_LEVELS: usize = 8;
+
+    /// One skill: a counter and the thresholds of its levels (ascending; 0 ends the list).
+    #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct SkillDef {
+        pub id: u8,
+        pub counter: u8,
+        pub thresholds: [u64; MAX_LEVELS],
+    }
+
+    impl SkillDef {
+        /// Thresholds strictly ascending until the first 0, then only zeros.
+        pub fn valid(&self) -> bool {
+            if usize::from(self.counter) >= counter::COUNT {
+                return false;
+            }
+            let mut prev = 0u64;
+            let mut ended = false;
+            for t in self.thresholds {
+                if ended {
+                    if t != 0 {
+                        return false;
+                    }
+                } else if t == 0 {
+                    ended = true;
+                } else if t <= prev {
+                    return false;
+                } else {
+                    prev = t;
+                }
+            }
+            true
+        }
+    }
+
+    /// The level `value` reaches against `thresholds`: how many thresholds, from the first, it
+    /// meets. A pure function: levels are computed, never stored (R43).
+    pub fn level(thresholds: &[u64; MAX_LEVELS], value: u64) -> u8 {
+        let mut l = 0u8;
+        for t in thresholds {
+            if *t == 0 || value < *t {
+                break;
+            }
+            l += 1;
+        }
+        l
+    }
+
+    /// Sources of `ProtocolFee` events (11 section 2.4).
+    pub mod fee_source {
+        pub const DEX_SHARE: u8 = 0;
+        pub const LAUNCH_LP: u8 = 1;
+        pub const ITEM_RUN: u8 = 2;
+        pub const SALE: u8 = 3;
+        pub const LICENCE: u8 = 4;
+        pub const LEASE: u8 = 5;
+        pub const BOOK_FILL: u8 = 6;
+        pub const RECIPE: u8 = 7;
+    }
+
+    /// `floor(amount * bps / 10_000)`.
+    pub fn bps(amount: u64, bps: u16) -> u64 {
+        (u128::from(amount) * u128::from(bps) / 10_000) as u64
+    }
+
+    /// `ceil(amount * bps / 10_000)`.
+    pub fn bps_up(amount: u64, bps: u16) -> u64 {
+        ((u128::from(amount) * u128::from(bps) + 9_999) / 10_000) as u64
+    }
+
+    /// Licence split (11 section 2.3): protocol first, then the template author's share of the
+    /// remainder, the rest to the item holder. Sums exactly to `price`.
+    pub fn licence_split(price: u64, protocol_bps: u16, author_bps: u16) -> (u64, u64, u64) {
+        let protocol = bps(price, protocol_bps);
+        let rest = price - protocol;
+        let author = bps(rest, author_bps);
+        (protocol, author, rest - author)
+    }
+
+    /// Token-side run waterfall (11 section 2.2) for a settled balance `b`: returns
+    /// `(protocol, author, rent, holder, bounty, rest)`, summing exactly to `b`.
+    pub fn run_waterfall(
+        b: u64,
+        item_protocol_bps: u16,
+        royalty_bps: u16,
+        author_bps: u16,
+        rent_bps: u16,
+        bounty_bps: u16,
+    ) -> (u64, u64, u64, u64, u64, u64) {
+        let protocol = bps(b, item_protocol_bps);
+        let b1 = b - protocol;
+        let royalty = bps(b1, royalty_bps);
+        let author = bps(royalty, author_bps);
+        let rent = bps(royalty - author, rent_bps);
+        let holder = royalty - author - rent;
+        let bounty = bps(b1 - royalty, bounty_bps);
+        let rest = b1 - royalty - bounty;
+        (protocol, author, rent, holder, bounty, rest)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn levels_count_met_thresholds() {
+            let t = [10, 100, 1_000, 0, 0, 0, 0, 0];
+            assert_eq!(level(&t, 0), 0);
+            assert_eq!(level(&t, 10), 1);
+            assert_eq!(level(&t, 999), 2);
+            assert_eq!(level(&t, u64::MAX), 3);
+            assert!(SkillDef { id: 0, counter: 0, thresholds: t }.valid());
+            assert!(!SkillDef { id: 0, counter: 0, thresholds: [5, 5, 0, 0, 0, 0, 0, 0] }.valid());
+            assert!(!SkillDef { id: 0, counter: 0, thresholds: [5, 0, 7, 0, 0, 0, 0, 0] }.valid());
+            assert!(!SkillDef { id: 0, counter: 99, thresholds: t }.valid());
+        }
+
+        #[test]
+        fn splits_sum_exactly() {
+            for price in [0u64, 1, 7, 999, 1_000_000_007, u64::MAX / 3] {
+                let (p, a, h) = licence_split(price, 250, 1_000);
+                assert_eq!(p + a + h, price);
+                let w = run_waterfall(price, 300, 2_500, 1_000, 5_000, 100);
+                assert_eq!(w.0 + w.1 + w.2 + w.3 + w.4 + w.5, price);
+            }
+            assert_eq!(bps_up(1, 1), 1);
+            assert_eq!(bps(1, 1), 0);
+        }
+    }
+}
