@@ -525,6 +525,12 @@ impl Hw {
                 equip_config: config,
             },
         );
+        // Integration pass 2: the item's `["lease", item]` under the market, first in the remaining
+        // accounts (10 section 17 I-3).
+        let mut ix = ix;
+        if let Some(i) = item {
+            ix.accounts.push(AccountMeta::new_readonly(hookwars_common::market::lease(&i), false));
+        }
         (self.w.env.send_paid_by(&[ix], proposer, &[]), proposal)
     }
 

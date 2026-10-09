@@ -99,4 +99,10 @@ pub enum ArmoryError {
     NotBadge,
     #[msg("a bond on this proposal is still posted: resolve it first")]
     BondStillPosted,
+    #[msg("the item is listed on the market: its royalties go with the sale")]
+    ItemListed,
+    #[msg("the item is leased to another token or slot")]
+    ItemLeasedElsewhere,
+    #[msg("only the market may end a lease")]
+    NotMarketCaller,
 }

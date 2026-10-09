@@ -823,7 +823,18 @@ pub mod hookwars_social {
                         }
                     })
                     .collect();
-                let ix = bordrless_token::client::transfer(treasury, *from_h.key, *to_h.key, *mint, None, extras, *amount);
+                // Integration pass 2 (10 section 17 I-1, R16, R24): a guild treasury pays out as a protocol
+                // source, so the token's own items do not cut the guild's spend.
+                let ix = bordrless_token::client::transfer_from_protocol(
+                    treasury,
+                    *from_h.key,
+                    *to_h.key,
+                    *mint,
+                    extras,
+                    *amount,
+                    crate::ID,
+                    treasury_seeds.iter().map(|x| x.to_vec()).collect(),
+                );
                 let mut infos = vec![
                     ctx.accounts.treasury.to_account_info(),
                     from_h.clone(),

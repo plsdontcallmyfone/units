@@ -60,6 +60,12 @@ pub mod ids {
     /// every agent badge (09 section 4.2).
     pub const AGENTS_SIGNER: Pubkey =
         Pubkey::from_str_const("79bZmFwi3tKQxa6dWnaigz29sVKCpPQ8fPufijxBiKdo");
+    /// `hookwars_market` (10).
+    pub const MARKET_ID: Pubkey =
+        Pubkey::from_str_const("FikEwNXoXqRWteX4kpCT8dJ34o8hWQ8w49whhZiqS2vv");
+    /// `hookwars_social` (10).
+    pub const SOCIAL_ID: Pubkey =
+        Pubkey::from_str_const("CKf4SjuiYxy4C2eSjk6oSQb2AnqC3ADoDTm8d323jWAx");
     /// Who may upgrade a template program (00 rule 3; upstream `HOOK_UPGRADE_AUTHORITIES`).
     pub const HOOK_UPGRADE_AUTHORITIES: [Pubkey; 2] = [MANAGED_HOOK_KEY, PROTOCOL_AUTHORITY];
     /// The upgradeable loader.
@@ -1850,5 +1856,62 @@ pub mod agents_record {
             &[&[CALLER_SEED, &[bump]]],
         )?;
         Ok(())
+    }
+}
+
+/// Integration pass 2 (10 section 17 I-3, I-4): the market's addresses and the `Lease` layout,
+/// read by the armory and items without a crate dependency (the market depends on the armory).
+pub mod market {
+    use super::*;
+
+    /// `["escrow", item_mint]`: owner of a listed item's holding.
+    pub fn escrow(item_mint: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(&[b"escrow", item_mint.as_ref()], &ids::MARKET_ID).0
+    }
+    /// `["lease-escrow", item_mint]`: owner of a leased item's holding.
+    pub fn lease_escrow(item_mint: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(&[b"lease-escrow", item_mint.as_ref()], &ids::MARKET_ID).0
+    }
+    /// `["lease", item]`.
+    pub fn lease(item: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(&[b"lease", item.as_ref()], &ids::MARKET_ID).0
+    }
+    /// `["market-caller"]`: the market's signer of `revert_for_lease_end`.
+    pub fn caller() -> (Pubkey, u8) {
+        Pubkey::find_program_address(&[b"market-caller"], &ids::MARKET_ID)
+    }
+    /// `Lease.state` Active.
+    pub const LEASE_ACTIVE: u8 = 1;
+
+    /// What the armory and items read of a `Lease` (discriminator, version, bump, lessor, item,
+    /// item_mint, token_mint, slot, rent_bps, fee_lamports, term_secs, starts_at, ends_at, state).
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct LeaseView {
+        pub lessor: Pubkey,
+        pub token_mint: Pubkey,
+        pub slot: u8,
+        pub rent_bps: u16,
+        pub ends_at: i64,
+        pub state: u8,
+    }
+
+    /// Reads a `Lease` owned by the market; `None` for an empty or foreign account.
+    pub fn read_lease(info: &AccountInfo) -> Option<LeaseView> {
+        if info.owner != &ids::MARKET_ID {
+            return None;
+        }
+        let d = info.try_borrow_data().ok()?;
+        if d.len() < 170 {
+            return None;
+        }
+        let key = |o: usize| Pubkey::try_from(&d[o..o + 32]).ok();
+        Some(LeaseView {
+            lessor: key(10)?,
+            token_mint: key(106)?,
+            slot: d[138],
+            rent_bps: u16::from_le_bytes([d[139], d[140]]),
+            ends_at: i64::from_le_bytes(d[161..169].try_into().ok()?),
+            state: d[169],
+        })
     }
 }

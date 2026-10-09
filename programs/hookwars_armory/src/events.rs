@@ -109,6 +109,8 @@ pub mod equip_by {
     pub const LAUNCH: u8 = 0;
     pub const VOTE: u8 = 1;
     pub const PERFORMANCE: u8 = 2;
+    /// Integration pass 2: the market ended a lease (10 section 17 I-3).
+    pub const LEASE_END: u8 = 3;
 }
 
 #[event]

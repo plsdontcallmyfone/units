@@ -159,3 +159,33 @@ pub fn holding_amount(info: &AccountInfo, mint: &Pubkey, owner: &Pubkey) -> Resu
     require_keys_eq!(h.owner, *owner, MarketError::WrongAccount);
     Ok(h.amount)
 }
+
+/// Integration pass 2 (10 section 17 I-3): asks the armory to revert the leased slot. `rem` is the
+/// armory's `revert_for_lease_end` account list, `["market-caller"]` first, then its refresh
+/// accounts; the market signs as `["market-caller"]`.
+pub fn revert_leased_slot<'info>(rem: &[AccountInfo<'info>], slot: u8, item: Pubkey) -> Result<()> {
+    use anchor_lang::solana_program::instruction::AccountMeta;
+    use anchor_lang::InstructionData;
+    let (caller, bump) = hookwars_common::market::caller();
+    let first = rem.first().ok_or(error!(crate::error::MarketError::WrongAccount))?;
+    require_keys_eq!(first.key(), caller, crate::error::MarketError::WrongAccount);
+    let accounts = rem
+        .iter()
+        .enumerate()
+        .map(|(i, a)| {
+            if i == 0 {
+                AccountMeta::new_readonly(a.key(), true)
+            } else if a.is_writable {
+                AccountMeta::new(a.key(), false)
+            } else {
+                AccountMeta::new_readonly(a.key(), false)
+            }
+        })
+        .collect();
+    let ix = Instruction {
+        program_id: hookwars_armory::ID,
+        accounts,
+        data: hookwars_armory::instruction::RevertForLeaseEnd { slot, item }.data(),
+    };
+    call(&ix, rem, &[&[b"market-caller", &[bump]]])
+}

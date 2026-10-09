@@ -346,6 +346,17 @@ pub mod hookwars_armory {
         process_check_performance(ctx)
     }
 
+    /// Integration pass 2 (10 section 17 I-3): the market ends a lease. When `slot` still holds the
+    /// leased `item`, it is settled out and reverted to its launch item (or emptied), as a
+    /// performance revert does. Signed by `["market-caller"]` under the market.
+    pub fn revert_for_lease_end<'info>(
+        ctx: Context<'info, RevertForLeaseEnd<'info>>,
+        slot: u8,
+        item: Pubkey,
+    ) -> Result<()> {
+        process_revert_for_lease_end(ctx, slot, item)
+    }
+
     /// Forges two items of one template into one (02 section 9).
     pub fn forge(ctx: Context<Forge>) -> Result<()> {
         process_forge(ctx)
@@ -806,6 +817,19 @@ pub struct CheckPerformance<'info> {
 
 #[event_cpi]
 #[derive(Accounts)]
+#[instruction(slot: u8)]
+pub struct RevertForLeaseEnd<'info> {
+    /// `["market-caller"]` under the market (checked in the handler).
+    pub market_caller: Signer<'info>,
+    #[account(seeds = [seeds::CONFIG], bump = config.bump)]
+    pub config: Box<Account<'info, ArmoryConfig>>,
+    #[account(mut, seeds = [seeds::SLOT_STATE, equip.token_mint.key().as_ref(), &[slot]], bump = slot_state.bump)]
+    pub slot_state: Box<Account<'info, SlotState>>,
+    pub equip: EquipCtx<'info>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
 pub struct Forge<'info> {
     #[account(mut)]
     pub forger: Signer<'info>,
@@ -1254,6 +1278,9 @@ fn process_claim_royalty<'info>(
         h.mint == a.item.item_mint && h.owner == claimant && h.amount == 1 && !h.frozen,
         ArmoryError::NotItemOwner
     );
+    // Integration pass 2 (10 section 17 I-4, R31): royalties stay with a listed item and go to its
+    // buyer, so nothing may claim from the market's escrow while it is listed.
+    require_keys_neq!(claimant, hookwars_common::market::escrow(&a.item.item_mint), ArmoryError::ItemListed);
     let cut_mint = a.cut_mint.key();
     // Security review 1, H-2: the kit counts a protocol transfer's program-owned destination as an
     // excluded vault, so a royalty of a kit token must go to a wallet (a key on the curve), never to
@@ -1660,6 +1687,21 @@ fn process_propose(
     let a = &ctx.accounts;
     let mint = read_mint(&a.token_mint.to_account_info())?;
     require!(a.slot_state.open_proposal.is_none(), ArmoryError::ProposalOpen);
+    // Integration pass 2 (10 section 17 I-3): a proposed item's `["lease", item]` under the market
+    // comes first in the remaining accounts. A lease that exists must be Active and name this token
+    // and slot; an item offered for lease, or leased elsewhere, is refused.
+    if let Some(k) = item {
+        let lease = ctx.remaining_accounts.first().ok_or(ArmoryError::WrongAccount)?;
+        require_keys_eq!(lease.key(), hookwars_common::market::lease(&k), ArmoryError::WrongAccount);
+        if let Some(l) = hookwars_common::market::read_lease(lease) {
+            require!(
+                l.state == hookwars_common::market::LEASE_ACTIVE
+                    && l.token_mint == a.token_mint.key()
+                    && l.slot == slot,
+                ArmoryError::ItemLeasedElsewhere
+            );
+        }
+    }
     check_proposed(
         &a.config.params,
         &mint,
@@ -2318,3 +2360,43 @@ mod tests {
     }
 }
 
+
+/// Integration pass 2 (10 section 17 I-3): see `revert_for_lease_end`.
+fn process_revert_for_lease_end<'info>(
+    ctx: Context<'info, RevertForLeaseEnd<'info>>,
+    slot: u8,
+    item: Pubkey,
+) -> Result<()> {
+    require_keys_eq!(
+        ctx.accounts.market_caller.key(),
+        hookwars_common::market::caller().0,
+        ArmoryError::NotMarketCaller
+    );
+    let mint = read_mint(&ctx.accounts.equip.token_mint.to_account_info())?;
+    require!(slot < mint.slot_count, ArmoryError::SlotIndexOutOfRange);
+    // A vote may already have replaced the leased item: then there is nothing to revert.
+    if mint.slots[usize::from(slot)].item != item {
+        return Ok(());
+    }
+    let launch_item = ctx.accounts.slot_state.launch_item;
+    if launch_item == Some(item) {
+        return Ok(());
+    }
+    let ts = now()?;
+    let params = ctx.accounts.config.params;
+    let config = ctx.accounts.slot_state.launch_config.clone();
+    let (old, new) = ctx
+        .accounts
+        .equip
+        .equip_to(&params, slot, launch_item, &config, false, true)?;
+    refresh_after_equip(&ctx.accounts.equip, slot, ctx.remaining_accounts)?;
+    emit_cpi!(EquipApplied {
+        mint: ctx.accounts.equip.token_mint.key(),
+        slot,
+        old_item: old,
+        new_item: new,
+        by: equip_by::LEASE_END,
+        ts
+    });
+    Ok(())
+}
