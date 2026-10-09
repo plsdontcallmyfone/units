@@ -541,6 +541,29 @@ Measured values go in 07; these are the shapes.
 | `reveal`: war, armory `mint_loot`, token `mint_to` (item mints have no slots) | 3 |
 | `split_protocol_fees`: war, bridge wrap | 2 |
 
+**Measured (M4/M5):**
+
+| Path | Keys | v0 bytes (lookup table) | Trace | Height | CU |
+| --- | --- | --- | --- | --- | --- |
+| `init_war` | 16 | 281 | 10 | 3 | 87,566 |
+| `siege` (rival a war token, marked) | 37 | 346 | 22 | 4 | 312,139 |
+| `raze` | 34 | 339 | 19 | 4 | 273,955 |
+| `counter_strike` | 34 | 348 | 24 | 4 | 324,581 |
+| `claim_bounty` | 24 | 304 | 12 | 4 | 117,702 |
+| `roll` | 16 | 290 | 9 | 3 | 63,689 |
+| `reveal` (armory stand-in, mints nothing) | 13 | 275 | 4 | 2 | 36,799 |
+| `claim_quest` (Raid) | 15 | 286 | 10 | 3 | 79,183 |
+| `submit_candidate` | 8 | 269 | 3 | 2 | 21,990 |
+| `split_protocol_fees` (with a winner) | 20 | 304 | 11 | 4 | 88,099 |
+
+Account sizes with the provisional layout constants (`MAX_CAPTURED` 8, `LOOT_TABLE_LEN` 8,
+`PARAM_FIELDS` 11): `WarConfig` 551 bytes (rent 4,725,840 lamports), `WarState` 984 (7,739,520),
+`Season` 178 (2,129,760), `LootTable` 775 (6,284,880), `RollRequest` 198 (2,268,960), `QuestMark` 90
+(1,517,280). Heights include the self-CPI events. Measured by
+`programs/tests/tests/budgets_war.rs::war_budgets` (LiteSVM, the M4/M5 branch, 2026-10-09), on
+launch pools with no kit and slot tables of a War slot and a touch-only Raid slot; heavier rival or
+token items add their own cost to `siege`, `raze` and `counter_strike`.
+
 All within 5. A siege runs the rival's items: heavy rival items cost the siege more compute, and a
 refusing rival Defense item makes sieges on it fail. Both are intended.
 
@@ -554,3 +577,102 @@ refusing rival Defense item makes sieges on it fail. Both are intended.
 | 03 | `Observations` with a TWAP read that returns none when the ring does not cover the window; companion `war_bps` paid to the chest's bridged-SOL holding; `init_war` at launch; launch swap builders for a rival's pool with its slot slices; the `fee_collector` note (10.4) |
 | 04 | the War orders template (kind `War`) with the fields of 6.0; `RaidLedger` with the fields of 2.5 including `season: u32` and `season_volume`; Raid range with `season_id: u32` (04 section 3, matches `current_season`); touch payloads `SpendRaidPoints`, `SpendTicket`, `AddTicket` accepted only from `["war-signer"]`; `settle_equip` paying Treaty and Tribute to the partner's `["treaty-inbox", partner]` holding and war-destined cuts to `["war-chest", mint]`; Treaty validation refusing a payee without kit holder rewards; Defense items reading `WarState.under_siege_until` |
 | kit | none in v1 (R10); D-7 later |
+
+## M4/M5 implementation notes
+
+Built on branch `m4` (2026-10-09): `programs/hookwars_war`, the test-only stand-ins
+`war_items_stub` (at the items id), `war_armory_stub` (at the armory id) and `randomness_stub`, and
+the suites `war.rs`, `siege.rs`, `counter_strike.rs`, `loot.rs`, `quests.rs`, `seasons.rs`,
+`budgets_war.rs` (53 tests) with the harness `programs/tests/src/war.rs`. Where the spec was open,
+the choice its rulings imply was taken:
+
+1. **War orders are recognised by kind, not id.** The armory numbers templates densely in
+   registration order (02 2.3), so a template id is not a constant. The War slot's item must be an
+   armory `Item` of a `Template` whose `kind` is `War` and whose `program` is the items program.
+   Staleness of the template's code is the armory's check at equip (02 3.3: items already equipped
+   keep running); the war program does not re-read ProgramData.
+2. **Peace is gated by the Treaty, not by the War orders.** 04 3.9 has eleven War orders fields
+   and no `peace_returns`; 04 3.5 gives the Treaty `returns_captured` (field 2). `return_captured`
+   requires that field to be 1 and the same Treaty item in both mints' slot tables. The Treaty's
+   template id is `WarConfig.treaty_template_id`, set at `init_config` and changed only through the
+   timelock (same reason as 1).
+3. **Names follow the owning part.** The siege threshold unit is `SIEGE_UNIT_LAMPORTS` (04 3.9,
+   where 6.0 here said `POINT_UNIT_LAMPORTS`); the ledger's season fields are `season_id` and
+   `outbound_volume_season` (04 2.9, where 2.5 here said `season` and `season_volume`).
+4. **Every policy number is a config field behind the timelock** (`WarParams`, 21 fields).
+   `init_config` is signed by the program's upgrade authority (upstream configs' rule); after it,
+   only `propose_config` then `apply_config`. Validation: every bps at most 10,000, the crank bounty
+   at most the companion's `MAX_BOUNTY_BPS`, every duration and unit positive.
+5. **Layout constants are provisional:** `MAX_CAPTURED` 8 and `LOOT_TABLE_LEN` 8 (account sizes
+   measured in section 14). `PARAM_FIELDS` 11 and `RAID_TABLE_LEN` 8 are assumed in
+   `src/foreign.rs` until the armory and items crates fix them.
+6. **Chest solvency is an identity.** `WarState::expected_balance()` is `funded_total +
+   razed_proceeds - spent_siege - spent_counter - paid_bounties - paid_cranks`, and every suite
+   asserts it equals the chest's balance (and `last_seen_balance`) after every step. Two rules keep
+   it exact: `razed_proceeds` is gross (the raze bounty is in `paid_cranks`), and a treaty-inflow
+   bounty is paid from the inbox, so it is not in `paid_cranks`.
+7. **Season counters by season number, not by time.** A war step does not read the `Season`, so
+   activity after `ends_at` and before the next season opens still counts toward the running season;
+   the next season cannot open before the last is finalized, which bounds this to
+   `CHALLENGE_SECS`. `raid_volume_won` is synced from the `RaidLedger` at `submit_candidate` (the
+   only time it is read), not at every roll.
+8. **Quest period:** `floor((now - Season.starts_at) / QUEST_PERIOD_SECS) + 1` (the first is 1).
+9. **One `cancel_pending(what, season)`:** `what` 0 the config change, 1 a season, 2 a loot table;
+   seasons and loot tables only before their season opens.
+10. **`WarConfig.last_winner_season`** is stored with `last_winner`, so `split_protocol_fees` knows
+    which `Season.prize_paid` to add to.
+11. **The randomness adapter interface** is fixed in `src/oracle.rs` (D-4 stays open for the oracle
+    behind it): `request_randomness(requester)` with the `RollRequest` PDA signing, and a
+    `Randomness` account (`requester`, `request_slot`, `fulfilled`, `fulfilled_slot`, `value`).
+    `reveal` takes a value only when fulfilled in a slot after the request. The draw: a template by
+    weight from bytes 0..8, each field from its own two bytes (8 + 2i), so 11 fields use 30 of 32.
+12. **`mint_loot`'s call:** data `owner, template_id: u16, params: [u32; PARAM_FIELDS]`; accounts
+    `loot_signer` (signer), `payer` (the revealer), `owner`, then the remaining accounts in order.
+    `RollRevealed.item` is the default key (the armory's `LootMinted` names the item).
+13. **Token slices are the first remaining accounts**, counted by `SliceArgs` (`first`, `second`):
+    the rival's delivery slice for `siege`, the input slice for `raze`, buy then burn slices for
+    `counter_strike`, the rival's Locked slice for `return_captured`. Touches take a `raid_slot`
+    index; a slot qualifies when its program is the items program, it answers touch and its range is
+    12 bytes (11 plus the epoch byte).
+14. **`return_captured` moves tokens with `transfer_from_protocol` (R16)**, so on the rival's mint
+    only its Locked slot runs.
+15. **Accounts other programs write are read by hand** (`siege`, `counter_strike`, `raze`): the
+    rival's and our launch, pool and mint are `UncheckedAccount`, decoded with owner and
+    discriminator checks, so no `Account<..>` exit writes back a pre-swap copy.
+16. **Measured sandwich results** (`siege.rs`, `counter_strike.rs`, TEST launch: LP fee 0.3%,
+    creator fee 1%): an attacker who bought 0.1, 0.5 or 1 SOL of the rival before a siege, and sold
+    after, ended with 9.998, 9.985 and 9.969 SOL of 10 (at 0.5 and 1 SOL the premium check made the
+    siege wait); around a counter-strike with 0.1, 0.5 and 2 SOL, 9.998, 9.991 and 9.963.
+17. **Tests write what other branches own.** Slot tables are written into upstream launches' mints
+    (the slot-aware launchpad is M3b); the War orders `Item`, `Template`, `ForgeCounter`,
+    `RaidLedger` and `Observations` are written with `put` in the stand-ins' Anchor layouts; the
+    treaty-inflow test writes a `WarState` directly for a kit launch, since the kit cannot sit in a
+    Locked slot in this branch (R9 is the kitcomp branch).
+18. **For the integrator:** M1's `programs/tests/tests/slots.rs` fails `cargo clippy -D warnings`
+    (an unneeded `mut` at line 134, a slice clone at line 236); not changed here.
+
+### Integration steps
+
+1. **Armory (M2):** replace `foreign::{Item, Template, Manifest, ForgeCounter, disc::{ITEM,
+   TEMPLATE, FORGE_COUNTER}}` and `PARAM_FIELDS` with the `hookwars_armory` crate's types; build
+   `mint_loot` with the armory's client and pass `create_item`'s accounts after `owner`; fill
+   `RollRevealed.item` from the armory's item derivation; delete `war_armory_stub` and switch the
+   suites to the real armory (templates registered, items created, `ForgeCounter` from real forges).
+2. **Items (M3b):** replace `foreign::{RaidLedger, RaidWindow, Mark, RAID_TABLE_LEN,
+   disc::RAID_LEDGER}` and `common::WarTouch` with the `hookwars_items` crate's; check its Raid range
+   layout against `common::RaidRange`; delete `war_items_stub`; give the Raid slot's real extras
+   (`extra_count`) in the suites' touches.
+3. **DEX (M3a):** replace `foreign::{ObservationHeader, Observation, Observations, OBS_HEADER_LEN,
+   disc::OBSERVATIONS, spot_q64}` and the TWAP read with `bordrless_swap` / `bordrless_core`'s;
+   confirm whether `Observations` is an Anchor account (this branch assumes its discriminator);
+   replace the suites' `put_observations` with real swaps over time.
+4. **Launchpad (M3b):** slot tables from `prepare_launch` and `init_war` in the launch's setup;
+   delete the harness's `add_slot` patching.
+5. **Companion (kitcomp):** add a funding test through `claim_fees` with `war_bps`.
+6. **Kit (R9, D-7):** with the kit in a Locked slot, run the treaty-inflow test on a real war token
+   (drop `put_war_state`).
+7. **Deployment:** the DEX config's `fee_collector` set to `["prize-vault"]` under the war program
+   (10.4); a randomness adapter program for the chosen oracle (D-4).
+8. **Pin the precomputed discriminators** (`foreign::disc`, `oracle::REQUEST_RANDOMNESS`,
+   `loot::MINT_LOOT`) against the owning crates' `Discriminator` in a host test once those crates
+   are in the workspace.

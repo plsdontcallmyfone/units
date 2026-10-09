@@ -48,7 +48,7 @@ entries, call height and compute units, and asserts a ceiling.
 | Raid buy via `swap_route` | 2 hops up to `MAX_ROUTE_HOPS` | `budgets.rs::route_*` |
 | Wallet transfer | 0 to `MAX_SLOTS` slots | `budgets.rs::transfer_*` |
 | `create_launch` | Plain; kit + 1 item; kit + max items; companion | `budgets.rs::launch_*` |
-| `siege`, `counter_strike`, `raze` | kit off on the rival (R10) | `budgets.rs::war_*` |
+| `siege`, `counter_strike`, `raze` | kit off on the rival (R10) | `budgets_war.rs::war_budgets` (measured, below) |
 | `settle_equip` | token side, pool side | `budgets.rs::settle_*` |
 | `execute` equip with registry creation | each template | `budgets.rs::equip_*` |
 | `roll` and `reveal` | with the chosen oracle (D-4) | `budgets.rs::loot_*` |
@@ -68,6 +68,29 @@ instruction names in one lookup table):
 | `execute` equip, War orders (no vault, no royalty holding) | 20 | 789 | 296 | 8 | 3 | 95,959 |
 | `execute` equip, Transfer Fee (equip vault, royalty holding) | 25 | 949 | 301 | 12 | 3 | 138,093 |
 | `forge`, two Raid items | 22 | 849 | 294 | 23 | 3 | 159,054 |
+
+**War paths, measured (M4/M5, `budgets_war.rs::war_budgets`):**
+
+| Path | Keys | v0 bytes (lookup table) | Trace | Height | CU |
+| --- | --- | --- | --- | --- | --- |
+| `init_war` | 16 | 281 | 10 | 3 | 87,566 |
+| `siege` (rival a war token, marked) | 37 | 346 | 22 | 4 | 312,139 |
+| `raze` | 34 | 339 | 19 | 4 | 273,955 |
+| `counter_strike` | 34 | 348 | 24 | 4 | 324,581 |
+| `claim_bounty` | 24 | 304 | 12 | 4 | 117,702 |
+| `roll` | 16 | 290 | 9 | 3 | 63,689 |
+| `reveal` (armory stand-in, mints nothing) | 13 | 275 | 4 | 2 | 36,799 |
+| `claim_quest` (Raid) | 15 | 286 | 10 | 3 | 79,183 |
+| `submit_candidate` | 8 | 269 | 3 | 2 | 21,990 |
+| `split_protocol_fees` (with a winner) | 20 | 304 | 11 | 4 | 88,099 |
+
+Account sizes with the provisional layout constants (`MAX_CAPTURED` 8, `LOOT_TABLE_LEN` 8,
+`PARAM_FIELDS` 11): `WarConfig` 551 bytes (rent 4,725,840 lamports), `WarState` 984 (7,739,520),
+`Season` 178 (2,129,760), `LootTable` 775 (6,284,880), `RollRequest` 198 (2,268,960), `QuestMark` 90
+(1,517,280). Heights include the self-CPI events. Measured by
+`programs/tests/tests/budgets_war.rs::war_budgets` (LiteSVM, the M4/M5 branch, 2026-10-09), on
+launch pools with no kit and slot tables of a War slot and a touch-only Raid slot; heavier rival or
+token items add their own cost to `siege`, `raze` and `counter_strike`.
 
 These measurements set `MAX_SLOTS`, `MAX_CUTTING_SLOTS`, `MAX_ROUTE_HOPS`, `OBS_RING_LEN`,
 `PARAM_FIELDS`, `MAX_CAPTURED`, `RAID_TABLE_LEN` and `LOOT_TABLE_LEN` (00 section 6, set by M).

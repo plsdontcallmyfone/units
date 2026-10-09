@@ -29,6 +29,11 @@ hookwars-armory = { path = "../hookwars_armory", features = ["no-entrypoint"] }
 hookwars-items = { path = "../hookwars_items", features = ["no-entrypoint"] }
 launch-stub = { path = "../launch_stub", features = ["no-entrypoint"] }
 war-stub = { path = "../war_stub", features = ["no-entrypoint"] }
+# Hookwars: the war program and its test-only stand-ins.
+hookwars-war = { path = "../hookwars_war", features = ["no-entrypoint"] }
+war-items-stub = { path = "../war_items_stub", features = ["no-entrypoint"] }
+war-armory-stub = { path = "../war_armory_stub", features = ["no-entrypoint"] }
+randomness-stub = { path = "../randomness_stub", features = ["no-entrypoint"] }
 solana-account = "=4.7.0"
 solana-hash.workspace = true
 solana-keypair.workspace = true
