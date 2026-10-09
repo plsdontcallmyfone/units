@@ -230,7 +230,11 @@ pub fn process_set_directive(
             .policy
             .tracked
             .iter()
-            .map(|t| (t.mint, t.per_action, t.per_day))
+            .map(|t| TrackedLimit {
+                mint: t.mint,
+                per_action: t.per_action,
+                per_day: t.per_day,
+            })
             .collect(),
         targets: constraints.allowed_targets.clone(),
     };

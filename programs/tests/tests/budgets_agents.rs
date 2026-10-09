@@ -11,7 +11,7 @@ use bordrless_program_tests::env::compute_unit_limit;
 use bordrless_program_tests::slots::item_slot;
 use bordrless_token::client as token;
 use hookwars_agents::constants::{kind, pda as apda, record_kind};
-use hookwars_agents::state::PolicyLimits;
+use hookwars_agents::state::{PolicyLimits, TrackedLimit};
 use hookwars_common::{ids, template_id, EquipConfig};
 use solana_keypair::Keypair;
 use solana_signer::Signer;
@@ -85,7 +85,7 @@ fn agents_budgets() {
     let limits = PolicyLimits {
         per_action_lamports: SOL,
         per_day_lamports: SOL,
-        tracked: vec![(mint, 1_000, 1_000)],
+        tracked: vec![TrackedLimit { mint, per_action: 1_000, per_day: 1_000 }],
         targets: vec![bordrless_token::ID],
     };
     let ix = aw.init_policy_ix(&a, limits);

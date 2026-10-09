@@ -328,3 +328,62 @@ pub fn wallet_level(profile: &AccountInfo, skills: &AccountInfo, wallet: &Pubkey
         None => 0,
     })
 }
+
+/// The accounts a protocol program passes to count a wallet's action and gate on its level.
+pub struct RecordAccs<'a, 'info> {
+    /// `["skills"]`.
+    pub skills: &'a AccountInfo<'info>,
+    /// The wallet's profile, or its empty address.
+    pub profile: &'a AccountInfo<'info>,
+    /// `["social-caller"]` under the calling program.
+    pub caller: &'a AccountInfo<'info>,
+    /// This program's event authority.
+    pub event_authority: &'a AccountInfo<'info>,
+    /// This program.
+    pub program: &'a AccountInfo<'info>,
+}
+
+/// For callers (craft, book, market): bumps `counter` of the profile in `s` through
+/// `record_wallet`, signed as `caller_program`'s `["social-caller"]`, when the skill table names
+/// `caller_program`; otherwise nothing is counted and nothing fails.
+pub fn record_wallet_cpi<'info>(s: &RecordAccs<'_, 'info>, caller_program: &Pubkey, counter: u8, value: u64) -> Result<()> {
+    use anchor_lang::solana_program::instruction::Instruction;
+    use anchor_lang::solana_program::program::invoke_signed;
+    use anchor_lang::{InstructionData, ToAccountMetas};
+    require_keys_eq!(*s.program.key, crate::ID, SocialError::WrongAccount);
+    let table = read_skills(s.skills)?;
+    if !table.callers.contains(caller_program) {
+        return Ok(());
+    }
+    let (caller, bump) = eco::caller_pda(eco::SOCIAL_CALLER_SEED, caller_program);
+    require_keys_eq!(*s.caller.key, caller, SocialError::WrongAccount);
+    let ix = Instruction {
+        program_id: crate::ID,
+        accounts: crate::accounts::RecordWallet {
+            caller,
+            skills: *s.skills.key,
+            profile: *s.profile.key,
+            event_authority: *s.event_authority.key,
+            program: crate::ID,
+        }
+        .to_account_metas(None),
+        data: crate::instruction::RecordWallet {
+            caller_program: *caller_program,
+            counter,
+            value,
+        }
+        .data(),
+    };
+    invoke_signed(
+        &ix,
+        &[
+            s.caller.clone(),
+            s.skills.clone(),
+            s.profile.clone(),
+            s.event_authority.clone(),
+            s.program.clone(),
+        ],
+        &[&[eco::SOCIAL_CALLER_SEED, &[bump]]],
+    )?;
+    Ok(())
+}

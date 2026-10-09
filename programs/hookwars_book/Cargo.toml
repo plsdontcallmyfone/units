@@ -1,20 +1,20 @@
 [package]
-name = "hookwars-market"
-description = "Hookwars (units): items as assets (docs/spec/10-expansion.md): listings and sales, collections, item rental, commissions."
+name = "hookwars-book"
+description = "Hookwars (units): a fully escrowed spot order book for materials and standing bids for item classes (docs/spec/11-hook-economy.md section 6)."
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "hookwars_market"
+name = "hookwars_book"
 
 [features]
 default = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-log-ix-name = []
-idl-build = ["anchor-lang/idl-build", "bordrless-token/idl-build", "hookwars-common/idl-build", "hookwars-armory/idl-build", "hookwars-social/idl-build"]
+idl-build = ["anchor-lang/idl-build", "bordrless-token/idl-build", "hookwars-common/idl-build", "hookwars-armory/idl-build", "hookwars-social/idl-build", "hookwars-market/idl-build", "hookwars-craft/idl-build"]
 anchor-debug = []
 custom-heap = []
 custom-panic = []
@@ -27,6 +27,8 @@ bordrless-hook = { path = "../../crates/bordrless-hook" }
 hookwars-common = { path = "../../crates/hookwars-common" }
 hookwars-armory = { path = "../hookwars_armory", features = ["no-entrypoint"] }
 hookwars-social = { path = "../hookwars_social", features = ["no-entrypoint"] }
+hookwars-market = { path = "../hookwars_market", features = ["no-entrypoint"] }
+hookwars-craft = { path = "../hookwars_craft", features = ["no-entrypoint"] }
 
 [lints]
 workspace = true

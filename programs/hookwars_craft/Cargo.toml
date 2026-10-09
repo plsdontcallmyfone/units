@@ -1,13 +1,13 @@
 [package]
-name = "hookwars-market"
-description = "Hookwars (units): items as assets (docs/spec/10-expansion.md): listings and sales, collections, item rental, commissions."
+name = "hookwars-craft"
+description = "Hookwars (units): materials, capped drops from verified activity, recipes, repairs and item wear (docs/spec/11-hook-economy.md section 5)."
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "hookwars_market"
+name = "hookwars_craft"
 
 [features]
 default = []
