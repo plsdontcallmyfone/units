@@ -219,6 +219,8 @@ fn render() -> String {
             times_besieged: rng.below(50) as u32,
             counter_strikes: rng.below(50) as u32,
             treaty_secs: rng.below(10_000_000),
+            // Security review 2 M-B: not read by the score itself.
+            funded: 0,
         };
         let penalize = rng.below(2) == 1;
         let season = Season {
