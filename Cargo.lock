@@ -1633,9 +1633,13 @@ name = "hookwars-items"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
+ "bordrless-core",
  "bordrless-hook",
+ "bordrless-swap",
  "bordrless-token",
+ "hookwars-armory",
  "hookwars-common",
+ "hookwars-war",
  "solana-security-txt",
 ]
 
@@ -1652,6 +1656,8 @@ dependencies = [
  "bordrless-launch",
  "bordrless-swap",
  "bordrless-token",
+ "hookwars-armory",
+ "hookwars-common",
  "solana-security-txt",
 ]
 
