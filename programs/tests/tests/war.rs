@@ -258,3 +258,55 @@ fn war_orders_must_be_the_ones_the_war_slot_names() {
         .send(&[ix], &[&holder])
         .expect_code(war_code(WarError::WrongWarOrders));
 }
+
+#[test]
+fn treaty_inflow_streams_to_holders_through_the_kit() {
+    let mut ww = WarWorld::new();
+    let rules = LaunchRules {
+        holder_fee_buy_bps: 100,
+        holder_fee_sell_bps: 100,
+        ..LaunchRules::NONE
+    };
+    let mint = ww.launch("TRTY", rules);
+    // Holders, so the kit has someone to share with.
+    for _ in 0..3 {
+        ww.buyer(&mint, 2 * SOL);
+    }
+    ww.put_war_state(&mint);
+    let inbox = hookwars_war::state::inbox_address(&mint).0;
+    let inbox_holding = token::holding_address(&ww.w.sol, &inbox);
+    let share_ix = |ww: &WarWorld, cranker: &anchor_lang::prelude::Pubkey, amount: u64| {
+        let inner = [
+            bordrless_kit::client::share(inbox, mint, inbox_holding, ww.w.sol, amount),
+            bordrless_bridge::client::unwrap_sol(inbox, 0),
+        ];
+        war::share_treaty_inflow(*cranker, mint, &inner)
+    };
+    // Empty inbox: nothing to share.
+    let (tx, _) = ww.crank(|c, ww| share_ix(ww, c, 1));
+    tx.expect_code(war_code(WarError::NothingToDo));
+    // A partner's treaty paid 1 SOL into the inbox (here: a plain transfer, as settle_equip does).
+    let payer = ww.w.wallet_with_sol(SOL);
+    let ix = token::transfer(
+        payer.pubkey(),
+        token::holding_address(&ww.w.sol, &payer.pubkey()),
+        inbox_holding,
+        ww.w.sol,
+        None,
+        vec![],
+        SOL,
+    );
+    ww.w.env.send_paid_by(&[ix], &payer, &[]).ok();
+    let vault = bordrless_kit::client::reward_vault_address(&mint, &ww.w.sol);
+    let vault_before = ww.w.env.holding(&ww.w.sol, &bordrless_kit::client::kit_config_address(&mint));
+    let _ = vault;
+    let (tx, cranker) = ww.crank(|c, ww| share_ix(ww, c, 1));
+    let e = tx.event::<TreatyInflowShared>();
+    let bounty = SOL * u64::from(TEST_PARAMS.max_crank_bounty_bps) / 10_000;
+    assert_eq!((e.amount, e.bounty), (SOL - bounty, bounty));
+    assert_eq!(e.cranker, cranker.pubkey());
+    assert_eq!(ww.w.env.holding(&ww.w.sol, &inbox), 0);
+    let vault_after = ww.w.env.holding(&ww.w.sol, &bordrless_kit::client::kit_config_address(&mint));
+    assert_eq!(vault_after - vault_before, SOL - bounty);
+    assert_eq!(ww.state(&mint).treaty_shared_total, SOL - bounty);
+}

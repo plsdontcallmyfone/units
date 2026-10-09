@@ -523,6 +523,46 @@ impl WarWorld {
         }
     }
 
+    /// Writes a fresh `WarState` for `mint` directly (for a token whose mint cannot carry a slot
+    /// table in this branch, such as a kit launch with the upstream single hook), and creates its
+    /// treaty inbox's holding.
+    pub fn put_war_state(&mut self, mint: &Pubkey) {
+        let (key, bump) = WarState::address(mint);
+        let s = WarState {
+            version: 1,
+            bump,
+            chest_bump: chest_address(mint).1,
+            inbox_bump: inbox_address(mint).1,
+            mint: *mint,
+            launch: launch::launch_address(mint),
+            last_seen_balance: 0,
+            funded_total: 0,
+            spent_siege: 0,
+            spent_counter: 0,
+            paid_bounties: 0,
+            paid_cranks: 0,
+            razed_proceeds: 0,
+            treaty_shared_total: 0,
+            last_siege_at: 0,
+            last_counter_at: 0,
+            last_treaty_tick: 0,
+            under_siege_until: 0,
+            siege_by_chest: Pubkey::default(),
+            captured: [Captured::default(); hookwars_war::constants::MAX_CAPTURED],
+            season_id: 0,
+            season: SeasonCounters::default(),
+            prev_season: SeasonCounters::default(),
+            reserved: [0; 64],
+        };
+        self.put_anchor(key, hookwars_war::ID, &s, WarState::LEN);
+        let payer = self.w.env.payer.insecure_clone();
+        let inbox = inbox_address(mint).0;
+        self.w
+            .env
+            .send(&[token::create_holding(payer.pubkey(), self.w.sol, inbox)], &[])
+            .ok();
+    }
+
     /// Writes `owner`'s Raid range in its holding of `mint` (the holding must exist).
     pub fn set_raid(&mut self, mint: &Pubkey, owner: &Pubkey, season: u32, points: u32, tickets: u16) {
         let key = token::holding_address(mint, owner);

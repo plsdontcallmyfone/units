@@ -109,7 +109,7 @@ pub fn process_accrue_treaty_time<'info>(
         .treaty_template_id
         .ok_or(WarError::NoTreatyTemplate)?;
     let rem = ctx.remaining_accounts;
-    require!(rem.len() % 2 == 0, WarError::MissingAccount);
+    require!(rem.len().is_multiple_of(2), WarError::MissingAccount);
     let mint_key = ctx.accounts.mint.key();
     let s = &mut ctx.accounts.war_state;
     s.roll(current);

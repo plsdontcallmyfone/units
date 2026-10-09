@@ -32,7 +32,7 @@ fn the_raid_quest_spends_points_for_a_ticket_once_a_period() {
     ww.set_raid(&t.mint, &holder.pubkey(), s.number, 3 * need, 0);
     let p = period(&ww, &s);
     let ix = war::claim_quest(holder.pubkey(), t.mint, s.number, quest::RAID, p, RAID_SLOT, vec![]);
-    let e = ww.w.env.send(&[ix.clone()], &[&holder]).event::<QuestClaimed>();
+    let e = ww.w.env.send(std::slice::from_ref(&ix), &[&holder]).event::<QuestClaimed>();
     assert_eq!((e.quest_id, e.period), (quest::RAID, p));
     assert_eq!(ww.raid(&t.mint, &holder.pubkey()), (s.number, 2 * need, 1));
     // Once a period.

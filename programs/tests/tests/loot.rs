@@ -100,12 +100,12 @@ fn a_roll_spends_a_ticket_and_a_reveal_mints_from_the_table() {
     let revealer = ww.w.env.funded(SOL);
     let ix = reveal_ix(&ww, &t, &holder.pubkey(), &revealer.pubkey(), 1);
     ww.w.env
-        .send_paid_by(&[ix.clone()], &revealer, &[])
+        .send_paid_by(std::slice::from_ref(&ix), &revealer, &[])
         .expect_code(war_code(WarError::RandomnessNotReady));
     // Fulfilled in the request's own slot: refused (a value must come after the request).
     fulfill(&mut ww, &roll, [0; 32]);
     ww.w.env
-        .send_paid_by(&[ix.clone()], &revealer, &[])
+        .send_paid_by(std::slice::from_ref(&ix), &revealer, &[])
         .expect_code(war_code(WarError::RandomnessNotReady));
     // A later slot: revealed. Value 0 draws the first entry at its minimums.
     ww.w.env.warp(1);
@@ -197,7 +197,7 @@ fn a_cancelled_roll_returns_rent_and_never_the_ticket() {
     let holding = token::holding_address(&t.mint, &holder.pubkey());
     let cancel = war::cancel_roll(holder.pubkey(), holding, 1);
     ww.w.env
-        .send(&[cancel.clone()], &[&holder])
+        .send(std::slice::from_ref(&cancel), &[&holder])
         .expect_code(war_code(WarError::RollNotExpired));
     ww.w.env.warp(TEST_PARAMS.roll_expiry_secs);
     let e = ww.w.env.send(&[cancel], &[&holder]).event::<RollCancelled>();
