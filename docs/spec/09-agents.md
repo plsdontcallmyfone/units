@@ -600,3 +600,118 @@ Events (self-CPI): `PassportRegistered`, `ProfileUpdated`, `PassportStatus`, `Ag
 4. A4: policy wallet; `agents_policy.rs`.
 5. A5: bonds, after the review 1 fixes are merged; `agents_bonds.rs`.
 6. A6: indexer, API, pages; Instance agents registered as the first passports on devnet.
+
+## 20. Agents implementation notes (2026-10-09, branch agents)
+
+Built: `programs/hookwars_agents` (`GUTwa3zv83CKoq3TNYL9W1bJeUSEBVxR3MkGdxiXnZJ9`), template 42 in
+`programs/hookwars_items/src/templates/soulbound.rs` with its dispatch entries and shape in
+`hookwars-common`, the test-only `programs/agents_caller_stub` (at the war id, signs
+`["agents-caller"]`), `programs/tests/src/agents.rs`, `tests/agents.rs`, `tests/budgets_agents.rs`.
+Where the build differs from the text above:
+
+1. **Badge creation is three instructions.** `register_passport` creates the passport, the
+   `AgentKey`, the `OperatorIndex` and the badge mint (`create_slot_mint`: decimals 0, max supply 1,
+   one Defense slot with equip rule Locked, may refuse, no cut, no data; mint, freeze and metadata
+   authority the agents signer; slot authority the armory's `["slots", mint]`). `equip_badge` then
+   calls the armory's `equip_launch` signing as `["armory-caller", badge_mint]` under this program
+   (needs integration request 1), and `issue_badge` mints 1 to the agent key's holding once slot 0
+   holds `AgentsConfig.soulbound_item`, then revokes the mint authority. One transaction for all of
+   it would carry the armory's equip accounts and the registry, too many keys beside the passport
+   accounts. `register_passport` takes the operator's next `index` as an argument and checks it.
+2. **Soulbound binds only on badges.** Its one extra is the mint; it refuses a transfer only when
+   the mint's freeze authority is the agents signer (`hookwars_common::ids::AGENTS_SIGNER`).
+   Equipped on any other token it answers nothing, so it can never be used to make an ordinary token
+   untransferable. Its error has its own enum (`SoulboundError`, offset 7000, code 7000) so
+   `ItemsError` is unchanged. `check_module_targets` in `hookwars_items/src/equip.rs` gains template
+   42 in the no-target list (one line).
+3. **Protocol transfers.** The badge's slot is kind Defense, not Locked, so a
+   `transfer_from_protocol` skips it (R16). No protocol vault can hold a badge (the badge is minted
+   only to the agent key and every send is refused), so section 4.3's "protocol transfers are
+   refused too" has no case to apply to.
+4. **Passport fields added:** `links` (live links), `attested_until` (the proof is recomputed from
+   these two, not stored alone), `badge_issued`. `Attestation` gains `agent_key` (the key its report
+   data binds; a rotation leaves it stale, and `endorse_attestation` refuses a stale one) and
+   `round` (incremented per submission); `Endorsement` gains `round`, so an endorsement of an earlier
+   quote never counts and one verifier counts once per round. `AgentsConfig` gains `fee_collector`
+   (the "protocol fee collector" of 3.1), `soulbound_item` and `signer_bump`; the verifier and target
+   lists change through the same timelocked `propose_config` / `apply_config` / `cancel_config` as
+   the params.
+5. **Bond marks.** A `BondMark` at `["bond-mark", proposal]` per bonded proposal makes "no other
+   live bond on either proposal" a creation failure (the `Bond` seed names only `proposal_a`).
+6. **Structural caps** (the account space needs them; the params narrow them): name 32 and URI 200
+   bytes (the token program's metadata bounds, since the badge carries both), handle 32 bytes;
+   `VERIFIERS_MAX` 8, `POLICY_TARGETS_MAX` 8, `POLICY_MAX_TRACKED` 4, provisional build values like
+   `MAX_MODULES`, to measure.
+7. **Rejection quorum** is measured against the token's whole supply, stricter than the armory's
+   eligible supply, so a bond is never forfeited where the armory's own quorum was not met.
+   `resolve_bond` reads both proposals live: it must run before the armory closes them (request 6).
+8. **Forfeits land as lamports** on the two `["treaty-inbox", mint]` PDAs under war (half each,
+   the odd lamport to the second), not in their bridged-SOL holdings (request 4).
+9. **`spend`** forwards the outer transaction's signers (the agent key) as signers and marks the
+   vault a signer; measured outflow is lamports plus bridged SOL for the SOL limits, and each
+   tracked mint's own limits. `withdraw` of a token takes `[mint, vault holding, operator holding,
+   the mint's hook accounts...]` as remaining accounts.
+10. **`record`** emits `AgentCredited` by self-CPI, one level above the `record` call.
+11. **Tests:** the ratified, held and rejected bond paths set the armory `Proposal` status and votes
+    (and, for "held", the two mints' slot item) directly in LiteSVM: executing a Treaty needs a
+    partner with the kit's holder rewards (M3b items notes), and the armory's own transitions are its
+    suites' subject. The real `propose` builds both proposals. Badges are equipped through
+    `launch_stub` until request 1 lands; a test shows `equip_badge` reaching the armory and being
+    refused with `NotLaunchCaller` today. The tests crate enables LiteSVM's `precompiles` feature so
+    link statements are verified by the real ed25519 program (Cargo.lock gains `agave-precompiles`
+    and its dependencies; no existing version changed).
+
+## 21. Integration requests
+
+Changes this branch needs in programs it does not own (the armory, war and items lanes).
+
+1. **Armory, `process_equip_launch`** (`programs/hookwars_armory/src/lib.rs`): accept
+   `launch_caller == PDA(["armory-caller", mint], <AGENTS_ID>)` as well as the launchpad's, only when
+   the mint is a badge: `slot_count == 1`, slot 0 kind Defense with equip rule Locked, the mint's
+   freeze authority is `hookwars_common::ids::AGENTS_SIGNER`, and `entry.item` is an item of template
+   42. Everything else in `equip_launch` is unchanged (R28).
+2. **Armory, template 42 creation:** `create_item` refuses templates whose `open_authoring` is false,
+   so a closed Soulbound template has no way to get its one item. Add an admin path (the armory admin
+   may create an item of a closed template), or register 42 with open authoring; the suites register
+   it open. Also refuse template 42 in `propose` and `execute` on any mint that is not a badge
+   (defence in depth; the template already answers nothing there).
+3. **Armory, optional record accounts** on `create_item`, `create_composite` (`ITEMS_AUTHORED`),
+   `forge` (`ITEMS_FORGED`), `claim_royalty` (`ROYALTY_CLAIM`, value = amount when the cut mint is
+   bridged SOL, else 0), `execute` and `equip_launch` (`ITEMS_EQUIPPED`, for the equipped item's
+   author's passport, only when the proposer or launch creator is not the author): three optional
+   trailing accounts `agent_passport` (mut), `<AGENTS_ID>`, `["agents-caller"]` under the armory.
+   After the instruction's own effects, invoke `hookwars_agents::record(kind: u8, value: u64)` with
+   accounts `[caller (signer), passport (mut), actor, agents event authority, <AGENTS_ID>]`, built by
+   hand (discriminator `sha256("global:record")[..8]`, Borsh args): the armory must not depend on the
+   `hookwars-agents` crate, which depends on the armory crate. Kind values are
+   `hookwars_agents::constants::record_kind`.
+4. **War:** the same optional accounts and hand-built call on `siege`, `counter_strike`, `raze`,
+   `share_treaty_inflow`, `split_protocol_fees`, `submit_candidate`, `finalize_season` (`CRANK`,
+   value = what the bounty was computed on), `claim_bounty` (`BOUNTY`, value = paid) and `reveal`
+   (`LOOT_REVEAL`). `share_treaty_inflow` should first wrap lamports above rent held by the
+   `["treaty-inbox", mint]` PDA into its bridged-SOL holding (bond forfeits arrive as lamports, note
+   8). `pay_broker_fee` and the War orders field `broker_fee_lamports` stay deferred (D-12).
+5. **Items, `settle_equip`:** the same optional accounts and call (`CRANK`, value = amount settled).
+6. **Armory, proposal closing:** refuse to close a `Proposal` while `["bond-mark", proposal]`
+   under `<AGENTS_ID>` exists and its bond is `Posted`, or have clients run `resolve_bond` before
+   closing. Without one of the two, a bond whose proposals were closed first stays `Posted` with
+   its lamports locked.
+7. **App:** section 10 (indexer tables, API routes, pages) on the app branch.
+
+### 20.1 Measured (`tests/budgets_agents.rs::agents_budgets`, LiteSVM, 2026-10-09)
+
+"With table" puts every account the transaction names in one lookup table.
+
+| Path | Keys | v0 bytes | With table | Trace | Height | CU |
+| --- | --- | --- | --- | --- | --- | --- |
+| `register_passport` (two signers, badge mint created) | 14 | 711 | 435 | 11 | 3 | 72,243 |
+| `issue_badge` | 13 | 551 | 275 | 10 | 3 | 66,092 |
+| `link_social` with its ed25519 instruction | 10 | 731 | 579 | 6 | 2 | 31,511 |
+| `submit_attestation` | 8 | 639 | 518 | 4 | 2 | 21,124 |
+| `endorse_attestation` | 9 | 419 | 267 | 4 | 2 | 27,675 |
+| `record` through a recorder (recorder at height 1) | 8 | 406 | 285 | 4 | 3 | 13,389 |
+| `spend`, one token transfer | 13 | 575 | 299 | 5 | 3 | 31,790 |
+| `post_bond` | 13 | 551 | 275 | 7 | 2 | 40,906 |
+
+Every path fits a legacy-size transaction without a table. `record` is height 2 under its caller and
+its event height 3, so a caller at height 1 that has finished its own CPIs stays inside 5 (R26).
