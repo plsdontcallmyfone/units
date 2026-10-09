@@ -1,29 +1,26 @@
 {
-  "name": "@hookwars/indexer",
+  "name": "@hookwars/api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Hookwars indexer: per-program signature cursors, self-CPI and log events, Postgres (docs/spec/06-app.md section 2).",
+  "description": "Hookwars API: reads from the indexer's Postgres, prepares transactions with the SDK (docs/spec/06-app.md sections 3 to 5).",
   "scripts": {
-    "migrate": "node src/main.ts migrate",
-    "once": "node src/main.ts once",
-    "start": "node src/main.ts run",
+    "start": "node src/main.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@hookwars/indexer": "workspace:^",
     "@hookwars/sdk": "workspace:^",
     "@hookwars/shared": "workspace:^",
     "@solana/web3.js": "1.98.4",
-    "pg": "8.16.3"
+    "pg": "8.16.3",
+    "sharp": "0.34.4"
   },
   "devDependencies": {
     "@types/node": "24.13.3",
     "@types/pg": "8.15.5",
     "typescript": "5.9.2",
     "vitest": "4.1.11"
-  },
-  "exports": {
-    "./*": "./src/*"
   }
 }
