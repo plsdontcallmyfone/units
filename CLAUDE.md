@@ -3,7 +3,7 @@
 **Name: units** (owner, 2026-10-09), lowercase wordmark, text only. "Hookwars" remains in paths, crate names (hookwars_*) and older docs until the global rename, which runs after every parallel branch has merged. Keep the name out of program ids.
 
 A fork of Bordrless (github.com/BordrlessDex/bordrless-programs, Apache-2.0), remote `upstream`.
-Remote `origin` = github.com/plsdontcallmyfone/units (private, created 2026-10-09). Only the lead pushes, and only main after a green merge; workers never push. Spot only. No em dashes anywhere. Never invent numbers:
+Remote `origin` = github.com/plsdontcallmyfone/units (public since 2026-10-09). Only the lead pushes, and only main after a green merge; workers never push. Spot only. No em dashes anywhere. Never invent numbers:
 every parameter is named in `docs/spec/00-overview.md` "Parameters" and is "to set" until a test
 measures or the owner decides it.
 
