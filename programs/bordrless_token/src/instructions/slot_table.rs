@@ -1,5 +1,5 @@
 // Changed by Hookwars: new file, slot-table instructions (create_slot_mint, set_slot_item,
-// set_vote_lock, touch).
+// set_vote_lock, touch); M2: Fee items may write data, Relation items may carry pool flags.
 //! The slot table (docs/spec/01-token-slots.md sections 1, 4 and 5).
 
 use anchor_lang::prelude::*;
@@ -263,7 +263,10 @@ pub struct SetSlotItem<'info> {
 /// Token flags a slot of `kind` with `bounds` may carry.
 fn allowed_flags(kind: u8, bounds: &SlotBounds) -> u16 {
     let base = match kind {
-        slot_kind::FEE => slot_flags::TRANSFER | slot_flags::TRANSFER_RETURNS_DELTA,
+        // Hookwars M2: Half-Life is a Fee item that writes hook data (04 section 3.7).
+        slot_kind::FEE => {
+            slot_flags::TRANSFER | slot_flags::TRANSFER_RETURNS_DELTA | slot_flags::WRITES_HOOK_DATA
+        }
         slot_kind::REWARD | slot_kind::RELATION => {
             slot_flags::TRANSFER
                 | slot_flags::BURN
@@ -329,7 +332,9 @@ pub fn process_set_slot_item(
         );
         require!(
             flags & !allowed_flags(slot.kind, &slot.bounds) == 0
-                && (pool_flags == 0 || slot.kind == slot_kind::POOL),
+                && (pool_flags == 0
+                    || slot.kind == slot_kind::POOL
+                    || slot.kind == slot_kind::RELATION),
             TokenError::SlotFlagsNotAllowed
         );
         if flags & slot_flags::TRANSFER_RETURNS_DELTA != 0 {
@@ -363,7 +368,8 @@ pub fn process_set_slot_item(
     } else {
         s.program = program;
         s.signer_bump = hook_signer(&crate::ID, &program).1;
-        s.launch_signer_bump = if s.kind == slot_kind::POOL {
+        // Hookwars M2: Relation items (Treaty, Tribute) have a pool half too (04 section 3).
+        s.launch_signer_bump = if s.kind == slot_kind::POOL || s.kind == slot_kind::RELATION {
             hook_signer(&LAUNCH_ID, &program).1
         } else {
             0

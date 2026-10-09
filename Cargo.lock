@@ -1599,6 +1599,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "hookwars-armory"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "bordrless-hook",
+ "bordrless-swap",
+ "bordrless-token",
+ "hookwars-common",
+ "solana-security-txt",
+]
+
+[[package]]
+name = "hookwars-common"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+]
+
+[[package]]
+name = "hookwars-items"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "bordrless-hook",
+ "bordrless-token",
+ "hookwars-common",
+ "solana-security-txt",
+]
+
+[[package]]
 name = "hybrid-array"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1702,6 +1732,13 @@ name = "keccak-const"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57d8d8ce877200136358e0bbff3a77965875db3af755a11e1fa6b1b3e2df13ea"
+
+[[package]]
+name = "launch-stub"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+]
 
 [[package]]
 name = "lazy_static"
@@ -4298,6 +4335,13 @@ name = "void"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
+
+[[package]]
+name = "war-stub"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+]
 
 [[package]]
 name = "wasi"

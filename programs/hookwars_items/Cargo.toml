@@ -1,0 +1,30 @@
+[package]
+name = "hookwars-items"
+description = "Hookwars: one program implementing every template (docs/spec/04-templates.md). M2: the entry points the armory calls (validate_params, manifest, combine_params, init_equip, close_equip); the hook callbacks and settle_equip are M3."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "hookwars_items"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "bordrless-hook/idl-build", "bordrless-token/idl-build", "hookwars-common/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+anchor-lang.workspace = true
+solana-security-txt = { workspace = true }
+bordrless-hook = { path = "../../crates/bordrless-hook" }
+bordrless-token = { path = "../bordrless_token", features = ["no-entrypoint"] }
+hookwars-common = { path = "../../crates/hookwars-common" }
+
+[lints]
+workspace = true
