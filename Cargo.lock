@@ -1754,6 +1754,7 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "bordrless-hook",
+ "bordrless-launch",
  "bordrless-swap",
  "bordrless-token",
  "hookwars-common",
