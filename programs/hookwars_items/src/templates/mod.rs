@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M3b); expansion templates 43 to 45 (10).
+// Changed by Hookwars: new file (M3b); expansion templates 43 to 45 (10); arsenal waves D and E.
 //! Every template's behaviour (04 section 3, 08 section 4), one file per template. A template is a
 //! set of pure functions over an [`Env`] (who it is, its params and targets, its own extras) and
 //! the callback's arguments; the engine (`crate::engine`) checks signers and accounts, runs each
@@ -10,7 +10,7 @@
 use anchor_lang::prelude::*;
 use bordrless_hook::pool_item::ItemPoolContext;
 use bordrless_hook::{PoolHookArgs, TokenSlotArgs};
-use hookwars_common::{ids, pda, template_id as t, Params};
+use hookwars_common::{arsenal2 as a2, ids, pda, template_id as t, Params};
 
 pub mod boss;
 pub mod coalition;
@@ -27,6 +27,29 @@ pub mod spy;
 pub mod transfer_fee;
 pub mod treaty;
 pub mod wall;
+// Arsenal waves D and E (08 section 4).
+pub mod ally_pass;
+pub mod embargo;
+pub mod first_blood;
+pub mod garrison;
+pub mod gift_ember;
+pub mod guest_list;
+pub mod holder_stream;
+pub mod holdings;
+pub mod loyalty_pot;
+pub mod mercenary;
+pub mod patience;
+pub mod referral;
+pub mod sell_ladder;
+pub mod target_burn;
+pub mod war_levy;
+
+pub use holdings::held;
+
+/// The registry entry a client resolves per trade (R22): the buyer's holding of another mint, or
+/// the buyer's `Referred` account. `init_equip` writes fixed keys only (see the arsenal 2
+/// integration requests in 08), so this key stands in for the derived account.
+pub const DERIVED: Pubkey = Pubkey::new_from_array([0xD5; 32]);
 
 /// What a module sees.
 pub struct Env<'a, 'info> {
@@ -113,6 +136,33 @@ pub fn extras(template: u16, mint: &Pubkey, targets: &[Pubkey]) -> Vec<(Pubkey, 
         t::HALF_LIFE | t::TRANSFER_FEE | t::LAUNCH_DECAY | t::MAX_TRANSACTION | t::DUST_GUARD => {
             v.push(launch(mint))
         }
+        // Arsenal waves D and E.
+        a2::GUEST_LIST => {
+            v.push(launch(mint));
+            v.push((DERIVED, false));
+        }
+        a2::ALLY_PASS => v.push((DERIVED, false)),
+        a2::REFERRAL => v.push((DERIVED, true)),
+        a2::GARRISON => v.push((pda::war_state(mint).0, false)),
+        a2::WAR_LEVY => {
+            v.push((pda::raid_ledger(mint).0, false));
+            v.push((pda::war_config().0, false));
+        }
+        a2::TARGET_BURN => {
+            v.push(launch(mint));
+            v.push((*mint, false));
+        }
+        a2::GIFT_EMBER | a2::SELL_LADDER | a2::LOYALTY_POT => v.push(launch(mint)),
+        a2::MERCENARY => {
+            v.push((pda::raid_ledger(mint).0, true));
+            v.push((pda::war_config().0, false));
+            v.push(launch(mint));
+        }
+        a2::PATIENCE => {
+            v.push((pda::raid_ledger(mint).0, true));
+            v.push(launch(mint));
+        }
+        a2::FIRST_BLOOD => v.push((a2::pda::first_blood(mint).0, true)),
         _ => {}
     }
     v
@@ -128,6 +178,16 @@ pub fn extra_count(template: u16, targets: usize) -> usize {
         t::SPY => 2 * targets,
         t::TREATY | t::TRIBUTE => targets * (1 + bordrless_token::constants::MAX_SLOTS),
         t::HALF_LIFE | t::TRANSFER_FEE | t::LAUNCH_DECAY | t::MAX_TRANSACTION | t::DUST_GUARD => 1,
+        // Arsenal waves D and E.
+        a2::GUEST_LIST | a2::WAR_LEVY | a2::TARGET_BURN | a2::PATIENCE => 2,
+        a2::MERCENARY => 3,
+        a2::ALLY_PASS
+        | a2::REFERRAL
+        | a2::GARRISON
+        | a2::GIFT_EMBER
+        | a2::SELL_LADDER
+        | a2::LOYALTY_POT
+        | a2::FIRST_BLOOD => 1,
         _ => 0,
     }
 }
@@ -209,6 +269,12 @@ pub fn token_before(
         t::TRANSFER_FEE => transfer_fee::token(env, args),
         t::MAX_TRANSACTION => max_transaction::max_tx(env, args),
         t::DUST_GUARD => max_transaction::dust(env, args),
+        // Arsenal waves D and E.
+        a2::GIFT_EMBER => gift_ember::token(env, args),
+        a2::SELL_LADDER => sell_ladder::token(env, args),
+        a2::LOYALTY_POT => loyalty_pot::token(env, args, src, dst),
+        a2::MERCENARY => mercenary::token(env, args, src, dst),
+        a2::PATIENCE => patience::token(env, args, src, dst),
         _ => Ok(TokenOut::default()),
     }
 }
@@ -217,6 +283,7 @@ pub fn token_before(
 pub fn touch(template: u16, env: &Env, args: &TokenSlotArgs, src: &[u8]) -> Result<Option<Vec<u8>>> {
     match template {
         t::RAID => raid::touch(env, args, src).map(Some),
+        a2::MERCENARY => mercenary::touch(env, args, src).map(Some),
         _ => Ok(None),
     }
 }
@@ -239,6 +306,19 @@ pub fn pool(
         t::LAUNCH_DECAY => launch_decay::pool(env, args, ctx, before),
         t::SELL_BURN => sell_burn::pool(env, args, ctx, before),
         t::BOSS => boss::pool(env, args, ctx, before),
+        // Arsenal waves D and E.
+        a2::GUEST_LIST => guest_list::pool(env, args, ctx, before),
+        a2::ALLY_PASS => ally_pass::pool(env, args, ctx, before),
+        a2::EMBARGO => embargo::pool(env, args, ctx, before),
+        a2::HOLDER_STREAM => holder_stream::pool(env, args, ctx, before),
+        a2::GARRISON => garrison::pool(env, args, ctx, before),
+        a2::WAR_LEVY => war_levy::pool(env, args, ctx, before),
+        a2::TARGET_BURN => target_burn::pool(env, args, ctx, before),
+        a2::MERCENARY => mercenary::pool(env, args, ctx, before),
+        a2::PATIENCE => patience::pool(env, args, ctx, before),
+        a2::LOYALTY_POT => loyalty_pot::pool(env, args, ctx, before),
+        a2::REFERRAL => referral::pool(env, args, ctx, before),
+        a2::FIRST_BLOOD => first_blood::pool(env, args, ctx, before),
         _ => Ok(PoolOut::default()),
     }
 }
@@ -259,6 +339,7 @@ pub fn token_destination(template: u16, targets: &[Pubkey]) -> Destination {
     match template {
         t::HALF_LIFE => Destination::Burn,
         t::TRANSFER_FEE => targets.first().map(|c| Destination::Owner(*c)).unwrap_or(Destination::None),
+        a2::GIFT_EMBER | a2::SELL_LADDER => Destination::Burn,
         _ => Destination::None,
     }
 }
@@ -273,6 +354,11 @@ pub fn pool_destination(template: u16, mint: &Pubkey, targets: &[Pubkey]) -> Des
             .first()
             .map(|p| Destination::Owner(treaty_inbox(p)))
             .unwrap_or(Destination::None),
+        // Arsenal waves D and E.
+        a2::EMBARGO | a2::WAR_LEVY => Destination::Owner(war_chest(mint)),
+        a2::HOLDER_STREAM => Destination::Owner(treaty_inbox(mint)),
+        a2::LOYALTY_POT => Destination::Owner(a2::pda::loyalty(mint).0),
+        a2::REFERRAL => Destination::Owner(a2::pda::referral_owner(mint).0),
         _ => Destination::None,
     }
 }

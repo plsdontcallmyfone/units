@@ -1,5 +1,6 @@
 // Changed by Hookwars: new file (M2), shared by hookwars_armory and hookwars_items; M3b: raid ledger,
-// war touches, launch reads, arsenal wave A templates, composites; expansion templates 43 to 45 (10).
+// war touches, launch reads, arsenal wave A templates, composites; expansion templates 43 to 45 (10);
+// arsenal waves D and E (`arsenal2`).
 //! Types and pure rules shared by the armory (docs/spec/02-armory.md) and the items program
 //! (docs/spec/04-templates.md): params (R7), the manifest (04 section 2.7), the equip config (04
 //! section 2.3), each template's fields and forge rules (04 section 3), seeds (00 section 4.3), the
@@ -431,6 +432,8 @@ pub fn shape(id: u16) -> Option<TemplateShape> {
         template_id::COALITION => (kind::RELATION, &[Keep, Keep], false),
         template_id::BOSS => (kind::POOL, &[Keep], false),
         template_id::RIVALRY => (kind::RELATION, &[Keep, Keep, Keep], false),
+        // Arsenal waves D and E (08 section 4): shapes in `arsenal2`.
+        id if arsenal2::is(id) => arsenal2::shape_of(id),
         _ => return None,
     };
     rules[..used.len()].copy_from_slice(used);
@@ -499,6 +502,8 @@ pub fn validate(id: u16, p: &Params) -> core::result::Result<(), ParamsError> {
         template_id::BOSS if p[0] == 0 => Err(ParamsError::BadParams),
         // Rivalry: [start unix seconds, duration seconds, war budget bps of the chest].
         template_id::RIVALRY if p[1] == 0 || p[2] > 10_000 => Err(ParamsError::BadParams),
+        // Arsenal waves D and E (08 section 4).
+        id if arsenal2::is(id) => arsenal2::validate(id, p),
         _ => Ok(()),
     }
 }
@@ -594,6 +599,8 @@ pub fn manifest(id: u16, p: &Params, max_targets: u8) -> core::result::Result<Ma
         template_id::BOSS => {
             m.pool_flags = pool_flags::AFTER_SWAP | pool_flags::MARKS;
         }
+        // Arsenal waves D and E (08 section 4).
+        id if arsenal2::is(id) => arsenal2::manifest(id, p, max_targets, &mut m),
         _ => {}
     }
     Ok(m)
@@ -1337,5 +1344,284 @@ mod tests {
         assert!(check_fields(template_id::TRANSFER_FEE, &min, &max, &p(&[10, 0])).is_ok());
         assert!(check_fields(template_id::TRANSFER_FEE, &min, &max, &p(&[10, 50])).is_err());
         assert!(check_fields(template_id::TRANSFER_FEE, &min, &max, &p(&[10, 100, 1])).is_err());
+    }
+}
+
+/// Arsenal waves D and E (08 section 4, ids per section 6): template ids, shapes, rules,
+/// manifests, and the seeds and accounts of their payouts (Referral, Loyalty Pot, First Blood).
+pub mod arsenal2 {
+    use super::*;
+
+    /// Guest List (08 4.2): [min_hold, open_after_secs]; one target mint.
+    pub const GUEST_LIST: u16 = 23;
+    /// Loyalty Pot (08 4.3): [sell_cut_bps, epoch_secs].
+    pub const LOYALTY_POT: u16 = 24;
+    /// Holder Stream (08 4.3): [buy_cut_bps, sell_cut_bps].
+    pub const HOLDER_STREAM: u16 = 25;
+    /// Ally Pass (08 4.4): [min_hold, discount_bps]; one ally mint.
+    pub const ALLY_PASS: u16 = 27;
+    /// Embargo (08 4.4): [cut_bps]; 1.. target mints.
+    pub const EMBARGO: u16 = 28;
+    /// Mercenary (08 4.5): [points_per_unit].
+    pub const MERCENARY: u16 = 29;
+    /// Garrison (08 4.5): [discount_bps].
+    pub const GARRISON: u16 = 30;
+    /// War Levy (08 4.5): [trigger_lamports, sell_cut_bps].
+    pub const WAR_LEVY: u16 = 31;
+    /// Target Burn (08 4.6): [burn_bps, target_supply_bps].
+    pub const TARGET_BURN: u16 = 33;
+    /// Gift Ember (08 4.6): [cut_bps].
+    pub const GIFT_EMBER: u16 = 34;
+    /// Referral (08 4.7): [cut_bps].
+    pub const REFERRAL: u16 = 36;
+    /// Sell Ladder (08 4.7): [step_bps, cut_per_step_bps, max_cut_bps].
+    pub const SELL_LADDER: u16 = 37;
+    /// First Blood (08 4.7): [discount_bps, min_lamports].
+    pub const FIRST_BLOOD: u16 = 38;
+    /// Patience (08 4.7): [min_age_secs, discount_bps, source]; as built only source 1 (own age).
+    pub const PATIENCE: u16 = 40;
+
+    /// Every id of this block.
+    pub const IDS: [u16; 14] = [
+        GUEST_LIST, LOYALTY_POT, HOLDER_STREAM, ALLY_PASS, EMBARGO, MERCENARY, GARRISON, WAR_LEVY,
+        TARGET_BURN, GIFT_EMBER, REFERRAL, SELL_LADDER, FIRST_BLOOD, PATIENCE,
+    ];
+
+    /// Hook-data bytes of Loyalty Pot (tag, `joined_epoch: u32`).
+    pub const LOYALTY_BYTES: u8 = 5;
+    /// Hook-data bytes of Mercenary (the Raid range).
+    pub const MERCENARY_BYTES: u8 = raid::RAID_RANGE_LEN as u8;
+    /// Hook-data bytes of Patience (tag, `since: u32`).
+    pub const PATIENCE_BYTES: u8 = 5;
+    /// Patience's only source as built: the module's own age stamp.
+    pub const PATIENCE_SOURCE_OWN: u32 = 1;
+
+    /// Whether `id` belongs to this block.
+    pub fn is(id: u16) -> bool {
+        IDS.contains(&id)
+    }
+
+    /// Kind, forge rules of the used fields, forgeable.
+    pub fn shape_of(id: u16) -> (u8, &'static [ForgeRule], bool) {
+        use ForgeRule::*;
+        match id {
+            GUEST_LIST => (kind::POOL, &[TowardFloor, Keep], true),
+            LOYALTY_POT => (kind::POOL, &[TowardCeiling, Keep], true),
+            HOLDER_STREAM => (kind::POOL, &[TowardCeiling, TowardCeiling], true),
+            ALLY_PASS => (kind::POOL, &[TowardFloor, TowardCeiling], true),
+            EMBARGO => (kind::POOL, &[TowardCeiling], true),
+            MERCENARY => (kind::POOL, &[TowardCeiling], true),
+            GARRISON => (kind::POOL, &[TowardCeiling], true),
+            WAR_LEVY => (kind::POOL, &[TowardFloor, TowardCeiling], true),
+            TARGET_BURN => (kind::POOL, &[TowardCeiling, Keep], true),
+            GIFT_EMBER => (kind::FEE, &[TowardCeiling], true),
+            REFERRAL => (kind::POOL, &[TowardCeiling], true),
+            SELL_LADDER => (kind::FEE, &[Keep, TowardCeiling, TowardCeiling], true),
+            FIRST_BLOOD => (kind::POOL, &[TowardCeiling, Keep], true),
+            _ => (kind::POOL, &[TowardFloor, TowardCeiling, Keep], true),
+        }
+    }
+
+    /// Template rules beyond floor and ceiling.
+    pub fn validate(id: u16, p: &Params) -> core::result::Result<(), ParamsError> {
+        let bad = match id {
+            LOYALTY_POT => p[1] == 0,
+            TARGET_BURN => p[1] > 10_000,
+            SELL_LADDER => p[0] == 0 || p[0] > 10_000 || p[2] < p[1],
+            PATIENCE => p[2] != PATIENCE_SOURCE_OWN,
+            _ => false,
+        };
+        if bad {
+            Err(ParamsError::BadParams)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn bps(v: u32) -> u16 {
+        u16::try_from(v).unwrap_or(u16::MAX)
+    }
+
+    /// The manifest of an item of template `id` with `p` (08 section 4, "Callbacks").
+    pub fn manifest(id: u16, p: &Params, max_targets: u8, m: &mut Manifest) {
+        use token_flags::*;
+        match id {
+            GUEST_LIST => {
+                m.pool_flags = pool_flags::BEFORE_SWAP;
+                m.may_refuse = true;
+                m.reads_other_pools = 1;
+            }
+            LOYALTY_POT => {
+                m.token_flags = BEFORE_TRANSFER | WRITES_HOOK_DATA;
+                m.pool_flags = pool_flags::AFTER_SWAP;
+                m.max_cut_sell_bps = bps(p[0]);
+                m.data_bytes = LOYALTY_BYTES;
+            }
+            HOLDER_STREAM => {
+                m.pool_flags = pool_flags::BEFORE_SWAP | pool_flags::AFTER_SWAP;
+                m.max_cut_buy_bps = bps(p[0]);
+                m.max_cut_sell_bps = bps(p[1]);
+            }
+            ALLY_PASS => {
+                m.pool_flags = pool_flags::BEFORE_SWAP;
+                m.max_discount_bps = bps(p[1]);
+                m.reads_other_pools = 1;
+            }
+            EMBARGO => {
+                m.pool_flags = pool_flags::BEFORE_SWAP;
+                m.max_cut_buy_bps = bps(p[0]);
+                m.reads_other_pools = max_targets;
+            }
+            MERCENARY => {
+                m.token_flags = BEFORE_TRANSFER | WRITES_HOOK_DATA | ANSWERS_TOUCH;
+                m.pool_flags = pool_flags::AFTER_SWAP | pool_flags::MARKS;
+                m.data_bytes = MERCENARY_BYTES;
+            }
+            GARRISON => {
+                m.pool_flags = pool_flags::BEFORE_SWAP;
+                m.max_discount_bps = bps(p[0]);
+            }
+            WAR_LEVY => {
+                m.pool_flags = pool_flags::AFTER_SWAP;
+                m.max_cut_sell_bps = bps(p[1]);
+            }
+            TARGET_BURN => {
+                m.pool_flags = pool_flags::BEFORE_SWAP | pool_flags::AFTER_SWAP;
+                m.may_burn = true;
+            }
+            GIFT_EMBER => {
+                m.token_flags = BEFORE_TRANSFER | TRANSFER_RETURNS_DELTA;
+                m.max_cut_transfer_bps = bps(p[0]);
+            }
+            REFERRAL => {
+                m.pool_flags = pool_flags::BEFORE_SWAP;
+                m.max_cut_buy_bps = bps(p[0]);
+            }
+            SELL_LADDER => {
+                m.token_flags = BEFORE_TRANSFER | TRANSFER_RETURNS_DELTA;
+                m.max_cut_transfer_bps = bps(p[2]);
+            }
+            FIRST_BLOOD => {
+                m.pool_flags = pool_flags::BEFORE_SWAP;
+                m.max_discount_bps = bps(p[0]);
+            }
+            PATIENCE => {
+                m.token_flags = BEFORE_TRANSFER | WRITES_HOOK_DATA;
+                m.pool_flags = pool_flags::AFTER_SWAP;
+                m.max_discount_bps = bps(p[1]);
+                m.data_bytes = PATIENCE_BYTES;
+            }
+            _ => {}
+        }
+    }
+
+    /// Seeds under items.
+    pub mod seeds {
+        /// `["referred", mint, buyer]`: a buyer's chosen referrer (08 4.7, R22).
+        pub const REFERRED: &[u8] = b"referred";
+        /// `["referral", mint]`: owner of the Referral payout vault (a holding of the quote).
+        pub const REFERRAL: &[u8] = b"referral";
+        /// `["loyalty", mint]`: the Loyalty Pot's state and owner of its vault (a holding of the
+        /// quote).
+        pub const LOYALTY: &[u8] = b"loyalty";
+        /// `["loyalty-claim", mint, holder]`: the last epoch a holder claimed.
+        pub const LOYALTY_CLAIM: &[u8] = b"loyalty-claim";
+        /// `["first-blood", mint]`: First Blood's last prize day.
+        pub const FIRST_BLOOD: &[u8] = b"first-blood";
+    }
+
+    /// PDAs under items.
+    pub mod pda {
+        use super::seeds;
+        use crate::ids::ITEMS_ID;
+        use anchor_lang::prelude::Pubkey;
+
+        /// `["referred", mint, buyer]`.
+        pub fn referred(mint: &Pubkey, buyer: &Pubkey) -> (Pubkey, u8) {
+            Pubkey::find_program_address(&[seeds::REFERRED, mint.as_ref(), buyer.as_ref()], &ITEMS_ID)
+        }
+        /// `["referral", mint]`.
+        pub fn referral_owner(mint: &Pubkey) -> (Pubkey, u8) {
+            Pubkey::find_program_address(&[seeds::REFERRAL, mint.as_ref()], &ITEMS_ID)
+        }
+        /// `["loyalty", mint]`.
+        pub fn loyalty(mint: &Pubkey) -> (Pubkey, u8) {
+            Pubkey::find_program_address(&[seeds::LOYALTY, mint.as_ref()], &ITEMS_ID)
+        }
+        /// `["loyalty-claim", mint, holder]`.
+        pub fn loyalty_claim(mint: &Pubkey, holder: &Pubkey) -> (Pubkey, u8) {
+            Pubkey::find_program_address(&[seeds::LOYALTY_CLAIM, mint.as_ref(), holder.as_ref()], &ITEMS_ID)
+        }
+        /// `["first-blood", mint]`.
+        pub fn first_blood(mint: &Pubkey) -> (Pubkey, u8) {
+            Pubkey::find_program_address(&[seeds::FIRST_BLOOD, mint.as_ref()], &ITEMS_ID)
+        }
+    }
+
+    /// `Launch.curve_tokens + Launch.reserve_tokens` (upstream layout: curve at 177, reserve at
+    /// 185): the supply the launch started with.
+    pub fn launch_initial_supply(data: &[u8], mint: &Pubkey) -> Option<u64> {
+        if data.len() < 193 || data[..8] != LAUNCH_DISCRIMINATOR || data[10..42] != mint.to_bytes() {
+            return None;
+        }
+        let curve = u64::from_le_bytes(data[177..185].try_into().ok()?);
+        let reserve = u64::from_le_bytes(data[185..193].try_into().ok()?);
+        curve.checked_add(reserve)
+    }
+
+    /// The Loyalty epoch of `now`.
+    pub fn epoch_of(now: i64, epoch_secs: u32) -> u32 {
+        u32::try_from(now.max(0) / i64::from(epoch_secs.max(1))).unwrap_or(u32::MAX)
+    }
+
+    /// Sell Ladder's cut in bps for selling `amount` of `balance` (08 4.7).
+    pub fn ladder_bps(p: &Params, amount: u64, balance: u64) -> u32 {
+        if balance == 0 || p[0] == 0 {
+            return 0;
+        }
+        let share = (u128::from(amount) * 10_000 / u128::from(balance)) as u64;
+        let steps = share / u64::from(p[0]);
+        (steps.saturating_mul(u64::from(p[1])).min(u64::from(p[2]))) as u32
+    }
+
+    /// Target Burn's burn on `base` with `supply` and the launch's `initial` supply.
+    pub fn target_burn(p: &Params, base: u64, supply: u64, initial: u64) -> u64 {
+        let target = (u128::from(initial) * u128::from(p[1]) / 10_000) as u64;
+        if supply <= target {
+            return 0;
+        }
+        let want = (u128::from(base) * u128::from(p[0].min(10_000)) / 10_000) as u64;
+        want.min(supply - target)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn p(v: &[u32]) -> Params {
+            let mut a = [0; PARAM_FIELDS];
+            a[..v.len()].copy_from_slice(v);
+            a
+        }
+
+        #[test]
+        fn every_id_has_a_shape_and_is_composable() {
+            for id in IDS {
+                assert!(shape(id).is_some(), "{id}");
+                assert!(composable(id), "{id}");
+            }
+        }
+
+        #[test]
+        fn ladder_and_target_burn() {
+            let l = p(&[1_000, 50, 300]);
+            assert_eq!(ladder_bps(&l, 50, 1_000), 0);
+            assert_eq!(ladder_bps(&l, 250, 1_000), 100);
+            assert_eq!(ladder_bps(&l, 1_000, 1_000), 300);
+            let t = p(&[100, 9_000]);
+            assert_eq!(target_burn(&t, 1_000_000, 1_000_000_000, 1_000_000_000), 10_000);
+            assert_eq!(target_burn(&t, 1_000_000, 900_000_005, 1_000_000_000), 5);
+            assert_eq!(target_burn(&t, 1_000_000, 900_000_000, 1_000_000_000), 0);
+        }
     }
 }

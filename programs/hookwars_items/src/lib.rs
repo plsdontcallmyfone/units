@@ -1,6 +1,6 @@
 // Changed by Hookwars: new file (M2), the template program's armory-facing entry points; M3b: the
 // token and pool callbacks, every base template and arsenal wave A, composites, the raid ledger
-// and settle_equip.
+// and settle_equip; arsenal waves D and E (templates, `payouts`).
 //! `hookwars_items`: one program implementing every template (docs/spec/04-templates.md,
 //! 08-arsenal.md, 00 D-2).
 //!
@@ -23,8 +23,11 @@ use hookwars_common::{EquipConfig, ParamsError, MAX_MODULES, PARAM_FIELDS};
 
 pub mod engine;
 pub mod equip;
+pub mod payouts;
 pub mod settle;
 pub mod templates;
+
+pub use payouts::*;
 
 declare_id!("8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv");
 
@@ -367,6 +370,31 @@ pub mod hookwars_items {
     /// sender's bounty, the rest to each module's destination. Permissionless.
     pub fn settle_equip<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Result<()> {
         settle::process(ctx, slot)
+    }
+
+    /// Referral: the buyer names its referrer, once (08 4.7).
+    pub fn set_referrer(ctx: Context<SetReferrer>, referrer: Pubkey) -> Result<()> {
+        payouts::process_set_referrer(ctx, referrer)
+    }
+
+    /// Referral: pays a buyer's owed referral from the Referral vault (permissionless).
+    pub fn settle_referral(ctx: Context<SettleReferral>, slot: u8) -> Result<()> {
+        payouts::process_settle_referral(ctx, slot)
+    }
+
+    /// First Blood: creates its state (permissionless).
+    pub fn init_first_blood(ctx: Context<InitFirstBlood>) -> Result<()> {
+        payouts::process_init_first_blood(ctx)
+    }
+
+    /// Loyalty Pot: creates its state for the item in `slot` (permissionless).
+    pub fn init_loyalty(ctx: Context<InitLoyalty>, slot: u8) -> Result<()> {
+        payouts::process_init_loyalty(ctx, slot)
+    }
+
+    /// Loyalty Pot: the holder's claim for the epoch (08 4.3).
+    pub fn claim_loyalty(ctx: Context<ClaimLoyalty>) -> Result<()> {
+        payouts::process_claim_loyalty(ctx)
     }
 }
 
