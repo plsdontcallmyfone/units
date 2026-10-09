@@ -838,3 +838,113 @@ Measured (server B, `budgets_arsenal1.rs`, every account in one lookup table):
 
 Transfer rows are one `transfer` with the slot's registry slice; pool rows include the stub's own
 call level and its instruction data (the forwarded `PoolHookArgs`).
+
+## Arsenal waves D and E notes (branch arsenal2)
+
+Built in `programs/hookwars_items/src/templates/` (one file per template), `payouts.rs` (new
+instructions and accounts), the `arsenal2` block of `crates/hookwars-common` and suites
+`programs/tests/tests/templates_<name>.rs` with `budgets_arsenal2.rs`. Where the build differs
+from section 4:
+
+1. **Ids and shapes live in `hookwars_common::arsenal2`** (ids 23, 24, 25, 27, 28, 29, 30, 31, 33,
+   34, 36, 37, 38, 40). `shape`, `validate` and `manifest` delegate to it with one arm each, so the
+   wave B and C branch can append to the same functions without overlapping text.
+2. **Derived extras (R22) are a placeholder in the registry.** `init_equip` writes fixed keys only
+   (`equip.rs`), so Guest List and Ally Pass (the buyer's holding of the target) and Referral (the
+   buyer's `Referred`) register `templates::DERIVED` in their place. Each template checks the
+   passed key against its own derivation and treats a mismatch as absent: Ally Pass and Referral
+   then do nothing, Guest List refuses during its opening (fail closed). `templates::extra_sources`
+   gives the same list as `AccountSource::Pda` entries (actor = pool prefix account 4) for
+   `init_equip` to adopt (integration request 1).
+3. **Loyalty Pot.**
+   - The cut is taken in `pool_after_swap` on a sell (the quote side), not `pool_before_swap`.
+   - The range is 5 bytes: tag and `joined_epoch: u32` (the epoch is `unix / epoch_secs`, which a
+     `u16` cannot hold for short epochs). The claimed epoch is not in hook data: `claim_loyalty`
+     would have to touch the holding through the token program, and items to token to items is a
+     reentrant call Solana refuses. It lives in a per-holder receipt
+     `["loyalty-claim", mint, holder]` (created on the first claim, the holder pays rent).
+   - The pot is `["loyalty", mint]`: one pot per mint, which is also the owner of its quote
+     vault. `init_loyalty(slot)` fixes the slot it reads params from.
+   - A roll happens on the first claim of a new epoch: `payable` is the vault's whole balance
+     (unclaimed amounts roll in), `eligible_supply` is the supply less the pool's and the launch's
+     holdings. A holding never stamped since the equip (it received nothing since) is eligible.
+4. **Patience: only source 1 (own age).** Source 2 (a Streak module) and 3 (Half-Life in the same
+   mint) need cross-module and cross-slot reads; `validate` refuses them. The discount is answered
+   in `pool_after_swap` (a sell's fees are taken there), from a mark the token half writes on the
+   seller's transfer into the pool: the ledger's `sell_mark` with this slot's bit, the convention
+   Shield uses. Patience therefore needs `init_raid_ledger`. A composite holding both Shield and
+   Patience would share one slot bit (integration request 2).
+5. **Referral.** `owed` records the gross cut. What reaches the Referral vault (owner
+   `["referral", mint]`, a holding of the quote) is that cut less the item's royalty and the
+   settlement bounty (`settle_equip`), so `settle_referral` pays the same net share of `owed`,
+   capped at the vault's balance, and pays its sender the settle bounty from it. Self-referral is
+   refused (`SelfReferral`) rather than netting zero, since the royalty and bounty would make it a
+   loss. The referrer is set once (`init`).
+6. **First Blood's day** lives in `["first-blood", mint]` (`init_first_blood`), not `EquipState`,
+   so the engine is untouched; without that account the template gives nothing.
+7. **Target Burn** burns a sell's input in `pool_before_swap` and a buy's output in
+   `pool_after_swap` (the base sides, R21). It reads the supply from the mint (an extra) and the
+   starting supply from the launch (`curve_tokens + reserve_tokens`).
+8. **Destinations.** Gift Ember and Sell Ladder burn (section 4 names none for Sell Ladder).
+   Embargo and War Levy pay the war chest, Holder Stream the treaty inbox, Loyalty Pot the pot,
+   Referral the Referral vault.
+9. **Embargo** does not check the first pool: a forged first pool only charges the forger.
+   **Mercenary** marks any inflow but never counts inbound siege volume (only an aimed Raid does),
+   which bounds review 2's self-raid concern to raid points.
+10. **Errors** are a separate `ArsenalError` with `#[error_code(offset = 7100)]`, so `ItemsError`
+    is unchanged.
+
+11. **Measured** (`budgets_arsenal2.rs`, LiteSVM, legacy transactions; pool rows go through the
+    test-only `launch_stub`, so they include its call level; token rows include an idempotent
+    `create_holding`):
+
+| Path | Keys | Bytes | Trace | Height | CU |
+| --- | --- | --- | --- | --- | --- |
+| transfer (send), Gift Ember | 15 | 643 | 5 | 2 | 53,954 |
+| transfer (sell), Sell Ladder | 15 | 643 | 7 | 2 | 51,665 |
+| transfer (send), Loyalty Pot stamp | 14 | 610 | 5 | 2 | 53,362 |
+| transfer (sell), Patience token half | 15 | 643 | 7 | 2 | 48,890 |
+| transfer (send), Mercenary range | 16 | 676 | 5 | 2 | 63,068 |
+| pool_before_swap buy, Guest List | 13 | 962 | 3 | 2 | 17,178 |
+| pool_before_swap buy, Ally Pass | 12 | 929 | 3 | 2 | 16,992 |
+| pool_before_swap buy, Embargo | 11 | 896 | 3 | 2 | 15,098 |
+| pool_before_swap buy, Holder Stream | 11 | 896 | 3 | 2 | 16,462 |
+| pool_before_swap buy, Garrison | 12 | 929 | 3 | 2 | 20,849 |
+| pool_after_swap sell, War Levy | 13 | 962 | 3 | 2 | 23,054 |
+| pool_before_swap sell, Target Burn | 12 | 930 | 3 | 2 | 21,109 |
+| pool_after_swap buy, Mercenary mark | 14 | 995 | 3 | 2 | 26,850 |
+| pool_after_swap sell, Loyalty Pot | 12 | 929 | 3 | 2 | 15,662 |
+| pool_before_swap buy, First Blood | 12 | 929 | 3 | 2 | 16,891 |
+| pool_before_swap buy, Referral | 12 | 929 | 3 | 2 | 17,684 |
+| pool_after_swap sell, Patience | 13 | 962 | 3 | 2 | 22,168 |
+| set_referrer | 6 | 351 | 3 | 2 | 8,392 |
+| init_first_blood | 6 | 319 | 3 | 2 | 6,611 |
+| init_loyalty | 6 | 320 | 3 | 2 | 6,801 |
+| settle_referral | 15 | 617 | 6 | 3 | 54,896 |
+| claim_loyalty (first claim: roll and receipt) | 18 | 716 | 5 | 3 | 64,650 |
+
+12. **One deliberate edit outside the templates:** `equip.rs` `check_module_targets` gains one
+    delegating arm (`hookwars_common::arsenal2::targets_ok`), or `init_equip` refuses every new
+    template with `BadTargets` and none of them can be equipped.
+
+## Integration requests (arsenal 2)
+
+1. **items `equip.rs` `process_init_equip`:** write `templates::extra_sources(...)` instead of
+   wrapping `templates::extras(...)` in `AccountSource::Key`, so registries carry the derived
+   holding and `Referred` entries; the SDK resolves them per trade (`Seed::Account(4)` = actor).
+2. **armory composite and equip checks:** refuse Mercenary with Raid on one mint (both Raid
+   ranges, 3.2); one Loyalty Pot and one First Blood per mint (their state is per mint); refuse a
+   composite holding both Shield and Patience (one shared `sell_mark` bit per slot).
+3. **war `claim_bounty` and `claim_quest`:** accept the Mercenary slot as a Raid range (same
+   layout, same touch payloads, `WarTouch` from `war-signer`).
+4. **items engine (integ, review 2 H-A):** many of these templates answer nothing on most calls
+   (Garrison when not under siege, Patience without a mark, Mercenary always); the launchpad's
+   silent-item fix covers them.
+5. **items `settle.rs` (review 2 L-C):** create the destination holdings of the Loyalty pot and
+   the Referral vault when missing, as for the war chest.
+6. **launchpad and app:** at launch or equip, call `init_raid_ledger` (Patience, Mercenary, War
+   Levy), `init_first_blood`, `init_loyalty`, and create the pot's and the Referral vault's quote
+   holdings; the SDK resolves derived extras; the site offers `set_referrer`, `claim_loyalty`,
+   `settle_referral`.
+7. **Loyalty Pot slot moves:** `init_loyalty` fixes the slot once; if the item is re-equipped in
+   another slot, a setter (armory-gated) or a re-init path is needed.

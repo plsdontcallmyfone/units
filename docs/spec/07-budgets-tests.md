@@ -214,3 +214,8 @@ server).
   without a larger frame behave as before) and clients request a 256 KiB heap frame for DEX
   transactions (`ComputeBudgetInstruction::RequestHeapFrame`).
 - `programs.sh build` fails on any stack frame over 4,096 bytes; the integ build reports none.
+
+Arsenal waves D and E, measured (`budgets_arsenal2.rs`, branch arsenal2, 2026-10-09): pool callbacks
+15,098 to 26,850 CU (through `launch_stub`), token transfers 48,890 to 63,068 CU, `settle_referral`
+54,896 CU at height 3, `claim_loyalty` 64,650 CU at height 3; full table in 08, "Arsenal waves D and
+E notes", item 11.

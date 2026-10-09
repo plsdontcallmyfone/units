@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file, helpers for the armory and items programs (M2); arsenal waves B and C schemas.
+// Changed by Hookwars: new file, helpers for the armory and items programs (M2); arsenal waves B and C schemas; arsenal waves D and E.
 //! The armory in the LiteSVM suites: loads `hookwars_armory`, `hookwars_items`, and the test-only
 //! `launch_stub` (at the launchpad's id: signs `["armory-caller", mint]`) and `war_stub` (at the
 //! war program's id: signs `["loot-signer"]`); initializes the armory with [`TEST_PARAMS`] and
@@ -97,6 +97,8 @@ pub fn test_schema(id: u16) -> (Params, Params, u8, bool) {
             6,
             false,
         ),
+        // Arsenal waves D and E (TEST ceilings).
+        id if hookwars_common::arsenal2::is(id) => crate::arsenal2::test_schema(id),
         _ => panic!("no template {id}"),
     }
 }
