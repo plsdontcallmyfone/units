@@ -6,7 +6,7 @@
  */
 import type { SlotKind } from './api.ts';
 
-export type ForgeRule = 'towardCeiling' | 'towardFloor' | 'keep' | 'none';
+export type ForgeRule = 'towardCeiling' | 'towardFloor' | 'keep' | 'floorWhenBothOn' | 'none';
 export type FieldFormat = 'bps' | 'ppm' | 'secs' | 'count' | 'flag' | 'mode' | 'units' | 'lamports';
 
 export interface TemplateField {
@@ -98,7 +98,7 @@ export const TEMPLATES: readonly TemplateDef[] = [
     targets: 'the collector', dataBytes: 0, forgeable: true, spec: '04 3.8',
     fields: [
       f(0, 'fee_bps', 0, 'TF_MAX_FEE_BPS', 'towardCeiling', 'bps'),
-      f(1, 'max_wallet_bps', 0, 10_000, 'towardFloor', 'bps'),
+      f(1, 'max_wallet_bps', 0, 10_000, 'floorWhenBothOn', 'bps'),
     ],
   },
   {

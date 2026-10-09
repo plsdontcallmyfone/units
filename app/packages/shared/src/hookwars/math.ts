@@ -28,6 +28,14 @@ export function forgeField(rule: ForgeRule, a: number, b: number, floor: number,
       if (a !== b) return null;
       out = a;
       break;
+    case 'floorWhenBothOn': {
+      // 0 is "off": forge toward the floor only when both are on (hookwars_common::combine).
+      if (a > 0 && b > 0) { const m = Math.min(a, b); out = m - Math.floor(((m - floor) * gainBps) / 10_000); }
+      else if (a === b) return a;
+      else return null;
+      if (out === 0) return 0;
+      break;
+    }
     case 'none':
       return null;
   }

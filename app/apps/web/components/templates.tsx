@@ -1,6 +1,6 @@
 import { TEMPLATES, type TemplateInfo } from '@hookwars/shared';
 
-const FORGE: Record<string, string> = { towardCeiling: 'toward ceiling', towardFloor: 'toward floor', keep: 'kept', none: 'not forgeable' };
+const FORGE: Record<string, string> = { towardCeiling: 'toward ceiling', towardFloor: 'toward floor', keep: 'kept', floorWhenBothOn: 'toward floor when both are on', none: 'not forgeable' };
 
 /** Templates as the chain registers them, or, before registration, as 04 defines them (labelled so). */
 export function TemplateTable({ registered }: { registered: TemplateInfo[] }) {
