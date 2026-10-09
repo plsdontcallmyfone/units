@@ -14,7 +14,7 @@
     "@hookwars/shared": "workspace:^",
     "geist": "1.4.2",
     "lightweight-charts": "5.0.8",
-    "next": "15.5.4",
+    "next": "15.5.27",
     "react": "19.1.1",
     "react-dom": "19.1.1",
     "server-only": "0.0.1"
