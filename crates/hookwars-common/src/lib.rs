@@ -1515,6 +1515,17 @@ pub mod arsenal2 {
         }
     }
 
+    /// The targets a module may be aimed at: Guest List and Ally Pass one mint, Embargo one or
+    /// more, the rest none; no role.
+    pub fn targets_ok(id: u16, n: usize, role: u8) -> bool {
+        role == 0
+            && match id {
+                GUEST_LIST | ALLY_PASS => n == 1,
+                EMBARGO => n >= 1,
+                _ => n == 0,
+            }
+    }
+
     /// Seeds under items.
     pub mod seeds {
         /// `["referred", mint, buyer]`: a buyer's chosen referrer (08 4.7, R22).

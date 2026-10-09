@@ -4,6 +4,7 @@ use anchor_lang::prelude::Pubkey;
 use bordrless_program_tests::arsenal2::*;
 use bordrless_program_tests::items::{equip, put_war_state};
 use hookwars_common::arsenal2 as a2;
+use solana_signer::Signer;
 
 #[test]
 fn garrison_discounts_buys_only_under_siege() {

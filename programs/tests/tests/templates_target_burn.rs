@@ -10,10 +10,10 @@ fn target_burn_burns_the_base_side_until_the_target() {
     let mut hw = world();
     let t = tok(&mut hw);
     let holder = hw.w.env.funded(SOL);
-    hw.mint_to(&t.owner, &t.mint, &holder.pubkey(), 1_000_000_000);
-    set_launch_supply(&mut hw, &t.mint, 750_000_000, 250_000_000);
     let tb = item(&mut hw, a2::TARGET_BURN, &[100, 9_000], 0);
     equip(&mut hw, &t.owner, &t.mint, 1, tb, vec![], 0).ok();
+    hw.mint_to(&t.owner, &t.mint, &holder.pubkey(), 1_000_000_000);
+    set_launch_supply(&mut hw, &t.mint, 750_000_000, 250_000_000);
     let p = t.pool.pubkey();
 
     // A sell's input and a buy's output are base: 1% burns.

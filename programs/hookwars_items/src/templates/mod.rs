@@ -168,6 +168,55 @@ pub fn extras(template: u16, mint: &Pubkey, targets: &[Pubkey]) -> Vec<(Pubkey, 
     v
 }
 
+/// [`extras`] as registry entries (R22): the [`DERIVED`] placeholders become the PDAs a client
+/// derives per trade from the pool prefix's actor (account 4). For `init_equip` to adopt (the
+/// arsenal 2 integration requests in 08); [`extras`] keeps its fixed-key form until then.
+pub fn extra_sources(template: u16, mint: &Pubkey, targets: &[Pubkey]) -> Vec<bordrless_hook::ExtraAccount> {
+    use bordrless_hook::{AccountSource, ExtraAccount, Seed};
+    const ACTOR: u8 = 4;
+    let derived = |n: usize| -> ExtraAccount {
+        match template {
+            a2::GUEST_LIST | a2::ALLY_PASS => ExtraAccount {
+                writable: false,
+                source: AccountSource::Pda {
+                    program: bordrless_token::ID,
+                    seeds: vec![
+                        Seed::Literal(b"holding".to_vec()),
+                        Seed::Literal(targets.get(n).copied().unwrap_or_default().to_bytes().to_vec()),
+                        Seed::Account(ACTOR),
+                    ],
+                },
+            },
+            _ => ExtraAccount {
+                writable: true,
+                source: AccountSource::Pda {
+                    program: crate::ID,
+                    seeds: vec![
+                        Seed::Literal(a2::seeds::REFERRED.to_vec()),
+                        Seed::Literal(mint.to_bytes().to_vec()),
+                        Seed::Account(ACTOR),
+                    ],
+                },
+            },
+        }
+    };
+    let mut n = 0usize;
+    extras(template, mint, targets)
+        .into_iter()
+        .map(|(k, writable)| {
+            if k == DERIVED {
+                n += 1;
+                derived(n - 1)
+            } else {
+                ExtraAccount {
+                    writable,
+                    source: AccountSource::Key(k),
+                }
+            }
+        })
+        .collect()
+}
+
 /// How many extras [`extras`] gives a module of `template` with `targets` targets.
 pub fn extra_count(template: u16, targets: usize) -> usize {
     match template {

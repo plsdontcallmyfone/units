@@ -1,5 +1,6 @@
 // Changed by Hookwars: new file (M3b), the armory-facing entry points moved out of lib.rs (M2) and
 // extended with the M3b registries and composites.
+// Changed by Hookwars (arsenal waves D and E): one arm in `check_module_targets`.
 //! The entry points the armory calls (02 section 4, 04 section 2.6).
 
 use anchor_lang::prelude::*;
@@ -62,6 +63,8 @@ pub fn check_module_targets(template_id: u16, targets: &[Pubkey], role: u8) -> R
         | template_id::MAX_TRANSACTION
         | template_id::DUST_GUARD
         | template_id::SELL_BURN => n == 0,
+        // Arsenal waves D and E (one arm; their rules live in `hookwars_common::arsenal2`).
+        id if hookwars_common::arsenal2::is(id) => hookwars_common::arsenal2::targets_ok(id, n, role),
         _ => false,
     };
     require!(ok, ItemsError::BadTargets);

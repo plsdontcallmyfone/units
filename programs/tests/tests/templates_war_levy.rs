@@ -6,6 +6,7 @@ use bordrless_program_tests::items::{equip, init_ledger, put_war_config};
 use hookwars_common::arsenal2 as a2;
 use hookwars_common::pda;
 use hookwars_common::raid::RaidLedger;
+use solana_signer::Signer;
 
 fn set_inbound(hw: &mut bordrless_program_tests::armory::Hw, mint: &Pubkey, volume: u64) {
     let key = pda::raid_ledger(mint).0;
