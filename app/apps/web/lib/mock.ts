@@ -137,6 +137,7 @@ export function mock(path: string): unknown {
   const [p, qs] = path.split('?');
   const q = new URLSearchParams(qs);
   let m: RegExpExecArray | null;
+  if (p === '/v1/status') return { cluster: 'https://api.devnet.solana.com', rpcReachable: true, slot: null, database: true, programs: [], indexer: [] };
   if (p === '/v1/launches') return launches;
   if (p === '/v1/feed') { const k = q.get('kind'); return { items: k ? FEED.filter((e) => e.kind === k) : FEED, next: null } satisfies Page<BattleEvent>; }
   if (p === '/v1/map') return MAP;
