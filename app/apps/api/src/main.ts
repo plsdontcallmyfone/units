@@ -1,3 +1,4 @@
+// Changed by Hookwars: logs the RPC URL redacted (app audit A-2).
 /** `node src/main.ts`. Environment: RPC_URL (default devnet), DATABASE_URL, PORT, HOST. */
 import { Connection } from '@solana/web3.js';
 import { pool } from '@hookwars/indexer/db.ts';

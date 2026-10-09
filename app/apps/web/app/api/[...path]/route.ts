@@ -1,3 +1,4 @@
+// Changed by Hookwars: path allow-list, body cap, generic errors (app audit A-3, A-8, A-11).
 /** The browser talks only to the site's own /api routes; this proxies them to the backend with no
  * user key (06 section 1 rule 5, upstream architecture "Off chain"). Only `v1/` paths are forwarded,
  * bodies are capped, and a failure answers a generic message with a request id while the detail is

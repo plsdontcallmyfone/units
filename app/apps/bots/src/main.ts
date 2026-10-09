@@ -1,3 +1,4 @@
+// Changed by Hookwars: send reports success only on 2xx (app audit A-10).
 /**
  * Polls the API's /v1/feed and posts new events once each, keyed by (signature, ordinal) in a local
  * state file, so a replay of the same range posts nothing twice (06 section 8). Disabled unless TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID or

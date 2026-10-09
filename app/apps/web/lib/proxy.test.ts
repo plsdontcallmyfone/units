@@ -1,3 +1,4 @@
+// Changed by Hookwars: tests for the proxy guards (app audit A-3, A-11).
 import { describe, expect, it } from 'vitest';
 import { BodyTooLarge, forwardPath, readCapped } from './proxy.ts';
 

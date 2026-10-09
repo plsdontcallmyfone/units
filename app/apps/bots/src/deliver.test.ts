@@ -1,3 +1,4 @@
+// Changed by Hookwars: tests that an event is marked posted only after a successful send (app audit A-10).
 import { describe, expect, it } from 'vitest';
 import type { BattleEvent } from '@hookwars/shared';
 import { deliver } from './deliver.ts';

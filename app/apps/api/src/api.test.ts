@@ -1,3 +1,4 @@
+// Changed by Hookwars: DATABASE_URL required, no default credentials (app audit A-9).
 /** Starts the API on an ephemeral port against the server's Postgres (fresh schema, empty) and a
  * mocked RPC, and checks every read route answers with its empty shape and prepares refuse with a
  * sentence while the programs are not deployed. */

@@ -1,3 +1,4 @@
+// Changed by Hookwars: generic errors to the page (app audit A-8).
 /** Server-side reads from the backend (06: the browser talks only to the site's /api routes; server
  * components read the backend directly). A failed read is reported, never replaced by a figure. */
 import 'server-only';

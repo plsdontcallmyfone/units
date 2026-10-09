@@ -1,3 +1,4 @@
+// Changed by Hookwars: security headers and unoptimized images (app audit A-1, A-5).
 /** API_URL is the backend the site's server proxies (06: the browser talks only to /api). */
 
 /**

@@ -1,3 +1,4 @@
+// Changed by Hookwars: staged slot launch, raid and settle prepares; v0 with lookup tables; input caps (integration, app audit A-4, A-6, A-12).
 /**
  * The prepare routes of docs/spec/06-app.md 3.3: build with the SDK, simulate, return unsigned v0
  * transactions for the wallet (the backend holds no user key, 06 section 1 rule 5). Every prepare

@@ -1,3 +1,4 @@
+// Changed by Hookwars: DATABASE_URL required, no default credentials (app audit A-9).
 import pg from 'pg';
 import { allDdl } from './schema.ts';
 

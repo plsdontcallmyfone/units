@@ -1,3 +1,4 @@
+// Changed by Hookwars: registers the launch and swap IDLs.
 /**
  * Turns the generated IDLs into the field schemas `codec.ts` runs (camelCase names), so accounts,
  * events and instruction arguments of the programs on main come from the programs themselves

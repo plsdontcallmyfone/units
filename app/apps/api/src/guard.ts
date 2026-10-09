@@ -1,3 +1,4 @@
+// Changed by Hookwars: body caps, rate limits, redaction and number checks for the API (app audit A-2, A-3, A-4, A-12).
 /**
  * Request guards of the API (app audit 1): the cluster a status may name (never the RPC URL, A-2),
  * URL redaction for logs (A-2), a body cap (A-3), a per-client token bucket (A-4) and integer

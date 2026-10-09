@@ -1,3 +1,4 @@
+// Changed by Hookwars: slot launch, swap_route and settle_equip builders from the IDLs.
 /**
  * Slot launches and raids on the real programs (M3a, M3b): the launchpad's four steps
  * (`prepare_launch`, `equip_prepared` forwarding the armory's `equip_launch`,

@@ -1,3 +1,4 @@
+// Changed by Hookwars: skipped without DATABASE_URL (app audit A-9).
 /**
  * Against a real Postgres (DATABASE_URL, the server's hookwars_app by default): migrations apply,
  * writing one transaction twice yields the same rows (idempotent), state handlers fill slots,

@@ -8,6 +8,7 @@
  *   authority, then the accounts of inner instructions).
  * - Slot launches, `swap_route`, `settle_equip` and `init_raid_ledger` are in `slot-launch.ts`, from
  *   the launchpad's, the DEX's and the items program's IDLs.
+ * Changed by Hookwars: siege and counter_strike no longer pass an observations account (the ring is in the pool).
  */
 import { PublicKey, TransactionInstruction, type AccountMeta } from '@solana/web3.js';
 import { idlIx } from './from-idl.ts';

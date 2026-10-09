@@ -1,3 +1,4 @@
+// Changed by Hookwars: bounded queries and cluster name only (app audit A-2, A-7, A-12).
 /**
  * The read routes of docs/spec/06-app.md 3.3, built from the indexer's tables. Every figure comes
  * from a row or an account; what the backend cannot read is `null` (06 section 1 rule 3).

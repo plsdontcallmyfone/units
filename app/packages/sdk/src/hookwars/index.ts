@@ -1,3 +1,4 @@
+// Changed by Hookwars: exports slot-launch.ts.
 export * from './codec.ts';
 export * from './accounts.ts';
 export * from './addresses.ts';

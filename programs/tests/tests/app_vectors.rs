@@ -1,3 +1,4 @@
+// Changed by Hookwars: window vectors from the pool ring reader (bordrless_core::observations).
 //! Vectors for the app's TypeScript mirror of the units math (app/INTEGRATION.md section 4):
 //! `programs/tests/vectors/hookwars-math.json`, copied to `app/packages/shared/vectors/`. Rendered
 //! from the Rust the programs run: `bordrless_core::observations::window_read`, `hookwars_common::{shape, combine, manifest,

@@ -1,3 +1,4 @@
+// Changed by Hookwars: fixture with the ring's cumulative price.
 import { describe, expect, it } from 'vitest';
 import {
   bounty, counterStrikeDue, decodeRange, findBannedWords, forgeField, itemSentence, mergeSlotCuts, PARAMS, q64ToDecimal, raidWindowAdd,

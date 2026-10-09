@@ -1,3 +1,4 @@
+// Changed by Hookwars: marks an event posted only after a successful send (app audit A-10).
 /**
  * One pass of the bots (app audit A-10): an event counts as posted only after every enabled channel
  * answered 2xx, the state is written after each success, and one failing event does not stop the

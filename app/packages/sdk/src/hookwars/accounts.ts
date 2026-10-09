@@ -1,3 +1,4 @@
+// Changed by Hookwars: the observation ring decoded from the pool account (M3a).
 /**
  * Account decoders for units.
  *

@@ -1,3 +1,4 @@
+// Changed by Hookwars: windowRead walks the ring newest first with the cumulative price.
 /**
  * The Hookwars math the site and backend mirror, each function citing the spec section whose
  * formula it implements. All integer math is in bigint with floors, as the programs do. Once the

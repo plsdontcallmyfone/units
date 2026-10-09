@@ -1,3 +1,4 @@
+// Changed by Hookwars: path allow-list and body cap for the proxy (app audit A-3, A-11).
 /** The /api proxy's checks, kept pure so they are unit tested (audit A-3, A-8, A-11). */
 
 /** The largest request body the site forwards (the API holds the same cap). */

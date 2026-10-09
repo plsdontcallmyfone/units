@@ -1,3 +1,4 @@
+// Changed by Hookwars: windowReadRaw reads the pool ring (M3a layout).
 /**
  * Exact ports of the Rust the programs run, pinned by `vectors/hookwars-math.json` (rendered by
  * `programs/tests/tests/app_vectors.rs`): `hookwars_common::{shape, combine, window_read,

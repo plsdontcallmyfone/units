@@ -1,3 +1,4 @@
+// Changed by Hookwars: tests for the API guards (app audit A-2, A-3, A-4, A-12).
 import { describe, expect, it } from 'vitest';
 import { Readable } from 'node:stream';
 import type { IncomingMessage } from 'node:http';
