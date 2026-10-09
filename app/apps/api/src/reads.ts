@@ -133,7 +133,7 @@ export async function feed(db: Pool, q: URLSearchParams): Promise<Page<BattleEve
 }
 
 /** How far back the war map looks, and how many edges of each kind it shows (A-7; operator settings). */
-const MAP_WINDOW_SECS = Number(process.env.MAP_WINDOW_SECS ?? 30 * 86_400);
+const MAP_WINDOW_SECS = ((v) => (Number.isFinite(v) && v > 0 ? v : 30 * 86_400))(Number(process.env.MAP_WINDOW_SECS));
 const MAP_EDGE_LIMIT = 500;
 /** Holdings scanned for generals per request (A-7). */
 const GENERALS_SCAN_LIMIT = 20_000;
