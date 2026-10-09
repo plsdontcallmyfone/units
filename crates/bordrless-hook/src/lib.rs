@@ -1,4 +1,4 @@
-// Changed by Hookwars: slot protocol (slot flags and kinds, TokenSlotArgs, SlotReturn, on_touch); PoolHookArgs.route (RouteContext).
+// Changed by Hookwars: slot protocol (slot flags and kinds, TokenSlotArgs, SlotReturn, on_touch); PoolHookArgs.route (RouteContext); pool-item protocol (ItemPoolContext, ItemPoolAnswer).
 //! The Bordrless hook protocol (v2), shared by the token standard (`bordrless_token`), the DEX
 //! (`bordrless_swap`) and every program that implements a hook.
 //!
@@ -1436,4 +1436,44 @@ pub fn equip_owner(items_program: &Pubkey, mint: &Pubkey, slot: u8) -> (Pubkey, 
 /// A mint's slot authority: `["slots", mint]` under `armory`.
 pub fn slot_authority(armory: &Pubkey, mint: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[SLOTS_SEED, mint.as_ref()], armory)
+}
+
+/// Pool-item protocol (Hookwars spec 03 section 5, 04 section 2.4): what the launchpad's pool hook
+/// passes to each equipped `Pool`-kind item and what the item answers. The launchpad calls
+/// `pool_before_swap(args: PoolHookArgs, ctx: ItemPoolContext)` and `pool_after_swap(args, ctx)` on
+/// `hookwars_items`, signing as `["hook-authority", items_program]` under the launchpad.
+pub mod pool_item {
+    use super::*;
+
+    /// Instruction name of the before-swap pool-item callback.
+    pub const POOL_BEFORE_SWAP: &str = "pool_before_swap";
+    /// Instruction name of the after-swap pool-item callback.
+    pub const POOL_AFTER_SWAP: &str = "pool_after_swap";
+
+    /// What the launchpad tells a pool item, besides the DEX's `PoolHookArgs` (route included).
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, Default, PartialEq, Eq)]
+    pub struct ItemPoolContext {
+        /// The slot index the item is equipped in.
+        pub slot: u8,
+        /// The item the slot holds (the callback checks it is the first extra account).
+        pub item: Pubkey,
+        /// The launch's own creator plus holder fee rate on this side, in basis points.
+        pub launch_fee_bps: u16,
+        /// What the launch's own rules cut on this side, in the side's unit.
+        pub launch_cut: u64,
+        /// The amount this callback acts on after the launch's cuts: before, the input; after, the
+        /// output it was told. On a quote side this is the quote the item's cut is computed on.
+        pub side_amount: u64,
+    }
+
+    /// A pool item's answer (return data of the callback).
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct ItemPoolAnswer {
+        /// Basis points of the launch's creator and holder fees on this side to waive (R6).
+        pub discount_bps: u16,
+        /// The item's cut in the quote, merged by the launchpad into one `PoolCuts` delta (R2).
+        pub cut: u64,
+        /// Base to burn, only where the slot allows a burn on this side (R21).
+        pub burn: u64,
+    }
 }
