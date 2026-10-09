@@ -71,15 +71,57 @@ against a mocked chain holding accounts encoded with the IDL codecs.
 - `Cargo.lock` regenerated: main's lockfile lacked the m4 merge's packages (`hookwars-war`, the war
   stubs), so `cargo test --locked` refused it.
 
-## 2. Remaining
+## 2. Done in round 2 (branch `integ`, 2026-10-09)
 
-| Area | Waits for | What to do |
-| --- | --- | --- |
-| DEX `Observations`, `swap_route`, `RouteContext`, `RouteSwapped`, `ObservationsCreated` | M3a merge | Regenerate the swap IDL; drop the spec `Observations` codec and the `swap` entries of `SPEC_ONLY` in `events.ts`; build `swap_route` with `idlIx`; check `OBS_LAYOUT` in `exact.ts` against the real account (the M2 raw reader `hookwars_common::obs_layout` is what the armory and war read today) |
-| Launchpad: `prepare_launch`, `create_launch` with slots, pool-item forwarding, `PoolItemCuts`, `LaunchPrepared`, `PoolRegistryRefreshed` | M3b | Regenerate the launch IDL; replace the `launch` spec entries; un-refuse `/v1/launch/prepare` |
-| Items callbacks, `settle_equip`, `init_raid_ledger`, `RaidLedger`, `RaidMarked`, `ShieldTaken`, `ItemCut`, `EquipSettled` | M3b | Regenerate the items IDL; replace `decodeRaidLedger` and the `items` spec events; build `settle_equip` with `idlIx` |
-| Composites and the arsenal templates (08) | Arsenal waves | Add each template's site sentence and fields to `packages/shared/src/hookwars/templates.ts` and its shape to `exact.ts`, pinned by `app_vectors.rs` |
-| Raid prepare (`/v1/raid/prepare`) | M3a and M3b | A two-hop `swap_route` from the rival through bridged SOL |
-| Indexer: execution-order ordinals, re-read after truncated logs, account snapshots, upstream kept tables | none | As before (06 2.1, 2.3) |
-| Wallet signing and a submit route on the site | none | The launch form and every prepare return unsigned v0 transactions today |
-| Per-mint address lookup tables | devnet | `pnpm admin init` equivalent for units; prepares compile without tables until then |
+Changed by Hookwars: round 2 integrates M3a (DEX ring, `swap_route`) and M3b (slot launches, items
+callbacks) into the app, and fixes the app audit (`~/ideas/hookwars/APP-AUDIT-1.md`).
+
+### IDLs
+
+Launch, swap, items and war regenerated with `scripts/solana/programs.sh idl` on the build server and
+copied to `idl/` and `packages/sdk/idl/`; `idl-types.gen.ts` regenerated.
+
+### SDK
+
+| Module | What changed |
+| --- | --- |
+| `accounts.ts` | `decodePoolObservations(poolData)`: the ring is the tail of the pool account from `POOL_LEN` (411), header 96 bytes, entries 48 (`bordrless_core::observations`). The separate `Observations` account and `observationsAddress` are gone |
+| `slot-launch.ts` | `prepareLaunch`, `equipLaunch`, `equipPrepared`, `createPreparedLaunch`, `refreshPoolRegistry`, `initRaidLedger`, `swapRoute`, `settleEquip` from the IDLs; pool-item account helpers; `settleDestination` mirrors the items program's `token_destination` / `pool_destination` |
+| `instructions.ts` | the spec-layout builders are removed; `siege` and `counter_strike` no longer pass an observations account |
+| `exact.ts`, `math.ts` | `windowReadRaw` reads the ring exactly as `bordrless_core::observations::window_read`; pinned by `app_vectors.rs` |
+
+### API
+
+- `/v1/launch/prepare` is staged: prepare (signed by the browser's fresh mint), one `equip_prepared`
+  per launch item, the mint's lookup table (create, then extend in chunks of 20), the launch (v0
+  with that table), then `refresh_pool_registry`, `init_war` and `init_raid_ledger`. It needs
+  `owner`, `mint`, `name`, `symbol` and `virtualQuote` (lamports, `MIN_VIRTUAL_QUOTE` to
+  `MAX_VIRTUAL_QUOTE`).
+- `/v1/raid/prepare`: a two-hop `swap_route`, rival to SOL on the rival's own launch pool, then SOL
+  to the target (the Raid template requires that first pool, security finding M-5).
+- `/v1/settle/prepare`: `settle_equip` with each module's destinations.
+- Every prepare compiles v0 with the protocol table (`PROTOCOL_LOOKUP_TABLE`, checked against the
+  protocol's addresses) plus its stage tables and refuses anything over 1,232 bytes (A-6).
+- `/v1/submit` sends a wallet-signed transaction and waits for confirmation, so the site never
+  holds the RPC URL (A-2).
+
+### Site
+
+The launch form makes a fresh mint key in the page, asks for the virtual SOL reserve, prepares
+the stages, signs the mint's stages, has the wallet sign all of them in one prompt
+(`signAllTransactions`), and sends them in order through `/api/v1/submit` (`lib/sign.ts`).
+
+### Operator settings (not protocol parameters)
+
+`DATABASE_URL` (required, no default), `RPC_URL`, `PROTOCOL_LOOKUP_TABLE`, `RATE_PREPARE_CAPACITY`,
+`RATE_PREPARE_PER_SEC`, `RATE_READ_CAPACITY`, `RATE_READ_PER_SEC`, `MAP_WINDOW_SECS`.
+
+## 3. Remaining
+
+| Area | What to do |
+| --- | --- |
+| SOL price | The app has no SOL price source, so the launch form asks for the virtual reserve in SOL instead of a dollar market cap |
+| Composites and the arsenal templates (08) | Add each template's site sentence and fields to `packages/shared/src/hookwars/templates.ts` and its shape to `exact.ts`, pinned by `app_vectors.rs` |
+| Indexer | execution-order ordinals, re-read after truncated logs, account snapshots, upstream kept tables (06 2.1, 2.3) |
+| Submit routes for the other prepares | Only the launch form signs and sends today; the other pages return unsigned transactions |
+| Protocol lookup table on devnet | create it and set `PROTOCOL_LOOKUP_TABLE`; prepares compile without it until then |
