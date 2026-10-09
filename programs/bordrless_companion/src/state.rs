@@ -1,3 +1,4 @@
+// Changed by Hookwars: Split.war_bps, the war chest share (spec 03, companion section).
 //! A launch's companion (`docs/companions.md`).
 
 use anchor_lang::prelude::*;
@@ -13,11 +14,17 @@ pub struct Split {
     pub holders_bps: u16,
     /// Accrued to the beneficiary, who is paid it as SOL.
     pub beneficiary_bps: u16,
+    /// Hookwars: paid at every claim to the token's war chest, `PDA(["war-chest", mint], WAR_ID)`'s
+    /// bridged-SOL holding (at most `WAR_BPS_MAX`).
+    pub war_bps: u16,
 }
 
 impl Split {
     pub fn valid(&self) -> bool {
-        u64::from(self.buyback_bps) + u64::from(self.holders_bps) + u64::from(self.beneficiary_bps)
+        u64::from(self.buyback_bps)
+            + u64::from(self.holders_bps)
+            + u64::from(self.beneficiary_bps)
+            + u64::from(self.war_bps)
             == BPS
     }
 }
@@ -63,7 +70,9 @@ pub struct Companion {
     /// moved toward the pool's price by at most `REFERENCE_STEP_BPS` at a time, once an interval.
     pub reference_price: u128,
     pub reference_at: i64,
-    pub reserved: [u8; 64],
+    /// Running total paid to the war chest (Hookwars).
+    pub war_total: u64,
+    pub reserved: [u8; 54],
 }
 
 impl Companion {

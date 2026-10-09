@@ -1,4 +1,4 @@
-// Changed by Hookwars: Mint accounts boxed (the Hookwars slot table makes Mint larger than the SBF stack frame allows).
+// Changed by Hookwars: Mint accounts boxed (the Hookwars slot table makes Mint larger than the SBF stack frame allows); R9 slot mints accepted (crate::setup).
 //! `init`: installs the kit on a launch's mint (`docs/hooks-v2.md` §4.10). Called by the launch
 //! program inside `create_launch`, signed by its kit-caller PDA for the mint.
 
@@ -89,12 +89,9 @@ pub fn process_init(ctx: Context<Init>, args: KitInitArgs) -> Result<()> {
     )?;
 
     // The mint: the kit as hook from its first instruction, nobody able to change it or mint.
+    // Hookwars R9: or the kit in the Locked slot of a slot mint (`crate::setup`).
     require!(
-        mint.hook_program == Some(crate::ID)
-            && mint.hook_authority.is_none()
-            && mint.mint_authority.is_none()
-            && mint.max_supply == supply
-            && mint.hook_flags == mint_flags(args.modules),
+        crate::setup::mint_setup_ok(mint, args.modules, supply),
         KitError::WrongMintSetup
     );
     // The whole supply in the launch's reserve, so nobody is eligible yet.

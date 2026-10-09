@@ -1,3 +1,4 @@
+// Changed by Hookwars: claim_fees pays the war share to the war chest.
 //! A launched companion's steps. `dev_buy` and `withdraw` serve the beneficiary; `claim_fees`,
 //! `buyback`, `share` and `release` anyone may send, each paying its sender `bounty_bps` of what it
 //! moves (as SOL). Every step is one call into a Bordrless program (plus the bridge's `unwrap_sol`
@@ -268,12 +269,31 @@ pub fn process_claim_fees<'info>(ctx: Context<'info, Step<'info>>) -> Result<()>
     let rest = got - bounty;
     let to_holders = bps_of(rest, u64::from(c.split.holders_bps));
     let to_beneficiary = bps_of(rest, u64::from(c.split.beneficiary_bps));
+    let to_war = bps_of(rest, u64::from(c.split.war_bps));
     // The rounding goes to buybacks when there are any, else to the beneficiary.
     let (to_buyback, to_beneficiary) = if c.split.buyback_bps > 0 {
-        (rest - to_holders - to_beneficiary, to_beneficiary)
+        (rest - to_holders - to_beneficiary - to_war, to_beneficiary)
     } else {
-        (0, rest - to_holders)
+        (0, rest - to_holders - to_war)
     };
+    // Hookwars: the war chest's share leaves the creator's holding now, as bridged SOL.
+    if to_war > 0 {
+        let war_chest = war_chest_address(&mint);
+        ensure_holding(&all, ctx.accounts.cranker.key(), BRIDGED_SOL_MINT, war_chest)?;
+        invoke_built(
+            &token_client::transfer(
+                creator,
+                token_client::holding_address(&BRIDGED_SOL_MINT, &creator),
+                token_client::holding_address(&BRIDGED_SOL_MINT, &war_chest),
+                BRIDGED_SOL_MINT,
+                None,
+                vec![],
+                to_war,
+            ),
+            &all,
+            &[&seeds.seeds()],
+        )?;
+    }
     pay_sol(
         &all,
         &seeds,
@@ -296,6 +316,8 @@ pub fn process_claim_fees<'info>(ctx: Context<'info, Step<'info>>) -> Result<()>
         .ok_or(CompanionError::MathOverflow)?;
     c.claimed_total = c.claimed_total.saturating_add(got);
     c.bounties_total = c.bounties_total.saturating_add(bounty);
+    c.war_total = c.war_total.saturating_add(to_war);
+    let war_total = c.war_total;
     emit_cpi!(FeesClaimed {
         companion: c.key(),
         claimed: got,
@@ -305,7 +327,21 @@ pub fn process_claim_fees<'info>(ctx: Context<'info, Step<'info>>) -> Result<()>
         to_beneficiary,
         cranker: ctx.accounts.cranker.key()
     });
+    if to_war > 0 {
+        emit_cpi!(CompanionWarFunded {
+            companion: ctx.accounts.companion.key(),
+            mint,
+            war_chest: war_chest_address(&mint),
+            amount: to_war,
+            war_total
+        });
+    }
     Ok(())
+}
+
+/// Hookwars: `PDA(["war-chest", mint], WAR_ID)`, owner of the holding the war share is paid into.
+pub fn war_chest_address(mint: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(&[WAR_CHEST_SEED, mint.as_ref()], &WAR_ID).0
 }
 
 // ---- buyback ----------------------------------------------------------------------------------------

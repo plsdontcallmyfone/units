@@ -1,3 +1,4 @@
+// Changed by Hookwars: WarShareTooHigh.
 use anchor_lang::prelude::*;
 
 #[error_code]
@@ -48,4 +49,6 @@ pub enum CompanionError {
     EarlyLocked,
     #[msg("the pool can't quote a buyback right now")]
     NoQuote,
+    #[msg("the war chest's share is above WAR_BPS_MAX")]
+    WarShareTooHigh,
 }

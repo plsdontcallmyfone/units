@@ -1,3 +1,4 @@
+// Changed by Hookwars: CompanionWarFunded.
 use anchor_lang::prelude::*;
 
 use crate::state::Split;
@@ -39,6 +40,19 @@ pub struct FeesClaimed {
     pub to_holders: u64,
     pub to_beneficiary: u64,
     pub cranker: Pubkey,
+}
+
+/// Hookwars: a claim paid the war chest its share.
+#[event]
+pub struct CompanionWarFunded {
+    pub companion: Pubkey,
+    pub mint: Pubkey,
+    /// `PDA(["war-chest", mint], WAR_ID)`.
+    pub war_chest: Pubkey,
+    /// Bridged SOL paid into the war chest's holding.
+    pub amount: u64,
+    /// Running total paid to the war chest.
+    pub war_total: u64,
 }
 
 #[event]

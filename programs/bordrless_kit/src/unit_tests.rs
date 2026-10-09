@@ -1,3 +1,4 @@
+// Changed by Hookwars: unit tests of the R9 mint setup and the R10 holder-rewards read.
 //! Host tests of the kit's pure parts: the reward math (§4.7, §4.8), the callbacks' rules in the
 //! order of §4.9, and the mirror (§4.13) against the program's own sync.
 
@@ -1284,5 +1285,154 @@ fn seeded_walk_keeps_the_vault_solvent() {
             "seed {seed} modules {modules}: inflows {inflows} claimed {claimed} dust {dust} \
              max dust {max_dust} below-min steps {below}"
         );
+    }
+}
+
+// ---- Hookwars: the mint setup init accepts (R9) and the holder-rewards read (R10) ---------------
+
+mod setup {
+    use super::*;
+    use bordrless_hook::slot_kind;
+    use bordrless_token::constants::MAX_SLOTS;
+    use bordrless_token::state::{Mint, Slot};
+
+    use crate::setup::{holder_rewards_on, kit_installed, mint_setup_ok, KIT_DATA_LEN};
+
+    const MODULES: u8 = crate::modules::HOLDER_REWARDS | crate::modules::MAX_WALLET;
+
+    fn legacy() -> Mint {
+        Mint {
+            version: 1,
+            decimals: 6,
+            supply: SUPPLY,
+            max_supply: SUPPLY,
+            mint_authority: None,
+            freeze_authority: None,
+            hook_authority: None,
+            metadata_authority: None,
+            hook_program: Some(crate::ID),
+            hook_flags: mint_flags(MODULES),
+            name: String::new(),
+            symbol: String::new(),
+            uri: String::new(),
+            created_at: NOW,
+            creator: Pubkey::new_unique(),
+            hook_signer_bump: 255,
+            reserved: [0; 31],
+            slot_authority: None,
+            slot_count: 0,
+            slots: [Slot::default(); MAX_SLOTS],
+        }
+    }
+
+    fn locked_kit() -> Slot {
+        Slot {
+            kind: slot_kind::LOCKED,
+            data_offset: 0,
+            data_len: KIT_DATA_LEN,
+            program: crate::ID,
+            flags: mint_flags(MODULES),
+            extra_count: 2,
+            ..Slot::default()
+        }
+    }
+
+    /// A slot mint: the kit Locked in slot 0, an empty item slot after it.
+    fn slotted() -> Mint {
+        let mut m = legacy();
+        m.hook_program = None;
+        m.hook_flags = 0;
+        m.slot_authority = Some(Pubkey::new_unique());
+        m.slot_count = 2;
+        m.slots[0] = locked_kit();
+        m.slots[1] = Slot {
+            kind: slot_kind::FEE,
+            data_offset: KIT_DATA_LEN,
+            data_len: 8,
+            ..Slot::default()
+        };
+        m
+    }
+
+    #[test]
+    fn the_upstream_single_hook_mint_is_still_accepted() {
+        assert!(mint_setup_ok(&legacy(), MODULES, SUPPLY));
+        let mut m = legacy();
+        m.hook_authority = Some(Pubkey::new_unique());
+        assert!(!mint_setup_ok(&m, MODULES, SUPPLY));
+        let mut m = legacy();
+        m.hook_flags = 0;
+        assert!(!mint_setup_ok(&m, MODULES, SUPPLY));
+        let mut m = legacy();
+        m.mint_authority = Some(Pubkey::new_unique());
+        assert!(!mint_setup_ok(&m, MODULES, SUPPLY));
+        assert!(!mint_setup_ok(&legacy(), MODULES, SUPPLY - 1));
+    }
+
+    #[test]
+    fn a_slot_mint_with_the_kit_locked_at_bytes_0_to_32_is_accepted() {
+        assert!(mint_setup_ok(&slotted(), MODULES, SUPPLY));
+        assert!(kit_installed(&slotted()));
+    }
+
+    #[test]
+    fn a_kit_that_keeps_no_hook_data_is_locked_with_no_range() {
+        let modules = crate::modules::MAX_WALLET | crate::modules::CREATOR_WALLET_LOCK;
+        let mut m = slotted();
+        m.slots[0].flags = mint_flags(modules);
+        m.slots[0].data_len = 0;
+        assert!(mint_setup_ok(&m, modules, SUPPLY));
+        m.slots[0].data_len = KIT_DATA_LEN;
+        assert!(!mint_setup_ok(&m, modules, SUPPLY));
+    }
+
+    #[test]
+    fn a_slot_mint_is_refused_unless_its_locked_slot_is_exactly_the_kit() {
+        let refused = |f: fn(&mut Mint)| {
+            let mut m = slotted();
+            f(&mut m);
+            assert!(!mint_setup_ok(&m, MODULES, SUPPLY));
+        };
+        refused(|m| m.slots[0].program = Pubkey::new_unique()); // another Locked program
+        refused(|m| m.slots[0].flags = 0); // not the kit's flags
+        refused(|m| m.slots[0].data_offset = 8); // not bytes 0..32
+        refused(|m| m.slots[0].data_len = 64); // more than its 32 bytes
+        refused(|m| m.slots[0].extra_count = 1); // not the registry's two extras
+        refused(|m| m.slots[0].kind = slot_kind::FEE); // no Locked slot at all
+        refused(|m| m.hook_program = Some(crate::ID)); // a single hook as well as slots
+        refused(|m| m.hook_authority = Some(Pubkey::new_unique()));
+        refused(|m| m.mint_authority = Some(Pubkey::new_unique()));
+    }
+
+    #[test]
+    fn war_reads_holder_rewards_only_from_a_kit_mint_and_its_own_config() {
+        let mint_key = Pubkey::new_unique();
+        let args = |modules: u8| KitInitArgs {
+            launch: Pubkey::new_unique(),
+            pool: Pubkey::new_unique(),
+            creator: Pubkey::new_unique(),
+            reward_mint: Pubkey::new_unique(),
+            modules,
+            max_wallet_bps: 200,
+            creator_unlock_at: 0,
+            early_window_end: 0,
+            early_unlock_at: 0,
+            kit_caller_bump: 255,
+        };
+        let vault = Some(Pubkey::new_unique());
+        let on = KitConfig::install(&args(MODULES), mint_key, SUPPLY, 255, vault, NOW).unwrap();
+        let off = KitConfig::install(&args(crate::modules::MAX_WALLET), mint_key, SUPPLY, 255, None, NOW)
+            .unwrap();
+        let other =
+            KitConfig::install(&args(MODULES), Pubkey::new_unique(), SUPPLY, 255, vault, NOW).unwrap();
+        for m in [legacy(), slotted()] {
+            assert!(holder_rewards_on(&mint_key, &m, Some(&on)));
+            assert!(!holder_rewards_on(&mint_key, &m, Some(&off)));
+            assert!(!holder_rewards_on(&mint_key, &m, Some(&other)));
+            assert!(!holder_rewards_on(&mint_key, &m, None));
+        }
+        let mut plain = legacy();
+        plain.hook_program = None;
+        assert!(!holder_rewards_on(&mint_key, &plain, Some(&on)));
     }
 }

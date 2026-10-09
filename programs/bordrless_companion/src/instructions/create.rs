@@ -1,3 +1,4 @@
+// Changed by Hookwars: war_bps checked at create.
 //! `create` and `launch`: a companion made for a mint that does not exist yet, then the launch
 //! created through it, with the companion's creator address as the launch's creator.
 
@@ -65,6 +66,10 @@ pub struct Create<'info> {
 pub fn process_create(ctx: Context<Create>, args: CreateArgs) -> Result<()> {
     require!(args.split.valid(), CompanionError::BadSplit);
     require!(
+        args.split.war_bps <= WAR_BPS_MAX,
+        CompanionError::WarShareTooHigh
+    );
+    require!(
         args.bounty_bps <= MAX_BOUNTY_BPS,
         CompanionError::BountyTooHigh
     );
@@ -117,7 +122,8 @@ pub fn process_create(ctx: Context<Create>, args: CreateArgs) -> Result<()> {
     c.max_buyback = args.max_buyback;
     c.buyback_interval = args.buyback_interval;
     c.vest_secs = args.vest_secs;
-    c.reserved = [0; 64];
+    c.war_total = 0;
+    c.reserved = [0; 54];
     emit_cpi!(CompanionCreated {
         companion: c.key(),
         mint,

@@ -1,4 +1,4 @@
-// Changed by Hookwars: program ids and derived addresses.
+// Changed by Hookwars: program ids and derived addresses; setup module (R9, R10).
 //! `bordrless_kit`: the token hook a Bordrless launch installs for the rules it fixes at launch
 //! (`docs/hooks-v2.md` §4).
 //!
@@ -34,11 +34,13 @@ pub mod instructions;
 pub mod math;
 pub mod mirror;
 pub mod rules;
+pub mod setup;
 pub mod state;
 #[cfg(test)]
 mod unit_tests;
 
 pub use constants::{mint_flags, modules, LAUNCH_ID};
+pub use setup::{holder_rewards_on, kit_data_len, kit_installed, mint_setup_ok, KIT_DATA_LEN};
 pub use instructions::*;
 pub use state::{HolderData, KitConfig, KitInitArgs};
 
