@@ -23,14 +23,14 @@ function MapView({ map }: { map: WarMap }) {
       {map.edges.map((e, i) => {
         const a = pos.get(e.from); const b = pos.get(e.to);
         if (!a || !b) return null;
-        return <line key={i} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke={e.kind === 'siege' ? 'var(--bad)' : e.kind === 'treaty' ? 'var(--ok)' : 'var(--accent)'} strokeWidth={2} strokeDasharray={e.kind === 'raid' ? '6 4' : undefined} />;
+        return <line key={i} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke={e.kind === 'siege' ? 'var(--bad)' : e.kind === 'treaty' ? 'var(--good)' : 'var(--ink)'} strokeWidth={2} strokeDasharray={e.kind === 'raid' ? '6 4' : undefined} />;
       })}
       {map.nodes.map((nd) => {
         const p = pos.get(nd.mint)!;
         return (
           <g key={nd.mint}>
-            <circle cx={p[0]} cy={p[1]} r={18} fill="var(--panel-2)" stroke={nd.underSiege ? 'var(--bad)' : 'var(--line)'} strokeWidth={2} />
-            <text x={p[0]} y={p[1] + 36} textAnchor="middle" fill="var(--dim)" fontSize={13}>{nd.symbol}</text>
+            <circle cx={p[0]} cy={p[1]} r={18} fill="var(--bg-3)" stroke={nd.underSiege ? 'var(--bad)' : 'var(--line)'} strokeWidth={2} />
+            <text x={p[0]} y={p[1] + 36} textAnchor="middle" fill="var(--ink-2)" fontSize={13}>{nd.symbol}</text>
           </g>
         );
       })}
@@ -48,7 +48,7 @@ export default async function WarRoom() {
   return (
     <>
       <Head eyebrow="War room" title="Every war, live" lede="Raids, sieges, counter-strikes and treaties between tokens, read from the chain as they land. Nothing here is a forecast." />
-      <div className="stats" style={{ marginBottom: 16 }}>
+      <div className="stats">
         <Stat label="Tokens on the map" value={map.ok ? map.data.nodes.length : DASH} />
         <Stat label="Relations" value={map.ok ? map.data.edges.length : DASH} sub="raids, sieges, treaties" />
         <Stat label="Raids in feed" value={raids ?? DASH} />
@@ -60,7 +60,7 @@ export default async function WarRoom() {
         <div className="grid">
           <Panel title="Map" meta="dashed: raid · red: siege · green: treaty" flush>
             {!map.ok ? <ReadFailed what="the map" error={map.error} /> : map.data.nodes.length === 0 ? (
-              <Empty title="No wars yet" what="A war starts when a token equips a Raid, Shield or Spy aimed at another token, and someone trades through it." next={<>Templates and items are in the <Link href="/armory" style={{ color: 'var(--accent)' }}>Armory</Link>.</>} />
+              <Empty title="No wars yet" what="A war starts when a token equips a Raid, Shield or Spy aimed at another token, and someone trades through it." next={<>Templates and items are in the <Link href="/armory">Armory</Link>.</>} />
             ) : <div className="map-wrap"><MapView map={map.data} /></div>}
           </Panel>
           <Panel title="Sieges" meta="readiness per War orders and rival">

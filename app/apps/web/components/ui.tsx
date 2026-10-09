@@ -32,7 +32,7 @@ export function Stat({ label, value, sub }: { label: string; value: ReactNode; s
 
 export function Head({ eyebrow, title, lede, right }: { eyebrow: string; title: string; lede?: ReactNode; right?: ReactNode }) {
   return (
-    <header className="head">
+    <header className="page-head">
       <div>
         <div className="eyebrow">{eyebrow}</div>
         <h1>{title}</h1>

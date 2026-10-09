@@ -11,7 +11,7 @@ export default async function Seasons() {
   return (
     <>
       <Head eyebrow="Seasons" title="King of the hill, on chain" lede="A season scores each token from its own war counters with weights published before it opens. After it ends anyone submits the leader; anyone can challenge with a higher score. The winner's chest gets a share of the protocol fees collected during the next season." />
-      <div className="stats" style={{ marginBottom: 16 }}>
+      <div className="stats">
         <Stat label="Season" value={s ? `#${s.number}` : '-'} sub={s ? (s.finalized ? 'finalized' : 'running') : 'none open'} />
         <Stat label="Leader" value={s?.leader ? short(s.leader.mint) : '-'} sub={s?.leader ? `score ${s.leader.score}` : undefined} />
         <Stat label="Prize vault" value={prize.ok ? sol(prize.data.lamports) : '-'} sub={prize.ok ? short(prize.data.vault) : undefined} />

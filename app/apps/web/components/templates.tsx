@@ -20,7 +20,7 @@ export function TemplateTable({ registered }: { registered: TemplateInfo[] }) {
                   {t.fields.map((f) => {
                     const lo = r ? r.fields.find((x) => x.index === f.index)?.min : f.floor;
                     const hi = r ? r.fields.find((x) => x.index === f.index)?.max : f.ceiling;
-                    return <div key={f.index} className="muted" style={{ fontSize: 13 }}><span style={{ color: 'var(--text)' }}>{f.name}</span> {String(lo)} to {String(hi)}, {FORGE[f.forge]}</div>;
+                    return <div key={f.index} className="muted" style={{ fontSize: 13 }}><span style={{ color: 'var(--ink)' }}>{f.name}</span> {String(lo)} to {String(hi)}, {FORGE[f.forge]}</div>;
                   })}
                 </div>
               </td>
