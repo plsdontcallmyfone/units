@@ -612,7 +612,7 @@ describe('v2 max wallet', () => {
     // A curve with a few hundred thousand lamports of room left: buy all but that much first.
     const pre = quoteLaunchSwap(OPEN, 'buy', max - 300_000n, 30, 100, rules);
     expect(pre.failure).toBeNull();
-    const near = { ...OPEN, baseReserve: OPEN.baseReserve - pre.amountOut, quoteReserve: OPEN.quoteReserve + launchSwapToReserve('buy', pre) };
+    const near = { ...OPEN, baseReserve: OPEN.baseReserve - pre.amountOut!, quoteReserve: OPEN.quoteReserve + launchSwapToReserve('buy', pre) };
     const round = 1_000_000_000n;
     expect(quoteLaunchSwap(near, 'buy', round, 30, 100, rules).failure).toBe('insufficient_liquidity');
     const r = remainderBuy(near, round, 30, 100, rules);

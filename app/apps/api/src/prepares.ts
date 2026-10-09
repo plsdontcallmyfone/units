@@ -10,7 +10,7 @@ import {
   type AccountMeta, type TransactionInstruction,
 } from '@solana/web3.js';
 import { hookwars, decodeLaunch, decodeKitConfig, decodePool, decodeLaunchConfig, launchHookExtras, launchPoolAddress, launchRulesFromInput, checkProtocolLookupTable, token, LAUNCH_CONFIG } from '@hookwars/sdk';
-import { FIXED_ADDRESSES, LP_FEE_BPS, remainderBuy, U64_MAX, MAX_VIRTUAL_QUOTE, MIN_VIRTUAL_QUOTE, NO_RULES, PROGRAM_IDS, TEMPLATES, type LaunchRulesInput, type PreparedTx } from '@hookwars/shared';
+import { FIXED_ADDRESSES, LP_FEE_BPS, remainderBuy, MAX_VIRTUAL_QUOTE, MIN_VIRTUAL_QUOTE, NO_RULES, PROGRAM_IDS, TEMPLATES, type LaunchRulesInput, type PreparedTx } from '@hookwars/shared';
 
 export class PrepareError extends Error {
   readonly status: number;
