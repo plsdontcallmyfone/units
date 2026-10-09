@@ -72,7 +72,7 @@ async function card(db: Pool, signature: string, ordinal: number): Promise<Buffe
   if (findBannedWords(line).length) return null;
   const esc = (s: string) => s.replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c]!);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><rect width="1200" height="630" fill="#0e0f12"/>
-<text x="80" y="140" fill="#9aa0aa" font-family="Geist, Inter, Arial, sans-serif" font-size="36">Hookwars</text>
+<text x="80" y="140" fill="#9aa0aa" font-family="Geist, Inter, Arial, sans-serif" font-size="36">units</text>
 <text x="80" y="330" fill="#f2f3f5" font-family="Geist, Inter, Arial, sans-serif" font-size="72" font-weight="600">${esc(line)}</text>
 <text x="80" y="560" fill="#6b7280" font-family="Geist, Inter, Arial, sans-serif" font-size="28">${esc(signature.slice(0, 8))}... slot ${r.slot}</text></svg>`;
   return sharp(Buffer.from(svg)).png().toBuffer();

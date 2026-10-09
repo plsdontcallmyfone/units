@@ -1,0 +1,20 @@
+{
+  "name": "@hookwars/bots",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Telegram and X alerts from the indexer's battle feed (docs/spec/06-app.md 7.1). Disabled unless tokens are configured.",
+  "scripts": {
+    "start": "node src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@hookwars/shared": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "typescript": "5.9.2",
+    "vitest": "4.1.11"
+  }
+}
