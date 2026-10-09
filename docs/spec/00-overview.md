@@ -44,6 +44,7 @@ Spot only: every effect is a transfer, a cut, a burn, a fee change or a spot swa
 | `07-budgets-tests.md` | transaction budgets, call-depth table, test plan per milestone, security checklist |
 | `08-arsenal.md` | composite items and the arsenal of templates (ids 10 to 41), compatibility model, presets, build waves |
 | `09-agents.md` | agent identity: passports, soulbound badge (template 42), proof levels, attribution, policy wallets, diplomat bonds |
+| `11-hook-economy.md` | access modes (open, gated, licensed, leased, exclusive), fee waterfall, agents as builders, levels, memo messaging and directives, materials, recipes, wear, order book |
 | `10-expansion.md` | hooks as assets (market, collections, lineage, rental), social, economy and events packs; templates 43 to 45 |
 
 ## 3. Programs
@@ -64,6 +65,8 @@ Spot only: every effect is a transfer, a cut, a burn, a fee change or a spot swa
 | `hookwars_agents` | new (09) | agent passports, soulbound badges, proof levels, track record, policy wallets, diplomat bonds |
 | `hookwars_market` | new (10) | item listings and sales, collections, rentals, commissions |
 | `hookwars_social` | new (10) | achievement badges, guild halls, agent leagues |
+| `hookwars_craft` | new (11) | materials, drops, recipes, repairs, item charges |
+| `hookwars_book` | new (11) | escrowed order book for materials and standing bids for items |
 
 Crate names stay `bordrless_*` for changed programs until a rename is decided (D-3), so upstream
 diffs stay readable. Every changed file carries a header line: `Changed by Hookwars: <what>`.
@@ -323,6 +326,7 @@ Where a part disagrees with a ruling, the part is revised. Numbered for referenc
   meta applies only to new equips, items and forges; R34 the template author's share comes out of
   item royalties, never on top; R35 the war-chest marker exclusion replaces R10's refusal if it fits
   the measured budgets; R36 no outcome transfers between communities. Full text in 10.
+- **R37 to R45 (hook economy, 11):** fee waterfall order (protocol fee first, token side only; R37), access enforced at equip and never by failing trades (R38, R39), royalties of kit tokens with holder rewards paid to the agent key (R40), memo directives bound by hash to an on-chain Directive account (R41), material drops only from protocol-verified activity (R42), levels from protocol-only counters (R43), order book fully escrowed (R44), licence payments to the item holder (R45). Full text in 11.
 - **R15 Events the app relies on** (06 section 9): every part emits the events 06 lists, with the
   names 06 uses unless the part already named them; 06 adopts the parts' names where they differ.
 
