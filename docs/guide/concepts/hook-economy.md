@@ -1,48 +1,90 @@
 # The hook economy
 
-Hooks are assets. Whoever builds a good hook earns every time any token runs it, and the protocol earns alongside.
+Hooks are assets. Builders earn every time any token runs their work, and the protocol earns alongside. Traders never pay a hidden charge: every fee and royalty comes out of a cut the item was already allowed to take, or out of a payment someone signed.
 
-## Who earns what
+> Built: royalties, settlement, the item market, rentals, commissions. **Planned** (specified, not built yet): access modes beyond Open and Leased, licences, the token-side protocol fee, levels, materials, recipes, wear and the order book.
 
-| Party | Earns | From |
+## Access modes (Planned)
+
+The item's holder chooses who may equip it.
+
+| Mode | Who may equip it | What the token pays | Ends when |
+| --- | --- | --- | --- |
+| Open | Any token whose slot fits | Nothing up front; the royalty comes out of the item's own cuts | The token unequips it |
+| Gated | Tokens the holder approved | Nothing up front | Unequip, or the holder revokes after the slot's notice |
+| Licensed | Tokens holding a live licence | The licence price, once per term | The licence expires or is revoked |
+| Leased | The one token named by an active lease (built) | The lease fee and a rent share | The lease ends |
+| Exclusive | One token at a time, first to equip | Nothing up front | That token unequips it |
+
+Exclusive combines with Gated and Licensed: an exclusive licence is the premium tier.
+
+## The fee waterfall
+
+Every hook run is settled by a permissionless `settle` step. The split always sums exactly to the amount collected; integer splits round down and the remainder goes to the last recipient.
+
+```
+token-side cut (b)                      pool-side cut (p)
+  protocol fee          (Planned)         protocol share taken by the DEX on the swap
+  ── then, on what is left ──             ── then ──
+  royalty                                 royalty
+    author share   -> template author        author share
+    rent           -> lessor, if leased     rent
+    holder         -> item owner            holder
+  bounty           -> whoever settled       bounty
+  rest             -> the template's destination (burn, war chest, partner, collector)
+```
+
+The protocol is paid first and only once: on the pool side the DEX already takes its share before the cut reaches the vault; on the token side a protocol fee is taken first at settlement (Planned).
+
+## Per market action
+
+| Action | Who pays | Split |
 | --- | --- | --- |
-| Item owner | Royalty | A share of what the item collects, every run, on every token that equips it |
-| Template author | Author share | A share of item royalties, never on top of them |
-| Protocol | Protocol fees | Its share of launch pool fees and hook cuts, plus market fees |
-| Crankers | Bounties | Small, capped shares for running settle, siege, counter-strike and season steps |
-| Holders | Holder rewards, loot, bounties | Kit rewards, treaty streams, raid points |
+| Item sale | Buyer | Protocol fee, author resale share, rest to seller |
+| Licence (Planned) | Licensee | Protocol fee, template author share, rest to item holder |
+| Lease fee | Lessee | Protocol fee, rest to lessor |
+| Order book fill (Planned) | Taker | Taker fee to protocol; maker fee may be zero |
+| Recipe (Planned) | Crafter | Fee split between protocol and the season pool |
 
-Traders never pay royalties on top: a royalty is always a share of a cut the item was already allowed to take.
-
-## Access modes
-
-| Mode | Who can equip the item |
-| --- | --- |
-| Open | Any token whose holders vote it in |
-| Leased | A token that rents it for a term (built) |
-| Gated | Tokens the owner allows (Planned: licences and allowlists, in the hook economy spec) |
+Every protocol collection emits a `ProtocolFee` event with its source, so the chain alone answers how much the protocol earned from each activity.
 
 ## The market
 
-Items trade like any other asset:
+- Listings and sales in bridged SOL, settled in one transaction.
+- Price history from sale events only.
+- Collections and sets.
+- Royalty income travels with the item: claims are refused while it is listed.
+- Rentals: an item leased for a term and a share of its cuts, returned automatically.
+- Commissions: a community posts a bounty for a hook; it pays once the winning item is equipped by vote.
 
-- **Listings and sales** in bridged SOL. The buyer pays the protocol fee, the template author's share and the seller in one transaction; no proceeds wait in a vault.
-- **Price history** comes from sale events only.
-- **Collections and sets** group items for discovery.
-- **Royalty income travels with the item.** Claims are refused while an item is listed, so unclaimed royalties go to the buyer with the sale.
+## Levels (Planned)
 
-## Rentals
+Levels are computed from counters only protocol programs can move, after their own effects, so every counted action paid its normal fees. A level is never stored as something you can buy.
 
-An owner leases an item to a token for a term and a share of its cuts. The item sits in escrow for the term and returns automatically. Rent is a share of the royalty, never charged on top. Reverting the slot when a lease ends is handled by the armory (in progress).
+| Skill | Counted from |
+| --- | --- |
+| Builder | Items authored, templates registered |
+| Crafter | Items crafted, repairs |
+| Trader | Order book fills |
+| Diplomat | Treaties that held |
 
-## Commissions
+Levels unlock higher licence prices, reduced Hook Lab bonds, higher-tier recipes and new order book markets. Each threshold is set by governance.
 
-A community posts a bounty for a hook it wants. Builders submit items, holders vote one into their slot through the normal vote, and the bounty pays out once the item is actually equipped. The winner keeps the royalty.
+## Materials, recipes and wear (Planned)
 
-## Forging and supply
+| Part | How it works |
+| --- | --- |
+| Materials | Fungible units tokens that enter only through drops from activity that already pays fees (settlement, raids, quests, season results), capped per season |
+| Recipes | Burn materials and pay a fee to craft an item, or to repair one |
+| Wear | Items can carry charges. Each run that applies an effect uses one. At zero the item goes dormant: it answers nothing and never blocks a trade. Repair restores charges |
 
-Forging burns two items to mint one stronger item, so supply of items falls as people improve them. Loot adds items; forging removes them.
+No emission, recipe or charge value ships until a faucet and sink simulation shows supply stays bounded and repair is worth it for items in real use.
 
-## Planned
+## Order book (Planned)
 
-The full hook economy spec (access licences, an order book for items, usage-based wear and on-chain skills) is being written. Anything on this page marked Planned is not built yet.
+| Book | Trades | Orders |
+| --- | --- | --- |
+| Material book | A material against bridged SOL | Limit buys and sells |
+| Class book | Items of one template and level range | Bids for any item matching the class; asks from listings |
+
+Every order is fully escrowed. No margin and no shorting.
