@@ -1,0 +1,3035 @@
+{
+  "address": "FikEwNXoXqRWteX4kpCT8dJ34o8hWQ8w49whhZiqS2vv",
+  "metadata": {
+    "name": "hookwars_market",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Hookwars (units): items as assets (docs/spec/10-expansion.md): listings and sales, collections, item rental, commissions."
+  },
+  "instructions": [
+    {
+      "name": "accept_lease",
+      "docs": [
+        "Anyone accepts an offered lease, paying its fee to the lessor; the term starts now."
+      ],
+      "discriminator": [
+        73,
+        241,
+        95,
+        119,
+        218,
+        242,
+        102,
+        155
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "lease",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  97,
+                  115,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "lease.item",
+                "account": "Lease"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lessor",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "apply_params",
+      "docs": [
+        "Anyone applies a pending params change once it is ready."
+      ],
+      "discriminator": [
+        188,
+        203,
+        86,
+        124,
+        178,
+        34,
+        133,
+        116
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  45,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "buy",
+      "docs": [
+        "Buys a listed item. The buyer pays the protocol fee, the author's resale share and the",
+        "seller directly; the escrow sends the item token to the buyer."
+      ],
+      "discriminator": [
+        102,
+        6,
+        61,
+        18,
+        1,
+        218,
+        235,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "listing",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seller",
+          "writable": true
+        },
+        {
+          "name": "author",
+          "writable": true
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "item"
+        },
+        {
+          "name": "item_mint"
+        },
+        {
+          "name": "escrow",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_holding",
+          "writable": true
+        },
+        {
+          "name": "buyer_holding",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "max_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "create_collection",
+      "docs": [
+        "Creates a collection of active templates (discovery only, 10 section 1.5)."
+      ],
+      "discriminator": [
+        156,
+        251,
+        92,
+        54,
+        233,
+        2,
+        16,
+        82
+      ],
+      "accounts": [
+        {
+          "name": "curator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  108,
+                  108,
+                  101,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.collections",
+                "account": "MarketConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "template_ids",
+          "type": {
+            "vec": "u16"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delist",
+      "docs": [
+        "The seller takes the item back."
+      ],
+      "discriminator": [
+        55,
+        136,
+        205,
+        107,
+        107,
+        173,
+        4,
+        31
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "seller",
+          "writable": true
+        },
+        {
+          "name": "listing",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "item_mint"
+        },
+        {
+          "name": "escrow",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_holding",
+          "writable": true
+        },
+        {
+          "name": "seller_holding",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "end_lease",
+      "docs": [
+        "Anyone ends a lease after its term; the item returns to the lessor. Reverting the slot (if",
+        "the item is still equipped there) is the armory's `revert_for_lease_end` (integration",
+        "request in 10)."
+      ],
+      "discriminator": [
+        103,
+        185,
+        73,
+        192,
+        161,
+        29,
+        161,
+        186
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "lease",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  97,
+                  115,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "lease.item",
+                "account": "Lease"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lessor",
+          "writable": true
+        },
+        {
+          "name": "item_mint"
+        },
+        {
+          "name": "lease_escrow",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  97,
+                  115,
+                  101,
+                  45,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lease_escrow_holding",
+          "writable": true
+        },
+        {
+          "name": "lessor_holding",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "expire",
+      "docs": [
+        "Anyone returns an expired listing to its seller."
+      ],
+      "discriminator": [
+        243,
+        83,
+        205,
+        58,
+        57,
+        201,
+        247,
+        146
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "seller",
+          "writable": true
+        },
+        {
+          "name": "listing",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "item_mint"
+        },
+        {
+          "name": "escrow",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_holding",
+          "writable": true
+        },
+        {
+          "name": "seller_holding",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "init",
+      "docs": [
+        "Creates the config; the program's upgrade authority signs."
+      ],
+      "discriminator": [
+        220,
+        59,
+        207,
+        236,
+        108,
+        250,
+        47,
+        100
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program_data"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "admin",
+          "type": "pubkey"
+        },
+        {
+          "name": "treasury",
+          "type": "pubkey"
+        },
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "MarketParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "list",
+      "docs": [
+        "Lists an item: its token moves into the escrow until it sells, is delisted or expires."
+      ],
+      "discriminator": [
+        54,
+        174,
+        193,
+        67,
+        17,
+        41,
+        132,
+        38
+      ],
+      "accounts": [
+        {
+          "name": "seller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "item"
+        },
+        {
+          "name": "item_mint"
+        },
+        {
+          "name": "seller_holding",
+          "writable": true
+        },
+        {
+          "name": "escrow",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_holding",
+          "writable": true
+        },
+        {
+          "name": "listing",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "price_lamports",
+          "type": "u64"
+        },
+        {
+          "name": "expires_at",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "offer_lease",
+      "docs": [
+        "Offers an item for rent to one token's slot. The item token moves into the lease escrow",
+        "until the offer is withdrawn or the lease ends."
+      ],
+      "discriminator": [
+        144,
+        216,
+        254,
+        204,
+        138,
+        68,
+        116,
+        252
+      ],
+      "accounts": [
+        {
+          "name": "lessor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "item"
+        },
+        {
+          "name": "item_mint"
+        },
+        {
+          "name": "lessor_holding",
+          "writable": true
+        },
+        {
+          "name": "token_mint"
+        },
+        {
+          "name": "lease_escrow",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  97,
+                  115,
+                  101,
+                  45,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lease_escrow_holding",
+          "writable": true
+        },
+        {
+          "name": "lease",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  97,
+                  115,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "token_mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "slot",
+          "type": "u8"
+        },
+        {
+          "name": "rent_bps",
+          "type": "u16"
+        },
+        {
+          "name": "fee_lamports",
+          "type": "u64"
+        },
+        {
+          "name": "term_secs",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "open_commission",
+      "docs": [
+        "Opens a commission: a bounty for an item a token's community wants in a vote-chosen slot."
+      ],
+      "discriminator": [
+        123,
+        199,
+        147,
+        95,
+        32,
+        168,
+        32,
+        119
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_mint"
+        },
+        {
+          "name": "commission",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_mint"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110,
+                  45,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "commission"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "slot",
+          "type": "u8"
+        },
+        {
+          "name": "brief_uri",
+          "type": "string"
+        },
+        {
+          "name": "bounty_lamports",
+          "type": "u64"
+        },
+        {
+          "name": "window_secs",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "pay_commission",
+      "docs": [
+        "Anyone pays the bounty to a submission's submitter once that item is equipped in the slot",
+        "(and was not the incumbent when the commission opened), after the submission window."
+      ],
+      "discriminator": [
+        175,
+        129,
+        67,
+        145,
+        170,
+        179,
+        69,
+        251
+      ],
+      "accounts": [
+        {
+          "name": "commission",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "commission.token_mint",
+                "account": "Commission"
+              },
+              {
+                "kind": "account",
+                "path": "commission.nonce",
+                "account": "Commission"
+              }
+            ]
+          },
+          "relations": [
+            "submission"
+          ]
+        },
+        {
+          "name": "submission",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  117,
+                  98,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "commission"
+              },
+              {
+                "kind": "account",
+                "path": "submission.item",
+                "account": "Submission"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_mint"
+        },
+        {
+          "name": "submitter",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110,
+                  45,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "commission"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "propose_params",
+      "docs": [
+        "The admin proposes new params and treasury; they apply after `admin_timelock_secs`."
+      ],
+      "discriminator": [
+        94,
+        141,
+        220,
+        182,
+        171,
+        53,
+        52,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  45,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "MarketParams"
+            }
+          }
+        },
+        {
+          "name": "treasury",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "refund_commission",
+      "docs": [
+        "Anyone refunds the bounty to the creator when no submission was equipped in time."
+      ],
+      "discriminator": [
+        97,
+        47,
+        202,
+        119,
+        18,
+        34,
+        85,
+        13
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "commission",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "commission.token_mint",
+                "account": "Commission"
+              },
+              {
+                "kind": "account",
+                "path": "commission.nonce",
+                "account": "Commission"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110,
+                  45,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "commission"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "submit",
+      "docs": [
+        "The holder of an item submits it while the commission is open."
+      ],
+      "discriminator": [
+        88,
+        166,
+        102,
+        181,
+        162,
+        127,
+        170,
+        48
+      ],
+      "accounts": [
+        {
+          "name": "submitter",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "commission",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "commission.token_mint",
+                "account": "Commission"
+              },
+              {
+                "kind": "account",
+                "path": "commission.nonce",
+                "account": "Commission"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_mint"
+        },
+        {
+          "name": "item"
+        },
+        {
+          "name": "item_mint"
+        },
+        {
+          "name": "submitter_holding"
+        },
+        {
+          "name": "submission",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  117,
+                  98,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "commission"
+              },
+              {
+                "kind": "account",
+                "path": "item"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "withdraw_offer",
+      "docs": [
+        "The lessor withdraws an offer nobody accepted; the item returns."
+      ],
+      "discriminator": [
+        203,
+        38,
+        131,
+        234,
+        204,
+        122,
+        53,
+        150
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "lease",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  97,
+                  115,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "lease.item",
+                "account": "Lease"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lessor",
+          "writable": true
+        },
+        {
+          "name": "item_mint"
+        },
+        {
+          "name": "lease_escrow",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  97,
+                  115,
+                  101,
+                  45,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lease_escrow_holding",
+          "writable": true
+        },
+        {
+          "name": "lessor_holding",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Collection",
+      "discriminator": [
+        48,
+        160,
+        232,
+        205,
+        191,
+        207,
+        26,
+        141
+      ]
+    },
+    {
+      "name": "Commission",
+      "discriminator": [
+        152,
+        254,
+        124,
+        223,
+        255,
+        105,
+        124,
+        133
+      ]
+    },
+    {
+      "name": "Lease",
+      "discriminator": [
+        14,
+        103,
+        218,
+        61,
+        248,
+        234,
+        105,
+        84
+      ]
+    },
+    {
+      "name": "Listing",
+      "discriminator": [
+        218,
+        32,
+        50,
+        73,
+        43,
+        134,
+        26,
+        58
+      ]
+    },
+    {
+      "name": "MarketConfig",
+      "discriminator": [
+        119,
+        255,
+        200,
+        88,
+        252,
+        82,
+        128,
+        24
+      ]
+    },
+    {
+      "name": "PendingMarketParams",
+      "discriminator": [
+        34,
+        82,
+        61,
+        75,
+        226,
+        224,
+        192,
+        191
+      ]
+    },
+    {
+      "name": "Submission",
+      "discriminator": [
+        58,
+        194,
+        159,
+        158,
+        75,
+        102,
+        178,
+        197
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "CollectionCreated",
+      "discriminator": [
+        69,
+        167,
+        76,
+        142,
+        182,
+        183,
+        233,
+        139
+      ]
+    },
+    {
+      "name": "CommissionOpened",
+      "discriminator": [
+        210,
+        65,
+        214,
+        157,
+        180,
+        156,
+        133,
+        179
+      ]
+    },
+    {
+      "name": "CommissionPaid",
+      "discriminator": [
+        114,
+        253,
+        151,
+        65,
+        215,
+        46,
+        30,
+        247
+      ]
+    },
+    {
+      "name": "CommissionRefunded",
+      "discriminator": [
+        72,
+        94,
+        153,
+        114,
+        125,
+        153,
+        215,
+        253
+      ]
+    },
+    {
+      "name": "Delisted",
+      "discriminator": [
+        127,
+        52,
+        154,
+        240,
+        230,
+        144,
+        87,
+        87
+      ]
+    },
+    {
+      "name": "LeaseEnded",
+      "discriminator": [
+        72,
+        213,
+        85,
+        72,
+        232,
+        231,
+        130,
+        177
+      ]
+    },
+    {
+      "name": "LeaseOffered",
+      "discriminator": [
+        194,
+        163,
+        184,
+        225,
+        179,
+        30,
+        10,
+        158
+      ]
+    },
+    {
+      "name": "LeaseStarted",
+      "discriminator": [
+        171,
+        28,
+        11,
+        70,
+        62,
+        1,
+        11,
+        202
+      ]
+    },
+    {
+      "name": "LeaseWithdrawn",
+      "discriminator": [
+        222,
+        176,
+        238,
+        138,
+        130,
+        181,
+        253,
+        33
+      ]
+    },
+    {
+      "name": "Listed",
+      "discriminator": [
+        243,
+        173,
+        136,
+        195,
+        125,
+        241,
+        12,
+        99
+      ]
+    },
+    {
+      "name": "ListingExpired",
+      "discriminator": [
+        86,
+        77,
+        98,
+        166,
+        213,
+        159,
+        72,
+        61
+      ]
+    },
+    {
+      "name": "MarketParamsApplied",
+      "discriminator": [
+        25,
+        62,
+        98,
+        165,
+        138,
+        90,
+        149,
+        137
+      ]
+    },
+    {
+      "name": "MarketParamsProposed",
+      "discriminator": [
+        145,
+        71,
+        84,
+        204,
+        190,
+        54,
+        112,
+        191
+      ]
+    },
+    {
+      "name": "Sold",
+      "discriminator": [
+        205,
+        203,
+        210,
+        202,
+        96,
+        11,
+        192,
+        10
+      ]
+    },
+    {
+      "name": "Submitted",
+      "discriminator": [
+        221,
+        58,
+        5,
+        241,
+        111,
+        209,
+        72,
+        210
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "NotUpgradeAuthority",
+      "msg": "the signer is not this program's upgrade authority"
+    },
+    {
+      "code": 6001,
+      "name": "NotAdmin",
+      "msg": "only the market admin may do this"
+    },
+    {
+      "code": 6002,
+      "name": "BadParams",
+      "msg": "a market parameter is out of bounds"
+    },
+    {
+      "code": 6003,
+      "name": "NotReady",
+      "msg": "no params change is pending, or it is not ready yet"
+    },
+    {
+      "code": 6004,
+      "name": "WrongAccount",
+      "msg": "an account is not the one expected"
+    },
+    {
+      "code": 6005,
+      "name": "NotAnItem",
+      "msg": "not an item of the armory"
+    },
+    {
+      "code": 6006,
+      "name": "NotItemHolder",
+      "msg": "the signer does not hold the item"
+    },
+    {
+      "code": 6007,
+      "name": "ZeroPrice",
+      "msg": "a price must be above zero"
+    },
+    {
+      "code": 6008,
+      "name": "NotSeller",
+      "msg": "only the seller may do this"
+    },
+    {
+      "code": 6009,
+      "name": "ListingExpired",
+      "msg": "the listing has expired"
+    },
+    {
+      "code": 6010,
+      "name": "NotExpired",
+      "msg": "the listing has not expired"
+    },
+    {
+      "code": 6011,
+      "name": "PriceMoved",
+      "msg": "the price is above the buyer's maximum"
+    },
+    {
+      "code": 6012,
+      "name": "WrongRecipient",
+      "msg": "a recipient is not the one the listing or item names"
+    },
+    {
+      "code": 6013,
+      "name": "BadName",
+      "msg": "a collection name is empty or too long"
+    },
+    {
+      "code": 6014,
+      "name": "TooManyTemplates",
+      "msg": "too many templates for a collection"
+    },
+    {
+      "code": 6015,
+      "name": "UnknownTemplate",
+      "msg": "a template is not an active armory template"
+    },
+    {
+      "code": 6016,
+      "name": "DuplicateTemplate",
+      "msg": "a template appears twice"
+    },
+    {
+      "code": 6017,
+      "name": "BadTerm",
+      "msg": "the lease term is outside the allowed range"
+    },
+    {
+      "code": 6018,
+      "name": "RentTooHigh",
+      "msg": "the rent share is above the ceiling"
+    },
+    {
+      "code": 6019,
+      "name": "WrongLeaseState",
+      "msg": "the lease is not in the state this needs"
+    },
+    {
+      "code": 6020,
+      "name": "NotLessor",
+      "msg": "only the lessor may do this"
+    },
+    {
+      "code": 6021,
+      "name": "LeaseNotOver",
+      "msg": "the lease term is not over"
+    },
+    {
+      "code": 6022,
+      "name": "NoSuchSlot",
+      "msg": "the slot does not exist on this token"
+    },
+    {
+      "code": 6023,
+      "name": "SlotNotVotable",
+      "msg": "the slot is not chosen by holder vote"
+    },
+    {
+      "code": 6024,
+      "name": "BountyTooSmall",
+      "msg": "the bounty is below the minimum"
+    },
+    {
+      "code": 6025,
+      "name": "BadUri",
+      "msg": "the brief URI is too long"
+    },
+    {
+      "code": 6026,
+      "name": "CommissionNotOpen",
+      "msg": "the commission is not open"
+    },
+    {
+      "code": 6027,
+      "name": "CommissionClosed",
+      "msg": "the commission is closed for submissions"
+    },
+    {
+      "code": 6028,
+      "name": "DoesNotFit",
+      "msg": "the item's kind does not fit the slot"
+    },
+    {
+      "code": 6029,
+      "name": "NotEquipped",
+      "msg": "the submitted item is not equipped in the slot (or was already there)"
+    },
+    {
+      "code": 6030,
+      "name": "RefundTooEarly",
+      "msg": "the refund window has not opened"
+    },
+    {
+      "code": 6031,
+      "name": "Overflow",
+      "msg": "arithmetic overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "Collection",
+      "docs": [
+        "`Collection` at `[\"collection\", id]` (10 section 1.5). Discovery only, no economic effect."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "id",
+            "type": "u32"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "curator",
+            "type": "pubkey"
+          },
+          {
+            "name": "template_ids",
+            "type": {
+              "vec": "u16"
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CollectionCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u32"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "curator",
+            "type": "pubkey"
+          },
+          {
+            "name": "template_ids",
+            "type": {
+              "vec": "u16"
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Commission",
+      "docs": [
+        "`Commission` at `[\"commission\", token_mint, nonce]` (10 section 5.2)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault_bump",
+            "type": "u8"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "brief_uri",
+            "type": "string"
+          },
+          {
+            "name": "bounty_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "incumbent",
+            "docs": [
+              "The item in the slot when the commission opened (a payment needs a different one)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "opens_at",
+            "type": "i64"
+          },
+          {
+            "name": "closes_at",
+            "type": "i64"
+          },
+          {
+            "name": "state",
+            "type": "u8"
+          },
+          {
+            "name": "winner",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "submissions",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CommissionOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "commission",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "bounty_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "closes_at",
+            "type": "i64"
+          },
+          {
+            "name": "brief_uri",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CommissionPaid",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "commission",
+            "type": "pubkey"
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "submitter",
+            "type": "pubkey"
+          },
+          {
+            "name": "bounty_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CommissionRefunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "commission",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "bounty_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Delisted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Lease",
+      "docs": [
+        "`Lease` at `[\"lease\", item]` (10 section 4.2). Closed when it ends or is withdrawn."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "lessor",
+            "type": "pubkey"
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "item_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "docs": [
+              "The token that may equip the item during the term."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "rent_bps",
+            "docs": [
+              "Share of the item's royalty paid to the lessor during the term (R32: never on top)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "fee_lamports",
+            "docs": [
+              "Paid once to the lessor by whoever accepts."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "term_secs",
+            "type": "u32"
+          },
+          {
+            "name": "starts_at",
+            "type": "i64"
+          },
+          {
+            "name": "ends_at",
+            "type": "i64"
+          },
+          {
+            "name": "state",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LeaseEnded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LeaseOffered",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "lessor",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "rent_bps",
+            "type": "u16"
+          },
+          {
+            "name": "fee_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "term_secs",
+            "type": "u32"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LeaseStarted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "payer",
+            "type": "pubkey"
+          },
+          {
+            "name": "starts_at",
+            "type": "i64"
+          },
+          {
+            "name": "ends_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LeaseWithdrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Listed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "item_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Listing",
+      "docs": [
+        "`Listing` at `[\"listing\", item_mint]` (10 section 1.1). One live listing per item."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "item_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "docs": [
+              "0 = never expires."
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ListingExpired",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketConfig",
+      "docs": [
+        "`MarketConfig` at `[\"market-config\"]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "Wallet that receives the protocol's share of sales."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "MarketParams"
+              }
+            }
+          },
+          {
+            "name": "collections",
+            "docs": [
+              "Collections created so far (the next id)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketParams",
+      "docs": [
+        "The market's parameters (10 section 13; every one \"to set\")."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "fee_bps",
+            "docs": [
+              "`MARKET_FEE_BPS`: the protocol's share of a sale price."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "author_resale_bps",
+            "docs": [
+              "`AUTHOR_RESALE_BPS`: the item author's share of a sale price."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "collection_max_templates",
+            "docs": [
+              "`COLLECTION_MAX_TEMPLATES`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "max_rent_bps",
+            "docs": [
+              "`MAX_RENT_BPS`: the most of an item's royalty a lease may assign to the lessor (R32)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "lease_min_secs",
+            "docs": [
+              "`LEASE_MIN_SECS`."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "lease_max_secs",
+            "docs": [
+              "`LEASE_MAX_SECS`."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "commission_min_lamports",
+            "docs": [
+              "`COMMISSION_MIN_LAMPORTS`."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "commission_vote_secs",
+            "docs": [
+              "`COMMISSION_VOTE_SECS`: after a commission closes, how long the slot has to equip a",
+              "submission before anyone may refund the bounty."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "admin_timelock_secs",
+            "docs": [
+              "`ADMIN_TIMELOCK_SECS` (00): delay on every params change."
+            ],
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketParamsApplied",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketParamsProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ready_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PendingMarketParams",
+      "docs": [
+        "`PendingMarketParams` at `[\"market-pending\"]`: a params change waiting for its delay."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "MarketParams"
+              }
+            }
+          },
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "ready_at",
+            "type": "i64"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Sold",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "item_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "type": "u64"
+          },
+          {
+            "name": "resale",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Submission",
+      "docs": [
+        "`Submission` at `[\"submission\", commission, item]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "commission",
+            "type": "pubkey"
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "submitter",
+            "type": "pubkey"
+          },
+          {
+            "name": "submitted_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Submitted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "commission",
+            "type": "pubkey"
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "submitter",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}

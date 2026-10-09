@@ -128,12 +128,78 @@ the stages, signs the mint's stages, has the wallet sign all of them in one prom
 `DATABASE_URL` (required, no default), `RPC_URL`, `PROTOCOL_LOOKUP_TABLE`, `RATE_PREPARE_CAPACITY`,
 `RATE_PREPARE_PER_SEC`, `RATE_READ_CAPACITY`, `RATE_READ_PER_SEC`, `MAP_WINDOW_SECS`.
 
-## 3. Remaining
+## 3. Done in app v2 (branch `appv2`, 2026-10-09)
+
+### IDLs and SDK
+
+- IDLs regenerated on server B for all 14 non-test programs (new: agents, market, social; items
+  updated) into `idl/` and `packages/sdk/idl/`. Two needed server-only patches of a copy of the
+  programs to build (never committed; see the requests in section 4).
+- `packages/shared`: `arsenal.ts` (templates 10 to 45 with fields, forge rules, range bytes and 08's
+  sentences; floors and ceilings named, never valued), `FAMILY_OF`, range decoders for tags 0x11,
+  0x12, 0x14, 0x18, 0x1a, 0x23, 0x27, 0x28; program ids for agents, market, social.
+- `packages/sdk`: codecs for every agents, market, social account and the items payout accounts;
+  events of every program from the IDLs, program-log events for items and launch (R18); PDAs;
+  `expansion.ts` builders for every agents, market, social and payout instruction the site uses,
+  including `equip_badge` (forwards the armory's `equip_launch` as the agents caller) and
+  `issue_badge`.
+
+### Indexer and API
+
+- Cursors for agents, market, social; `mint_tables` recorded from a `LaunchCreated` transaction's
+  lookup table and loaded by every prepare that names the mint (`mint` or `tokenMint`); views
+  `item_sales`, `item_listings`, `badge_awards`, `passports`. Event tables of events with no own
+  field now get valid DDL.
+- Reads (`src/reads-expansion.ts`): `/v1/agents?sort=`, `/v1/agents/:passport`,
+  `/v1/market/listings`, `/v1/market/items/:itemMint` (sales from `Sold` events only, lineage from
+  `Forged` events), `/v1/market/leases`, `/v1/market/collections`, `/v1/commissions`,
+  `/v1/commissions/:address`, `/v1/guilds`, `/v1/guilds/:id`, `/v1/badges`. A missing account
+  reads as `null`.
+- Prepares (`src/expansion-prepares.ts`), all `POST /v1/<route>/prepare`: market list, delist,
+  buy, collections, lease offer/accept/withdraw/end; commissions open/submit/pay/refund; badges
+  claim; guilds create/deposit/propose/approve/execute; agents register, profile, badge
+  equip/issue, policy init/limits/freeze/withdraw, bonds post/resolve; referral set/settle,
+  loyalty init/claim, first-blood init.
+
+### Site
+
+- `components/action.tsx`: one form for every non-launch prepare: wallet connect, prepare with
+  the wallet as owner, sign all in one prompt, send each through `/api/v1/submit`. Used on the
+  token page (buy, raid, propose, vote, count, close vote, settle, bounty or open chest, quest,
+  roll, referrer, loyalty, commission), the armory item page (royalty claim, forge) and every new
+  page.
+- New pages: `/agents` (league by one track-record counter, no prize; register),
+  `/agents/[passport]` (proof levels with what each proves, record, links, policy wallet, bonds,
+  badge steps, operator actions), `/marketplace` (listings, collections), `/marketplace/items/
+  [itemMint]` (price line and table from sales only, lineage tree, listing, rental),
+  `/marketplace/rentals`, `/commissions`, `/commissions/[address]`, `/guilds`, `/guilds/[id]`,
+  `/badges`, `/armory/templates`, `/armory/templates/[id]` (sentence with field names, fields with
+  registered floors and ceilings, manifest, holder data, payout forms for 24, 36, 38). Nav gains
+  Templates, Commissions and a Community menu.
+- Docs: `scripts/build-docs.mjs` compiles `docs/guide` (SUMMARY.md as the sidebar, heading
+  anchors, mermaid shown as labelled source, links to /docs routes) at build time; 18 pages from
+  main's guide build. Falls back to `apps/web/docs-sample` when the guide is absent.
+- `MOCK_DATA=1` shows a "Demo data" chip and a banner on every page.
+- Screenshots: `app/screenshots/{desktop,mobile}_*.png` for every new page, checked for status,
+  horizontal overflow, page errors and em dashes (all clean).
+
+## 4. Requests to the program owners (from app v2)
+
+| Program | Request |
+| --- | --- |
+| hookwars_items | Merge `ArsenalError` (payouts.rs, offset 7100) and `SoulboundError` (templates/soulbound.rs, offset 7000) into the one `#[error_code]` enum: Anchor's IDL build refuses more than one ("Multiple error definitions are not allowed"). The committed IDL carries all 30 codes. |
+| hookwars_agents | `PolicyLimits.tracked: Vec<(Pubkey, u64, u64)>`: the IDL builder cannot express tuples. A struct `TrackedLimit { mint, per_action, per_day }` has the same Borsh bytes; the committed IDL uses it. |
+| hookwars_armory | `equip_launch` accepts only the launchpad's `["armory-caller", mint]`; the agents badge needs the agents program's caller too (09 section 21 request 1). Until then `agents/badge/equip` fails simulation with `NotLaunchCaller`. |
+
+## 5. Remaining
 
 | Area | What to do |
 | --- | --- |
 | SOL price | The app has no SOL price source, so the launch form asks for the virtual reserve in SOL instead of a dollar market cap |
-| Composites and the arsenal templates (08) | Add each template's site sentence and fields to `packages/shared/src/hookwars/templates.ts` and its shape to `exact.ts`, pinned by `app_vectors.rs` |
+| Arsenal shapes pinned | templates 10 to 45 are in `arsenal.ts`; pin their shapes in `exact.ts` against `app_vectors.rs` (programs/tests, not app-owned); composite range sub-decoding |
 | Indexer | execution-order ordinals, re-read after truncated logs, account snapshots, upstream kept tables (06 2.1, 2.3) |
-| Submit routes for the other prepares | Only the launch form signs and sends today; the other pages return unsigned transactions |
+| Simulation against the programs | New prepares are tested for exact IDL account lists on a mocked chain; nobody has yet simulated them against deployed agents, market, social programs (not on devnet) |
+| Agent flows needing a second signer | `register_passport` with an agent key other than the operator, `link_social` (ed25519 statement), `submit_attestation`, `post_bond` together with the two proposals |
+| Agents league per season | 09 asks for per-season sums of indexed events; the site ranks by the on-chain lifetime counters until the indexer derives season sums |
+| Operator page, broker page | `/operators/:key`, `/agents/:passport/broker` (09 section 10) not built |
 | Protocol lookup table on devnet | create it and set `PROTOCOL_LOOKUP_TABLE`; prepares compile without it until then |

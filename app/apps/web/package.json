@@ -8,7 +8,12 @@
     "build": "next build",
     "start": "next start -p 9960 -H 127.0.0.1",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "docs": "node scripts/build-docs.mjs",
+    "predev": "node scripts/build-docs.mjs",
+    "prebuild": "node scripts/build-docs.mjs",
+    "pretypecheck": "node scripts/build-docs.mjs",
+    "pretest": "node scripts/build-docs.mjs"
   },
   "dependencies": {
     "@hookwars/shared": "workspace:^",
@@ -18,7 +23,8 @@
     "next": "15.5.27",
     "react": "19.1.1",
     "react-dom": "19.1.1",
-    "server-only": "0.0.1"
+    "server-only": "0.0.1",
+    "marked": "15.0.12"
   },
   "devDependencies": {
     "@types/node": "24.13.3",

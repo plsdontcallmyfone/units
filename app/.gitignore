@@ -4,3 +4,4 @@ dist/
 *.tsbuildinfo
 .env
 .env.local
+apps/web/lib/docs-content.json

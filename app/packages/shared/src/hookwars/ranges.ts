@@ -13,6 +13,14 @@ export type DecodedRange =
   | { slot: number; type: 'raid'; seasonId: number; raidPoints: number; tickets: number }
   | { slot: number; type: 'shield'; origin: number; originAt: number }
   | { slot: number; type: 'halfLife'; since: number }
+  | { slot: number; type: 'cooldown'; lastBuy: number }
+  | { slot: number; type: 'dailySellCap'; day: number; base: bigint }
+  | { slot: number; type: 'flashGuard'; buySlotLow: number }
+  | { slot: number; type: 'loyalty'; joinedEpoch: number }
+  | { slot: number; type: 'streak'; lastDay: number; streak: number; flags: number }
+  | { slot: number; type: 'rankBadge'; volumeUnits: number; rank: number }
+  | { slot: number; type: 'guildTag'; guild: number }
+  | { slot: number; type: 'patience'; since: number }
   | { slot: number; type: 'unknown'; tag: number; bytes: Uint8Array };
 
 /** On-chain value of slot_kind::LOCKED (crates/bordrless-hook). */
@@ -50,6 +58,23 @@ export function decodeRange(data: Uint8Array, spec: SlotRangeSpec, currentSeason
       return { slot: spec.slot, type: 'shield', origin: body[1] ?? 0, originAt: u32(body, 2) };
     case 0x07:
       return { slot: spec.slot, type: 'halfLife', since: u32(body, 1) };
+    // Arsenal layouts (programs/hookwars_items/src/templates/*.rs `TAG` and `read`).
+    case 0x11:
+      return { slot: spec.slot, type: 'cooldown', lastBuy: u32(body, 1) };
+    case 0x12:
+      return { slot: spec.slot, type: 'dailySellCap', day: u16(body, 1), base: u64(body, 3) };
+    case 0x14:
+      return { slot: spec.slot, type: 'flashGuard', buySlotLow: u32(body, 1) };
+    case 0x18:
+      return { slot: spec.slot, type: 'loyalty', joinedEpoch: u32(body, 1) };
+    case 0x1a:
+      return { slot: spec.slot, type: 'streak', lastDay: u16(body, 1), streak: u16(body, 3), flags: body[5] ?? 0 };
+    case 0x23:
+      return { slot: spec.slot, type: 'rankBadge', volumeUnits: u32(body, 1), rank: body[5] ?? 0 };
+    case 0x27:
+      return { slot: spec.slot, type: 'guildTag', guild: u16(body, 1) };
+    case 0x28:
+      return { slot: spec.slot, type: 'patience', since: u32(body, 1) };
     default:
       return { slot: spec.slot, type: 'unknown', tag, bytes: body };
   }

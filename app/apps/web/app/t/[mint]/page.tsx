@@ -6,6 +6,7 @@ import { DASH, ago, compact, int, short, sol, until } from '@/lib/format';
 import { Empty, ReadFailed } from '@/components/ui';
 import { TokenChart } from '@/components/token-chart';
 import { CopyMint } from '@/components/copy-mint';
+import { TokenActions } from '@/components/token-actions';
 import './token-page.css';
 
 type LaunchRow = Record<string, unknown>;
@@ -180,6 +181,12 @@ export default async function TokenPage({ params }: { params: Promise<{ mint: st
             <table><thead><tr><th>#</th><th>Raider</th><th className="num">Points</th><th className="num">Volume</th></tr></thead>
               <tbody>{generals.data.map((g) => <tr key={g.owner}><td>{g.rank}</td><td className="addr">{short(g.owner, 6)}</td><td className="num">{int(g.raidPoints)}</td><td className="num">{sol(g.raidVolume, 2)}</td></tr>)}</tbody></table>
           )}
+        </Pn>
+      </div>
+      {/* Changed by Hookwars (app v2): every action on this token, signed in the wallet. */}
+      <div className="cv3-acts">
+        <Pn title="Act" aside="signed in your wallet, sent through the backend">
+          <TokenActions mint={mint} hasWar={Boolean(w?.chest)} />
         </Pn>
       </div>
     </div>

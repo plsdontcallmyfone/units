@@ -1,6 +1,7 @@
+// Changed by Hookwars: cursors for agents, market and social; a slot launch's lookup table per mint.
 /**
  * The indexing loop (06 2.1): one signature cursor per program, oldest first; each transaction is
- * fetched once, its events decoded (self-CPI and `hookwars_items` logs), written keyed by
+ * fetched once, its events decoded (self-CPI, and the program logs of items and the launchpad), written keyed by
  * `(signature, ordinal)`, and the state tables updated. Failed transactions are skipped.
  */
 import { Connection, PublicKey, type ConfirmedSignatureInfo, type VersionedTransactionResponse } from '@solana/web3.js';
@@ -9,7 +10,7 @@ import { PROGRAM_IDS } from '@hookwars/shared';
 import type { Pool, PoolClient } from 'pg';
 import { colName, eventTable } from './schema.ts';
 
-/** The nine cursors of 06 2.1. */
+/** One cursor per program (06 2.1, plus agents, market and social). */
 export const CURSOR_PROGRAMS: { program: string; address: string }[] = [
   { program: 'token', address: PROGRAM_IDS.token },
   { program: 'swap', address: PROGRAM_IDS.swap },
@@ -20,6 +21,9 @@ export const CURSOR_PROGRAMS: { program: string; address: string }[] = [
   { program: 'armory', address: PROGRAM_IDS.armory },
   { program: 'items', address: PROGRAM_IDS.items },
   { program: 'war', address: PROGRAM_IDS.war },
+  { program: 'agents', address: PROGRAM_IDS.agents },
+  { program: 'market', address: PROGRAM_IDS.market },
+  { program: 'social', address: PROGRAM_IDS.social },
 ];
 
 export interface IndexStats { program: string; signatures: number; transactions: number; events: number; skippedFailed: number }
@@ -51,6 +55,12 @@ async function newSignatures(conn: Connection, address: string, until: string | 
   return out.reverse();
 }
 
+/** The address lookup tables a transaction loaded, other than the protocol's. */
+export function tablesOf(tx: VersionedTransactionResponse, protocolTable: string | null = process.env.PROTOCOL_LOOKUP_TABLE ?? null): string[] {
+  const msg = tx.transaction.message as { addressTableLookups?: { accountKey: PublicKey }[] };
+  return (msg.addressTableLookups ?? []).map((l) => l.accountKey.toBase58()).filter((k) => k !== protocolTable);
+}
+
 function keysOf(tx: VersionedTransactionResponse): string[] {
   const msg = tx.transaction.message;
   const keys = msg.staticAccountKeys.map((k) => k.toBase58());
@@ -59,7 +69,7 @@ function keysOf(tx: VersionedTransactionResponse): string[] {
   return keys;
 }
 
-export async function writeTransaction(client: PoolClient, signature: string, slot: number, blockTime: number | null, events: hookwars.TxEvent[], truncated: boolean, programs: string[]): Promise<void> {
+export async function writeTransaction(client: PoolClient, signature: string, slot: number, blockTime: number | null, events: hookwars.TxEvent[], truncated: boolean, programs: string[], tables: string[] = []): Promise<void> {
   const bt = blockTime === null ? null : new Date(blockTime * 1000);
   await client.query('insert into transactions (signature, slot, block_time, logs_truncated, programs) values ($1,$2,$3,$4,$5) on conflict (signature) do nothing', [signature, slot, bt, truncated, programs]);
   for (const ev of events) {
@@ -80,6 +90,11 @@ export async function writeTransaction(client: PoolClient, signature: string, sl
       );
     }
     await applyState(client, ev, slot);
+    // A slot launch's own lookup table (the launch stage loads it, 03 M3b): prepares that touch the
+    // mint compile with it (app audit A-6).
+    if (ev.program === 'launch' && ev.name === 'LaunchCreated' && tables.length > 0) {
+      await client.query(`insert into mint_tables (mint, lookup_table, updated_slot) values ($1,$2,$3) on conflict (mint) do update set lookup_table = excluded.lookup_table, updated_slot = excluded.updated_slot`, [String(ev.data.mint), tables[0], slot]);
+    }
   }
 }
 
@@ -183,7 +198,7 @@ export async function indexOnce(conn: Connection, db: Pool, opts: { maxPerProgra
           const client = await db.connect();
           try {
             await client.query('begin');
-            await writeTransaction(client, s.signature, tx.slot, tx.blockTime ?? null, events, truncated, [c.program]);
+            await writeTransaction(client, s.signature, tx.slot, tx.blockTime ?? null, events, truncated, [c.program], tablesOf(tx));
             await client.query('commit');
           } catch (e) {
             await client.query('rollback');

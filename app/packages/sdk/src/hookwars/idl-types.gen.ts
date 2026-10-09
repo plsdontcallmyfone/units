@@ -72,13 +72,19 @@ export namespace Items {
   export interface EquipInitialized { mint: PublicKey; slot: number; item: PublicKey; config: EquipConfig; }
   export interface EquipSettled { mint: PublicKey; slot: number; item: PublicKey; royaltyToken: bigint; royaltyQuote: bigint; amountToken: bigint; amountQuote: bigint; burned: bigint; bountyToken: bigint; bountyQuote: bigint; }
   export interface EquipState { version: number; bump: number; mint: PublicKey; slot: number; item: PublicKey; templateId: number; config: EquipConfig; equippedAt: bigint; runs: bigint; collectedToken: bigint; poolOwed: bigint; poolSettled: bigint; tokenUnsettled: (bigint)[]; poolUnsettled: (bigint)[]; reserved: Buffer; }
+  export interface FirstBlood { version: number; bump: number; mint: PublicKey; lastDay: number; taken: boolean; }
   export interface ItemCut { mint: PublicKey; slot: number; item: PublicKey; module: number; side: number; amount: bigint; }
   export interface ItemPoolContext { slot: number; item: PublicKey; launchFeeBps: number; launchCut: bigint; sideAmount: bigint; }
+  export interface LoyaltyClaimed { mint: PublicKey; holder: PublicKey; epoch: number; balance: bigint; amount: bigint; }
+  export interface LoyaltyPot { version: number; bump: number; mint: PublicKey; slot: number; epoch: number; payable: bigint; claimed: bigint; eligibleSupply: bigint; }
+  export interface LoyaltyRolled { mint: PublicKey; epoch: number; payable: bigint; eligibleSupply: bigint; }
   export interface Manifest { kind: number; tokenFlags: number; poolFlags: number; maxCutBuyBps: number; maxCutSellBps: number; maxCutTransferBps: number; maxDiscountBps: number; mayRefuse: boolean; mayBurn: boolean; dataBytes: number; readsOtherPools: number; }
   export type Phase = 'Before' | 'After';
   export interface PoolHookArgs { op: PoolOp; phase: Phase; pool: PublicKey; baseMint: PublicKey; quoteMint: PublicKey; actor: PublicKey; recipient: PublicKey; direction: number; amountIn: bigint; amountOut: bigint; baseReserve: bigint; quoteReserve: bigint; virtualBase: bigint; virtualQuote: bigint; lpFeeBps: number; protocolFeeBps: number; swapCount: bigint; createdAt: bigint; lpAmount: bigint; hookData: Buffer; route: RouteContext; }
   export type PoolOp = 'Initialize' | 'AddLiquidity' | 'RemoveLiquidity' | 'Swap';
   export interface RaidMarked { mint: PublicKey; rival: PublicKey; trader: PublicKey; volume: bigint; points: number; lootTicket: boolean; }
+  export interface ReferralPaid { mint: PublicKey; buyer: PublicKey; referrer: PublicKey; gross: bigint; paid: bigint; bounty: bigint; }
+  export interface Referred { version: number; bump: number; mint: PublicKey; buyer: PublicKey; referrer: PublicKey; owed: bigint; paid: bigint; }
   export interface RouteContext { routeInputMint: PublicKey; routeOutputMint: PublicKey; firstPool: PublicKey; routeAmountIn: bigint; hopIndex: number; hopCount: number; }
   export interface ShieldTaken { mint: PublicKey; owner: PublicKey; cut: bigint; }
   export interface TokenSlotArgs { op: TokenSlotOp; phase: Phase; slot: number; item: PublicKey; mint: PublicKey; source: PublicKey; destination: PublicKey; sourceOwner: PublicKey; destinationOwner: PublicKey; authority: PublicKey; authorityIsDelegate: boolean; amount: bigint; delta: bigint; totalDelta: bigint; sourceBalance: bigint; destinationBalance: bigint; decimals: number; supply: bigint; sourceData: Buffer; destinationData: Buffer; payload: Buffer; }
@@ -169,4 +175,159 @@ export namespace Companion {
   export interface LaunchRules { holderFeeBuyBps: number; holderFeeSellBps: number; burnBuyBps: number; burnSellBps: number; maxWalletBps: number; creatorLockSecs: number; earlyWindowSecs: number; earlyLockSecs: number; }
   export interface SharedWithHolders { companion: PublicKey; amount: bigint; bounty: bigint; cranker: PublicKey; }
   export interface Split { buybackBps: number; holdersBps: number; beneficiaryBps: number; warBps: number; }
+}
+
+export namespace Launch {
+  export interface AuthorFeesPaid { launch: PublicKey; mint: PublicKey; config: PublicKey; author: PublicKey; amount: bigint; paidTotal: bigint; slot: bigint; ts: bigint; }
+  export interface Config { version: number; bump: number; admin: PublicKey; treasury: PublicKey; quoteMint: PublicKey; launchFeeLamports: bigint; lpFeeBps: number; maxCreatorFeeBps: number; sniperWindowSecs: bigint; sniperStartBps: number; curveBps: number; supply: bigint; decimals: number; minVirtualQuote: bigint; maxVirtualQuote: bigint; paused: boolean; launches: bigint; ruleBounds: RuleBounds; reserved: Buffer; }
+  export interface ConfigArgs { admin: PublicKey; treasury: PublicKey; quoteMint: PublicKey; launchFeeLamports: bigint; lpFeeBps: number; maxCreatorFeeBps: number; sniperWindowSecs: bigint; sniperStartBps: number; curveBps: number; supply: bigint; decimals: number; minVirtualQuote: bigint; maxVirtualQuote: bigint; paused: boolean; ruleBounds: RuleBounds; }
+  export interface ConfigListed { config: PublicKey; author: PublicKey; authorShareBps: number; ts: bigint; }
+  export interface ConfigSet { admin: PublicKey; treasury: PublicKey; quoteMint: PublicKey; launchFeeLamports: bigint; lpFeeBps: number; maxCreatorFeeBps: number; sniperWindowSecs: bigint; sniperStartBps: number; curveBps: number; supply: bigint; decimals: number; minVirtualQuote: bigint; maxVirtualQuote: bigint; paused: boolean; ruleBounds: RuleBounds; ts: bigint; }
+  export interface CreateConfigArgs { rules: LaunchRules; creatorFeeBps: number; customHook: PublicKey | null; customHookFlags: number; label: string; }
+  export interface CreateLaunchArgs { name: string; symbol: string; uri: string; creatorFeeBps: number; virtualQuote: bigint; rules: LaunchRules; }
+  export interface CreatorFeesClaimed { launch: PublicKey; mint: PublicKey; creator: PublicKey; amount: bigint; claimedTotal: bigint; slot: bigint; ts: bigint; }
+  export interface Delta { amount: bigint; account: number; }
+  export interface Graduated { launch: PublicKey; mint: PublicKey; pool: PublicKey; cranker: PublicKey; topup: bigint; burned: bigint; baseReserve: bigint; quoteReserve: bigint; lpMinted: bigint; supply: bigint; slot: bigint; ts: bigint; }
+  export interface HookReturn { deltas: (Delta)[]; burn: bigint; lpFeeBps: number | null; sourceHookData: Buffer | null; destinationHookData: Buffer | null; }
+  export interface Launch { version: number; bump: number; mint: PublicKey; creator: PublicKey; pool: PublicKey; quoteMint: PublicKey; status: number; creatorFeeBps: number; lpFeeBps: number; sniperWindowSecs: bigint; sniperStartBps: number; virtualQuote: bigint; virtualBase: bigint; graduationQuote: bigint; curveTokens: bigint; reserveTokens: bigint; reserveHolding: PublicKey; quoteHolding: PublicKey; lpHolding: PublicKey; createdAt: bigint; graduatedAt: bigint; creatorFeesAccrued: bigint; creatorFeesClaimed: bigint; graduationTopup: bigint; graduationBurned: bigint; rules: LaunchRules; modules: number; kitConfig: PublicKey; holderVault: PublicKey; kitCallerBump: number; creatorUnlockAt: bigint; earlyWindowEnd: bigint; earlyUnlockAt: bigint; creatorBought: boolean; holderFeesAccrued: bigint; burnedOnTrades: bigint; config: PublicKey; customHook: PublicKey | null; customHookFlags: number; authorShareBps: number; authorFeesPaid: bigint; slotLaunch: number; reserved: Buffer; }
+  export interface LaunchConfig { version: number; creator: PublicKey; rules: LaunchRules; creatorFeeBps: number; customHook: PublicKey | null; customHookFlags: number; label: string; createdAt: bigint; authorShareBps: number; reserved: Buffer; }
+  export interface LaunchConfigCreated { config: PublicKey; creator: PublicKey; rules: LaunchRules; creatorFeeBps: number; customHook: PublicKey | null; customHookFlags: number; label: string; ts: bigint; }
+  export interface LaunchCreated { launch: PublicKey; mint: PublicKey; creator: PublicKey; pool: PublicKey; quoteMint: PublicKey; lpMint: PublicKey; name: string; symbol: string; uri: string; supply: bigint; decimals: number; creatorFeeBps: number; lpFeeBps: number; sniperWindowSecs: bigint; sniperStartBps: number; virtualQuote: bigint; virtualBase: bigint; graduationQuote: bigint; curveTokens: bigint; reserveTokens: bigint; launchFeeLamports: bigint; rules: LaunchRules; modules: number; kitConfig: PublicKey | null; holderVault: PublicKey | null; creatorUnlockAt: bigint; earlyWindowEnd: bigint; earlyUnlockAt: bigint; config: PublicKey | null; customHook: PublicKey | null; customHookFlags: number; slot: bigint; ts: bigint; }
+  export interface LaunchPrepared { mint: PublicKey; creator: PublicKey; slotCount: number; kitSlot: boolean; slot: bigint; ts: bigint; }
+  export interface LaunchRules { holderFeeBuyBps: number; holderFeeSellBps: number; burnBuyBps: number; burnSellBps: number; maxWalletBps: number; creatorLockSecs: number; earlyWindowSecs: number; earlyLockSecs: number; }
+  export type Phase = 'Before' | 'After';
+  export interface PoolHookArgs { op: PoolOp; phase: Phase; pool: PublicKey; baseMint: PublicKey; quoteMint: PublicKey; actor: PublicKey; recipient: PublicKey; direction: number; amountIn: bigint; amountOut: bigint; baseReserve: bigint; quoteReserve: bigint; virtualBase: bigint; virtualQuote: bigint; lpFeeBps: number; protocolFeeBps: number; swapCount: bigint; createdAt: bigint; lpAmount: bigint; hookData: Buffer; route: RouteContext; }
+  export interface PoolItemCuts { launch: PublicKey; pool: PublicKey; mint: PublicKey; side: number; discountBps: number; parts: (PoolItemPart)[]; poolCutsDelta: bigint; burned: bigint; slot: bigint; ts: bigint; }
+  export interface PoolItemPart { slot: number; item: PublicKey; discountBps: number; cut: bigint; burn: bigint; }
+  export type PoolOp = 'Initialize' | 'AddLiquidity' | 'RemoveLiquidity' | 'Swap';
+  export interface PoolRegistryRefreshed { mint: PublicKey; pool: PublicKey; items: (PublicKey)[]; accounts: number; ts: bigint; }
+  export interface PrepareLaunchArgs { name: string; symbol: string; uri: string; creatorFeeBps: number; rules: LaunchRules; slots: (SlotInit)[]; }
+  export interface PreparedLaunch { version: number; bump: number; mint: PublicKey; creator: PublicKey; rules: LaunchRules; creatorFeeBps: number; slotCount: number; preparedAt: bigint; launched: boolean; reserved: Buffer; }
+  export interface RouteContext { routeInputMint: PublicKey; routeOutputMint: PublicKey; firstPool: PublicKey; routeAmountIn: bigint; hopIndex: number; hopCount: number; }
+  export interface RuleBounds { maxHolderFeeBps: number; maxBurnBps: number; maxRulesFeeBps: number; minMaxWalletBps: number; maxMaxWalletBps: number; maxCreatorLockSecs: number; maxEarlyWindowSecs: number; maxEarlyLockSecs: number; }
+  export interface SlotBounds { maxCutBps: number; mayRefuse: boolean; mayWriteData: boolean; mayAnswerTouch: boolean; mayBurn: boolean; }
+  export interface SlotInit { kind: number; equipRule: number; bounds: SlotBounds; dataLen: number; lockedProgram: PublicKey | null; lockedFlags: number; lockedExtraCount: number; }
+}
+
+export namespace Swap {
+  export interface AddLiquidityArgs { baseDesired: bigint; quoteDesired: bigint; minLp: bigint; baseHookAccounts: number; quoteHookAccounts: number; hookData: Buffer; }
+  export interface Config { version: number; bump: number; admin: PublicKey; protocolFeeBps: number; feeCollector: PublicKey; treasury: PublicKey; poolCreationFeeLamports: bigint; paused: boolean; poolsCreated: bigint; launchProtocolShareBps: number; reserved: Buffer; }
+  export interface ConfigArgs { admin: PublicKey; protocolFeeBps: number; feeCollector: PublicKey; treasury: PublicKey; poolCreationFeeLamports: bigint; paused: boolean; launchProtocolShareBps: number; }
+  export interface ConfigSet { admin: PublicKey; protocolFeeBps: number; launchProtocolShareBps: number; feeCollector: PublicKey; treasury: PublicKey; poolCreationFeeLamports: bigint; paused: boolean; ts: bigint; }
+  export interface CreatePoolArgs { lpFeeBps: number; hookProgram: PublicKey; hookFlags: number; virtualBase: bigint; virtualQuote: bigint; baseAmount: bigint; quoteAmount: bigint; baseHookAccounts: number; quoteHookAccounts: number; hookData: Buffer; }
+  export interface CurveFinalized { pool: PublicKey; baseReserve: bigint; quoteReserve: bigint; lpSupply: bigint; lpMinted: bigint; lpRecipient: PublicKey; slot: bigint; ts: bigint; }
+  export interface DeltaPaid { holding: PublicKey; amount: bigint; }
+  export interface HopArgs { direction: number; accounts: number; inHookAccounts: number; outHookAccounts: number; }
+  export interface LiquidityAdded { pool: PublicKey; provider: PublicKey; baseAmount: bigint; quoteAmount: bigint; lpMinted: bigint; baseReserve: bigint; quoteReserve: bigint; lpSupply: bigint; slot: bigint; ts: bigint; }
+  export interface LiquidityRemoved { pool: PublicKey; provider: PublicKey; baseAmount: bigint; quoteAmount: bigint; lpBurned: bigint; baseReserve: bigint; quoteReserve: bigint; lpSupply: bigint; slot: bigint; ts: bigint; }
+  export interface Mint { version: number; decimals: number; supply: bigint; maxSupply: bigint; mintAuthority: PublicKey | null; freezeAuthority: PublicKey | null; hookAuthority: PublicKey | null; metadataAuthority: PublicKey | null; hookProgram: PublicKey | null; hookFlags: number; name: string; symbol: string; uri: string; createdAt: bigint; creator: PublicKey; hookSignerBump: number; reserved: Buffer; slotAuthority: PublicKey | null; slotCount: number; slots: (Slot)[]; }
+  export interface Pool { version: number; bump: number; lpMintBump: number; baseMint: PublicKey; quoteMint: PublicKey; lpMint: PublicKey; baseVault: PublicKey; quoteVault: PublicKey; hookProgram: PublicKey | null; hookFlags: number; lpFeeBps: number; protocolFeeBps: number; baseReserve: bigint; quoteReserve: bigint; virtualBase: bigint; virtualQuote: bigint; lpSupply: bigint; protocolFeesQuote: bigint; curve: boolean; creator: PublicKey; createdAt: bigint; lastSwapAt: bigint; swapCount: bigint; baseVolume: bigint; quoteVolume: bigint; hookSignerBump: number; feeModel: number; protocolShareBps: number; reserved: Buffer; }
+  export interface PoolCreated { pool: PublicKey; payer: PublicKey; creator: PublicKey; baseMint: PublicKey; quoteMint: PublicKey; lpMint: PublicKey; baseVault: PublicKey; quoteVault: PublicKey; lpFeeBps: number; protocolFeeBps: number; feeModel: number; protocolShareBps: number; hookProgram: PublicKey | null; hookFlags: number; virtualBase: bigint; virtualQuote: bigint; baseReserve: bigint; quoteReserve: bigint; lpSupply: bigint; lpMinted: bigint; curve: boolean; slot: bigint; ts: bigint; }
+  export interface ProtocolFeesCollected { pool: PublicKey; quoteAmount: bigint; collector: PublicKey; ts: bigint; }
+  export interface RemoveLiquidityArgs { lpAmount: bigint; minBase: bigint; minQuote: bigint; baseHookAccounts: number; quoteHookAccounts: number; hookData: Buffer; }
+  export interface RouteContext { routeInputMint: PublicKey; routeOutputMint: PublicKey; firstPool: PublicKey; routeAmountIn: bigint; hopIndex: number; hopCount: number; }
+  export interface RouteSwapped { trader: PublicKey; routeInputMint: PublicKey; routeOutputMint: PublicKey; amountIn: bigint; amountOut: bigint; pools: (PublicKey)[]; slot: bigint; ts: bigint; }
+  export interface Slot { kind: number; equipRule: number; bounds: SlotBounds; dataOffset: number; dataLen: number; item: PublicKey; program: PublicKey; flags: number; poolFlags: number; equipVault: PublicKey; signerBump: number; launchSignerBump: number; dataEpoch: number; extraCount: number; }
+  export interface SlotBounds { maxCutBps: number; mayRefuse: boolean; mayWriteData: boolean; mayAnswerTouch: boolean; mayBurn: boolean; }
+  export interface SwapArgs { direction: number; amountIn: bigint; minAmountOut: bigint; inHookAccounts: number; outHookAccounts: number; hookData: Buffer; }
+  export interface SwapRouteArgs { amountIn: bigint; minAmountOut: bigint; hops: (HopArgs)[]; hookData: Buffer; }
+  export interface Swapped { pool: PublicKey; trader: PublicKey; recipient: PublicKey; direction: number; amountIn: bigint; deltasIn: (DeltaPaid)[]; burnIn: bigint; cutsIn: bigint; receivedIn: bigint; lpFee: bigint; protocolFee: bigint; lpFeeBps: number; amountOut: bigint; deltasOut: (DeltaPaid)[]; burnOut: bigint; cutsOut: bigint; deliveredOut: bigint; baseReserve: bigint; quoteReserve: bigint; virtualBase: bigint; virtualQuote: bigint; swapCount: bigint; slot: bigint; ts: bigint; route: RouteContext; }
+}
+
+export namespace Agents {
+  export interface AgentCredited { passport: PublicKey; kind: number; value: bigint; ts: bigint; }
+  export interface AgentKey { passport: PublicKey; bump: number; }
+  export interface AgentKeyRotated { passport: PublicKey; oldKey: PublicKey; newKey: PublicKey; badgeMint: PublicKey; generation: number; ts: bigint; }
+  export interface AgentsConfig { version: number; bump: number; signerBump: number; admin: PublicKey; feeCollector: PublicKey; soulboundItem: PublicKey; params: AgentsParams; verifiers: (PublicKey)[]; targets: (PublicKey)[]; pending: ConfigChange | null; passports: bigint; reserved: Buffer; }
+  export interface AgentsParams { nameMaxLen: number; uriMaxLen: number; handleMaxLen: number; passportFeeLamports: bigint; maxPassportsPerOperator: number; attestQuorum: number; attestMaxTtlSecs: bigint; policyDaySecs: bigint; bondLamports: bigint; bondMinPassportAgeSecs: bigint; bondCancelGraceSecs: bigint; treatyHoldSecs: bigint; adminTimelockSecs: bigint; }
+  export interface ArmoryConfig { version: number; bump: number; admin: PublicKey; pendingAdmin: PublicKey | null; pendingAdminAt: bigint; itemsMinted: bigint; templates: number; params: ArmoryParams; reserved: Buffer; }
+  export interface ArmoryParams { maxRoyaltyBps: number; votePeriodSecs: number; voteQuorumBps: number; minNoticeSecs: number; maxNoticeSecs: number; forgeGainBps: number; minTwapSecs: number; maxPoolItemCutBps: number; maxPoolItemDiscountBps: number; maxItemReads: number; adminTimelockSecs: number; settleBountyBps: number; }
+  export interface AttestArgs { teeKind: number; measurement: Buffer; reportData: Buffer; nonce: Buffer; quoteHash: Buffer; quoteUri: string; sourceUri: string; expiresAt: bigint; }
+  export interface Attestation { passport: PublicKey; agentKey: PublicKey; teeKind: number; measurement: Buffer; reportData: Buffer; nonce: Buffer; quoteHash: Buffer; quoteUri: string; sourceUri: string; submittedAt: bigint; expiresAt: bigint; endorsements: number; round: number; bump: number; }
+  export interface AttestationEndorsed { passport: PublicKey; verifier: PublicKey; quoteHash: Buffer; endorsements: number; ts: bigint; }
+  export interface AttestationSubmitted { passport: PublicKey; teeKind: number; measurement: Buffer; quoteHash: Buffer; expiresAt: bigint; round: number; ts: bigint; }
+  export interface BadgeIssued { passport: PublicKey; badgeMint: PublicKey; agentKey: PublicKey; generation: number; ts: bigint; }
+  export interface Bond { passport: PublicKey; proposalA: PublicKey; proposalB: PublicKey; mintA: PublicKey; mintB: PublicKey; treatyItem: PublicKey; amount: bigint; postedAt: bigint; ratifiedAt: bigint; status: number; bump: number; }
+  export interface BondForfeited { bond: PublicKey; passport: PublicKey; inboxA: PublicKey; inboxB: PublicKey; amount: bigint; ts: bigint; }
+  export interface BondMark { bond: PublicKey; bump: number; }
+  export interface BondPosted { bond: PublicKey; passport: PublicKey; proposalA: PublicKey; proposalB: PublicKey; treatyItem: PublicKey; amount: bigint; ts: bigint; }
+  export interface BondReturned { bond: PublicKey; passport: PublicKey; ratified: boolean; amount: bigint; ts: bigint; }
+  export interface ConfigArgs { admin: PublicKey; feeCollector: PublicKey; soulboundItem: PublicKey; params: AgentsParams; verifiers: (PublicKey)[]; targets: (PublicKey)[]; }
+  export interface ConfigChange { admin: PublicKey; feeCollector: PublicKey; soulboundItem: PublicKey; params: AgentsParams; verifiers: (PublicKey)[]; targets: (PublicKey)[]; eta: bigint; }
+  export interface ConfigInitialized { admin: PublicKey; feeCollector: PublicKey; params: AgentsParams; ts: bigint; }
+  export interface Endorsement { attestation: PublicKey; verifier: PublicKey; quoteHash: Buffer; round: number; endorsedAt: bigint; bump: number; }
+  export interface EndorsementRevoked { passport: PublicKey; verifier: PublicKey; endorsements: number; ts: bigint; }
+  export interface EquipConfig { targets: (PublicKey)[]; role: number; }
+  export interface Item { version: number; bump: number; itemMint: PublicKey; templateId: number; params: (number)[]; manifest: Manifest; author: PublicKey; royaltyBps: number; level: number; source: number; equippedCount: number; royaltyOwnerBump: number; createdAt: bigint; reserved: Buffer; }
+  export interface Link { passport: PublicKey; platform: number; handle: string; postUri: string; statementHash: Buffer; linkedAt: bigint; bump: number; }
+  export interface LinkAdded { passport: PublicKey; platform: number; handle: string; postUri: string; statementHash: Buffer; ts: bigint; }
+  export interface LinkRemoved { passport: PublicKey; platform: number; ts: bigint; }
+  export interface Manifest { kind: number; tokenFlags: number; poolFlags: number; maxCutBuyBps: number; maxCutSellBps: number; maxCutTransferBps: number; maxDiscountBps: number; mayRefuse: boolean; mayBurn: boolean; dataBytes: number; readsOtherPools: number; }
+  export interface OperatorIndex { operator: PublicKey; next: number; active: number; bump: number; }
+  export interface ParamsApplied { change: ConfigChange; ts: bigint; }
+  export interface ParamsCancelled { ts: bigint; }
+  export interface ParamsProposed { change: ConfigChange; ts: bigint; }
+  export interface Passport { version: number; bump: number; operator: PublicKey; index: number; agentKey: PublicKey; name: string; avatarUri: string; bioUri: string; hireUri: string; kinds: number; status: number; proof: number; links: number; attestedUntil: bigint; badgeMint: PublicKey; badgeGeneration: number; badgeIssued: boolean; creditAgentId: Buffer | null; createdAt: bigint; lastActiveAt: bigint; record: TrackRecord; reserved: Buffer; }
+  export interface PassportRegistered { passport: PublicKey; operator: PublicKey; agentKey: PublicKey; name: string; kinds: number; badgeMint: PublicKey; ts: bigint; }
+  export interface PassportStatus { passport: PublicKey; status: number; ts: bigint; }
+  export interface Policy { passport: PublicKey; frozen: boolean; perActionLamports: bigint; perDayLamports: bigint; dayStart: bigint; spentToday: bigint; tracked: (TrackedMint)[]; targets: (PublicKey)[]; bump: number; vaultBump: number; }
+  export interface PolicyLimits { perActionLamports: bigint; perDayLamports: bigint; tracked: (TrackedLimit)[]; targets: (PublicKey)[]; }
+  export interface PolicySet { passport: PublicKey; perActionLamports: bigint; perDayLamports: bigint; frozen: boolean; ts: bigint; }
+  export interface PolicySpend { passport: PublicKey; targetProgram: PublicKey; solOut: bigint; ts: bigint; }
+  export interface PolicyWithdraw { passport: PublicKey; mint: PublicKey | null; amount: bigint; ts: bigint; }
+  export interface ProfileArgs { name: string; avatarUri: string; bioUri: string; hireUri: string; kinds: number; creditAgentId: Buffer | null; }
+  export interface ProfileUpdated { passport: PublicKey; name: string; kinds: number; ts: bigint; }
+  export interface ProofChanged { passport: PublicKey; old: number; new: number; ts: bigint; }
+  export interface Proposal { version: number; bump: number; mint: PublicKey; slot: number; nonce: bigint; proposer: PublicKey; item: PublicKey | null; config: EquipConfig; createdAt: bigint; voteEnd: bigint; executableAt: bigint; votesFor: bigint; votesAgainst: bigint; votersOpen: number; status: number; reserved: Buffer; }
+  export interface TrackRecord { itemsAuthored: number; itemsEquipped: number; itemsForged: number; royaltyClaims: number; royaltiesClaimedSol: bigint; treatiesProposed: number; treatiesRatified: number; treatiesHeld: number; treatiesBroken: number; bondsForfeited: number; cranks: number; crankValueLamports: bigint; bountiesClaimedLamports: bigint; lootReveals: number; }
+  export interface TrackedLimit { mint: PublicKey; perAction: bigint; perDay: bigint; }
+  export interface TrackedMint { mint: PublicKey; perAction: bigint; perDay: bigint; spentToday: bigint; }
+  export interface TreatyBroken { bond: PublicKey; passport: PublicKey; ts: bigint; }
+  export interface TreatyHeld { bond: PublicKey; passport: PublicKey; ts: bigint; }
+}
+
+export namespace Market {
+  export interface Collection { version: number; bump: number; id: number; name: string; curator: PublicKey; templateIds: (number)[]; createdAt: bigint; }
+  export interface CollectionCreated { id: number; name: string; curator: PublicKey; templateIds: (number)[]; ts: bigint; }
+  export interface Commission { version: number; bump: number; vaultBump: number; creator: PublicKey; tokenMint: PublicKey; slot: number; nonce: bigint; briefUri: string; bountyLamports: bigint; incumbent: PublicKey; opensAt: bigint; closesAt: bigint; state: number; winner: PublicKey | null; submissions: number; }
+  export interface CommissionOpened { commission: PublicKey; creator: PublicKey; tokenMint: PublicKey; slot: number; bountyLamports: bigint; closesAt: bigint; briefUri: string; }
+  export interface CommissionPaid { commission: PublicKey; item: PublicKey; submitter: PublicKey; bountyLamports: bigint; ts: bigint; }
+  export interface CommissionRefunded { commission: PublicKey; creator: PublicKey; bountyLamports: bigint; ts: bigint; }
+  export interface Delisted { itemMint: PublicKey; seller: PublicKey; ts: bigint; }
+  export interface Lease { version: number; bump: number; lessor: PublicKey; item: PublicKey; itemMint: PublicKey; tokenMint: PublicKey; slot: number; rentBps: number; feeLamports: bigint; termSecs: number; startsAt: bigint; endsAt: bigint; state: number; }
+  export interface LeaseEnded { item: PublicKey; tokenMint: PublicKey; slot: number; ts: bigint; }
+  export interface LeaseOffered { item: PublicKey; lessor: PublicKey; tokenMint: PublicKey; slot: number; rentBps: number; feeLamports: bigint; termSecs: number; ts: bigint; }
+  export interface LeaseStarted { item: PublicKey; payer: PublicKey; startsAt: bigint; endsAt: bigint; }
+  export interface LeaseWithdrawn { item: PublicKey; ts: bigint; }
+  export interface Listed { item: PublicKey; itemMint: PublicKey; seller: PublicKey; priceLamports: bigint; expiresAt: bigint; ts: bigint; }
+  export interface Listing { version: number; bump: number; seller: PublicKey; item: PublicKey; itemMint: PublicKey; priceLamports: bigint; createdAt: bigint; expiresAt: bigint; }
+  export interface ListingExpired { itemMint: PublicKey; seller: PublicKey; ts: bigint; }
+  export interface MarketConfig { version: number; bump: number; admin: PublicKey; treasury: PublicKey; params: MarketParams; collections: number; reserved: Buffer; }
+  export interface MarketParams { feeBps: number; authorResaleBps: number; collectionMaxTemplates: number; maxRentBps: number; leaseMinSecs: number; leaseMaxSecs: number; commissionMinLamports: bigint; commissionVoteSecs: number; adminTimelockSecs: number; }
+  export interface MarketParamsApplied { ts: bigint; }
+  export interface MarketParamsProposed { readyAt: bigint; }
+  export interface PendingMarketParams { bump: number; params: MarketParams; treasury: PublicKey; readyAt: bigint; active: boolean; }
+  export interface Sold { item: PublicKey; itemMint: PublicKey; seller: PublicKey; buyer: PublicKey; price: bigint; fee: bigint; resale: bigint; ts: bigint; }
+  export interface Submission { version: number; bump: number; commission: PublicKey; item: PublicKey; submitter: PublicKey; submittedAt: bigint; }
+  export interface Submitted { commission: PublicKey; item: PublicKey; submitter: PublicKey; ts: bigint; }
+}
+
+export namespace Social {
+  export interface BadgeAward { bump: number; badgeId: number; recipient: PublicKey; awardedAt: bigint; }
+  export interface BadgeAwarded { id: number; recipient: PublicKey; claimant: PublicKey; ts: bigint; }
+  export interface BadgeCreated { id: number; mint: PublicKey; name: string; criterion: Criterion; claimsOpenAt: bigint; }
+  export interface BadgeType { version: number; bump: number; mintBump: number; id: number; mint: PublicKey; name: string; criterion: Criterion; claimsOpenAt: bigint; awarded: bigint; createdAt: bigint; }
+  export type Criterion = ({ name: 'FirstSiege' } & { mint: PublicKey; }) | ({ name: 'RaidPoints' } & { mint: PublicKey; min: number; }) | ({ name: 'ForgeLevel' } & { minLevel: number; });
+  export interface Guild { version: number; bump: number; treasuryBump: number; id: number; name: string; officers: (PublicKey)[]; threshold: number; officersVersion: number; actions: bigint; createdAt: bigint; }
+  export interface GuildAction { version: number; bump: number; guildId: number; nonce: bigint; kind: GuildActionKind; approvals: number; officersVersion: number; proposedAt: bigint; eta: bigint; executed: boolean; }
+  export interface GuildActionApproved { id: number; nonce: bigint; officer: PublicKey; }
+  export interface GuildActionExecuted { id: number; nonce: bigint; kind: GuildActionKind; ts: bigint; }
+  export type GuildActionKind = ({ name: 'SpendSol' } & { to: PublicKey; lamports: bigint; }) | ({ name: 'SpendToken' } & { mint: PublicKey; to: PublicKey; amount: bigint; }) | ({ name: 'SetOfficers' } & { officers: (PublicKey)[]; threshold: number; });
+  export interface GuildActionProposed { id: number; nonce: bigint; kind: GuildActionKind; eta: bigint; }
+  export interface GuildCreated { id: number; name: string; founder: PublicKey; ts: bigint; }
+  export interface GuildDeposit { id: number; from: PublicKey; lamports: bigint; ts: bigint; }
+  export interface PendingSocialParams { bump: number; params: SocialParams; readyAt: bigint; active: boolean; }
+  export interface SocialConfig { version: number; bump: number; admin: PublicKey; params: SocialParams; badges: number; guilds: number; reserved: Buffer; }
+  export interface SocialParams { guildMaxOfficers: number; guildTimelockSecs: number; adminTimelockSecs: number; }
+  export interface SocialParamsProposed { readyAt: bigint; }
 }

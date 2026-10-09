@@ -40,14 +40,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <a href="/" className="nav-logo" aria-label="units home">units</a>
             <Nav />
             <div className="nav-end">
-              {MOCK ? <span className="chip warn" title="MOCK_DATA=1: the site shows invented tokens and events, not the chain">mock data</span> : null}
+              {MOCK ? <span className="chip warn" title="MOCK_DATA=1: the site shows invented tokens and events, not the chain">Demo data</span> : null}
               <ClusterBadge />
               <a className="btn sm primary" href="/launch">Launch</a>
             </div>
           </div>
           <NavSheet />
         </header>
-        <main className="wrap shell">{children}</main>
+        <main className="wrap shell">{MOCK ? <p className="demo-banner" role="note">Demo data: tokens, items and events on this site are invented for display, not read from the chain.</p> : null}{children}</main>
         <footer className="foot">
           <div className="wrap foot-grid">
             <div className="foot-brand">
@@ -55,7 +55,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               <p>Tokens whose hooks are owned items. Holders vote what fills each slot, aim raids at rivals and fund a war chest from their own fees. Spot only.</p>
             </div>
             <div className="foot-col"><div className="label">PLATFORM</div><a href="/launch">Launch</a><a href="/">Projects</a><a href="/war">War room</a><a href="/armory">Armory</a></div>
-            <div className="foot-col"><div className="label">DOCS</div><a href="/docs">How units works</a><a href="/docs#templates">Templates</a><a href="/docs#parameters">Parameters</a></div>
+            <div className="foot-col"><div className="label">DOCS</div><a href="/docs">How units works</a><a href="/docs/protocol#templates">Templates</a><a href="/docs/protocol#parameters">Parameters</a></div>
             <div className="foot-col"><div className="label">NETWORK</div><span>Solana</span><span>Spot only</span><span>Bordrless standard</span></div>
           </div>
         </footer>

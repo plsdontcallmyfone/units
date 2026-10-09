@@ -3,6 +3,7 @@ import type { BattleEvent, ItemSummary } from '@hookwars/shared';
 import { read } from '@/lib/api';
 import { short } from '@/lib/format';
 import { Empty, Head, Panel, ReadFailed } from '@/components/ui';
+import { Action, Actions } from '@/components/action';
 
 export default async function ItemPage({ params }: { params: Promise<{ item: string }> }) {
   const { item } = await params;
@@ -32,6 +33,14 @@ export default async function ItemPage({ params }: { params: Promise<{ item: str
         {it.history.length === 0 ? <Empty title="No history yet" what="Equips, cuts, settlements and claims of this item land here." /> : (
           <div className="rows">{it.history.map((h) => <div className="row" key={`${h.signature}:${h.ordinal}`}><span className="chip">{h.kind}</span><span className="muted">{short(h.signature, 8)}</span><span className="faint">{h.amount ?? ''}</span></div>)}</div>
         )}
+      </Panel>
+      {/* Changed by Hookwars (app v2): the item's actions, signed in the wallet. */}
+      <div style={{ height: 16 }} />
+      <Panel title="Act" meta={<Link href={`/marketplace/items/${it.itemMint}`}>sell or rent on the market</Link>}>
+        <Actions>
+          <Action route="royalties" title="Claim royalty" what="Settled royalty in one cut mint goes to the holder." fixed={{ item: it.item, itemMint: it.itemMint }} fields={[{ name: 'cutMint', label: 'Cut mint', kind: 'key' }, { name: 'amount', label: 'Amount (base units)', kind: 'amount' }]} />
+          <Action route="forge" title="Forge" what="Burns this item and another of the same template into one a level higher." fixed={{ itemA: it.item }} fields={[{ name: 'itemB', label: 'Second item', kind: 'key' }]} />
+        </Actions>
       </Panel>
     </>
   );

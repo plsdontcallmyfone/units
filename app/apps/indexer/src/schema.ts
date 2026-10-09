@@ -1,3 +1,4 @@
+// Changed by Hookwars: mint lookup tables; views over the market, social and agents events.
 /**
  * The indexer's Postgres schema (docs/spec/06-app.md 2.3). Amounts are `numeric(39,0)`, addresses
  * `text`, times `timestamptz` plus raw unix seconds. Every event row is keyed by
@@ -47,7 +48,7 @@ export function eventTablesDdl(): string[] {
   for (const [program, specs] of Object.entries(hookwars.EVENT_SPECS)) {
     for (const [name, fields] of specs) {
       const cols = fields.flatMap(([f, ty]) => { const c = colName(f, ty); return c ? [`"${c}" ${sqlType(ty)}`] : []; }).join(', ');
-      out.push(`create table if not exists ${eventTable(program, name)} (${EVENT_COLS}, ${cols}, primary key (signature, ordinal))`);
+      out.push(`create table if not exists ${eventTable(program, name)} (${EVENT_COLS}, ${cols ? `${cols}, ` : ''}primary key (signature, ordinal))`);
     }
   }
   return out;
@@ -67,6 +68,7 @@ export const CORE_DDL: string[] = [
   `create table if not exists vote_locks (holding text primary key, mint text, owner text, amount numeric(39,0), until bigint, updated_slot bigint)`,
   `create table if not exists holding_hook_data (holding text primary key, mint text, owner text, data text, updated_slot bigint)`,
   `create table if not exists templates (template_id int primary key, program text, code_hash text, deploy_slot numeric(39,0), kind int, field_count int, field_min jsonb, field_max jsonb, name text, status text not null default 'active', registered_slot bigint)`,
+  `create table if not exists mint_tables (mint text primary key, lookup_table text not null, updated_slot bigint)`,
   `create table if not exists bot_posts (signature text not null, ordinal int not null, channel text not null, posted_at timestamptz not null default now(), primary key (signature, ordinal, channel))`,
 ];
 
@@ -86,6 +88,11 @@ export const VIEWS_DDL: string[] = [
   `create or replace view route_swaps as select * from ev_swap_route_swapped`,
   `create or replace view war_chests as select * from ev_war_war_chest_created`,
   `create or replace view prizes as select * from ev_war_prize_paid`,
+  // Market and social (10): sales are the only price history the site shows.
+  `create or replace view item_sales as select * from ev_market_sold`,
+  `create or replace view item_listings as select * from ev_market_listed`,
+  `create or replace view badge_awards as select * from ev_social_badge_awarded`,
+  `create or replace view passports as select * from ev_agents_passport_registered`,
 ];
 
 export function allDdl(): string[] {

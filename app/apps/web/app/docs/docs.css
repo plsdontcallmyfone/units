@@ -1,0 +1,38 @@
+/* Docs: the guide's layout in the site's tokens. UI text is sans; only code blocks keep code styling. */
+.docs { display: grid; grid-template-columns: 220px minmax(0, 1fr) 200px; gap: var(--s6); align-items: start; }
+.docs-side, .docs-toc { position: sticky; top: calc(var(--nav-h) + var(--s5)); display: grid; gap: 2px; max-height: calc(100vh - var(--nav-h) - var(--s7)); overflow-y: auto; font-family: var(--sans); }
+.docs-side { background: var(--glass-2); border: 1px solid var(--line); padding: var(--s3) 0; }
+.docs-group { font: 500 11px/1.4 var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); padding: var(--s3) var(--s3) var(--s1); }
+.docs-link { display: block; padding: 6px var(--s3); font-size: 14px; color: var(--ink-2); border-left: 1px solid transparent; }
+.docs-link:hover { color: var(--ink); background: var(--bg-2); }
+.docs-link.on { color: var(--ink); background: var(--bg-2); border-left-color: var(--ink); }
+.docs-toc a { display: block; padding: 4px 0; font-size: 13px; color: var(--muted); }
+.docs-toc a:hover { color: var(--ink); }
+.docs-body { min-width: 0; }
+.docs-prose { font: 15px/1.7 var(--sans); color: var(--ink-2); max-width: 76ch; }
+.docs-prose h1, .docs-prose h2, .docs-prose h3, .docs-prose h4 { font-family: var(--sans); color: var(--ink); letter-spacing: -0.01em; line-height: 1.25; scroll-margin-top: calc(var(--nav-h) + var(--s4)); position: relative; }
+.docs-prose h1 { font-size: clamp(28px, 3.4vw, 40px); font-weight: 700; margin: 0 0 var(--s5); }
+.docs-prose h2 { font-size: 22px; font-weight: 650; margin: var(--s7) 0 var(--s3); padding-top: var(--s4); border-top: 1px solid var(--line); }
+.docs-prose h3 { font-size: 17px; font-weight: 650; margin: var(--s5) 0 var(--s2); }
+.docs-prose .anchor { position: absolute; left: -1em; width: 1em; color: var(--muted); opacity: 0; text-decoration: none; font-weight: 400; }
+.docs-prose h1:hover .anchor, .docs-prose h2:hover .anchor, .docs-prose h3:hover .anchor, .docs-prose .anchor:focus { opacity: 1; }
+.docs-prose p, .docs-prose ul, .docs-prose ol { margin: 0 0 var(--s4); }
+.docs-prose a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
+.docs-prose a:hover { text-decoration-color: var(--ink); }
+.docs-prose code { font-size: 0.9em; background: var(--bg-2); border: 1px solid var(--line); padding: 1px 5px; }
+.docs-prose pre { margin: 0 0 var(--s4); padding: var(--s4); background: var(--bg-2); border: 1px solid var(--line); overflow-x: auto; }
+.docs-prose pre code { background: none; border: 0; padding: 0; font-size: 13px; line-height: 1.6; color: var(--ink); }
+.docs-prose table { width: 100%; border-collapse: collapse; margin: 0 0 var(--s4); font-size: 14px; display: block; overflow-x: auto; }
+.docs-prose th { font: 600 12px var(--sans); letter-spacing: 0.04em; text-transform: none; color: var(--ink); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line-2); }
+.docs-prose td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.docs-prose blockquote { margin: 0 0 var(--s4); padding: var(--s2) var(--s4); border-left: 2px solid var(--line-2); color: var(--ink-2); }
+.docs-prose .diagram { margin: 0 0 var(--s4); border: 1px solid var(--line-2); background: var(--glass); }
+.docs-prose .diagram figcaption { font: 500 12px var(--sans); color: var(--muted); padding: var(--s2) var(--s4); border-bottom: 1px solid var(--line); }
+.docs-prose .diagram pre { margin: 0; border: 0; background: transparent; }
+.docs-pager { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s4); margin-top: var(--s7); padding-top: var(--s5); border-top: 1px solid var(--line); }
+.docs-pager a { display: grid; gap: 2px; padding: var(--s3) var(--s4); border: 1px solid var(--line); color: var(--ink); font: 15px var(--sans); }
+.docs-pager a:hover { border-color: var(--ink); }
+.docs-pager a.next { text-align: right; }
+.docs-pager small { font-size: 12px; color: var(--muted); }
+@media (max-width: 1100px) { .docs { grid-template-columns: 200px minmax(0, 1fr); } .docs-toc { display: none; } }
+@media (max-width: 760px) { .docs { grid-template-columns: minmax(0, 1fr); } .docs-side { position: static; max-height: none; } }
