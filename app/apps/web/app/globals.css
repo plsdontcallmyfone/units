@@ -53,10 +53,11 @@ pre { margin: 0; white-space: pre; }
 .menu-icon { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid var(--line-2); background: var(--bg); color: var(--ink-2); }
 .menu-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linejoin: round; stroke-linecap: round; }
 .menu-item.on .menu-icon { border-color: var(--good); color: var(--good); }
-.menu-foot { border-top: 1px solid var(--line); }
-.menu-foot > .menu-item { max-width: var(--maxw); margin: 0 auto; padding: var(--s3) var(--gutter); grid-template-columns: 40px minmax(0, 1fr) auto; }
-.menu-foot { position: relative; }
-.menu-read { position: absolute; right: var(--gutter); top: 50%; transform: translateY(-50%); font: 500 12px var(--sans); color: var(--ink-2); pointer-events: none; }
+.menu-foot { border-top: 1px solid var(--line); padding: var(--s3) 0; }
+.menu-foot-in { max-width: var(--maxw); margin: 0 auto; padding: 0 var(--gutter); }
+.menu-item-foot { grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; margin: 0 -10px; }
+.menu-read { font: 500 12px var(--sans); color: var(--ink-2); white-space: nowrap; padding-right: 4px; }
+.menu-item-foot:hover .menu-read { color: var(--ink); }
 .nav-links a { font-size: 14px; color: var(--ink-2); position: relative; padding: 6px 0; white-space: nowrap; transition: color 0.2s; }
 .nav-links a.on, .nav-links a:hover { color: var(--ink); }
 .nav-links a.on:after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: var(--ink); }

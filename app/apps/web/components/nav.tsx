@@ -55,8 +55,8 @@ export const LINKS: [string, string][] = GROUPS.flatMap((g) => g.href ? [[g.href
 
 const on = (href: string, path: string) => href === '/' ? path === '/' : path.startsWith(href);
 
-function Entry({ item, path }: { item: Item; path: string }) {
-  return <Link className={`menu-item ${on(item.href, path) ? 'on' : ''}`} href={item.href}><span className="menu-icon" aria-hidden>{item.icon}</span><span><b>{item.label}</b><small>{item.what}</small></span></Link>;
+function Entry({ item, path, read }: { item: Item; path: string; read?: boolean }) {
+  return <Link className={`menu-item ${read ? 'menu-item-foot' : ''} ${on(item.href, path) ? 'on' : ''}`} href={item.href}><span className="menu-icon" aria-hidden>{item.icon}</span><span><b>{item.label}</b><small>{item.what}</small></span>{read ? <span className="menu-read">Read <span aria-hidden>›</span></span> : null}</Link>;
 }
 
 export function Nav() {
@@ -78,7 +78,7 @@ export function Nav() {
             <button type="button" className={active ? 'on' : ''} aria-expanded={isOpen} aria-haspopup="true" onClick={() => setOpen(isOpen ? null : g.label)}>{g.label}<svg className="caret" viewBox="0 0 10 6" aria-hidden><path d="M1 1l4 4 4-4" /></svg></button>
             <div className="menu" role="menu" hidden={!isOpen}>
               <div className="menu-cols">{g.columns.map((c) => <div className="menu-col" key={c.title}><div className="label">{c.title}</div>{c.items.map((i) => <Entry key={i.href} item={i} path={path} />)}</div>)}</div>
-              {g.foot ? <div className="menu-foot"><Entry item={g.foot} path={path} /><span className="menu-read">Read <span aria-hidden>›</span></span></div> : null}
+              {g.foot ? <div className="menu-foot"><div className="menu-foot-in"><Entry item={g.foot} path={path} read /></div></div> : null}
             </div>
           </div>
         );
