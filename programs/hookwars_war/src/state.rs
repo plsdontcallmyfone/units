@@ -282,7 +282,11 @@ pub struct WarState {
     pub sent_coalition: u64,
     /// Pass 4b: the live or last rivalry (10 section 11.3).
     pub rivalry: RivalryBudget,
-    pub reserved: [u8; 64],
+    /// Pass 5 (review 3 I-4): the rival of the last counted win and its season; a second win
+    /// against the same rival in one season does not count.
+    pub last_win_rival: Pubkey,
+    pub last_win_season: u32,
+    pub reserved: [u8; 28],
 }
 
 impl WarState {

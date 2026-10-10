@@ -570,7 +570,9 @@ impl WarWorld {
             received_other: 0,
             sent_coalition: 0,
             rivalry: RivalryBudget::default(),
-            reserved: [0; 64],
+            last_win_rival: Pubkey::default(),
+            last_win_season: 0,
+            reserved: [0; 28],
         };
         self.put_anchor(key, hookwars_war::ID, &s, WarState::LEN);
         let payer = self.w.env.payer.insecure_clone();

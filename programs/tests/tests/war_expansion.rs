@@ -449,6 +449,44 @@ fn a_rivalry_ring_fences_its_budget_and_settles_into_the_score_only() {
     assert_eq!(season.score(&st.season), Some(7));
 }
 
+/// Pass 5 (review 3 I-4): a passive rival (no raids back) gives no win; a contested rivalry does,
+/// once per rival per season.
+#[test]
+fn p5_i4_rivalry_wins_need_a_contest_and_count_once_per_rival_per_season() {
+    let mut ww = WarWorld::new();
+    let a = ww.war_token("FA", OrdersSpec::default());
+    let b = ww.war_token("FB", OrdersSpec::default());
+    ww.fund_chest(&a.mint, 10 * SOL);
+    let settle = |ww: &mut WarWorld, theirs: u64| -> bool {
+        let now = ww.now();
+        let (item, slot) = rivalry(ww, &a, &b.mint, now - 10, 60, 1_000);
+        ww.w.env.send(&[war::open_rivalry(a.mint, item, slot)], &[]).ok();
+        ww.w.env.warp(61);
+        let t = ww.now();
+        ww.put_ledger(&a.mint, 0, 0, &[(b.mint, t, 500, 0)]);
+        if theirs > 0 {
+            ww.put_ledger(&b.mint, 0, 0, &[(a.mint, t, theirs, 0)]);
+        }
+        let tx = ww.w.env.send(&[war::settle_rivalry(a.mint, b.mint)], &[]);
+        let won = tx.event::<RivalrySettled>().won;
+        // Free the slot for the next rivalry item.
+        ww.write_mint(&a.mint, |m| {
+            m.slots[usize::from(slot)] = Default::default();
+            m.slot_count -= 1;
+        });
+        won
+    };
+    // Passive rival: no win.
+    assert!(!settle(&mut ww, 0));
+    assert_eq!(ww.state(&a.mint).season.rivalry_wins, 0);
+    // Contested: a win.
+    assert!(settle(&mut ww, 100));
+    assert_eq!(ww.state(&a.mint).season.rivalry_wins, 1);
+    // The same rival again in the same season: not counted.
+    assert!(!settle(&mut ww, 100));
+    assert_eq!(ww.state(&a.mint).season.rivalry_wins, 1);
+}
+
 #[test]
 fn unequipping_the_rivalry_ends_it_early_with_no_win_and_no_transfer() {
     let mut ww = WarWorld::new();
