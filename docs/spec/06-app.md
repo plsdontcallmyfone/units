@@ -49,7 +49,7 @@ These hold on every surface, every bot post and every share card.
    and pays its own fees.
 6. **Spot only.** Every action is a swap, a transfer, a claim, a vote, an equip crank, a war crank, a
    roll, a forge or a quest claim.
-7. **No em dashes.** Fonts follow the agencypad reference (owner, 2026-10-10): Inter for body, JetBrains Mono for headings, labels, figures and addresses. Tabular digits everywhere.
+7. **No em dashes.** Fonts follow the plnty reference (owner, 2026-10-10): Suisse Intl for running text, KMR Apparat for display, labels and nav. No monospace face; tabular digits everywhere.
 
 ## 2. Indexer
 
@@ -550,7 +550,7 @@ Same shape as upstream: API, indexer, builders, submitter, keeper.
 
 ## 6. Site
 
-Next.js, Inter and JetBrains Mono as section 1 rule 7 says. Every figure from the API; null renders as a dash; every empty
+Next.js, Suisse Intl and KMR Apparat as section 1 rule 7 says. Every figure from the API; null renders as a dash; every empty
 state names what is missing.
 
 ### 6.1 Navigation
@@ -738,7 +738,7 @@ No PnL, no projected figures.
 - Every page loads with an empty database and shows its empty states.
 - A template whose program is not `<ITEMS_ID>`, or whose hash no longer matches, shows "Custom hook,
   unverified" on every surface.
-- No file contains U+2014; headings, labels and figures render JetBrains Mono (screenshot pass).
+- No file contains U+2014; display, labels and figures render KMR Apparat, running text Suisse Intl (screenshot pass).
 - Bots: a replayed event range posts once (idempotent by `(signature, ordinal)`).
 
 ## 9. Open questions for other parts
