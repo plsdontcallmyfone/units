@@ -107,4 +107,19 @@ pass item.
 
 ## 8. Tests
 
-See the final report of the lane for counts. New suite `programs/tests/tests/pass4a.rs`.
+Server A, branch `p4a` rebased on main `385cc28`: full Rust suite 578 passed, 0 failed, 10 ignored
+(the 7 Hook Lab pipeline tests, 2 Studio fixtures and `devnet_plan`, each run explicitly too:
+pipeline 7 of 7 including `the_armory_registers_and_equips_the_starter_end_to_end`, `devnet_plan`
+106 steps landing in order). New suite `programs/tests/tests/pass4a.rs` (12 tests: reader pins, the
+admin queue, exclusive, gated with revocation and enforcement, licensed with lapse and revocation,
+`set_access` checks and level gates, the agent directive, submissions, external templates token
+side, first-target payout, pool side through the real launchpad, forge of composites);
+`units-memo` 4 unit tests (social vectors); `hookwars-common` access unit test. Clippy with
+`-D warnings` is clean on the armory, items, token, launchpad, common, memo and `ext_template`
+(two lints in `hookwars_war` from main allowed for the run, and the tests crate's existing
+warnings, are outside this lane).
+
+App suite on server B (no app change on this branch): install, typecheck, next build and audit
+pass; the sdk's `instructions.vectors.test.ts` fails 2 cases (`splitNoWinner`, `splitWinner`):
+main's math vectors carry pass 4b's split `boss_pool` account, the app's war IDL builders do not
+yet (inherited from main, not caused here).
