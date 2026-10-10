@@ -193,3 +193,77 @@ signatures and decoded real events into the `ev_*` tables and `mint_tables` (the
 the launched tokens' lookup tables from there), and the explorer route decoded the drill's raid
 (RaidMarked, ItemCut, PoolItemCuts, RouteSwapped). The public devnet RPC rate-limits the indexer
 heavily (429 replies); a private devnet RPC in `RPC_URL` (server-side only) makes it usable.
+
+## 8. Drill run, 2026-10-10
+
+The drill ran from server B through the API (127.0.0.1:9961, `app/devnet.env`) with
+`scripts/devnet/drill.mjs`: one prepare route per call, signed by a drill wallet (keys in
+`keys/drill/`, git-ignored, with the saved addresses and the fresh mint keys) and sent to devnet;
+`scripts/devnet/drill-timed.sh` ran the steps that wait on a clock; `scripts/devnet/why.mjs`
+simulates a route with its logs when the API only returns an error code. Every landed signature and
+every refusal is in `scripts/devnet/drill-log.jsonl`. Wallets: creator `8UAP7u...`, rival (unused),
+trader1 `9wHRyP...`, trader2 `FnAgNS...`, operator `7tifEW...`, agent `6FVQS1...`; funded from the
+deployer. All parameter values are the suites' TEST values.
+
+Tokens: rival `2kAuR9Xeb3aiUBWpkPGj2dDboJy9tWvAVjr4oxiJyRcK` (Size Tiers in a pool slot), ours
+`GpLBXgjg7xvFQHXjzA18FZA3ZyEKUEwnspeNrJs6bhPK` (kit with 1% holder rewards in slot 0, Raid aimed at the
+rival, War orders, Size Tiers), plain `6nb4ZabNV5KFtYhXXWmLHQYoNZcTk6ohVMk6n6DZBhiL` (no pool item).
+
+| # | Step | Result | Signatures (first of each) |
+| --- | --- | --- | --- |
+| 1 | Wrap SOL | done (trader1, trader2) | `5Y9A8gDi14P6LrFNrGouzF23Cd7ozoJCdSiTLTb2C4WzyigaDLabVPXxzr4XjVoivZMayXLyxkDDUqgn6brn2QQ3` |
+| 2 | Slot launch with the kit, Raid, War orders, Size Tiers | done: prepare, 3 equips, lookup table, launch, war chest and raid ledger | launch `65GaCaJx45y754UcYXAdFERTq93ypksVZqDcafner8Z3LPAQrra4JdpEJaiEvZ2SpurqARZcofnXQbotS7YLxZLG`, war chest `3qYHd6yAuChQmhEQJ3gChV8aUMy4jJMkDXPWV95nK7HK67Ud8WxjR94bge7TRCy5T7NbvwyEN2a8HUvqmJ58AoJb` |
+| 3 | The rival | done | launch `4LJBsjrP48QGKWZffLjYoffFQWGBzkRkQXHhQADrXqzFHPFCN5Ro7DDHgFsvbhapBVYZiRLaLExGq7qhYiD3Yx1Q` |
+| 4 | Buys and sells on both, items answering | done | buy `4QoscxJ7Th9p1T55Ghv7pxBnFvzAc4mkJig2oaowoBg9fEd6Rxdr4nYLyLhd4WcxFCYZMMc8WqTddTP5sJJm8PFB`, sell `33wHt9rSt4cj4nov3nokqKo4kZjgqfYG2wujHm4jVQHTrY17wpqnJbmvS5VoRw5vWyfNWXuWqfsQqceVq4c977Tw` |
+| 5 | A raid (sell the rival, buy ours in one route) | done; the explorer decodes RaidMarked, ItemCut, PoolItemCuts, RouteSwapped | `4YZMQdScd8KCvcbNKzdu84aTNmdssvusMt1YpYt6UBck4dsgzEVeJ3nTEU5PnLR9hHAdsmXTeYu9K4v1MB54e5Lr` |
+| 6 | Settle item cuts, claim royalty | done (3 settles; 18,489 lamports of royalty claimed) | `27E6p3TzN3g1sstb9GMv5DkcezUGHU5PhkR8izQhRi4z218VfVqV5bANd49C6KYWbcRgeSUtNfd8fTtc7JesivfF`, `4uadthw9noT2BJi86UgRrVKsNCwFRh1KKz45dnxrq4LCxQpepCxpoAxhzhsggzZxPPKiBDnZFK9WquF8JGHy2UUy` |
+| 7 | Holder vote to swap an item | proposed, voted, counted: PASSED (23,911,046,608,536 for, eligible 87,265,620,525,449); `execute` not run: no API route or builder (gap G-1) | propose `4vA82ohjoS1WU6uCihN8U57fYSMdKzNkB845zwZHpyaHXnNpnKxBt9PcTDCe3LW2G1g4wcX4PWgnic7qaAJXs8JX`, count `4dkZixQkX1rjeQLBFfSRAoBArvTfm8aPAeKYnDz6bjkZeDGMXgfeFMYwZC4HESqEbFMgyvKW8Atovv1ECUrzAWTq` |
+| 8 | Forge two items | done (same-params Size Tiers; mixed params are refused NotForgeable, as designed) | `4Zj4QkvmsBJ82WLpuVpxuBmXAq5qXoyg7fjNcRwsZpaYu3kUBwASvuv139eCjmAeQdWQBrzWVUj6J9TvRWNaMeri` |
+| 9 | Composite with three modules, by vote | composite made (Size Tiers, Side Skew, Dust Guard); proposed on the rival's slot 0, counted PASSED; `execute` as 7 | composite `53TyApKGnk9WxwwYD934Azs7rJnVefvqov4BS3qbLMDV7T4YeH5oMWhafToheNAtMqQne5SPDFFDsQRJzpNuvvxw`, count `4r6ZPFXUcvsJCuR8XNhCTxccKTzvyAGv2zrmTU4VN8ePTmvmqLn6qu8f5bRoNqBKJQpJ6yDiSoHWg3bJ1upJDe7a` |
+| 10 | Market listing, purchase, collection | done | list `3AdLP3mAW5Z2DutTWS6mTkURCeZgEKpXBrL857UsDV6idBe8ZisBsHF4K8v9xGcrCF5c8SQzcBb1pL445W8Vx9E1`, buy `5RyMfNJqh6zMZhpG4N8TVue7qSEsRsVwhuccdShTeM6ngn8D62osThg2WArcet7vhX3XRF4hR4gYfjXCqCeSCFkk`, collection `2783nDT6F972CFAjxULML8q9XXBqPsc3RN586o9JNgXtqTuBtAYJwbR2X8sSDXJ4dvGy2JnZQhRdcj99rFFhiAKA` |
+| 11 | Rental: lease, let it end | done (offer, accept, end after the 1 h term) | offer `3E4xahnjAbFjdXuVebGQa533vMnL43KrYaBfVyZdydK7LTQaNUL9QvcLcW9BbT1ziooUPGy63Q21XNmpHeqASQzp`, end `2X4T5hcfANb2wsKM2Z2h7nsBAnLdjzSCzZVkGAuT2VuDxxyaXBqA149pdNzYHUMcm3CQcs7gmLtCtQNvY8DgFmZu` |
+| 12 | Guild hall: create, deposit, officer action after the delay | done | create `VWT1RNqtfEvMLeZshthF6SHpPssndw147QLkQzpuMZLyQsKdptMcxPz6onP1WisUrerToCbeSGwxXvbjkP7oUvk`, execute `3Luw1M3XXGsnSF9HiMewWS3dtrEhdgVEVP8aGNrUqktYq4AeVkUVq9gK1w8PnXW3mSJ6zZxdtFdDCHV729iY5g4m` |
+| 13 | Agent passport, link, badge | done (passport `5qRQujWoALwNzPVyugjVg1XfVz3oi6rdQMTiWaNzQPfj`; link by `drill.mjs link`, gap G-2) | register `3ppnvc9yKFA9usjsC8BoDfasadXTa2q95aK9dtJbuKVbsj6XG4mjeS9pg3aw8r2do8SRmv1rbmMFWz5y34fA5HAK`, link `Ahx6YAyoGUgFz2ZgjHixcbQdrVeRWD8uciS5PD2JugJaAEZ5KHC6WmF5Pv5hChZHs2c54NF5bsNfkaGENwmmkSn`, badge `29irWedVARvcu3S7W9ZM4iJ788byZY4DFmH9VGDsJrQqQr5gcX2AzLaSUvAr3JKT6kyp8SqW7ZAo9q3diMFwzDyf` |
+| 14 | War: funding, siege, counter-strike, raze | funding recorded; siege due after the raids but refused ItemAccountsMissing (gap G-3); counter-strike refused OwnTokenHasRewards and raze refused RazeDisabled, both as designed for this token and these TEST orders | funding `xULwg7VBgvZtrmca4NkntquRCM9oXiFebp3rA59Rrbk9cwXM4pK8PYNtVWqR37fsTPwsbng3DVgBMi4JBXT5rKG` |
+| 15 | Bounty and quest | bounty claimed; quest: see 17 | bounty `4ZaMz6FVnGdtiuB8HqyGYKRpeyzbu1hkw6peELfoPeWWAf2bDWVvtt9cbgWurbzeXJZRdv23EgUAqQg5iM9cGu8U` |
+| 16 | Loot | see 17 | |
+| 17 | Season | season 1 proposed (TEST weights) and its loot table (one TEST entry) proposed behind the war timelock; open, quest, roll and prize split: see the season run below | season `41Sn24E2v9AcQPUAw2vCU44KDMrCHTh7XrD7bFsGng9B42TddYww5Tc1BVdgTBkdWd7K1aiTZe2d1T9DmdDjBU7x`, loot table `4c5DoQCFhxUjiTVdWAEA8Tj4WYWbkeUUE3ZMpGZJjRUzXjYyg67AdfeW9wSwgk7PetZRVr3DToWy5GTpVJHCZQ4k` |
+| 18 | Graduation with the remainder buy | not run: filling the curve to graduation needs more devnet SOL than the lane holds | |
+
+### Fixes the drill needed (on branch devnet)
+
+API and SDK changes, each found by a refused or failing step above and covered by the app suite
+(399 tests, typecheck, next build on server B):
+
+- `create_prepared_launch`'s data is encoded alone (`idlData`): the regenerated launch IDL names its
+  accounts, and the builder failed with "missing account creator".
+- Launch rules that install a kit put the kit in slot 0: the API now offsets the requested slots
+  (the first equip was refused SlotLocked).
+- The kit's slice for the launch deposit is derived from the rules (`kitRewardVault`), since its
+  registry is written inside the launch.
+- A resumed launch leaves out the prepare stage (its simulation fails on the existing mint).
+- `init_war` only for a token with a War slot (MissingWarSlot); the raid ledger for any Raid or Shield.
+- A raid route uses both tokens' lookup tables (it did not fit a packet with one).
+- `propose` passes the item's template, program and program data (WrongAccount without them).
+- `create_collection` passes the template accounts (WrongAccount without them).
+- `agents/register` requires an `agentKey` other than the operator (KeyIsOperator; the old default
+  was the operator itself, so it could never land).
+- `claim_bounty` passes the chest's inner `unwrap_sol` (MissingAccount).
+- `finalize` passes the launch and its holdings (WrongAccount).
+
+### Gaps the drill found (not fixed here)
+
+- G-1: no API route or SDK builder for armory `execute` with its equip accounts, so a passed vote
+  cannot be applied from the site.
+- G-2: no API route or SDK builder for agents `link_social` (the ed25519 statement instruction);
+  the drill used `drill.mjs link`.
+- G-3 (protocol): war `siege`, `raze` and `counter_strike` build their launch-pool swap with the
+  upstream accounts only (`swap_with_base_slice`), without a slot launch's pool-cuts holding and pool
+  item accounts, so a war crank against a token with a pool item fails ItemAccountsMissing in the
+  launchpad's `before_swap`. The suites siege tokens without pool items only.
+- G-4: no API route for bridge `wrap_sol`; the buy flow expects bridged SOL already held.
+- G-5: the init plan leaves out the DEX `fee_collector` to the war prize vault (R14), the first
+  season and its loot table; `open_season` needs the loot table, and `split_protocol_fees` finds
+  nothing to split until fees reach the prize vault.
+- G-6: the public devnet RPC rate-limits the indexer and the plan sender (429); a private RPC is
+  needed for a running site.

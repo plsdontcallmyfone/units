@@ -146,6 +146,17 @@ if (cmd === 'wallets') {
   const sig = await web3.sendAndConfirmTransaction(conn, new web3.Transaction().add(ix), [admin], { commitment: 'confirmed' });
   log({ step: 'war propose_season', number, startsAt: String(startsAt), signature: sig });
   console.log(`season ${number} proposed, starts ${startsAt}: ${sig}`);
+} else if (cmd === 'loot-table') {
+  // loot-table <season>: war `propose_loot_table` by the admin with one TEST entry, the Raid template
+  // over its whole schema range (weight 1). open_season needs the season's table (no API route).
+  const admin = loadKey(DEPLOYER);
+  const season = Number(argv[1]);
+  const max = [5000, 300, 1000];
+  const ranges = Array.from({ length: 11 }, (_, i) => ({ min: 0, max: max[i] ?? 0 }));
+  const ix = sdk.hookwars.idlIx('war', 'propose_loot_table', { admin: admin.publicKey, config: sdk.hookwars.WAR_CONFIG, lootTable: sdk.hookwars.lootTableAddress(season) }, { season, entries: [{ templateId: 1, weight: 1, ranges }] }, [{ pubkey: sdk.hookwars.templateAddress(1), isSigner: false, isWritable: false }]);
+  const sig = await web3.sendAndConfirmTransaction(conn, new web3.Transaction().add(ix), [admin], { commitment: 'confirmed' });
+  log({ step: 'war propose_loot_table', season, signature: sig });
+  console.log(`loot table for season ${season} proposed: ${sig}`);
 } else if (cmd === 'save-fresh') {
   // Saves the address of a "$new:" key as <name> (a launch whose --save did not run).
   const s5 = state();
