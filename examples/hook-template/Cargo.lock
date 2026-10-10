@@ -1753,25 +1753,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hooklab"
-version = "0.1.0"
-dependencies = [
- "anchor-lang",
- "bordrless-hook",
- "bordrless-program-tests",
- "bordrless-token",
- "hookwars-armory",
- "hookwars-common",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "solana-account",
- "solana-keypair",
- "solana-signature",
- "solana-signer",
-]
-
-[[package]]
 name = "hookwars-agents"
 version = "0.1.0"
 dependencies = [

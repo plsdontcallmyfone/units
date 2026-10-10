@@ -1,0 +1,48 @@
+# units Hook Lab starter: an external hook template (docs/guide/guides/build-a-hook-template.md,
+# tools/hooklab/README.md). Its own workspace, so a submitter's crate looks like this one.
+[package]
+name = "hook-template-example"
+description = "units Hook Lab starter template: a capped cut on every wallet transfer, paid into the slot's equip vault, plus a send counter in the holding's range."
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "hook_template_example"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "bordrless-hook/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+# Hook Lab fixtures only: deliberately broken builds the pipeline must reject.
+overcut = []
+refuse = []
+badwrite = []
+cuburn = []
+
+[dependencies]
+anchor-lang = "=1.2.0"
+bordrless-hook = { path = "../../crates/bordrless-hook" }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
+
+[workspace]
+members = ["."]
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
+
+[profile.release.build-override]
+opt-level = 3
+incremental = false
+codegen-units = 1
