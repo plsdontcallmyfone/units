@@ -823,7 +823,14 @@ pub fn dissolve_coalition(id: u32, members: &[Pubkey], inner: &[Instruction]) ->
         accounts.push(AccountMeta::new(chest, false));
         accounts.push(AccountMeta::new(token_client::holding_address(&BRIDGED_SOL_MINT, &chest), false));
     }
-    accounts.extend(accounts_of(inner));
+    // Each key once: the program's 32 KiB heap holds every account info the instruction lists, and
+    // the per-member `wrap_sol`s repeat most of theirs.
+    for m in accounts_of(inner) {
+        match accounts.iter_mut().find(|a| a.pubkey == m.pubkey) {
+            Some(a) => a.is_writable |= m.is_writable,
+            None => accounts.push(m),
+        }
+    }
     ix(accounts, crate::instruction::DissolveCoalition {}.data())
 }
 

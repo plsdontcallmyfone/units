@@ -520,7 +520,8 @@ pub struct DissolveCoalition<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/// Pays `share` (lamports already in `chest`) into the member's chest holding and books it.
+/// Pays `share` (lamports already in `chest`) into the member's chest holding and books it. `s` and
+/// `wrap` are reused across members (the 32 KiB bump heap never frees).
 #[inline(never)]
 fn return_share<'info>(
     all: &[AccountInfo<'info>],
@@ -528,9 +529,11 @@ fn return_share<'info>(
     mint: &Pubkey,
     current: u32,
     share: u64,
+    s: &mut WarState,
+    wrap: &mut anchor_lang::solana_program::instruction::Instruction,
 ) -> Result<()> {
     require!(*q[0].key == WarState::address(mint).0 && *q[0].owner == crate::ID, WarError::WrongAccount);
-    let mut s = Box::new(WarState::try_deserialize(&mut &q[0].try_borrow_data()?[..])?);
+    *s = WarState::try_deserialize(&mut &q[0].try_borrow_data()?[..])?;
     require!(*q[1].key == chest_address(mint).0, WarError::WrongAccount);
     require!(
         *q[2].key == token_client::holding_address(&BRIDGED_SOL_MINT, q[1].key),
@@ -538,10 +541,15 @@ fn return_share<'info>(
     );
     let before = chest_balance(&q[2])?;
     s.roll(current);
-    note_funding(&mut s, before);
+    note_funding(s, before);
     if share > 0 {
+        // `wrap_sol(user, lamports)`: the user is account 0, its wrapped holding account 5, the
+        // amount the 8 bytes after the discriminator.
+        wrap.accounts[0].pubkey = *q[1].key;
+        wrap.accounts[5].pubkey = *q[2].key;
+        wrap.data[8..16].copy_from_slice(&share.to_le_bytes());
         let seeds = chest_seeds(mint, s.chest_bump);
-        invoke_built(&bordrless_bridge::client::wrap_sol(*q[1].key, share), all, &[&seeds.seeds()])?;
+        invoke_built(wrap, all, &[&seeds.seeds()])?;
     }
     let after = chest_balance(&q[2])?;
     s.received_other = s.received_other.saturating_add(after.saturating_sub(before));
@@ -576,6 +584,8 @@ pub fn process_dissolve_coalition<'info>(ctx: Context<'info, DissolveCoalition<'
     let weight_total: u128 = contributed[..n].iter().map(|v| u128::from(*v)).sum();
     let mut left = total_balance;
     let mut returned = Vec::with_capacity(n);
+    let mut state = Box::new(WarState::try_deserialize(&mut &rem[0].try_borrow_data()?[..])?);
+    let mut wrap = bordrless_bridge::client::wrap_sol(*rem[1].key, 0);
     for i in 0..n {
         let share = if i + 1 == n {
             left
@@ -587,7 +597,7 @@ pub fn process_dissolve_coalition<'info>(ctx: Context<'info, DissolveCoalition<'
         left -= share;
         let q = &rem[3 * i..3 * i + 3];
         transfer_lamports(&all, &seeds, shared, &q[1], share)?;
-        return_share(&all, q, &members[i], current, share)?;
+        return_share(&all, q, &members[i], current, share, &mut state, &mut wrap)?;
         returned.push(share);
     }
     let c = &mut ctx.accounts.coalition;

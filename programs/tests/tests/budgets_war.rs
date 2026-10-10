@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file.
+// Changed by Hookwars: new file; pass 4b: the expansion paths (boss claim, five-member coalition form, contribute, joint siege, five-member dissolve, rivalry open and settle).
 //! Transaction budgets of the war paths (07 section 3, `budgets.rs::war_*`, kept in its own file):
 //! keys, v0 bytes with a lookup table holding every account that may be loaded from one, trace
 //! entries, call height and compute units, each asserted under mainnet's limits (64 trace entries,
@@ -186,4 +186,124 @@ fn war_budgets() {
     ] {
         println!("account {name}: {len} bytes, rent {} lamports", ww.w.env.rent(len));
     }
+}
+
+/// Pass 4b (10 sections 8, 11.1, 11.3): the expansion paths at their worst case (a coalition of
+/// `COALITION_MAX_MEMBERS`).
+#[test]
+fn war_expansion_budgets() {
+    use bordrless_hook::slot_kind;
+    use bordrless_launch::client as launch;
+    use hookwars_war::client::Member;
+    use hookwars_war::constants::{COALITION_MAX_MEMBERS, COALITION_TEMPLATE, RIVALRY_TEMPLATE};
+    use hookwars_war::foreign::{template_address, PARAM_FIELDS};
+
+    println!("| path | keys | v0 bytes | trace | height | CU |");
+    println!("| --- | --- | --- | --- | --- | --- |");
+    let mut ww = WarWorld::new();
+    let mut max = [0u32; PARAM_FIELDS];
+    max[..3].copy_from_slice(&[u32::MAX, u32::MAX, 10_000]);
+    ww.put_template(COALITION_TEMPLATE, slot_kind::RELATION, 2, [0; PARAM_FIELDS], max, false);
+    ww.put_template(RIVALRY_TEMPLATE, slot_kind::RELATION, 3, [0; PARAM_FIELDS], max, false);
+    let id = 1;
+    let mut members = Vec::new();
+    let mut tokens = Vec::new();
+    for i in 0..COALITION_MAX_MEMBERS {
+        let t = ww.war_token(&format!("M{i}"), OrdersSpec::default());
+        let mut p = [0u32; PARAM_FIELDS];
+        p[0] = id;
+        p[1] = 5_000;
+        let item = ww.put_item(COALITION_TEMPLATE, p);
+        ww.add_slot(&t.mint, WarWorld::named_slot(slot_kind::RELATION, item));
+        ww.fund_chest(&t.mint, 10 * SOL);
+        members.push(Member { mint: t.mint, item, template: template_address(COALITION_TEMPLATE) });
+        tokens.push(t);
+    }
+    let payer = ww.w.env.payer.insecure_clone();
+    measure(&mut ww, "form_coalition (5)", war::form_coalition(payer.pubkey(), id, 86_400, &members), &payer, &[]);
+    let shared = Coalition::chest(id).0;
+    for m in &members {
+        let cranker = ww.w.env.funded(SOL);
+        let inner = [
+            bordrless_bridge::client::unwrap_sol(WarWorld::chest(&m.mint), 0),
+            bordrless_bridge::client::wrap_sol(shared, 0),
+            token::create_holding(cranker.pubkey(), ww.w.sol, shared),
+        ];
+        let ix = war::contribute(cranker.pubkey(), id, *m, SOL, &inner);
+        measure(&mut ww, "contribute", ix, &cranker, &[]);
+    }
+    // The joint siege.
+    let rival = ww.launch("RIV", LaunchRules::NONE);
+    ww.buyer(&rival, SOL);
+    ww.w.env.warp(120);
+    let now = ww.now();
+    let a = tokens[0];
+    ww.put_ledger(&a.mint, 0, threshold(), &[(rival, now, threshold(), 0)]);
+    let pool = ww.w.launch_pool_key(&rival);
+    let spot = ww.spot(&pool);
+    ww.flat_observations(&pool, spot, 3_600);
+    let cranker = ww.w.env.funded(SOL);
+    let keys = ww.w.launch_keys(&rival);
+    let inner = [
+        launch::swap_with_base_slice(&keys, shared, shared, 1, 1, 0, vec![]),
+        token::create_holding(cranker.pubkey(), rival, shared),
+        bordrless_bridge::client::unwrap_sol(shared, 0),
+    ];
+    let ix = war::coalition_siege(cranker.pubkey(), id, a.mint, a.orders, rival, pool, None, vec![], &inner);
+    measure(&mut ww, "coalition_siege", ix, &cranker, &[]);
+    // Wind down after the term, then dissolve all five.
+    ww.w.env.warp(86_400);
+    let spot = ww.spot(&pool);
+    ww.flat_observations(&pool, spot, 3_600);
+    for _ in 0..4 {
+        let c: Coalition = ww.w.env.read(&Coalition::address(id).0);
+        if c.captured[0].amount == 0 {
+            break;
+        }
+        let cranker = ww.w.env.funded(SOL);
+        let inner = [
+            launch::swap_with_base_slice(&keys, shared, shared, 0, 1, 0, vec![]),
+            token::create_holding(cranker.pubkey(), rival, shared),
+            bordrless_bridge::client::unwrap_sol(shared, 0),
+        ];
+        let ix = war::coalition_raze(cranker.pubkey(), id, rival, pool, vec![], &inner);
+        measure(&mut ww, "coalition_raze (after the term)", ix, &cranker, &[]);
+        ww.w.env.warp(1);
+    }
+    let mints: Vec<Pubkey> = members.iter().map(|m| m.mint).collect();
+    let mut inner = vec![bordrless_bridge::client::unwrap_sol(shared, 0)];
+    inner.extend(mints.iter().map(|m| bordrless_bridge::client::wrap_sol(WarWorld::chest(m), 0)));
+    let ix = war::dissolve_coalition(id, &mints, &inner);
+    let payer = ww.w.env.payer.insecure_clone();
+    measure(&mut ww, "dissolve_coalition (5)", ix, &payer, &[]);
+
+    // A rivalry between the first two members.
+    let b = tokens[1];
+    let mut p = [0u32; PARAM_FIELDS];
+    p[..3].copy_from_slice(&[(ww.now() - 10) as u32, 3_600, 2_000]);
+    let item = ww.put_item(RIVALRY_TEMPLATE, p);
+    let slot = ww.add_slot(&a.mint, WarWorld::named_slot(slot_kind::RELATION, item));
+    let (key, bump) = hookwars_common::pda::equip_state(&a.mint, slot);
+    let es = hookwars_items::EquipState {
+        version: 1,
+        bump,
+        mint: a.mint,
+        slot,
+        item,
+        template_id: RIVALRY_TEMPLATE,
+        config: hookwars_common::EquipConfig { targets: vec![b.mint], role: 0 },
+        equipped_at: 0,
+        runs: 0,
+        collected_token: 0,
+        pool_owed: 0,
+        pool_settled: 0,
+        token_unsettled: [0; hookwars_common::MAX_MODULES],
+        pool_unsettled: [0; hookwars_common::MAX_MODULES],
+        runs_at_settle: 0,
+        reserved: [0; 24],
+    };
+    ww.put_anchor(key, bordrless_token::constants::ITEMS_ID, &es, hookwars_items::EquipState::space(1));
+    measure(&mut ww, "open_rivalry", war::open_rivalry(a.mint, item, slot), &payer, &[]);
+    ww.w.env.warp(3_600);
+    measure(&mut ww, "settle_rivalry", war::settle_rivalry(a.mint, b.mint), &payer, &[]);
 }
