@@ -698,6 +698,11 @@
       "code": 6028,
       "name": "MathOverflow",
       "msg": "math overflow"
+    },
+    {
+      "code": 6029,
+      "name": "SourceNotAllowed",
+      "msg": "a program address the kit never counted may not move the token outside a protocol transfer"
     }
   ],
   "types": [

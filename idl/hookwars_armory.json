@@ -459,6 +459,13 @@
         {
           "name": "proposal",
           "writable": true
+        },
+        {
+          "name": "bond_mark"
+        },
+        {
+          "name": "bond",
+          "optional": true
         }
       ],
       "args": []
@@ -1326,6 +1333,9 @@
         },
         {
           "name": "launch",
+          "docs": [
+            "passed (security review 1, M-1); when it holds a launch, the two holdings below are required."
+          ],
           "optional": true
         },
         {
@@ -1615,6 +1625,89 @@
       ]
     },
     {
+      "name": "init_counters",
+      "docs": [
+        "Integration pass 2 (10 section 17 I-5): creates `wallet`'s badge counters",
+        "(`[\"authored\", wallet]`, `[\"claimed\", wallet]`); permissionless, idempotent."
+      ],
+      "discriminator": [
+        31,
+        28,
+        111,
+        176,
+        163,
+        188,
+        142,
+        138
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "author_counter",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "wallet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "claim_counter",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  105,
+                  109,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "wallet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "wallet",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "mint_loot",
       "docs": [
         "The war program mints a loot item (02 section 4.3)."
@@ -1862,6 +1955,51 @@
         {
           "name": "template_programdata",
           "optional": true
+        },
+        {
+          "name": "proposer_holding",
+          "docs": [
+            "threshold, locked in place for the vote period; address-checked in the handler)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "slot_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  108,
+                  111,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token",
+          "accounts": [
+            {
+              "name": "token_program",
+              "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+            },
+            {
+              "name": "token_event_authority",
+              "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
+            },
+            {
+              "name": "system_program",
+              "address": "11111111111111111111111111111111"
+            }
+          ]
         },
         {
           "name": "system_program",
@@ -2220,6 +2358,178 @@
       ]
     },
     {
+      "name": "revert_for_lease_end",
+      "docs": [
+        "Integration pass 2 (10 section 17 I-3): the market ends a lease. When `slot` still holds the",
+        "leased `item`, it is settled out and reverted to its launch item (or emptied), as a",
+        "performance revert does. Signed by `[\"market-caller\"]` under the market."
+      ],
+      "discriminator": [
+        164,
+        162,
+        91,
+        201,
+        160,
+        65,
+        235,
+        3
+      ],
+      "accounts": [
+        {
+          "name": "market_caller",
+          "docs": [
+            "`[\"market-caller\"]` under the market (checked in the handler)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "slot_state",
+          "writable": true
+        },
+        {
+          "name": "equip",
+          "accounts": [
+            {
+              "name": "payer",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "token_mint",
+              "writable": true
+            },
+            {
+              "name": "slot_authority"
+            },
+            {
+              "name": "equip_state",
+              "writable": true
+            },
+            {
+              "name": "old_item",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "old_equip_vault",
+              "optional": true
+            },
+            {
+              "name": "new_item",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "new_template",
+              "optional": true
+            },
+            {
+              "name": "template_program",
+              "optional": true
+            },
+            {
+              "name": "template_programdata",
+              "optional": true
+            },
+            {
+              "name": "registry",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "new_equip_vault",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "royalty_owner",
+              "optional": true
+            },
+            {
+              "name": "royalty_holding_token",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "quote_mint",
+              "optional": true
+            },
+            {
+              "name": "royalty_holding_quote",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "new_composite",
+              "docs": [
+                "composite; read by the items program's `init_equip`."
+              ],
+              "optional": true
+            },
+            {
+              "name": "armory_signer",
+              "address": "2NSNJ4W51G5ZZSc4wVqkjyR8yr5yzuEjquKv7iprzSHP"
+            },
+            {
+              "name": "items_program",
+              "address": "8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv"
+            },
+            {
+              "name": "token",
+              "accounts": [
+                {
+                  "name": "token_program",
+                  "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+                },
+                {
+                  "name": "token_event_authority",
+                  "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
+                },
+                {
+                  "name": "system_program",
+                  "address": "11111111111111111111111111111111"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "slot",
+          "type": "u8"
+        },
+        {
+          "name": "item",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "vote",
       "docs": [
         "Votes by locking tokens in place (02 section 6.3)."
@@ -2349,6 +2659,32 @@
         88,
         136,
         153
+      ]
+    },
+    {
+      "name": "AuthorCounter",
+      "discriminator": [
+        28,
+        12,
+        79,
+        166,
+        175,
+        231,
+        103,
+        86
+      ]
+    },
+    {
+      "name": "ClaimCounter",
+      "discriminator": [
+        7,
+        204,
+        84,
+        7,
+        227,
+        56,
+        52,
+        216
       ]
     },
     {
@@ -2894,6 +3230,41 @@
       "code": 6042,
       "name": "ConditionNotMet",
       "msg": "the condition does not hold long enough"
+    },
+    {
+      "code": 6043,
+      "name": "RecipientOffCurve",
+      "msg": "royalties of a kit token go to a wallet (a key on the curve)"
+    },
+    {
+      "code": 6044,
+      "name": "BelowProposalThreshold",
+      "msg": "the proposer holds less than the proposal threshold"
+    },
+    {
+      "code": 6045,
+      "name": "NotBadge",
+      "msg": "only an agent badge mint may hold a Soulbound item"
+    },
+    {
+      "code": 6046,
+      "name": "BondStillPosted",
+      "msg": "a bond on this proposal is still posted: resolve it first"
+    },
+    {
+      "code": 6047,
+      "name": "ItemListed",
+      "msg": "the item is listed on the market: its royalties go with the sale"
+    },
+    {
+      "code": 6048,
+      "name": "ItemLeasedElsewhere",
+      "msg": "the item is leased to another token or slot"
+    },
+    {
+      "code": 6049,
+      "name": "NotMarketCaller",
+      "msg": "only the market may end a lease"
     }
   ],
   "types": [
@@ -3094,6 +3465,62 @@
               "(`MAX_CRANK_BOUNTY_BPS` at most; 04 section 2.5)."
             ],
             "type": "u16"
+          },
+          {
+            "name": "proposal_min_bps",
+            "docs": [
+              "Security review 1, M-2: the least a proposer must hold, in basis points of the mint's",
+              "supply, locked in place for the vote period (0 turns the requirement off). To set."
+            ],
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AuthorCounter",
+      "docs": [
+        "Integration pass 2 (10 section 17 I-5): `AuthorCounter` at `[\"authored\", wallet]`, bumped by",
+        "`create_item` and `create_composite` when passed; read by social badges."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "items",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClaimCounter",
+      "docs": [
+        "Integration pass 2 (10 section 17 I-5): `ClaimCounter` at `[\"claimed\", wallet]`: bridged-SOL",
+        "lamports of royalty the wallet claimed, bumped by `claim_royalty` when passed."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "lamports",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }

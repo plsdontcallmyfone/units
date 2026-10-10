@@ -80,6 +80,50 @@
       "args": []
     },
     {
+      "name": "apply_skills",
+      "docs": [
+        "Applies a ready skill change (anyone)."
+      ],
+      "discriminator": [
+        255,
+        130,
+        8,
+        238,
+        85,
+        195,
+        98,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "skills",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  107,
+                  105,
+                  108,
+                  108,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "approve_action",
       "docs": [
         "An officer approves a pending action."
@@ -795,6 +839,161 @@
       ]
     },
     {
+      "name": "init_skills",
+      "docs": [
+        "Creates the skill table (admin, once)."
+      ],
+      "discriminator": [
+        185,
+        216,
+        44,
+        33,
+        34,
+        20,
+        253,
+        8
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  99,
+                  105,
+                  97,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "skills",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  107,
+                  105,
+                  108,
+                  108,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "skills",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "SkillDef"
+              }
+            }
+          }
+        },
+        {
+          "name": "callers",
+          "type": {
+            "vec": "pubkey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "open_profile",
+      "docs": [
+        "Opens `wallet`'s profile (anyone pays the rent) (11 3.3)."
+      ],
+      "discriminator": [
+        166,
+        26,
+        49,
+        17,
+        125,
+        46,
+        37,
+        42
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "wallet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "wallet",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "propose_action",
       "docs": [
         "An officer proposes a guild action; it can execute after `guild_timelock_secs` with the",
@@ -1018,6 +1217,166 @@
           }
         }
       ]
+    },
+    {
+      "name": "propose_skills",
+      "docs": [
+        "Proposes a new skill table and caller list (admin; applies after the admin timelock)."
+      ],
+      "discriminator": [
+        74,
+        198,
+        139,
+        235,
+        2,
+        201,
+        20,
+        149
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  99,
+                  105,
+                  97,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "skills",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  107,
+                  105,
+                  108,
+                  108,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "skills",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "SkillDef"
+              }
+            }
+          }
+        },
+        {
+          "name": "callers",
+          "type": {
+            "vec": "pubkey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "record_wallet",
+      "docs": [
+        "Adds `value` to a wallet counter; signed by a registered caller program's PDA (R43)."
+      ],
+      "discriminator": [
+        127,
+        63,
+        108,
+        135,
+        212,
+        239,
+        13,
+        184
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "docs": [
+            "The `[\"social-caller\"]` PDA of a registered protocol program."
+          ],
+          "signer": true
+        },
+        {
+          "name": "skills",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  107,
+                  105,
+                  108,
+                  108,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "profile",
+          "writable": true
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "caller_program",
+          "type": "pubkey"
+        },
+        {
+          "name": "counter",
+          "type": "u8"
+        },
+        {
+          "name": "value",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -1084,6 +1443,32 @@
         192,
         53,
         147
+      ]
+    },
+    {
+      "name": "Profile",
+      "discriminator": [
+        184,
+        101,
+        165,
+        188,
+        95,
+        63,
+        127,
+        188
+      ]
+    },
+    {
+      "name": "SkillTable",
+      "discriminator": [
+        57,
+        231,
+        254,
+        144,
+        51,
+        147,
+        46,
+        52
       ]
     },
     {
@@ -1193,6 +1578,45 @@
       ]
     },
     {
+      "name": "ProfileOpened",
+      "discriminator": [
+        245,
+        141,
+        9,
+        145,
+        14,
+        240,
+        165,
+        228
+      ]
+    },
+    {
+      "name": "SkillsApplied",
+      "discriminator": [
+        191,
+        1,
+        71,
+        218,
+        197,
+        207,
+        94,
+        100
+      ]
+    },
+    {
+      "name": "SkillsProposed",
+      "discriminator": [
+        126,
+        203,
+        10,
+        50,
+        83,
+        190,
+        246,
+        251
+      ]
+    },
+    {
       "name": "SocialParamsProposed",
       "discriminator": [
         134,
@@ -1203,6 +1627,19 @@
         69,
         93,
         196
+      ]
+    },
+    {
+      "name": "WalletRecorded",
+      "discriminator": [
+        254,
+        67,
+        135,
+        67,
+        240,
+        115,
+        225,
+        71
       ]
     }
   ],
@@ -1286,6 +1723,36 @@
       "code": 6015,
       "name": "Overflow",
       "msg": "arithmetic overflow"
+    },
+    {
+      "code": 6016,
+      "name": "BadSkill",
+      "msg": "a skill is malformed (counter out of range or thresholds not ascending)"
+    },
+    {
+      "code": 6017,
+      "name": "TooMany",
+      "msg": "too many skills or callers"
+    },
+    {
+      "code": 6018,
+      "name": "NotCaller",
+      "msg": "the signer is not a registered caller's PDA"
+    },
+    {
+      "code": 6019,
+      "name": "SkillsNotReady",
+      "msg": "no pending skill change, or not ready yet"
+    },
+    {
+      "code": 6020,
+      "name": "BadCounter",
+      "msg": "unknown counter"
+    },
+    {
+      "code": 6021,
+      "name": "DuplicateSkill",
+      "msg": "two skills share an id"
     }
   ],
   "types": [
@@ -1467,6 +1934,24 @@
               {
                 "name": "min_level",
                 "type": "u8"
+              }
+            ]
+          },
+          {
+            "name": "ItemsAuthored",
+            "fields": [
+              {
+                "name": "min",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "name": "RoyaltiesClaimed",
+            "fields": [
+              {
+                "name": "min_lamports",
+                "type": "u64"
               }
             ]
           }
@@ -1799,6 +2284,210 @@
       }
     },
     {
+      "name": "Profile",
+      "docs": [
+        "`Profile` at `[\"profile\", wallet]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "counters",
+            "type": {
+              "array": [
+                "u64",
+                16
+              ]
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProfileOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SkillChange",
+      "docs": [
+        "A pending skill table change."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "skills",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "SkillDef"
+                }
+              }
+            }
+          },
+          {
+            "name": "callers",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "eta",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SkillDef",
+      "docs": [
+        "One skill: a counter and the thresholds of its levels (ascending; 0 ends the list)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u8"
+          },
+          {
+            "name": "counter",
+            "type": "u8"
+          },
+          {
+            "name": "thresholds",
+            "type": {
+              "array": [
+                "u64",
+                8
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "SkillTable",
+      "docs": [
+        "`SkillTable` at `[\"skills\"]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "skills",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "SkillDef"
+                }
+              }
+            }
+          },
+          {
+            "name": "callers",
+            "docs": [
+              "Programs whose `[\"social-caller\"]` PDA may call `record_wallet`."
+            ],
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "pending",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "SkillChange"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "SkillsApplied",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "skills",
+            "type": "u8"
+          },
+          {
+            "name": "callers",
+            "type": "u8"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SkillsProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "eta",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "SocialConfig",
       "type": {
         "kind": "struct",
@@ -1888,6 +2577,38 @@
         "fields": [
           {
             "name": "ready_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WalletRecorded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "caller_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "counter",
+            "type": "u8"
+          },
+          {
+            "name": "value",
+            "type": "u64"
+          },
+          {
+            "name": "total",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
             "type": "i64"
           }
         ]

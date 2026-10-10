@@ -69,6 +69,52 @@
       "args": []
     },
     {
+      "name": "apply_licence_params",
+      "docs": [
+        "Anyone applies pending licence parameters once ready."
+      ],
+      "discriminator": [
+        138,
+        102,
+        120,
+        80,
+        96,
+        31,
+        51,
+        221
+      ],
+      "accounts": [
+        {
+          "name": "licence_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  99,
+                  101,
+                  110,
+                  99,
+                  101,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "apply_params",
       "docs": [
         "Anyone applies a pending params change once it is ready."
@@ -286,6 +332,207 @@
         {
           "name": "max_price",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "buy_license",
+      "docs": [
+        "Buys (or, while live, extends) a licence for a token; pays the 2.3 split."
+      ],
+      "discriminator": [
+        255,
+        81,
+        129,
+        152,
+        169,
+        201,
+        232,
+        105
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "licence_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  99,
+                  101,
+                  110,
+                  99,
+                  101,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "offer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  99,
+                  101,
+                  110,
+                  99,
+                  101,
+                  45,
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item"
+              }
+            ]
+          }
+        },
+        {
+          "name": "license",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  99,
+                  101,
+                  110,
+                  115,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item"
+              },
+              {
+                "kind": "account",
+                "path": "token_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "item"
+        },
+        {
+          "name": "item_mint"
+        },
+        {
+          "name": "template"
+        },
+        {
+          "name": "token_mint"
+        },
+        {
+          "name": "holder",
+          "writable": true
+        },
+        {
+          "name": "holder_holding"
+        },
+        {
+          "name": "author",
+          "writable": true
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "skills"
+        },
+        {
+          "name": "holder_profile",
+          "writable": true
+        },
+        {
+          "name": "social_caller"
+        },
+        {
+          "name": "social_event_authority"
+        },
+        {
+          "name": "social_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "max_price",
+          "type": "u64"
+        },
+        {
+          "name": "reference",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         }
       ]
     },
@@ -699,6 +946,92 @@
       "args": []
     },
     {
+      "name": "expire_license",
+      "docs": [
+        "Anyone frees the live slot of an ended licence."
+      ],
+      "discriminator": [
+        194,
+        250,
+        96,
+        185,
+        236,
+        185,
+        147,
+        149
+      ],
+      "accounts": [
+        {
+          "name": "offer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  99,
+                  101,
+                  110,
+                  99,
+                  101,
+                  45,
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "offer.item",
+                "account": "LicenceOffer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "license",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  99,
+                  101,
+                  110,
+                  115,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "offer.item",
+                "account": "LicenceOffer"
+              },
+              {
+                "kind": "account",
+                "path": "license.token_mint",
+                "account": "License"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "init",
       "docs": [
         "Creates the config; the program's upgrade authority signs."
@@ -767,6 +1100,98 @@
           "type": {
             "defined": {
               "name": "MarketParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "init_licence_config",
+      "docs": [
+        "The market admin creates the licence parameters."
+      ],
+      "discriminator": [
+        208,
+        223,
+        10,
+        212,
+        204,
+        202,
+        25,
+        36
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "licence_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  99,
+                  101,
+                  110,
+                  99,
+                  101,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "LicenceParams"
             }
           }
         }
@@ -1320,6 +1745,99 @@
       "args": []
     },
     {
+      "name": "propose_licence_params",
+      "docs": [
+        "The market admin proposes new licence parameters (applied after the timelock)."
+      ],
+      "discriminator": [
+        49,
+        226,
+        65,
+        180,
+        195,
+        189,
+        30,
+        137
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "licence_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  99,
+                  101,
+                  110,
+                  99,
+                  101,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "LicenceParams"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "propose_params",
       "docs": [
         "The admin proposes new params and treasury; they apply after `admin_timelock_secs`."
@@ -1544,6 +2062,436 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "renew_license",
+      "docs": [
+        "Renews an existing licence by one term at the offer's price."
+      ],
+      "discriminator": [
+        104,
+        243,
+        122,
+        253,
+        203,
+        203,
+        199,
+        64
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "licence_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  99,
+                  101,
+                  110,
+                  99,
+                  101,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "offer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  99,
+                  101,
+                  110,
+                  99,
+                  101,
+                  45,
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item"
+              }
+            ]
+          }
+        },
+        {
+          "name": "license",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  99,
+                  101,
+                  110,
+                  115,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item"
+              },
+              {
+                "kind": "account",
+                "path": "token_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "item"
+        },
+        {
+          "name": "item_mint"
+        },
+        {
+          "name": "template"
+        },
+        {
+          "name": "token_mint"
+        },
+        {
+          "name": "holder",
+          "writable": true
+        },
+        {
+          "name": "holder_holding"
+        },
+        {
+          "name": "author",
+          "writable": true
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "skills"
+        },
+        {
+          "name": "holder_profile",
+          "writable": true
+        },
+        {
+          "name": "social_caller"
+        },
+        {
+          "name": "social_event_authority"
+        },
+        {
+          "name": "social_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "max_price",
+          "type": "u64"
+        },
+        {
+          "name": "reference",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "revoke_license",
+      "docs": [
+        "The holder revokes a per-period licence and refunds the unused fraction."
+      ],
+      "discriminator": [
+        97,
+        10,
+        143,
+        67,
+        35,
+        212,
+        153,
+        8
+      ],
+      "accounts": [
+        {
+          "name": "holder",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "item_mint"
+        },
+        {
+          "name": "holder_holding"
+        },
+        {
+          "name": "offer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  99,
+                  101,
+                  110,
+                  99,
+                  101,
+                  45,
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "offer.item",
+                "account": "LicenceOffer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "license",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  99,
+                  101,
+                  110,
+                  115,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "offer.item",
+                "account": "LicenceOffer"
+              },
+              {
+                "kind": "account",
+                "path": "license.token_mint",
+                "account": "License"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "set_licence_offer",
+      "docs": [
+        "The item holder sets (or closes, `active = false`) its licence terms."
+      ],
+      "discriminator": [
+        4,
+        170,
+        252,
+        76,
+        121,
+        196,
+        26,
+        239
+      ],
+      "accounts": [
+        {
+          "name": "holder",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "licence_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  99,
+                  101,
+                  110,
+                  99,
+                  101,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "item"
+        },
+        {
+          "name": "item_mint"
+        },
+        {
+          "name": "holder_holding"
+        },
+        {
+          "name": "offer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  99,
+                  101,
+                  110,
+                  99,
+                  101,
+                  45,
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "price_lamports",
+          "type": "u64"
+        },
+        {
+          "name": "term_secs",
+          "type": "u32"
+        },
+        {
+          "name": "per",
+          "type": "u8"
+        },
+        {
+          "name": "max_live",
+          "type": "u16"
+        },
+        {
+          "name": "exclusive",
+          "type": "bool"
+        },
+        {
+          "name": "active",
+          "type": "bool"
+        }
+      ]
     },
     {
       "name": "submit",
@@ -1803,6 +2751,45 @@
       ]
     },
     {
+      "name": "LicenceConfig",
+      "discriminator": [
+        68,
+        94,
+        141,
+        150,
+        163,
+        210,
+        202,
+        146
+      ]
+    },
+    {
+      "name": "LicenceOffer",
+      "discriminator": [
+        186,
+        210,
+        4,
+        8,
+        61,
+        107,
+        81,
+        193
+      ]
+    },
+    {
+      "name": "License",
+      "discriminator": [
+        248,
+        152,
+        195,
+        100,
+        185,
+        108,
+        176,
+        231
+      ]
+    },
+    {
       "name": "Listing",
       "discriminator": [
         218,
@@ -1974,6 +2961,71 @@
       ]
     },
     {
+      "name": "LicenceBought",
+      "discriminator": [
+        254,
+        182,
+        105,
+        54,
+        107,
+        23,
+        158,
+        223
+      ]
+    },
+    {
+      "name": "LicenceExpired",
+      "discriminator": [
+        227,
+        124,
+        213,
+        103,
+        221,
+        14,
+        239,
+        98
+      ]
+    },
+    {
+      "name": "LicenceOfferSet",
+      "discriminator": [
+        170,
+        117,
+        161,
+        161,
+        30,
+        142,
+        207,
+        165
+      ]
+    },
+    {
+      "name": "LicenceParamsProposed",
+      "discriminator": [
+        254,
+        35,
+        199,
+        50,
+        171,
+        221,
+        175,
+        126
+      ]
+    },
+    {
+      "name": "LicenceRevoked",
+      "discriminator": [
+        137,
+        241,
+        58,
+        197,
+        78,
+        195,
+        164,
+        179
+      ]
+    },
+    {
       "name": "Listed",
       "discriminator": [
         243,
@@ -2023,6 +3075,19 @@
         54,
         112,
         191
+      ]
+    },
+    {
+      "name": "ProtocolFee",
+      "discriminator": [
+        152,
+        79,
+        46,
+        229,
+        127,
+        92,
+        192,
+        21
       ]
     },
     {
@@ -2212,6 +3277,41 @@
       "code": 6031,
       "name": "Overflow",
       "msg": "arithmetic overflow"
+    },
+    {
+      "code": 6032,
+      "name": "BadLicenceTerms",
+      "msg": "licence terms are out of bounds"
+    },
+    {
+      "code": 6033,
+      "name": "NotLicensable",
+      "msg": "the item is not offered for licence"
+    },
+    {
+      "code": 6034,
+      "name": "LicenceSoldOut",
+      "msg": "every live licence of this item is taken"
+    },
+    {
+      "code": 6035,
+      "name": "NotLive",
+      "msg": "the licence is not live"
+    },
+    {
+      "code": 6036,
+      "name": "NotRevocable",
+      "msg": "per-token licences cannot be revoked"
+    },
+    {
+      "code": 6037,
+      "name": "NotEnded",
+      "msg": "the licence has not ended yet"
+    },
+    {
+      "code": 6038,
+      "name": "BadLicenceParams",
+      "msg": "licence parameters out of bounds"
     }
   ],
   "types": [
@@ -2647,6 +3747,370 @@
       }
     },
     {
+      "name": "LicenceBought",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "payer",
+            "type": "pubkey"
+          },
+          {
+            "name": "holder",
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "protocol",
+            "type": "u64"
+          },
+          {
+            "name": "author",
+            "type": "u64"
+          },
+          {
+            "name": "to_holder",
+            "type": "u64"
+          },
+          {
+            "name": "ends_at",
+            "type": "i64"
+          },
+          {
+            "name": "renewal",
+            "type": "bool"
+          },
+          {
+            "name": "reference",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LicenceConfig",
+      "docs": [
+        "`LicenceConfig` at `[\"licence-config\"]` (admin = the market admin)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "LicenceParams"
+              }
+            }
+          },
+          {
+            "name": "pending",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "LicenceParams"
+                }
+              }
+            }
+          },
+          {
+            "name": "pending_at",
+            "type": "i64"
+          },
+          {
+            "name": "protocol_fees_total",
+            "type": "u128"
+          },
+          {
+            "name": "licences_sold",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LicenceExpired",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LicenceOffer",
+      "docs": [
+        "`LicenceOffer` at `[\"licence-offer\", item]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "item_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "set_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "term_secs",
+            "type": "u32"
+          },
+          {
+            "name": "per",
+            "type": "u8"
+          },
+          {
+            "name": "max_live",
+            "docs": [
+              "How many tokens may hold a live licence at once (1 with `exclusive`)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "exclusive",
+            "type": "bool"
+          },
+          {
+            "name": "live",
+            "type": "u16"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LicenceOfferSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "holder",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "term_secs",
+            "type": "u32"
+          },
+          {
+            "name": "per",
+            "type": "u8"
+          },
+          {
+            "name": "max_live",
+            "type": "u16"
+          },
+          {
+            "name": "exclusive",
+            "type": "bool"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LicenceParams",
+      "docs": [
+        "Licence parameters (11 section 11; every one \"to set\")."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "protocol_bps",
+            "docs": [
+              "`LICENCE_PROTOCOL_BPS`."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "author_bps",
+            "docs": [
+              "The template author's share of the remainder, until `Template.author_bps` exists (R34)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "min_secs",
+            "docs": [
+              "`LICENCE_MIN_SECS`, `LICENCE_MAX_SECS`."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "max_secs",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LicenceParamsProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ready_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LicenceRevoked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "refund",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "License",
+      "docs": [
+        "`License` at `[\"license\", item, token_mint]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "payer",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_paid",
+            "docs": [
+              "Paid since `starts_at` (the span a revocation refunds against)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "starts_at",
+            "type": "i64"
+          },
+          {
+            "name": "ends_at",
+            "type": "i64"
+          },
+          {
+            "name": "revoked_at",
+            "docs": [
+              "0 = not revoked."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "per",
+            "type": "u8"
+          },
+          {
+            "name": "counted",
+            "docs": [
+              "Whether it holds one of the offer's live slots."
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
       "name": "Listed",
       "type": {
         "kind": "struct",
@@ -2928,6 +4392,42 @@
           {
             "name": "active",
             "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProtocolFee",
+      "docs": [
+        "Every protocol collection (11 section 2.4); `mint` is the default key for native lamports."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "source",
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "reference",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
           }
         ]
       }
