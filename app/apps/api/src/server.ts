@@ -14,6 +14,8 @@ import * as reads from './reads.ts';
 import * as xreads from './reads-expansion.ts';
 import { prepare, PrepareError } from './prepares.ts';
 import { submit } from './submit.ts';
+import * as explorer from './explorer.ts';
+import * as launchPlan from './launch-plan.ts';
 import { clientKey, clusterName, HttpError, intParam, RateLimiter, readJsonBody } from './guard.ts';
 
 export interface Deps { db: Pool | null; conn: Connection; rpcUrl: string }
@@ -108,6 +110,12 @@ export function handler(deps: Deps) {
         if (!prepareLimit.take(client)) return json(res, 429, { error: 'Too many requests; wait a little.', code: 'RateLimited' });
         return json(res, 200, await submit(deps.conn, await readJsonBody(req)));
       }
+      // Changed by Hookwars (explorer v2, launch page): the launch walked step by step, a simulation per step.
+      if (req.method === 'POST' && (p === '/v1/launch/plan' || p === '/v1/simulate')) {
+        if (!prepareLimit.take(client)) return json(res, 429, { error: 'Too many requests; wait a little.', code: 'RateLimited' });
+        const body = await readJsonBody(req);
+        return json(res, 200, p === '/v1/simulate' ? await launchPlan.simulate(deps.conn, body) : await launchPlan.launchPlan(deps.conn, body));
+      }
       if (!readLimit.take(client)) return json(res, 429, { error: 'Too many requests; wait a little.', code: 'RateLimited' });
       if (req.method !== 'GET') return json(res, 405, { error: 'Method not allowed.' });
       if (p === '/v1/status') return json(res, 200, await reads.status(db, { cluster: clusterName(deps.rpcUrl), slot: () => deps.conn.getSlot('confirmed') }));
@@ -139,6 +147,10 @@ export function handler(deps: Deps) {
       if (p === '/v1/guilds') return json(res, 200, await cached('guilds', 15_000, () => xreads.guilds(deps.conn)));
       if ((m = /^\/v1\/guilds\/(\d+)$/.exec(p))) { const g = await xreads.guild(deps.conn, intParam(m[1], 'guild', 0, 4_294_967_295)); return json(res, 200, g); }
       if (p === '/v1/badges') return json(res, 200, await cached('badges', 15_000, () => xreads.badges(deps.conn, db)));
+      // Changed by Hookwars (explorer v2): chain reads, the indexer optional.
+      if (p === '/v1/launch/config') return json(res, 200, await launchPlan.launchConfig(deps.conn));
+      if (p === '/v1/launch/buy-quote') return json(res, 200, await launchPlan.buyQuote(deps.conn, q));
+      if (p.startsWith('/v1/explorer/')) { const r = await explorer.route(deps.conn, db, p, q); if (r) return json(res, r.status, r.body); }
       if (!db) return json(res, 503, { error: 'The database is not reachable.', code: 'NoDatabase' });
       if (p === '/v1/templates') return json(res, 200, await reads.templates(db));
       if (p === '/v1/items') return json(res, 200, await reads.items(db, q));

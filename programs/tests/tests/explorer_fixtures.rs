@@ -208,11 +208,15 @@ fn explorer_fixtures_slot_launch_pool_item_swaps() {
     let item = items[0];
     let trader = w.env.funded(100 * SOL);
     w.wrap_sol(&trader, 10 * SOL).ok();
-    w.set_stub(&creator, &item, ans(1_000, 1_000_000, 0), ans(0, 500_000, 0), false, false);
+    w.set_stub(&creator, &item, ans(0, 1_000_000, 0), ans(0, 0, 0), false, false);
     let t = trader.pubkey();
     let ixs = vec![token::create_holding(t, mint, t), w.slot_swap_ix(&t, &t, &mint, 1, SOL / 10)];
     record(&trader, |ixs: &[Instruction]| w.env.send_paid_by(ixs, &trader, &[]), &ixs, "slot_buy_pool_item").ok();
     let held = w.env.holding(&mint, &t);
+    // The same before-swap cut on a sell: refused (a pool item cuts a sell's quote output, after).
+    let ixs = vec![w.slot_swap_ix(&t, &t, &mint, 0, held / 4)];
+    record(&trader, |ixs: &[Instruction]| w.env.send_paid_by(ixs, &trader, &[]), &ixs, "slot_sell_wrong_side").expect_fail();
+    w.set_stub(&creator, &item, ans(0, 0, 0), ans(0, 500_000, 0), false, false);
     let ixs = vec![w.slot_swap_ix(&t, &t, &mint, 0, held / 2)];
     record(&trader, |ixs: &[Instruction]| w.env.send_paid_by(ixs, &trader, &[]), &ixs, "slot_sell_pool_item").ok();
 }

@@ -41,7 +41,8 @@ export async function transaction(conn: Connection, signature: string) {
   if (explore.classifyQuery(signature).kind !== 'signature') throw new HttpError(400, 'BadSignature', 'That is not a transaction signature.');
   const r = await conn.getTransaction(signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 });
   if (!r) return null;
-  return explore.explainTransaction(txSourceOf(signature, r));
+  const src = txSourceOf(signature, r);
+  return { ...explore.explainTransaction(src), logs: src.logs };
 }
 
 type EventRow = { signature: string; ordinal: number; slot: string | number; program: string; name: string; data: Record<string, unknown> };
@@ -99,7 +100,7 @@ export async function address(conn: Connection, db: Pool | null, key: string) {
       indexed.owner = (await db.query('select o.* from item_owners o join items i on i.item_mint = o.item_mint where i.item = $1', [key])).rows[0] ?? null;
       indexed.equippedOn = (await db.query('select mint, slot from slots where item = $1', [key])).rows;
     }
-    if (kind === 'template' && decoded.data) indexed.template = (await db.query('select * from templates where template_id = $1', [Number((decoded.data as Record<string, unknown>).templateId ?? -1)])).rows[0] ?? null;
+    if (kind === 'template' && decoded.data) indexed.template = (await db.query('select * from templates where template_id = $1', [Number((decoded.data as Record<string, unknown>).id ?? -1)])).rows[0] ?? null;
   }
   return {
     address: key, exists: info !== null, lamports: info ? String(info.lamports) : null, owner, ownerName: owner ? explore.programName(owner) : null,

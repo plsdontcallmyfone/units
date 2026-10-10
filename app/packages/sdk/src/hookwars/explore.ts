@@ -335,6 +335,8 @@ export function explainTransaction(tx: TxSource): ExplainedTransaction {
   story.push(...royaltySplits(all));
   const walk = (xs: DecodedInstruction[]) => { for (const x of xs) { if (x.memo) story.push({ kind: 'memo', title: x.memo.units ? `Memo: ${x.memo.units.kind}` : 'Memo', facts: x.memo.units ? memoFacts(x.memo.units) : [['Text', x.memo.text]] }); walk(x.inner); } };
   walk(instructions);
+  // A failed transaction changes nothing: its events and memos are shown as what was attempted.
+  if (!(tx.err === null || tx.err === undefined)) for (const l of story) l.title = `Rolled back: ${l.title}`;
   const programs = [...new Set(instructions.flatMap(function names(x): string[] { return [x.program ?? x.programId, ...x.inner.flatMap(names)]; }))];
   return {
     failure: failureOf(tx.logs),
@@ -346,16 +348,18 @@ export function explainTransaction(tx: TxSource): ExplainedTransaction {
 
 /** The last "failed" log line, with an Anchor custom error named from the program's interface. */
 export function failureOf(logs: string[]): ExplainedTransaction['failure'] {
-  for (let i = logs.length - 1; i >= 0; i--) {
-    const m = /^Program (\w+) failed: (.+)$/.exec(logs[i]!);
-    if (!m) continue;
-    const program = programName(m[1]!);
-    const hex = /custom program error: 0x([0-9a-f]+)/i.exec(m[2]!);
-    const code = hex ? parseInt(hex[1]!, 16) : null;
-    const e = code !== null && program ? EXPLORER_IDLS[program]?.errors?.find((x) => x.code === code) : undefined;
-    return { programId: m[1]!, program, code, name: e?.name ?? null, message: e?.msg ?? m[2]! };
-  }
-  return null;
+  // The innermost failure is the first "failed" line: the callers above it fail with its code.
+  const i = logs.findIndex((l) => /^Program \w+ failed: /.test(l));
+  if (i < 0) return null;
+  const m = /^Program (\w+) failed: (.+)$/.exec(logs[i]!)!;
+  const program = programName(m[1]!);
+  const hex = /custom program error: 0x([0-9a-f]+)/i.exec(m[2]!);
+  const code = hex ? parseInt(hex[1]!, 16) : null;
+  const e = code !== null && program ? EXPLORER_IDLS[program]?.errors?.find((x) => x.code === code) : undefined;
+  // Anchor also logs the error by name just before the failure.
+  const anchor = logs.slice(0, i).reverse().find((l) => l.includes('AnchorError'));
+  const an = anchor ? /Error Code: (\w+)\. Error Number: (\d+)\. Error Message: (.+?)\.?$/.exec(anchor) : null;
+  return { programId: m[1]!, program, code, name: e?.name ?? an?.[1] ?? null, message: e?.msg ?? an?.[3] ?? m[2]! };
 }
 
 // ------------------------------------------------------------------------------ story --
@@ -404,7 +408,8 @@ export function storyOf(e: { program: string; name: string; data: Record<string,
     case 'swap.RouteSwapped':
       return { kind: 'swap', title: `Route of ${((d.pools as unknown[]) ?? []).length} hops`, facts: [['Trader', s(d.trader)], ['From mint', s(d.routeInputMint)], ['To mint', s(d.routeOutputMint)], ['In', s(d.amountIn)], ['Out', s(d.amountOut)]] };
     case 'launch.PoolItemCuts': {
-      const facts: [string, string][] = [['Mint', s(d.mint)], ['Side', side(d.side)], ['Discount', bps(d.discountBps)], ['Into pool cuts', s(d.poolCutsDelta)], ['Burned', s(d.burned)]];
+      // launch events.rs: side 0 is the swap's input (before), 1 its output (after).
+      const facts: [string, string][] = [['Mint', s(d.mint)], ['Side', s(d.side) === '0' ? 'input, before the swap' : s(d.side) === '1' ? 'output, after the swap' : s(d.side)], ['Discount', bps(d.discountBps)], ['Into pool cuts', s(d.poolCutsDelta)], ['Burned', s(d.burned)]];
       for (const p of (d.parts as Record<string, unknown>[] | undefined) ?? []) facts.push([`Slot ${s(p.slot)}`, `item ${short(p.item)}: discount ${bps(p.discountBps)}, cut ${s(p.cut)}, burn ${s(p.burn)}`]);
       return { kind: 'poolItems', title: 'Pool items on this swap', facts };
     }
@@ -414,8 +419,11 @@ export function storyOf(e: { program: string; name: string; data: Record<string,
       return { kind: 'launch', title: 'Graduated', facts: [['Mint', s(d.mint)], ['Cranker', s(d.cranker)], ['Reserve burned', s(d.burned)], ['LP minted', s(d.lpMinted)]] };
     case 'items.RaidMarked':
       return { kind: 'raid', title: 'Raid marked', facts: [['Mint', s(d.mint)], ['Rival', s(d.rival)], ['Trader', s(d.trader)], ['Volume', solOf(d.volume)], ['Points', s(d.points)], ['Loot ticket', d.lootTicket ? 'yes' : 'no']] };
-    case 'items.ItemCut':
-      return { kind: 'poolItems', title: `Item cut in slot ${s(d.slot)}`, facts: [['Mint', s(d.mint)], ['Item', s(d.item)], ['Module', s(d.module)], ['Side', side(d.side)], ['Amount', s(d.amount)]] };
+    case 'items.ItemCut': {
+      // items lib.rs: side 0 token, 1 pool on a buy, 2 pool on a sell.
+      const where = s(d.side) === '0' ? 'on a transfer' : s(d.side) === '1' ? 'on a pool buy' : s(d.side) === '2' ? 'on a pool sell' : `side ${s(d.side)}`;
+      return { kind: s(d.side) === '0' ? 'transfer' : 'poolItems', title: `Slot ${s(d.slot)} item cut ${where}`, facts: [['Mint', s(d.mint)], ['Item', s(d.item)], ['Module', s(d.module)], ['Amount', s(d.amount)]] };
+    }
     case 'items.EquipSettled':
       // 11 section 2: what the settle paid out of the equip vault. Each figure is the event's own field.
       return { kind: 'settle', title: `Settlement of slot ${s(d.slot)}`, facts: [['Mint', s(d.mint)], ['Item', s(d.item)],
