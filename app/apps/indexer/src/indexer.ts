@@ -1,4 +1,4 @@
-// Changed by Hookwars: cursors for agents, market and social; a slot launch's lookup table per mint.
+// Changed by Hookwars: cursors for agents, market and social; a slot launch's lookup table per mint; social state (postage, profile authors).
 /**
  * The indexing loop (06 2.1): one signature cursor per program, oldest first; each transaction is
  * fetched once, its events decoded (self-CPI, and the program logs of items and the launchpad), written keyed by
@@ -9,6 +9,7 @@ import { hookwars } from '@hookwars/sdk';
 import { PROGRAM_IDS } from '@hookwars/shared';
 import type { Pool, PoolClient } from 'pg';
 import { colName, eventTable } from './schema.ts';
+import { applySocialState } from './social.ts';
 
 /** One cursor per program (06 2.1, plus agents, market and social). */
 export const CURSOR_PROGRAMS: { program: string; address: string }[] = [
@@ -90,6 +91,7 @@ export async function writeTransaction(client: PoolClient, signature: string, sl
       );
     }
     await applyState(client, ev, slot);
+    await applySocialState(client, signature, ev, slot);
     // A slot launch's own lookup table (the launch stage loads it, 03 M3b): prepares that touch the
     // mint compile with it (app audit A-6).
     if (ev.program === 'launch' && ev.name === 'LaunchCreated' && tables.length > 0) {

@@ -1,4 +1,4 @@
-// Changed by Hookwars: every program's events from its IDL; log events for items and the launchpad.
+// Changed by Hookwars: every program's events from its IDL; log events for items and the launchpad; economy events not yet in the IDLs.
 /**
  * Hookwars events (06 2.1). Self-CPI events (`emit_cpi!`) arrive as inner instructions to the
  * program's event authority: `EVENT_IX_TAG` (Anchor's `sha256("anchor:event")[..8]`), then the
@@ -20,9 +20,20 @@ export const EVENT_IX_TAG = UPSTREAM_EVENT_IX_TAG;
 
 type Spec = [name: string, fields: Field[]];
 
-/** Spec tables for events not in any IDL. Every program on main now has its IDL, so this is empty;
- * kept so a future spec-only event has a place to go (INTEGRATION.md). */
-const SPEC_ONLY: Record<string, Spec[]> = {};
+/** Spec tables for events not in any IDL yet. The app IDLs predate the economy merge (11): its
+ * directive, postage and profile events are written from the program source until the IDLs are
+ * regenerated (an IDL event of the same name wins). */
+const SPEC_ONLY: Record<string, Spec[]> = {
+  agents: [
+    ['DirectiveSet', [['passport', 'pubkey'], ['seq', 'u32'], ['memoHash', { bytes: 32 }], ['ts', 'i64']]],
+    ['Committed', [['passport', 'pubkey'], ['reference', { bytes: 32 }], ['hash', { bytes: 32 }], ['ts', 'i64']]],
+    ['MessagePosted', [['passport', 'pubkey'], ['reference', { bytes: 32 }], ['postage', 'u64'], ['ts', 'i64']]],
+  ],
+  social: [
+    ['ProfileOpened', [['wallet', 'pubkey'], ['ts', 'i64']]],
+    ['WalletRecorded', [['wallet', 'pubkey'], ['callerProgram', 'pubkey'], ['counter', 'u8'], ['value', 'u64'], ['total', 'u64'], ['ts', 'i64']]],
+  ],
+};
 
 /** The programs whose events come from their IDLs. */
 const IDL_PROGRAMS = ['token', 'armory', 'items', 'war', 'companion', 'launch', 'swap', 'agents', 'market', 'social'] as const;

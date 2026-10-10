@@ -1,4 +1,4 @@
-// Changed by Hookwars: read routes for agents, market, commissions, guilds and badges; prepares get the database for mint lookup tables.
+// Changed by Hookwars: read routes for agents, market, commissions, guilds and badges; prepares get the database for mint lookup tables; social routes.
 /**
  * The Hookwars API (docs/spec/06-app.md 3.3) on node:http. JSON in and out, bigint as decimal
  * strings, `null` for anything not read, errors as upstream's `ApiErrorBody`.
@@ -14,6 +14,7 @@ import * as reads from './reads.ts';
 import * as xreads from './reads-expansion.ts';
 import { prepare, PrepareError } from './prepares.ts';
 import { submit } from './submit.ts';
+import { socialRoute } from './social.ts';
 import { clientKey, clusterName, HttpError, intParam, RateLimiter, readJsonBody } from './guard.ts';
 
 export interface Deps { db: Pool | null; conn: Connection; rpcUrl: string }
@@ -128,6 +129,9 @@ export function handler(deps: Deps) {
       }
       // Agents, market and social (09, 10): chain state read directly, history from the indexer when it is up.
       // A missing account reads as null (the page says what is missing), as /war does.
+      // Social layer: profiles, timelines, feeds, threads, leaderboards, live, hides.
+      const social = await socialRoute(p, q, deps.conn, db);
+      if (social) return json(res, social.status, social.body);
       if (p === '/v1/agents') return json(res, 200, await cached(`agents:${q.get('sort') ?? ''}`, 15_000, () => xreads.agentsLeague(deps.conn, q.get('sort'))));
       if ((m = /^\/v1\/agents\/(\w{32,44})$/.exec(p))) { const a = await xreads.agent(deps.conn, m[1]!); return json(res, 200, a); }
       if (p === '/v1/market/listings') return json(res, 200, await cached('listings', 10_000, () => xreads.listings(deps.conn, db)));

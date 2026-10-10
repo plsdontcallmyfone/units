@@ -1,4 +1,4 @@
-// Changed by Hookwars: exports slot-launch.ts and expansion.ts.
+// Changed by Hookwars: exports slot-launch.ts, expansion.ts and memo.ts.
 export * from './codec.ts';
 export * from './accounts.ts';
 export * from './addresses.ts';
@@ -12,3 +12,4 @@ export type * from './idl-types.gen.ts';
 export * from './war-context.ts';
 export * from './slot-launch.ts';
 export * from './expansion.ts';
+export * from './memo.ts';
