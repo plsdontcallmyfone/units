@@ -10,7 +10,7 @@ import {
   ITEMS_ID, TOKEN_ID, agentsConfigAddress, collectionAddress, agentVaultAddress, armoryConfigAddress, badgeMintAddress, badgeMinterAddress, commissionAddress,
   commissionVaultAddress, equipStateAddress, firstBloodAddress, guildActionAddress, guildAddress, guildTreasuryAddress, holdingAddr,
   leaseAddress, leaseEscrowAddress, listingAddress, loyaltyClaimAddress, loyaltyPotAddress, marketEscrowAddress, passportAddress,
-  AGENTS_ID, armoryCallerAddress, referralVaultOwner, referredAddress, submissionAddress, treatyInboxAddress, agentsSignerAddress, agentBadgeMintAddress, compositeAddress, launchAddr,
+  AGENTS_ID, armoryCallerAddress, referralVaultOwner, referredAddress, submissionAddress, treatyInboxAddress, agentsSignerAddress, agentBadgeMintAddress, compositeAddress, launchAddr, templateAddress,
 } from './addresses.ts';
 
 const TOKEN_EVENT_AUTHORITY = new PublicKey(FIXED_ADDRESSES.tokenEventAuthority);
@@ -36,7 +36,8 @@ export function marketBuy(buyer: PublicKey, seller: PublicKey, author: PublicKey
 }
 /** `create_collection(name, template_ids)`; `nextId` is `MarketConfig.collections`. */
 export function marketCreateCollection(curator: PublicKey, nextId: number, name: string, templateIds: number[]): TransactionInstruction {
-  return idlIx('market', 'create_collection', { curator, collection: collectionAddress(nextId) }, { name, templateIds });
+  // Each template's account, in order, follows (the program checks one per id; found on the devnet drill).
+  return idlIx('market', 'create_collection', { curator, collection: collectionAddress(nextId) }, { name, templateIds }, templateIds.map((id) => ({ pubkey: templateAddress(id), isSigner: false, isWritable: false })));
 }
 /** `offer_lease(token_mint, slot, rent_bps, fee_lamports, term_secs)`. */
 export function marketOfferLease(lessor: PublicKey, item: PublicKey, itemMint: PublicKey, tokenMint: PublicKey, slot: number, rentBps: number, feeLamports: bigint, termSecs: number): TransactionInstruction {

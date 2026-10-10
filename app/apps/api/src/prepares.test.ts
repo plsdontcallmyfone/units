@@ -59,6 +59,15 @@ describe('prepares the merged programs allow', () => {
     expect(S(ix!.keys[names.indexOf('orders_item')]!.pubkey)).toBe(S(warItem));
     expect(S(ix!.keys[names.indexOf('orders_template')]!.pubkey)).toBe(S(hookwars.templateAddress(9)));
     expect(ix!.data.subarray(8)).toEqual(Buffer.from([1])); // raid_slot 1
+    // The chest pays through the bridge's unwrap_sol, the last inner instruction (devnet drill).
+    expect(S(ix!.keys[ix!.keys.length - 1]!.pubkey)).toBe(S(hookwars.BRIDGE_ID));
+  });
+  it('finalize passes the launch and both holdings the count leaves out (devnet drill)', async () => {
+    const [ix] = await PREPARES['proposals/finalize/prepare']!.build({ owner: S(owner), mint: S(mint), slot: 3, nonce: '0' }, conn);
+    const names = hookwars.coderOf('armory').accountsOf('finalize').map((a) => a.name);
+    const launch = hookwars.launchAddr(mint);
+    expect(S(ix!.keys[names.indexOf('launch')]!.pubkey)).toBe(S(launch));
+    expect(S(ix!.keys[names.indexOf('launch_holding')]!.pubkey)).toBe(S(hookwars.holdingAddr(mint, launch)));
   });
   it('claim quest and roll use the Raid slot', async () => {
     const [q] = await PREPARES['quests/prepare']!.build({ owner: S(owner), mint: S(mint), season: 3, questId: 1, period: 4 }, conn);

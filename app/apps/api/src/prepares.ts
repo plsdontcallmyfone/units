@@ -9,7 +9,7 @@ import {
   AddressLookupTableAccount, AddressLookupTableProgram, ComputeBudgetProgram, Connection, PublicKey, TransactionMessage, VersionedTransaction,
   type AccountMeta, type TransactionInstruction,
 } from '@solana/web3.js';
-import { hookwars, decodeLaunch, decodeKitConfig, decodePool, decodeLaunchConfig, launchHookExtras, launchPoolAddress, launchRulesFromInput, checkProtocolLookupTable, token, LAUNCH_CONFIG, companion, companionCreatorAddress, COMPANION_DEFAULTS, type CompanionArgs } from '@hookwars/sdk';
+import { hookwars, bridge, holderVaultAddress, programDataAddress, decodeLaunch, decodeKitConfig, decodePool, decodeLaunchConfig, launchHookExtras, launchPoolAddress, launchRulesFromInput, checkProtocolLookupTable, token, LAUNCH_CONFIG, companion, companionCreatorAddress, COMPANION_DEFAULTS, type CompanionArgs } from '@hookwars/sdk';
 import type { Pool as Db } from 'pg';
 import { EXPANSION_PREPARES } from './expansion-prepares.ts';
 import { SOCIAL_PREPARES } from './social-prepares.ts';
@@ -85,12 +85,21 @@ export const PREPARES: Record<string, PrepareDef> = {
       const item = b.item ? pk(b, 'item') : null;
       // Pass 4a: a Gated, Licensed or Leased item carries its access proof.
       let proof: AccountMeta[] = [];
+      let template: { address: PublicKey; program: PublicKey; programData: PublicKey } | undefined;
       if (item) {
         const info = await conn.getAccountInfo(item, 'confirmed');
-        const mode = info ? (hookwars.itemCodec().decode(info.data) as { accessMode?: number }).accessMode ?? 0 : 0;
-        proof = hookwars.accessProof(mode, item, mint);
+        if (!info) throw new PrepareError(404, 'NoSuchItem', 'The proposed item does not exist.');
+        const it = hookwars.itemCodec().decode(info.data) as { templateId: number; accessMode?: number };
+        proof = hookwars.accessProof(it.accessMode ?? 0, item, mint);
+        // The armory checks the proposed item's template and its program's deploy slot (found on the
+        // devnet drill: without them `propose` is refused with WrongAccount).
+        const address = hookwars.templateAddress(it.templateId);
+        const ti = await conn.getAccountInfo(address, 'confirmed');
+        if (!ti) throw new PrepareError(409, 'NoTemplate', 'The item\'s template is not registered on this cluster.');
+        const program = (hookwars.templateCodec().decode(ti.data) as { program: PublicKey }).program;
+        template = { address, program, programData: programDataAddress(program) };
       }
-      return [hookwars.propose(pk(b, 'owner'), mint, slot, state.nextNonce, item, targets, role, undefined, proof)];
+      return [hookwars.propose(pk(b, 'owner'), mint, slot, state.nextNonce, item, targets, role, template, proof)];
     },
   },
   'settle/prepare': {
@@ -130,7 +139,9 @@ export const PREPARES: Record<string, PrepareDef> = {
       const owner = pk(b, 'owner'); const mint = pk(b, 'mint');
       const { orders, raid, extras } = await raidContext(conn, mint, owner);
       if (!orders) throw new PrepareError(409, 'NoWarOrders', 'This token has no War orders equipped, so its chest pays no bounties.');
-      return [hookwars.claimBounty(owner, mint, orders, raid.slot, extras)];
+      // The chest pays in SOL through the bridge's `unwrap_sol` (the war client's inner list; without it
+      // the claim fails with MissingAccount, found on the devnet drill).
+      return [hookwars.claimBounty(owner, mint, orders, raid.slot, extras, [bridge.unwrapSol(hookwars.warChestAddress(mint), 0n)])];
     },
   },
   'quests/prepare': {
@@ -161,7 +172,15 @@ export const PREPARES: Record<string, PrepareDef> = {
   },
   'proposals/finalize/prepare': {
     programs: ['armory'], label: 'Count the vote', payer: (b) => pk(b, 'owner'),
-    build: async (b) => [hookwars.finalize(pk(b, 'mint'), int(b, 'slot', 0, 255), big(b, 'nonce'))],
+    // The launch address is always passed (security review 1, M-1) with the pool's and the launch's
+    // holdings of the token, which the count leaves out of the eligible supply; without them the
+    // armory refuses with WrongAccount (found on the devnet drill).
+    build: async (b) => {
+      const mint = pk(b, 'mint');
+      const launch = hookwars.launchAddr(mint);
+      const pool = launchPoolAddress(mint, QUOTE, LP_FEE_BPS);
+      return [hookwars.finalize(mint, int(b, 'slot', 0, 255), big(b, 'nonce'), { launch, poolBaseVault: holding(mint, pool), launchHolding: holding(mint, launch) })];
+    },
   },
   'proposals/cancel/prepare': {
     programs: ['armory'], label: 'Cancel the proposal', payer: (b) => pk(b, 'owner'),
@@ -398,8 +417,15 @@ export async function launchStages(b: Body, conn: Connection, companionLaunch = 
   const stages: Stage[] = [];
   const first: TransactionInstruction[] = companionLaunch ? [companion.create(owner, b.beneficiary === undefined ? owner : pk(b, 'beneficiary'), mint, companionArgs(b))] : [];
   first.push(step(hookwars.prepareLaunch(creator, mint, { name, symbol, uri, creatorFeeBps, rules, slots })));
-  stages.push({ label: companionLaunch ? 'Create the companion and prepare the launch' : 'Prepare the launch', ixs: first, extraSigners: ['mint'], simulate: !companionLaunch, tables: [] });
+  // A resumed launch (the mint already prepared): the prepare stage landed before, and simulating it
+  // again only fails on the existing mint, so it is left out and the equips follow.
+  const prepared = (await conn.getAccountInfo(mint, 'confirmed')) !== null;
+  if (!prepared) stages.push({ label: companionLaunch ? 'Create the companion and prepare the launch' : 'Prepare the launch', ixs: first, extraSigners: ['mint'], simulate: !companionLaunch, tables: [] });
   const armory = new PublicKey(PROGRAM_IDS.armory);
+  // Rules that install a kit module put the kit, Locked, in slot 0 of the mint (bordrless_launch
+  // `prepare_launch`); the requested slots follow it (found on the devnet drill, 2026-10-10).
+  const kitSlot = rulesIn.holderFeeBuyBps > 0 || rulesIn.holderFeeSellBps > 0 || rulesIn.maxWalletBps > 0 || rulesIn.creatorLockDays > 0 || rulesIn.earlyWindowSecs > 0 ? 1 : 0;
+  if (req.length + kitSlot > 4) throw new PrepareError(400, 'BadRequest', 'These rules take slot 0 for the kit, so at most 3 more slots fit.');
   for (let i = 0; i < req.length; i++) {
     const r = req[i]!;
     if (!r.launchItem) continue;
@@ -409,11 +435,11 @@ export async function launchStages(b: Body, conn: Connection, companionLaunch = 
     if (!info || !info.owner.equals(armory)) throw new PrepareError(409, 'NoItem', `slot ${i}: no such item on this cluster.`);
     const it = hookwars.itemCodec().decode(info.data) as { templateId: number; manifest: { tokenFlags: number; poolFlags: number } };
     const targets = (r.targets ?? []).slice(0, MAX_TARGETS).map((x) => new PublicKey(x));
-    const entry = { slot: i, item, config: { targets, role: 0 }, noticeSecs: Number.isInteger(r.noticeSecs) && r.noticeSecs >= 0 ? r.noticeSecs : 0, rule: null };
+    const entry = { slot: i + kitSlot, item, config: { targets, role: 0 }, noticeSecs: Number.isInteger(r.noticeSecs) && r.noticeSecs >= 0 ? r.noticeSecs : 0, rule: null };
     const tokenCuts = (it.manifest.tokenFlags & 64) !== 0; const poolCuts = it.manifest.poolFlags !== 0;
     const mode = (it as { accessMode?: number }).accessMode ?? 0;
     const eq = hookwars.equipLaunch(creator, mint, QUOTE, entry, { item, templateId: it.templateId, tokenCuts, poolCuts, composite: it.templateId === 41 }, hookwars.accessProof(mode, item, mint));
-    stages.push({ label: `Equip slot ${i}`, ixs: [step(hookwars.equipPrepared(creator, mint, eq))], extraSigners: [], simulate: false, tables: [] });
+    stages.push({ label: `Equip slot ${i + kitSlot}`, ixs: [step(hookwars.equipPrepared(creator, mint, eq))], extraSigners: [], simulate: false, tables: [] });
   }
   return stages;
 }
@@ -437,7 +463,9 @@ export async function launchPhase(conn: Connection, owner: PublicKey, mint: Publ
   const treasury = decodeLaunchConfig(cfg.data).treasury;
   const pool = launchPoolAddress(mint, QUOTE, LP_FEE_BPS);
   const launch = hookwars.launchAddr(mint);
-  const s = await hookwars.fetchTokenHookSlices(conn, { mint, source: holding(mint, launch), destination: holding(mint, pool), authority: launch, sourceOwner: launch, destinationOwner: pool });
+  // The kit writes its registry inside the launch, so its slice for the deposit comes from the rules.
+  const rewards = args.rules.holderFeeBuyBps > 0 || args.rules.holderFeeSellBps > 0;
+  const s = await hookwars.fetchTokenHookSlices(conn, { mint, source: holding(mint, launch), destination: holding(mint, pool), authority: launch, sourceOwner: launch, destinationOwner: pool, kitRewardVault: rewards ? holderVaultAddress(mint, QUOTE) : null });
   if (!s) throw new PrepareError(409, 'NotPrepared', 'This mint is not a prepared slot launch.');
   const created = hookwars.createPreparedLaunch(creator, mint, treasury, QUOTE, LP_FEE_BPS, args, poolItemRegistries(m, mint), hookwars.sliceAccounts(s));
   const create = companionLaunch ? hookwars.companionLaunchSlots(owner, mint, created) : created;
@@ -458,9 +486,11 @@ export async function launchPhase(conn: Connection, owner: PublicKey, mint: Publ
   const local = new AddressLookupTableAccount({ key: table, state: { deactivationSlot: BigInt('18446744073709551615'), lastExtendedSlot: 0, lastExtendedSlotStartIndex: 0, authority: owner, addresses: addrs } });
   stages.push({ label: 'Launch', ixs: [create], extraSigners: create.keys.some((k) => k.isSigner && k.pubkey.equals(mint)) ? ['mint'] : [], simulate: false, tables: [local] });
   const raids = req.some((r) => r.templateId === 1 || r.templateId === 2);
-  const after: TransactionInstruction[] = [hookwars.initWar(owner, mint)];
+  // `init_war` refuses a mint with no War slot (MissingWarSlot, seen on the devnet drill), so only a
+  // war token gets its war state; the raid ledger follows any Raid or Shield item.
+  const after: TransactionInstruction[] = req.some((r) => r.kind === 'war') ? [hookwars.initWar(owner, mint)] : [];
   if (raids) after.push(hookwars.initRaidLedger(owner, mint));
-  stages.push({ label: 'War chest', ixs: after, extraSigners: [], simulate: false, tables: [] });
+  if (after.length) stages.push({ label: after.length > 1 || req.some((r) => r.kind === 'war') ? 'War chest' : 'Raid ledger', ixs: after, extraSigners: [], simulate: false, tables: [] });
   return stages;
 }
 
@@ -525,7 +555,10 @@ export async function prepare(conn: Connection, route: string, body: Body, db?: 
   if (missing.length) {
     throw new PrepareError(409, 'NotDeployed', `Not on this cluster yet: the ${missing.join(', ')} program${missing.length > 1 ? 's are' : ' is'} not deployed, so this cannot be prepared.`);
   }
-  const protocol = [...await protocolTable(conn), ...await mintTables(conn, db, body.mint ?? body.tokenMint)];
+  // A raid routes through two launches: both tokens' tables (seen on the devnet drill: the route
+  // did not fit a packet with one).
+  const mints = [...new Set([body.mint ?? body.tokenMint, body.target, body.rival].filter((m): m is string => typeof m === 'string'))];
+  const protocol = [...await protocolTable(conn), ...(await Promise.all(mints.map((m) => mintTables(conn, db, m)))).flat()];
   if (def.staged) {
     const stages = await def.staged(body, conn);
     const out: PreparedTx[] = [];

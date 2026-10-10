@@ -78,8 +78,11 @@ describe('market prepares', () => {
     expect([b.seller, b.author, b.treasury]).toEqual([S(seller), S(author), S(treasury)]);
   });
   it('a collection takes the next id from the config and refuses a bad template list', async () => {
-    const c = await built('market/collections', 'market', 'create_collection', { name: 'Raiders', templateIds: [1, 9] });
+    // Each template's account follows, in order (the program checks one per id; devnet drill).
+    const c = await built('market/collections', 'market', 'create_collection', { name: 'Raiders', templateIds: [1, 9] }, 2);
     expect(c.collection).toBe(S(hookwars.collectionAddress(7)));
+    const [ix] = await PREPARES['market/collections/prepare']!.build({ owner: S(owner), name: 'Raiders', templateIds: [1, 9] }, conn);
+    expect(ix!.keys.slice(-2).map((k) => S(k.pubkey))).toEqual([S(hookwars.templateAddress(1)), S(hookwars.templateAddress(9))]);
     await expect(PREPARES['market/collections/prepare']!.build({ owner: S(owner), name: 'x', templateIds: [0] }, conn)).rejects.toThrow(/templateIds/);
   });
   it('lease offer, accept, withdraw and end name the lessor from the lease', async () => {
@@ -120,9 +123,13 @@ describe('social prepares', () => {
 
 describe('agents prepares', () => {
   it('register takes the next index and derives the badge mint', async () => {
-    const r = await built('agents/register', 'agents', 'register_passport', { name: 'scout', kinds: 3 });
+    const agentKey = K(77);
+    const r = await built('agents/register', 'agents', 'register_passport', { name: 'scout', kinds: 3, agentKey: S(agentKey) });
     const p = hookwars.passportAddress(owner, 0);
-    expect([r.passport, r.fee_collector, r.badge_mint]).toEqual([S(p), S(feeCollector), S(hookwars.agentBadgeMintAddress(p, 0))]);
+    expect([r.passport, r.fee_collector, r.badge_mint, r.agent_key]).toEqual([S(p), S(feeCollector), S(hookwars.agentBadgeMintAddress(p, 0)), S(agentKey)]);
+    // The agent key must be its own key: the program refuses the operator's (KeyIsOperator).
+    await expect(PREPARES['agents/register/prepare']!.build({ owner: S(owner), name: 'scout', kinds: 3 }, conn)).rejects.toThrow(/agentKey/);
+    await expect(PREPARES['agents/register/prepare']!.build({ owner: S(owner), name: 'scout', kinds: 3, agentKey: S(owner) }, conn)).rejects.toThrow(/agentKey/);
   });
   it('profile, policy and withdraw', async () => {
     await built('agents/profile', 'agents', 'update_profile', { passport: S(passport), name: 'scout', kinds: 1 });
