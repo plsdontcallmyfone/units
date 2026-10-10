@@ -99,6 +99,7 @@ fn social_budgets() {
     let extra = vec![
         AccountMeta::new_readonly(item, false),
         AccountMeta::new_readonly(token::holding_address(&item_mint, &h), false),
+        AccountMeta::new(item_claim_marker(0, &item), false),
     ];
     measure(&mut hw.w, "social claim_badge (forge level)", &holder, &[], claim_badge_ix(&h, 0, &h, extra));
 

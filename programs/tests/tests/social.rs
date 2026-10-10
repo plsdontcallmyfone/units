@@ -36,18 +36,20 @@ fn a_forge_level_badge_opens_after_the_delay_and_cannot_move() {
     send(&mut hw.w.env, &admin, &[create_badge_ix(&admin.pubkey(), 0, "Smith", Criterion::ForgeLevel { min_level: 1 })]).ok();
     send(&mut hw.w.env, &admin, &[create_badge_ix(&admin.pubkey(), 1, "Master", Criterion::ForgeLevel { min_level: 3 })]).ok();
     let (holder, item, item_mint) = hw.item(t::TRANSFER_FEE, params(&[100, 0]), 100);
-    let extra = |w: &Pubkey| {
+    let extra_for = |id: u32, w: &Pubkey| {
         vec![
             AccountMeta::new_readonly(item, false),
             AccountMeta::new_readonly(token::holding_address(&item_mint, w), false),
+            AccountMeta::new(item_claim_marker(id, &item), false),
         ]
     };
+    let extra = |w: &Pubkey| extra_for(0, w);
     let h = holder.pubkey();
     send(&mut hw.w.env, &holder, &[claim_badge_ix(&h, 0, &h, extra(&h))])
         .expect_code(social_code(SocialError::ClaimsNotOpen));
     hw.w.env.warp(i64::from(TEST_SOCIAL.admin_timelock_secs));
     // Level 1 items do not meet a level 3 badge.
-    send(&mut hw.w.env, &holder, &[claim_badge_ix(&h, 1, &h, extra(&h))])
+    send(&mut hw.w.env, &holder, &[claim_badge_ix(&h, 1, &h, extra_for(1, &h))])
         .expect_code(social_code(SocialError::CriterionNotMet));
     // A wallet that does not hold the item does not meet it either.
     let s = stranger.pubkey();
@@ -69,6 +71,15 @@ fn a_forge_level_badge_opens_after_the_delay_and_cannot_move() {
     let other = Keypair::new().pubkey();
     send(&mut hw.w.env, &stranger, &[claim_badge_ix(&s, 0, &other, extra(&other))])
         .expect_code(social_code(SocialError::WrongAccount));
+    // Pass 5 (review 3 I-3): the item moves to a second wallet, which meets the criterion with
+    // the same item, but the item already earned this badge.
+    let ixs = [
+        token::create_holding(h, item_mint, s),
+        token::transfer(h, token::holding_address(&item_mint, &h), token::holding_address(&item_mint, &s), item_mint, None, vec![], 1),
+    ];
+    hw.w.env.send_paid_by(&ixs, &holder, &[]).ok();
+    send(&mut hw.w.env, &stranger, &[claim_badge_ix(&s, 0, &s, extra(&s))])
+        .expect_code(social_code(SocialError::AlreadyClaimed));
 }
 
 /// A launch with a raid slot holding a crafted Raid item at the armory's address, a wallet with

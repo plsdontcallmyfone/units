@@ -400,6 +400,11 @@ pub fn create_badge_ix(admin: &Pubkey, id: u32, name: &str, criterion: hookwars_
 }
 
 /// `claim_badge` of badge `id` for `recipient`; `extra` are the criterion's accounts.
+/// Pass 5 (I-3): the ForgeLevel claim marker `["badge-claim", id, item]`.
+pub fn item_claim_marker(id: u32, item: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(&[hookwars_social::seeds::ITEM_CLAIM, &id.to_le_bytes(), item.as_ref()], &hookwars_social::ID).0
+}
+
 pub fn claim_badge_ix(claimant: &Pubkey, id: u32, recipient: &Pubkey, extra: Vec<AccountMeta>) -> Instruction {
     let badge = Pubkey::find_program_address(&[hookwars_social::seeds::BADGE, &id.to_le_bytes()], &hookwars_social::ID).0;
     let award = Pubkey::find_program_address(

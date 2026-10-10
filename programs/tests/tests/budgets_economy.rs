@@ -195,7 +195,16 @@ fn directive_budgets() {
     let ix = aw.init_policy_ix(&a, limits);
     aw.hw.w.env.send_paid_by(&[ix], &a.operator, &[]).ok();
     let p = a.passport;
-    let text = units_memo::directive_message(&p.to_string(), 0, "https://example.invalid/rules.md", &"ab".repeat(32)).encode();
+    let dc = DirectiveConstraints {
+        max_spend_per_action: SOL,
+        max_spend_per_day: SOL,
+        allowed_targets: vec![bordrless_token::ID],
+        allowed_access_modes: 0b11111,
+        max_licence_price: SOL,
+        frozen: false,
+    };
+    let ch = hookwars_agents::handlers::directive::constraints_hash_hex(&dc).unwrap();
+    let text = units_memo::directive_message(&p.to_string(), 0, "https://example.invalid/rules.md", &"ab".repeat(32), &ch).encode();
     let memo = Instruction {
         program_id: MEMO_PROGRAM_ID,
         accounts: vec![AccountMeta::new_readonly(a.operator.pubkey(), true)],
@@ -217,14 +226,7 @@ fn directive_budgets() {
         },
         hookwars_agents::instruction::SetDirective {
             seq: 0,
-            constraints: DirectiveConstraints {
-                max_spend_per_action: SOL,
-                max_spend_per_day: SOL,
-                allowed_targets: vec![bordrless_token::ID],
-                allowed_access_modes: 0b11111,
-                max_licence_price: SOL,
-                frozen: false,
-            },
+            constraints: dc,
         },
     );
     let op = a.operator.insecure_clone();

@@ -4,6 +4,7 @@
 // the craft and book programs. Everything is built from the generated IDLs (`idlIx`); the suffix
 // shapes are `crates/hookwars-common` `agents_record`, `market`, `eco_cpi` (`init_wear_metas`,
 // `social_metas`) and the items program's `settle.rs`.
+import { createHash } from 'node:crypto';
 import { accessPolicyAddress, adminActionHash, gated, queueAdmin } from './access.ts';
 import { PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY, SystemProgram, type AccountMeta, type TransactionInstruction } from '@solana/web3.js';
 import { FIXED_ADDRESSES } from '@hookwars/shared';
@@ -223,6 +224,15 @@ export function reslotLoyalty(mint: PublicKey, oldSlot: number, oldItem: PublicK
 // ---------------------------------------------------------------- agents (11 section 4) --
 
 export interface DirectiveConstraintsInput { maxSpendPerAction: bigint; maxSpendPerDay: bigint; allowedTargets: PublicKey[]; allowedAccessModes: number; maxLicencePrice: bigint; frozen: boolean }
+
+/** Pass 5 (review 3 L-6): hex `sha256(borsh(constraints))`, the directive memo's `c`, which
+ * `set_directive` checks against the constraints it writes. */
+export function directiveConstraintsHashHex(c: DirectiveConstraintsInput): string {
+  const u64 = (x: bigint) => { const b = Buffer.alloc(8); b.writeBigUInt64LE(x); return b; };
+  const n = Buffer.alloc(4); n.writeUInt32LE(c.allowedTargets.length);
+  const bytes = Buffer.concat([u64(c.maxSpendPerAction), u64(c.maxSpendPerDay), n, ...c.allowedTargets.map((t) => t.toBuffer()), Buffer.from([c.allowedAccessModes]), u64(c.maxLicencePrice), Buffer.from([c.frozen ? 1 : 0])]);
+  return createHash('sha256').update(bytes).digest('hex');
+}
 
 /** `set_directive(seq, constraints)`; the directive memo signed by the operator goes in the same transaction. */
 export function agentsSetDirective(operator: PublicKey, passport: PublicKey, seq: number, constraints: DirectiveConstraintsInput): TransactionInstruction {

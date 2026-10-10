@@ -58,6 +58,8 @@ pub mod seeds {
     pub const GUILD: &[u8] = b"guild";
     pub const TREASURY: &[u8] = b"guild-treasury";
     pub const ACTION: &[u8] = b"guild-action";
+    /// Pass 5 (review 3 I-3): `["badge-claim", badge_id, item]`, one ForgeLevel award per item.
+    pub const ITEM_CLAIM: &[u8] = b"badge-claim";
 }
 
 /// Parameters (10 section 13; all to set).
@@ -240,6 +242,8 @@ pub enum SocialError {
     BadCounter,
     #[msg("two skills share an id")]
     DuplicateSkill,
+    #[msg("this item already earned this badge")]
+    AlreadyClaimed,
 }
 
 #[event]
@@ -381,6 +385,56 @@ fn call<'info>(ix: &Instruction, infos: &[AccountInfo<'info>], seeds: &[&[&[u8]]
     Ok(())
 }
 
+/// Pass 5 (I-3): creates the empty marker `["badge-claim", badge_id, item]` (no data), refusing
+/// when it exists (`AlreadyClaimed`).
+fn mark_item_claim<'info>(
+    badge_id: u32,
+    payer: &AccountInfo<'info>,
+    item: &AccountInfo<'info>,
+    marker: &AccountInfo<'info>,
+    system_program: &AccountInfo<'info>,
+) -> Result<()> {
+    let id = badge_id.to_le_bytes();
+    let (addr, bump) = Pubkey::find_program_address(&[seeds::ITEM_CLAIM, &id, item.key.as_ref()], &crate::ID);
+    require_keys_eq!(*marker.key, addr, SocialError::WrongAccount);
+    // Created by an earlier claim: owned by this program.
+    require!(*marker.owner != crate::ID, SocialError::AlreadyClaimed);
+    let rent = Rent::get()?.minimum_balance(0);
+    let b = [bump];
+    let signer: &[&[u8]] = &[seeds::ITEM_CLAIM, &id, item.key.as_ref(), &b];
+    let have = marker.lamports();
+    if have == 0 {
+        return system_program::create_account(
+            CpiContext::new_with_signer(
+                system_program.clone(),
+                system_program::CreateAccount { from: payer.clone(), to: marker.clone() },
+                &[signer],
+            ),
+            rent,
+            0,
+            &crate::ID,
+        );
+    }
+    // Lamports sent there first (griefing) do not block the claim: top up and assign.
+    if have < rent {
+        system_program::transfer(
+            CpiContext::new(
+                system_program.clone(),
+                system_program::Transfer { from: payer.clone(), to: marker.clone() },
+            ),
+            rent - have,
+        )?;
+    }
+    system_program::assign(
+        CpiContext::new_with_signer(
+            system_program.clone(),
+            system_program::Assign { account_to_assign: marker.clone() },
+            &[signer],
+        ),
+        &crate::ID,
+    )
+}
+
 fn check_token(token_program: &AccountInfo, event_authority: &AccountInfo) -> Result<()> {
     require_keys_eq!(*token_program.key, bordrless_token::ID, SocialError::WrongAccount);
     require_keys_eq!(
@@ -393,7 +447,8 @@ fn check_token(token_program: &AccountInfo, event_authority: &AccountInfo) -> Re
 
 /// Whether `recipient` meets `c`. `extra` are the criterion's accounts:
 /// FirstSiege: `[war_state]`; RaidPoints: `[mint, recipient's holding, raid item, war_config]`;
-/// ForgeLevel: `[item, recipient's holding of the item]`; ItemsAuthored: `[AuthorCounter]`;
+/// ForgeLevel: `[item, recipient's holding of the item, ["badge-claim", badge id, item] (mut)]`
+/// (the third is created by the claim, pass 5 I-3); ItemsAuthored: `[AuthorCounter]`;
 /// RoyaltiesClaimed: `[ClaimCounter]`.
 fn criterion_met(c: &Criterion, recipient: &Pubkey, extra: &[AccountInfo]) -> Result<bool> {
     use hookwars_common::{ids, pda};
@@ -681,6 +736,18 @@ pub mod hookwars_social {
             ],
             &[minter_seeds],
         )?;
+        // Pass 5 (review 3 I-3): a ForgeLevel badge is earned once per item, not once per wallet
+        // the item passes through: the claim creates `["badge-claim", badge id, item]`, which a
+        // second claim with the same item cannot create again.
+        if matches!(b.criterion, Criterion::ForgeLevel { .. }) {
+            mark_item_claim(
+                badge_id,
+                &ctx.accounts.claimant.to_account_info(),
+                &ctx.remaining_accounts[0],
+                ctx.remaining_accounts.get(2).ok_or(SocialError::WrongAccount)?,
+                &ctx.accounts.system_program.to_account_info(),
+            )?;
+        }
         let award = &mut ctx.accounts.award;
         award.bump = ctx.bumps.award;
         award.badge_id = badge_id;

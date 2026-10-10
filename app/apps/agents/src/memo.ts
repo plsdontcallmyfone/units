@@ -211,24 +211,25 @@ export function parseMessage(bytes: Uint8Array, maxBytes: number): Message {
 }
 
 /** The body of a `directive` (11 section 4.3), exact keys in order. */
-export interface DirectiveBody { passport: string; seq: bigint; rulesUri: string; h: string }
+/** Pass 5 (review 3 L-6): `c` is the hex sha256 of the Borsh-encoded constraints `set_directive` writes. */
+export interface DirectiveBody { passport: string; seq: bigint; rulesUri: string; h: string; c: string }
 
 export function directiveBodyValue(b: DirectiveBody): Obj {
-  return obj([['passport', b.passport], ['seq', b.seq], ['rules_uri', b.rulesUri], ['h', b.h]]);
+  return obj([['passport', b.passport], ['seq', b.seq], ['rules_uri', b.rulesUri], ['h', b.h], ['c', b.c]]);
 }
 
 export function readDirectiveBody(v: Value): DirectiveBody {
   if (!isObj(v)) throw new MemoError('Shape');
-  const keys = ['passport', 'seq', 'rules_uri', 'h'];
+  const keys = ['passport', 'seq', 'rules_uri', 'h', 'c'];
   if (v.obj.length !== keys.length || v.obj.some(([k], i) => k !== keys[i])) throw new MemoError('Shape');
-  const [p, seq, uri, h] = v.obj.map(([, x]) => x);
-  if (typeof p !== 'string' || typeof seq !== 'bigint' || typeof uri !== 'string' || typeof h !== 'string') throw new MemoError('Shape');
-  return { passport: p, seq, rulesUri: uri, h };
+  const [p, seq, uri, h, c] = v.obj.map(([, x]) => x);
+  if (typeof p !== 'string' || typeof seq !== 'bigint' || typeof uri !== 'string' || typeof h !== 'string' || typeof c !== 'string') throw new MemoError('Shape');
+  return { passport: p, seq, rulesUri: uri, h, c };
 }
 
 /** A directive memo for `passport` at `seq`, from the passport itself to everyone. */
-export function directiveMessage(passport: string, seq: bigint, rulesUri: string, rulesHashHex: string): Message {
-  return { kind: 'directive', from: passport, to: '*', thread: '', re: '', body: directiveBodyValue({ passport, seq, rulesUri, h: rulesHashHex }), expiresAt: 0n };
+export function directiveMessage(passport: string, seq: bigint, rulesUri: string, rulesHashHex: string, constraintsHashHex: string): Message {
+  return { kind: 'directive', from: passport, to: '*', thread: '', re: '', body: directiveBodyValue({ passport, seq, rulesUri, h: rulesHashHex, c: constraintsHashHex }), expiresAt: 0n };
 }
 
 /** Message id = `<transaction signature>:<instruction index>` (assigned by the indexer). */
