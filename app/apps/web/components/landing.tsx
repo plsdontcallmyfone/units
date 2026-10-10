@@ -17,5 +17,5 @@ export function Landing() {
     f.addEventListener('load', style); style();
     return () => f.removeEventListener('load', style);
   }, []);
-  return <iframe ref={ref} className="landing" title="units" src="/plnty/index.html" />;
+  return <iframe ref={ref} className="landing" title="units" src="/plnty/units.html" />;
 }

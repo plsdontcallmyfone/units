@@ -89,19 +89,21 @@ export default async function Projects({ searchParams }: { searchParams: Promise
   return (
     <>
       <header className="hero-box">
-        <img className="doodle doodle-wow" src="/doodles/creator-wow.svg" alt="" width={186} height={97} aria-hidden />
-        <img className="doodle doodle-arrow" src="/doodles/creator-arrow.svg" alt="" width={53} height={62} aria-hidden />
         <div>
           <div className="eyebrow">Projects</div>
           <h1>Tokens at war</h1>
           <p className="lede">Every token here runs hooks that are owned items. Its holders vote what fills each slot, aim raids at rivals, and fund a war chest from their own fees.</p>
         </div>
+        <div className="hero-side">
+          <img className="doodle doodle-wow" src="/doodles/creator-wow.svg" alt="" width={186} height={97} aria-hidden />
+          <img className="doodle doodle-arrow" src="/doodles/creator-arrow.svg" alt="" width={53} height={62} aria-hidden />
         <dl className="hero-stats">
           <div><dt>Tokens</dt><dd>{launches.ok ? int(cards.length) : DASH}</dd></div>
           <div><dt>At war</dt><dd>{launches.ok ? int(cards.filter((c) => c.state !== 'quiet').length) : DASH}</dd></div>
           <div><dt>Under siege</dt><dd>{launches.ok ? int(cards.filter((c) => c.state === 'siege').length) : DASH}</dd></div>
           <div><dt>Programs</dt><dd>{status.ok ? `${deployed}/${programs.length}` : DASH}</dd></div>
         </dl>
+        </div>
       </header>
       <div className="directory">
         <aside className="rail" aria-label="Filter by equipped item">

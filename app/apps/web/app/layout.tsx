@@ -1,7 +1,11 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import { SiteHeader, type TickerItem } from '@/components/site-header';
+import { Cursor } from '@/components/cursor';
 import './globals.css';
-import { Nav, NavSheet } from '@/components/nav';
+import '../components/site-header.css';
+import type { BattleEvent, Page } from '@hookwars/shared';
+import { ago, short } from '@/lib/format';
 import { read } from '@/lib/api';
 import type { HookwarsStatus } from '@hookwars/shared';
 import { MOCK } from '@/lib/mock';
@@ -13,44 +17,25 @@ export const metadata: Metadata = {
 
 export const dynamic = 'force-dynamic';
 
-async function ClusterBadge() {
-  const s = await read<HookwarsStatus>('/v1/status');
-  if (!s.ok) return <span className="nav-clock"><span className="dot bad" />BACKEND UNREACHABLE</span>;
-  const deployed = s.data.programs.filter((p) => p.deployed).length;
-  const total = s.data.programs.length;
-  const name = s.data.cluster.includes('devnet') ? 'DEVNET' : s.data.cluster.includes('mainnet') ? 'MAINNET' : 'CLUSTER';
-  const cls = !s.data.rpcReachable ? 'bad' : deployed === total && total > 0 ? 'ok' : 'warn';
-  return (
-    <span className="nav-clock" title={`${deployed} of ${total} units programs deployed`}>
-      <span className={`dot ${cls}`} />{name}{total ? ` ${deployed}/${total}` : ''}
-    </span>
-  );
+const KIND: Record<string, string> = { raid: 'raided', siege: 'besieged', counter_strike: 'counter-struck', treaty_on: 'signed with', proposal: 'proposed on', equip: 'equipped on', forge: 'forged on', loot: 'looted on', bounty: 'claimed on', raze: 'razed', return: 'returned to' };
+
+async function headerData(): Promise<{ ticker: TickerItem[]; cluster: { name: string; cls: string; title: string } }> {
+  const [s, f] = await Promise.all([read<HookwarsStatus>('/v1/status'), read<Page<BattleEvent>>('/v1/feed')]);
+  const ticker: TickerItem[] = f.ok ? f.data.items.slice(0, 14).map((e) => ({ who: e.actor ? short(e.actor, 4) : short(e.mint, 4), verb: KIND[e.kind] ?? e.kind, what: e.otherMint ? short(e.otherMint, 4) : short(e.mint, 4), tool: `${e.detail.template ?? e.kind} · ${ago(e.ts)}` })) : [];
+  if (!s.ok) return { ticker, cluster: { name: 'Backend down', cls: 'bad', title: s.error } };
+  const deployed = s.data.programs.filter((p) => p.deployed).length, total = s.data.programs.length;
+  const name = s.data.cluster.includes('devnet') ? 'Devnet' : s.data.cluster.includes('mainnet') ? 'Mainnet' : 'Cluster';
+  return { ticker, cluster: { name, cls: !s.data.rpcReachable ? 'bad' : deployed === total && total > 0 ? 'ok' : 'warn', title: `${deployed} of ${total} units programs deployed` } };
 }
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const h = await headerData();
   return (
     <html lang="en">
       <body>
-        <div className="scene" aria-hidden>
-          <img className="scene-a" src="/scene/dog-orange.webp" alt="" />
-          <img className="scene-b" src="/scene/chicken-blue.webp" alt="" />
-          <img className="scene-c" src="/scene/fists-clouds.webp" alt="" />
-          <img className="scene-d" src="/scene/rooster.webp" alt="" />
-          <span className="edge edge-l edge-1" /><span className="edge edge-l edge-2" /><span className="edge edge-l edge-3" /><span className="edge edge-r edge-1" /><span className="edge edge-r edge-2" /><span className="edge edge-r edge-3" />
-        </div>
-        <header className="nav">
-          <div className="wrap nav-row">
-            <a href="/" className="nav-logo" aria-label="units home">units</a>
-            <Nav />
-            <div className="nav-end">
-              {MOCK ? <span className="chip warn" title="MOCK_DATA=1: the site shows invented tokens and events, not the chain">Demo data</span> : null}
-              <ClusterBadge />
-              <a className="btn sm primary" href="/launch">Launch</a>
-            </div>
-          </div>
-          <NavSheet />
-        </header>
-        <main className="wrap shell">{MOCK ? <p className="demo-banner" role="note">Demo data: tokens, items and events on this site are invented for display, not read from the chain.</p> : null}{children}</main>
+        <Cursor />
+        <SiteHeader ticker={h.ticker} />
+        <main className="wrap shell">{children}</main>
         <footer className="foot">
           <div className="wrap foot-grid">
             <div className="foot-brand">
