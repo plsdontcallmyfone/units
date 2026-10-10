@@ -34,6 +34,8 @@ export class MockChain implements ChainReader {
   async directiveMemo(p: PublicKey, seq: number) { return this.directiveMemos.get(`${p.toBase58()}:${seq}`) ?? null; }
   async fetchRules(uri: string) { const r = this.rules.get(uri); if (!r) throw new Error('rules_uri answered 404'); return r; }
   async itemsMinted() { return this.minted; }
+  itemTemplates = new Map<string, number>();
+  async itemTemplateId(m: PublicKey) { return this.itemTemplates.get(m.toBase58()) ?? null; }
   async mintFacts(m: PublicKey) { return this.mints.get(m.toBase58()) ?? null; }
   async operatorKeys(op: PublicKey) { return this.operators.get(op.toBase58()) ?? [op.toBase58()]; }
   async lamports(a: PublicKey) { return this.balances.get(a.toBase58()) ?? 0n; }

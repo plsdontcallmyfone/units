@@ -234,7 +234,7 @@ fn markets_exist_only_for_materials() {
     ix.accounts[2].pubkey = fake;
     ew.send(&creator, &[ix]).expect_code(book_code(E::BadBase));
     let ix = ew.create_market_ix(&creator.pubkey(), MAT, 0, 1);
-    ew.send(&creator, &[ix]).expect_code(book_code(E::BadParams));
+    ew.send(&creator, &[ix]).expect_code(book_code(E::BadTerms));
     let ix = ew.create_market_ix(&creator.pubkey(), MAT, TICK, 1);
     ew.send(&creator, &[ix]).ok();
     // One book per material.

@@ -4,7 +4,7 @@
 // close with the bond guard, crafting and repair, the material order book and class bids, the
 // Loyalty Pot reslot, the sell route and the three war cranks. Each reads what it needs from the
 // chain and builds with the `@hookwars/sdk` economy builders (generated IDLs); `finish` simulates.
-import { PublicKey, type AccountMeta, type Connection, type TransactionInstruction } from '@solana/web3.js';
+import { PublicKey, TransactionInstruction, type AccountMeta, type Connection } from '@solana/web3.js';
 import { hookwars, token, bridge, launch as upLaunch, launchKeysOf, decodeLaunch, launchPoolAddress, launchHookExtras } from '@hookwars/sdk';
 import { FIXED_ADDRESSES, LP_FEE_BPS, PROGRAM_IDS } from '@hookwars/shared';
 import { big, int, pk, PrepareError, type Body, type PrepareDef } from './prepares.ts';
@@ -94,9 +94,17 @@ export async function leaseRevert(conn: Connection, payer: PublicKey, lease: { i
   if (!ssInfo || !esInfo) return null;
   const es = hookwars.equipStateCodec.decode(esInfo.data);
   if (!es.item.equals(lease.item)) return null;
-  const ss = hookwars.slotStateCodec.decode(ssInfo.data);
-  const oldItem = await need(conn, lease.item, (d) => hookwars.itemCodec().decode(d), 'The leased item no longer exists.');
-  const change: hookwars.EquipChange = { oldItem: lease.item, oldEquipVault: (oldItem.manifest.tokenFlags & 64) !== 0 ? hookwars.equipVault(mint, slot) : null };
+  const change = await revertChange(conn, mint, slot, lease.item, hookwars.slotStateCodec.decode(ssInfo.data));
+  // Pass 4a: a slot launch's Pool or Relation slot also refreshes the pool registry (spec 14 3.1).
+  const metas = hookwars.revertForLeaseEndMetas(payer, mint, slot, lease.item, change);
+  return [...metas, ...(await refreshTailOf(conn, mint, slot))];
+}
+
+/** The equip change back to the slot's launch item, `oldItem` going out (lease end, enforce_access). */
+export async function revertChange(conn: Connection, mint: PublicKey, slot: number, oldItemKey: PublicKey, slotState?: { launchItem: PublicKey | null }): Promise<hookwars.EquipChange> {
+  const ss = slotState ?? await need(conn, hookwars.slotStateAddress(mint, slot), (d) => hookwars.slotStateCodec.decode(d), 'This slot has no state.');
+  const oldItem = await need(conn, oldItemKey, (d) => hookwars.itemCodec().decode(d), 'The outgoing item no longer exists.');
+  const change: hookwars.EquipChange = { oldItem: oldItemKey, oldEquipVault: (oldItem.manifest.tokenFlags & 64) !== 0 ? hookwars.equipVault(mint, slot) : null };
   const next = ss.launchItem;
   if (next) {
     const ni = await need(conn, next, (d) => hookwars.itemCodec().decode(d), 'The slot\'s launch item no longer exists.');
@@ -109,7 +117,18 @@ export async function leaseRevert(conn: Connection, payer: PublicKey, lease: { i
       newComposite: ni.templateId === hookwars.COMPOSITE_TEMPLATE_ID ? hookwars.compositeAddress(next) : null,
     } satisfies hookwars.EquipChange);
   }
-  return hookwars.revertForLeaseEndMetas(payer, mint, slot, lease.item, change);
+  return change;
+}
+
+/** The refresh tail of an equip change on `slot` of `mint` (empty unless a Pool or Relation slot). */
+export async function refreshTailOf(conn: Connection, mint: PublicKey, slot: number): Promise<AccountMeta[]> {
+  const [mi, li] = await conn.getMultipleAccountsInfo([mint, hookwars.launchAddr(mint)], 'confirmed');
+  if (!mi) return [];
+  let kind = 0;
+  try { kind = hookwars.decodeSlotMint(mi.data).slots[slot]?.kind ?? 0; } catch { return []; }
+  if (kind !== 3 && kind !== 4) return [];
+  const pool = li && li.data.length >= 106 ? new PublicKey(li.data.subarray(74, 106)) : PublicKey.default;
+  return hookwars.refreshTail(mint, pool);
 }
 
 const UPGRADEABLE_LOADER = new PublicKey('BPFLoaderUpgradeab1e11111111111111111111111');
@@ -358,15 +377,89 @@ export const ECONOMY_PREPARES: Record<string, PrepareDef> = {
   }),
 
   // ---------------------------------------------------------------- admin setters (13 E-2, E-7; wave F) --
-  'armory/template-economy/prepare': one('Set template economy', ['armory'], async (b) => [hookwars.setTemplateEconomy(
+  'armory/template-economy/prepare': one('Set template economy', ['armory'], async (b) => [queued(b, hookwars.setTemplateEconomy(
     pk(b, 'owner'), int(b, 'templateId', 1, 65_535), int(b, 'authorBps', 0, 10_000), int(b, 'defaultAccess', 0, 255), int(b, 'allowedAccess', 0, 255), int(b, 'chargesOnCreate', 0, U32_MAX),
-  )]),
-  'armory/protocol-bps/prepare': one('Set the item protocol fee', ['armory'], async (b) => [hookwars.setItemProtocolBps(pk(b, 'owner'), int(b, 'itemProtocolBps', 0, 10_000))]),
+  ))]),
+  'armory/protocol-bps/prepare': one('Set the item protocol fee', ['armory'], async (b) => [queued(b, hookwars.setItemProtocolBps(pk(b, 'owner'), int(b, 'itemProtocolBps', 0, 10_000)))]),
   'presets/register/prepare': one('Register a preset', ['armory'], async (b) => {
     const ids = b.templateIds;
     if (!Array.isArray(ids) || ids.length < 2 || ids.length > 6 || ids.some((x) => !Number.isInteger(x) || x < 1 || x > 65_535)) throw new PrepareError(400, 'BadRequest', '"templateIds" must be 2 to 6 template ids.');
     const name = b.name;
     if (typeof name !== 'string' || name.length === 0 || name.length > 32) throw new PrepareError(400, 'BadRequest', '"name" must be 1 to 32 characters.');
-    return [hookwars.registerPreset(pk(b, 'owner'), int(b, 'id', 0, 65_535), ids as number[], name)];
+    return [queued(b, hookwars.registerPreset(pk(b, 'owner'), int(b, 'id', 0, 65_535), ids as number[], name))];
+  }),
+
+  // ---------------------------------------------------------------- pass 4a: admin queue, access, submissions (spec 14) --
+  'armory/queue/prepare': one('Queue an admin action', ['armory'], async (b) => [hookwars.queueAdmin(pk(b, 'owner'), hex32(b, 'actionHash'))]),
+  'armory/queue/cancel/prepare': one('Cancel a queued admin action', ['armory'], async (b) => [hookwars.cancelAdmin(pk(b, 'owner'), hex32(b, 'actionHash'))]),
+  'armory/access-params/prepare': one('Set the access parameters', ['armory'], async (b) => {
+    const p = b.params as Body | undefined;
+    if (!p || typeof p !== 'object') throw new PrepareError(400, 'BadRequest', '"params" is required.');
+    const params = {
+      licenceTier1Lamports: big(p, 'licenceTier1Lamports'), licenceTier1Level: int(p, 'licenceTier1Level', 0, 255), labBondLamports: big(p, 'labBondLamports'),
+      labBondDiscountLevel: int(p, 'labBondDiscountLevel', 0, 255), labBondDiscountBps: int(p, 'labBondDiscountBps', 0, 10_000),
+      licenceMinSecs: int(p, 'licenceMinSecs', 0, U32_MAX), licenceMaxSecs: int(p, 'licenceMaxSecs', 0, U32_MAX),
+    };
+    const g = hookwars.setAccessParams(pk(b, 'owner'), params);
+    return [b.queue === true ? g.queue : g.apply];
+  }),
+  'access/set/prepare': one('Set the access mode', ['armory', 'social', 'agents'], async (b, conn) => {
+    const itemMint = pk(b, 'itemMint'); const it = await item(conn, itemMint);
+    const holder = b.holder === undefined ? pk(b, 'owner') : pk(b, 'holder');
+    const lt = b.licenceTerms as Body | undefined | null;
+    const licenceTerms = lt ? { priceLamports: big(lt, 'priceLamports'), termSecs: int(lt, 'termSecs', 1, U32_MAX), per: int(lt, 'per', 0, 1), maxLive: int(lt, 'maxLive', 1, 65_535) } : null;
+    const sfx: hookwars.SetAccessSuffixes = {};
+    if (licenceTerms) sfx.level = { wallet: pk(b, 'owner') };
+    if (b.passport !== undefined) sfx.agent = { passport: pk(b, 'passport'), directive: pk(b, 'directive') };
+    return [hookwars.setAccess(pk(b, 'owner'), { itemMint, templateId: it.templateId, holder, mode: int(b, 'mode', 0, 4), exclusive: b.exclusive === true, licenceTerms }, sfx)];
+  }),
+  'access/approve/prepare': one('Approve a token', ['armory'], async (b) => [hookwars.approveToken(pk(b, 'owner'), pk(b, 'itemMint'), pk(b, 'owner'), pk(b, 'tokenMint'))]),
+  'access/revoke/prepare': one('Revoke an approval', ['armory'], async (b, conn) => {
+    const itemMint = pk(b, 'itemMint'); const tokenMint = pk(b, 'tokenMint'); const itemKey = hookwars.itemAddress(itemMint);
+    const mi = await conn.getAccountInfo(tokenMint, 'confirmed');
+    const slots = mi ? hookwars.activeSlots(hookwars.decodeSlotMint(mi.data)).map((s, i) => ({ s, i })).filter(({ s }) => s.item.equals(itemKey)).map(({ i }) => hookwars.slotStateAddress(tokenMint, i)) : [];
+    return [hookwars.revokeApproval(pk(b, 'owner'), itemMint, pk(b, 'owner'), tokenMint, slots)];
+  }),
+  'access/enforce/prepare': one('Enforce a lapsed access', ['armory', 'items', 'token', 'launch'], async (b, conn) => {
+    const mint = pk(b, 'mint'); const slot = int(b, 'slot', 0, 7);
+    const es = await need(conn, hookwars.equipStateAddress(mint, slot), (d) => hookwars.equipStateCodec.decode(d), 'Nothing is equipped in this slot.');
+    const it = await need(conn, es.item, (d) => hookwars.itemCodec().decode(d) as { accessMode?: number }, 'The equipped item no longer exists.');
+    const mode = it.accessMode ?? 0;
+    if (mode !== hookwars.ACCESS.GATED && mode !== hookwars.ACCESS.LICENSED) throw new PrepareError(409, 'NotGated', 'The equipped item is neither Gated nor Licensed, so there is nothing to enforce.');
+    const change = await revertChange(conn, mint, slot, es.item);
+    return [hookwars.enforceAccess(pk(b, 'owner'), mint, slot, es.item, mode, change, await refreshTailOf(conn, mint, slot))];
+  }),
+  'templates/submit/prepare': one('Submit a template', ['armory'], async (b) => [hookwars.submitTemplate(pk(b, 'owner'), pk(b, 'program'), hex32(b, 'codeHash'), hex32(b, 'uriHash'))]),
+  'templates/settle/prepare': one('Settle a template submission', ['armory'], async (b, conn) => {
+    const program = pk(b, 'program');
+    const sub = await need(conn, hookwars.templateSubmissionAddress(program), (d) => hookwars.coderOf('armory').decodeAccount<{ submitter: PublicKey }>('TemplateSubmission', d), 'No submission for this program.');
+    return [hookwars.settleSubmission(pk(b, 'owner'), program, sub.submitter, b.approved === true, b.forfeit === true, b.templateId === undefined ? null : hookwars.templateAddress(int(b, 'templateId', 1, 65_535)))];
+  }),
+  // The Hook Lab report carries the register_external_template instruction: relayed for the admin,
+  // its queue entry first (`queue: true`), the instruction itself once the timelock has passed.
+  'templates/register-external/prepare': one('Register an external template', ['armory'], async (b) => {
+    const data = Buffer.from(String(b.data ?? ''), 'base64');
+    const disc = Buffer.from(hookwars.coderOf('armory').instruction('register_external_template').discriminator);
+    if (data.length <= 8 || !data.subarray(0, 8).equals(disc)) throw new PrepareError(400, 'BadRequest', '"data" must be a register_external_template instruction (base64) from the Hook Lab report.');
+    const program = pk(b, 'templateProgram'); const admin = pk(b, 'owner');
+    const hash = hookwars.adminActionHash(data, [program]);
+    if (b.queue === true) return [hookwars.queueAdmin(admin, hash)];
+    const keys = (b.keys as { pubkey: string; isSigner: boolean; isWritable: boolean }[] | undefined) ?? [];
+    if (!Array.isArray(keys) || keys.length === 0) throw new PrepareError(400, 'BadRequest', '"keys" (the report instruction\'s accounts) are required.');
+    const metas = keys.map((k) => ({ pubkey: new PublicKey(k.pubkey), isSigner: Boolean(k.isSigner), isWritable: Boolean(k.isWritable) }));
+    metas[0] = { pubkey: admin, isSigner: true, isWritable: true };
+    return [new TransactionInstruction({ programId: hookwars.ARMORY_ID, keys: metas, data })];
   }),
 };
+
+/** A gated admin instruction, or with `queue: true` its `queue_admin` (pass 4a admin queue). */
+function queued(b: Body, apply: TransactionInstruction): TransactionInstruction {
+  return b.queue === true ? hookwars.queueFor(apply) : apply;
+}
+
+/** 32 bytes as 64 hex characters. */
+function hex32(b: Body, k: string): Buffer {
+  const v = b[k];
+  if (typeof v !== 'string' || !/^[0-9a-fA-F]{64}$/.test(v)) throw new PrepareError(400, 'BadRequest', `"${k}" must be 64 hex characters.`);
+  return Buffer.from(v, 'hex');
+}

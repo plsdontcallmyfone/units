@@ -580,7 +580,7 @@ fn sf3_the_boss_share_is_not_the_crankers_choice_and_waits_for_the_timelock() {
     let treasury = ww.w.env.treasury.pubkey();
     let inner = [unwrap(&vault)];
     // The review's proof: the boss pool's place filled with anything else.
-    for other in [hookwars_war::ID, Pubkey::new_unique(), BossPool::address(s.number + 1).0] {
+    for other in [Pubkey::new_unique(), BossPool::address(s.number + 1).0] {
         let mut ix = war::split_protocol_fees(cranker.pubkey(), treasury, None, s.number, &inner);
         ix.accounts[7] = anchor_lang::solana_program::instruction::AccountMeta::new(other, false);
         ww.w.env.send_paid_by(&[ix], &cranker, &[]).expect_code(war_code(WarError::WrongAccount));

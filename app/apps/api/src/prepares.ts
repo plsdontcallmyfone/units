@@ -81,7 +81,15 @@ export const PREPARES: Record<string, PrepareDef> = {
       const state = hookwars.slotStateCodec.decode(ss.data);
       const targets = keys(b, 'targets', MAX_TARGETS);
       const role = ({ none: 0, pay: 1, receive: 2 } as Record<string, number>)[String(b.role ?? 'none')] ?? 0;
-      return [hookwars.propose(pk(b, 'owner'), mint, slot, state.nextNonce, b.item ? pk(b, 'item') : null, targets, role)];
+      const item = b.item ? pk(b, 'item') : null;
+      // Pass 4a: a Gated, Licensed or Leased item carries its access proof.
+      let proof: AccountMeta[] = [];
+      if (item) {
+        const info = await conn.getAccountInfo(item, 'confirmed');
+        const mode = info ? (hookwars.itemCodec().decode(info.data) as { accessMode?: number }).accessMode ?? 0 : 0;
+        proof = hookwars.accessProof(mode, item, mint);
+      }
+      return [hookwars.propose(pk(b, 'owner'), mint, slot, state.nextNonce, item, targets, role, undefined, proof)];
     },
   },
   'settle/prepare': {
@@ -411,7 +419,8 @@ export async function launchStages(b: Body, conn: Connection, companionLaunch = 
     const targets = (r.targets ?? []).slice(0, MAX_TARGETS).map((x) => new PublicKey(x));
     const entry = { slot: i, item, config: { targets, role: 0 }, noticeSecs: Number.isInteger(r.noticeSecs) && r.noticeSecs >= 0 ? r.noticeSecs : 0, rule: null };
     const tokenCuts = (it.manifest.tokenFlags & 64) !== 0; const poolCuts = it.manifest.poolFlags !== 0;
-    const eq = hookwars.equipLaunch(creator, mint, QUOTE, entry, { item, templateId: it.templateId, tokenCuts, poolCuts, composite: it.templateId === 41 });
+    const mode = (it as { accessMode?: number }).accessMode ?? 0;
+    const eq = hookwars.equipLaunch(creator, mint, QUOTE, entry, { item, templateId: it.templateId, tokenCuts, poolCuts, composite: it.templateId === 41 }, hookwars.accessProof(mode, item, mint));
     stages.push({ label: `Equip slot ${i}`, ixs: [step(hookwars.equipPrepared(creator, mint, eq))], extraSigners: [], simulate: false, tables: [] });
   }
   return stages;

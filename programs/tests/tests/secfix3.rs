@@ -456,8 +456,8 @@ fn lease_world() -> (Hw, Keypair, Pubkey, Pubkey, Pubkey) {
     hw.w.env.fund(treasury, SOL);
     ex::load(&mut hw.w.env, treasury);
     let owner = hw.w.env.funded(100 * SOL);
-    let mint = hw.slot_mint(&owner, ex::test_slots());
-    let other = hw.slot_mint(&owner, ex::test_slots());
+    let mint = hw.slot_mint(&owner, bordrless_program_tests::armory::test_slots());
+    let other = hw.slot_mint(&owner, bordrless_program_tests::armory::test_slots());
     let (_, incumbent, _) = hw.item(t::TRANSFER_FEE, params(&[100, 0]), 100);
     hw.equip_launch(&owner, &mint, Hw::entry(2, Some(incumbent), fee_config())).ok();
     hw.equip_launch(&owner, &other, Hw::entry(2, Some(incumbent), fee_config())).ok();

@@ -244,22 +244,25 @@ export async function planAction(action: Action, ctx: TickContext, deps: Deps, p
       return done(sell ? 'sell' : 'buy', v.instructions, memo, prepared.tables, { req, holding: hookwars.holdingAddr(mint, vault) });
     }
     case 'set_access': {
-      // R-4: `set_access` (11 section 1.1, spec 13 E-1) is deferred in the armory. The action is
-      // checked against the directive now and is built once the armory IDL carries the instruction.
+      // The armory's set_access (spec 14 section 2): signed by the agent key for the item its vault
+      // holds, with the agent suffix (the armory reads the live directive itself); not through spend.
       const k = ctx.eff.constraints;
       const r: string[] = [];
       if ((k.allowedAccessModes & (1 << action.mode)) === 0) r.push(`access mode ${action.mode} is not allowed by the directive`);
       if (action.licencePrice > k.maxLicencePrice) r.push(`licence price ${action.licencePrice} is over the directive's ${k.maxLicencePrice}`);
+      if (action.mode === hookwars.ACCESS.LEASED) r.push('Leased is set by the market\'s lease, not by set_access');
       const itemMint = new PublicKey(action.itemMint);
       if ((await deps.chain.tokenBalance(itemMint, vault)) < 1n) r.push('the agent vault does not hold this item');
+      const templateId = await deps.chain.itemTemplateId(itemMint);
+      if (templateId === null) r.push('no armory item has this mint');
       if (ctx.policy.frozen) r.push('the policy is frozen');
       if (r.length) return refuse(...r);
-      if (!hookwars.coderOf('armory').idl.instructions.some((i) => i.name === 'set_access')) return refuse('set_access is not in the armory program yet (spec 13 E-1 is deferred); the action activates when the regenerated IDL carries it');
-      let inner: TransactionInstruction;
-      try {
-        inner = hookwars.idlIx('armory', 'set_access', { holder: vault, owner: vault, item: hookwars.itemAddress(itemMint), itemMint, holding: hookwars.holdingAddr(itemMint, vault) }, { mode: action.mode, licencePrice: action.licencePrice, price: action.licencePrice });
-      } catch (e) { return refuse(`set_access could not be built from the IDL: ${(e as Error).message}`); }
-      return done('set access', [wrapSpend(inner, agent, passport, vault)], actionMemo(ctx, 'set_access', `set access mode ${action.mode} on item ${itemMint.toBase58()}, licence ${action.licencePrice} lamports`, pv));
+      const licensed = action.mode === hookwars.ACCESS.LICENSED;
+      const ix = hookwars.setAccess(agent, {
+        itemMint, templateId: templateId!, holder: vault, mode: action.mode, exclusive: action.exclusive,
+        licenceTerms: licensed ? { priceLamports: action.licencePrice, termSecs: action.termSecs, per: action.per, maxLive: action.maxLive } : null,
+      }, { agent: { passport, directive: hookwars.directiveAddress(passport, ctx.eff.seq) }, ...(licensed ? { level: { wallet: agent } } : {}) });
+      return done('set access', [ix], actionMemo(ctx, 'set_access', `set access mode ${action.mode} on item ${itemMint.toBase58()}, licence ${action.licencePrice} lamports`, pv));
     }
     case 'status': {
       const lim = memoLimit(); if (lim) return refuse(lim);

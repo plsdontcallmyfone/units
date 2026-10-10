@@ -39,7 +39,7 @@ const accounts = new Map<string, Buffer>([
   [S(hookwars.dropRuleAddress(0)), enc('craft', 'DropRule', { source: 0, materialId: 2 })],
   [S(hookwars.presetAddress(3)), enc('armory', 'Preset', { id: 3, name: 'p', templateIds: [1, 7] })],
   [S(itemA), itemData(1, itemMintA)], [S(itemB), itemData(7, itemMintB)], [S(wearItem), itemData(7, wearing, true)],
-  [S(hookwars.bookConfigAddress()), enc('book', 'BookConfig', { treasury, params: { takerBps: 0, makerBps: 0, slots: 2, matchMax: 4, createLevel: 0, orderBountyLamports: 0n, adminTimelockSecs: 0 } })],
+  [S(hookwars.bookConfigAddress()), enc('book', 'BookConfig', { treasury, params: { takerBps: 0, makerBps: 0, slots: 2, matchMax: 4, createLevel: 0, orderBountyLamports: 0n, adminTimelockSecs: 0, tickMinLamports: 1n, tickMaxLamports: 1_000_000_000n, minSizeMax: 1_000_000n, skillMinFeeLamports: 0n } })],
   [S(hookwars.bookMarketAddress(hookwars.materialMintAddress(2))), enc('book', 'BookMarket', {
     baseMint: hookwars.materialMintAddress(2), materialId: 2, tickLamports: 1n, minSize: 1n,
     asks: [order(1, maker1, 10n, 3n), order(2, K(113), 11n, 1n, 1n), order(3, maker2, 12n, 5n)],

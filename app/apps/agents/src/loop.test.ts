@@ -9,7 +9,7 @@ import { wrapSpend } from './plan.ts';
 import { emptyBook } from './policy.ts';
 import { CRANK_ROUTES } from './router.ts';
 import { memoMatches, provenanceOf, verifyProvenance } from './provenance.ts';
-import { AGENT, kit, SentSender } from './testkit.ts';
+import { AGENT, kit, OPEN_CONSTRAINTS, SentSender } from './testkit.ts';
 
 const ITEM_MINT = new PublicKey(new Uint8Array(32).fill(11));
 const TOKEN_MINT = new PublicKey(new Uint8Array(32).fill(12));
@@ -149,12 +149,23 @@ describe('agent loop with the stub model on a mocked chain', () => {
     for (const r of ['war/siege/prepare', 'war/counter-strike/prepare', 'war/raze/prepare', 'book/crank/prepare']) expect(CRANK_ROUTES).toContain(r);
   });
 
-  it('set_access is checked against the directive and refused until the armory has it (R-4)', async () => {
-    const k = kit(replay([{ actions: [{ type: 'set_access', itemMint: ITEM_MINT.toBase58(), mode: 1, licencePrice: '5' }] }]), { roles: ['market'] });
+  it('set_access is checked against the directive, then built for the armory with the agent suffix (R-4, spec 14)', async () => {
+    const act = { type: 'set_access', itemMint: ITEM_MINT.toBase58(), mode: 1, licencePrice: '5' };
+    const k = kit(replay([{ actions: [act] }]), { roles: ['market'] });
     k.chain.tokens.set(`${ITEM_MINT.toBase58()}:${k.vault.toBase58()}`, 1n);
+    k.chain.itemTemplates.set(ITEM_MINT.toBase58(), 7);
     const r = await tick(k.rt);
-    expect(r.results[0]!.ok).toBe(false);
-    expect(r.results[0]!.refusals!.join()).toMatch(/access mode 1 is not allowed|not in the armory program yet/);
+    expect(r.results[0]!.refusals!.join()).toMatch(/access mode 1 is not allowed/);
+    const k2 = kit(replay([{ actions: [act] }]), { roles: ['market'] });
+    k2.chain.postDirective(k2.passport, 0, { ...OPEN_CONSTRAINTS(), allowedAccessModes: 1 << 1, maxLicencePrice: 10n }, 'https://rules.example/scout/0.json', '{"v":1}');
+    k2.chain.tokens.set(`${ITEM_MINT.toBase58()}:${k2.vault.toBase58()}`, 1n);
+    k2.chain.itemTemplates.set(ITEM_MINT.toBase58(), 7);
+    const r2 = await tick(k2.rt);
+    expect(r2.results[0]).toMatchObject({ ok: true });
+    const ix = k2.sender.submitted[0]!.instructions[0]!;
+    expect(ix.programId.equals(hookwars.ARMORY_ID)).toBe(true);
+    const tail = ix.keys.slice(-3).map((m) => m.pubkey.toBase58());
+    expect(tail).toEqual([hookwars.AGENTS_ID.toBase58(), k2.passport.toBase58(), hookwars.directiveAddress(k2.passport, 0).toBase58()]);
   });
 
   it('refuses trades on its own or its operator tokens before asking the router to prepare', async () => {

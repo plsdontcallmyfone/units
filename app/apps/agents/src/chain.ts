@@ -29,6 +29,8 @@ export interface ChainReader {
   /** The rules document (size-capped, https from a public address only). */
   fetchRules(uri: string): Promise<Buffer>;
   itemsMinted(): Promise<bigint>;
+  /** The template id of the armory item minted at `itemMint` (null when there is none). */
+  itemTemplateId(itemMint: PublicKey): Promise<number | null>;
   /** The creator of a token and the authors of the items equipped on it. */
   mintFacts(mint: PublicKey): Promise<MintFacts | null>;
   /** Every key of the operator: its passports, their agent keys and vaults. */
@@ -116,6 +118,10 @@ export class RpcChain implements ChainReader {
     const info = await this.conn.getAccountInfo(hookwars.armoryConfigAddress(), 'confirmed');
     if (!info) throw new Error('no armory config on this cluster');
     return hookwars.armoryConfigCodec.decode(info.data).itemsMinted;
+  }
+  async itemTemplateId(itemMint: PublicKey): Promise<number | null> {
+    const info = await this.conn.getAccountInfo(hookwars.itemAddress(itemMint), 'confirmed');
+    return info ? (hookwars.itemCodec().decode(info.data) as { templateId: number }).templateId : null;
   }
   async mintFacts(mint: PublicKey): Promise<MintFacts | null> {
     const info = await this.conn.getAccountInfo(mint, 'confirmed');
