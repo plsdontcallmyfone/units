@@ -93,7 +93,7 @@ impl Rng {
     pub fn new(seed: u64) -> Self {
         Self(seed ^ 0x9E37_79B9_7F4A_7C15 | 1)
     }
-    pub fn next(&mut self) -> u64 {
+    pub fn next_u64(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x >> 12;
         x ^= x << 25;
@@ -106,7 +106,7 @@ impl Rng {
         if hi <= lo {
             return lo;
         }
-        lo + self.next() % (hi - lo + 1)
+        lo + self.next_u64() % (hi - lo + 1)
     }
 }
 

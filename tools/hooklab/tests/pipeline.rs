@@ -90,8 +90,8 @@ fn the_starter_template_passes_and_its_report_verifies() {
     let key = Keypair::new();
     let signed = report::sign(body, &key);
     assert!(report::verify(&signed, Some(&key.pubkey().to_string())).is_ok());
-    // The author is never in the report.
-    assert!(!serde_json::to_string(&signed).unwrap().contains("author"));
+    // The author is never in the report (no `author` field; `open_authoring` is a registry flag).
+    assert!(!serde_json::to_string(&signed).unwrap().contains("\"author\""));
 }
 
 #[test]
@@ -99,8 +99,9 @@ fn the_starter_template_passes_and_its_report_verifies() {
 fn an_over_cut_is_named() {
     let r = suite::run(&manifest(), &so(Some("overcut")), settings()).unwrap();
     assert!(classes(&r).contains(&"over_cut".to_string()), "{:?}", r.violations);
-    // Only at the top of the range: at cut_bps 0 the extra 100 bps stays inside the 500 bound.
-    assert!(r.violations.iter().all(|v| v.params == vec![500] || v.class != "over_cut"));
+    // Only near the top of the range: over 400 bps the extra 100 passes the 500 bound.
+    assert!(r.violations.iter().filter(|v| v.class == "over_cut").all(|v| v.params[0] > 400));
+    assert!(r.violations.iter().any(|v| v.params == vec![500]));
 }
 
 #[test]

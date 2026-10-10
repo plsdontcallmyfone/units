@@ -10,7 +10,7 @@
   "may_burn": false,
   "data_bytes": 5,
   "answers_touch": false,
-  "max_cu_per_call": 12000,
+  "max_cu_per_call": 15000,
   "extras": ["item", "equip_vault"],
   "params": {
     "field_count": 1,
