@@ -1,4 +1,6 @@
 // Changed by Hookwars: new file, helpers for the armory and items programs (M2); arsenal waves B to E schemas; security review 1 and 2: propose and finalize accounts, TEST thresholds.
+// Changed by Hookwars: protocol pass 4a (L-1): gated admin instructions go through the admin queue (queue_ix,
+// Hw::queue, Hw::send_gated); registration queues first.
 //! The armory in the LiteSVM suites: loads `hookwars_armory`, `hookwars_items`, and the test-only
 //! `launch_stub` (at the launchpad's id: signs `["armory-caller", mint]`) and `war_stub` (at the
 //! war program's id: signs `["loot-signer"]`); initializes the armory with [`TEST_PARAMS`] and
@@ -128,6 +130,54 @@ pub fn armory_ix(accounts: impl ToAccountMetas, data: impl InstructionData) -> I
     }
 }
 
+/// Protocol pass 4a (E-1, E-8): TEST access and lab numbers (none is a decision; the licence term
+/// bounds are the market suites' `TEST_LICENCE` values).
+pub const TEST_ACCESS: hookwars_armory::state::AccessParams = hookwars_armory::state::AccessParams {
+    licence_tier_1_lamports: 1_000_000_000,
+    licence_tier_1_level: 1,
+    lab_bond_lamports: 1_000_000_000,
+    lab_bond_discount_level: 1,
+    lab_bond_discount_bps: 5_000,
+    licence_min_secs: 3_600,
+    licence_max_secs: 2_592_000,
+};
+
+/// Protocol pass 4a (L-1): `queue_admin` for the gated armory instruction data `data` bound to
+/// `bound`, by `admin`; returns the instruction and the queue entry's address.
+pub fn queue_ix(admin: &Pubkey, data: &[u8], bound: &[Pubkey]) -> (Instruction, Pubkey) {
+    let hash = hookwars_armory::action_hash(data, bound);
+    let queued = hookwars_common::access::queued_address(&hash).0;
+    let ix = armory_ix(
+        hookwars_armory::accounts::QueueAdmin {
+            admin: *admin,
+            config: pda::config().0,
+            queued,
+            system_program: anchor_lang::system_program::ID,
+            event_authority: armory_events(),
+            program: ids::ARMORY_ID,
+        },
+        hookwars_armory::instruction::QueueAdmin { action_hash: hash },
+    );
+    (ix, queued)
+}
+
+/// Protocol pass 4a (L-1): the address a gated instruction's queue entry has.
+pub fn queued_for(data: &[u8], bound: &[Pubkey]) -> Pubkey {
+    hookwars_common::access::queued_address(&hookwars_armory::action_hash(data, bound)).0
+}
+
+/// Protocol pass 4a (L-1): sets the queue entry of a gated instruction built with
+/// `queued: Pubkey::default()`.
+pub fn fill_queued(ix: &mut Instruction, bound: &[Pubkey]) -> Pubkey {
+    let q = queued_for(&ix.data, bound);
+    for m in ix.accounts.iter_mut() {
+        if m.pubkey == Pubkey::default() {
+            m.pubkey = q;
+        }
+    }
+    q
+}
+
 /// `ix` (an armory instruction whose `launch_caller` is `["armory-caller", mint]`) forwarded by
 /// `launch_stub`, which signs as that PDA.
 pub fn as_launch(mint: &Pubkey, ix: Instruction) -> Instruction {
@@ -196,10 +246,45 @@ impl Hw {
     pub fn new() -> Self {
         let mut hw = Self::bare();
         hw.init().ok();
+        // Protocol pass 4a (L-1): queue every registration first, so one timelock covers them.
+        for id in 1..=9u16 {
+            let data = hookwars_armory::instruction::RegisterTemplate { args: Self::template_args(id) }.data();
+            hw.queue(&data, &[ids::ITEMS_ID]);
+        }
         for id in 1..=9u16 {
             hw.register(id).ok();
         }
         hw
+    }
+
+    /// Protocol pass 4a (L-1): queues the gated instruction `data` (bound to `bound`) with the
+    /// admin unless already queued; returns the entry.
+    pub fn queue(&mut self, data: &[u8], bound: &[Pubkey]) -> Pubkey {
+        let admin = self.admin.insecure_clone();
+        let (ix, q) = queue_ix(&admin.pubkey(), data, bound);
+        if self.w.env.account(&q).is_none() {
+            self.w.env.send_paid_by(&[ix], &admin, &[]).ok();
+        }
+        q
+    }
+
+    /// Protocol pass 4a (L-1): waits until the queue entry `q` is ready.
+    pub fn ready(&mut self, q: &Pubkey) {
+        if let Some(e) = self.w.env.try_read::<hookwars_armory::state::QueuedAction>(q) {
+            if e.ready_at > self.w.env.now {
+                let d = e.ready_at - self.w.env.now;
+                self.w.env.warp(d);
+            }
+        }
+    }
+
+    /// Protocol pass 4a (L-1): queues the gated instruction `ix` (built with `queued:
+    /// Pubkey::default()`) with the admin, waits out the timelock, and sends it signed by `signer`.
+    pub fn send_gated(&mut self, signer: &Keypair, mut ix: Instruction, bound: &[Pubkey]) -> Tx {
+        let q = fill_queued(&mut ix, bound);
+        self.queue(&ix.data, bound);
+        self.ready(&q);
+        self.w.env.send_paid_by(&[ix], signer, &[])
     }
 
     /// Loads the programs only.
@@ -283,12 +368,53 @@ impl Hw {
                 template_program: program,
                 programdata: hookwars_common::programdata_address(&program),
                 system_program: anchor_lang::system_program::ID,
+                queued: Pubkey::default(),
                 event_authority: armory_events(),
                 program: ids::ARMORY_ID,
             },
             hookwars_armory::instruction::RegisterTemplate { args },
         );
-        self.w.env.send_paid_by(&[ix], admin, &[])
+        self.send_gated(admin, ix, &[program])
+    }
+
+    /// Protocol pass 4a (L-1): [`Hw::send_gated`] for several gated instructions bound to no key,
+    /// sent in one transaction.
+    pub fn send_gated_all(&mut self, signer: &Keypair, mut ixs: Vec<Instruction>) -> Tx {
+        let mut qs = Vec::new();
+        for ix in ixs.iter_mut() {
+            let q = fill_queued(ix, &[]);
+            self.queue(&ix.data, &[]);
+            qs.push(q);
+        }
+        for q in &qs {
+            self.ready(q);
+        }
+        self.w.env.send_paid_by(&ixs, signer, &[])
+    }
+
+    /// Protocol pass 4a: `register_external_template` of `args` and `manifest` with `program`.
+    pub fn register_external(
+        &mut self,
+        admin: &Keypair,
+        program: Pubkey,
+        args: RegisterTemplateArgs,
+        manifest: hookwars_common::Manifest,
+    ) -> Tx {
+        let ix = armory_ix(
+            hookwars_armory::accounts::RegisterTemplate {
+                admin: admin.pubkey(),
+                config: pda::config().0,
+                template: pda::template(args.id).0,
+                template_program: program,
+                programdata: hookwars_common::programdata_address(&program),
+                system_program: anchor_lang::system_program::ID,
+                queued: Pubkey::default(),
+                event_authority: armory_events(),
+                program: ids::ARMORY_ID,
+            },
+            hookwars_armory::instruction::RegisterExternalTemplate { args, manifest },
+        );
+        self.send_gated(admin, ix, &[program])
     }
 
     /// Registers template `id` from the items program with the TEST schema.
@@ -420,8 +546,10 @@ impl Hw {
             let owner = pda::royalty_owner(&n).0;
             a.new_item = Some(n);
             a.new_template = Some(pda::template(i.template_id).0);
-            a.template_program = Some(ids::ITEMS_ID);
-            a.template_programdata = Some(hookwars_common::programdata_address(&ids::ITEMS_ID));
+            // Protocol pass 4a: an external template's own program.
+            let program = self.template_program_of(i.template_id);
+            a.template_program = Some(program);
+            a.template_programdata = Some(hookwars_common::programdata_address(&program));
             a.registry = Some(
                 Pubkey::find_program_address(
                     &[bordrless_hook::HOOK_ACCOUNTS_SEED, mint.as_ref(), n.as_ref()],
@@ -476,6 +604,36 @@ impl Hw {
         self.w.env.send_paid_by(&[as_launch(mint, ix)], payer, &[])
     }
 
+    /// Protocol pass 4a: the program of template `id` (the items program for a built-in one).
+    pub fn template_program_of(&self, id: u16) -> Pubkey {
+        self.w
+            .env
+            .try_read::<hookwars_armory::state::Template>(&pda::template(id).0)
+            .map(|t| t.program)
+            .unwrap_or(ids::ITEMS_ID)
+    }
+
+    /// Protocol pass 4a (E-1): `equip_launch` with the access proof suffix `[<ARMORY_ID>, proof]`.
+    pub fn equip_launch_with(&mut self, payer: &Keypair, mint: &Pubkey, entry: LaunchEquip, proof: Option<Pubkey>) -> Tx {
+        let equip = self.equip_accounts(&payer.pubkey(), mint, entry.slot, None, entry.item);
+        let mut ix = armory_ix(
+            hookwars_armory::accounts::EquipLaunch {
+                launch_caller: pda::armory_caller(mint).0,
+                config: pda::config().0,
+                slot_state: pda::slot_state(mint, entry.slot).0,
+                equip,
+                system_program: anchor_lang::system_program::ID,
+                event_authority: armory_events(),
+                program: ids::ARMORY_ID,
+            },
+            hookwars_armory::instruction::EquipLaunch { entry },
+        );
+        if let Some(p) = proof {
+            ix.accounts.extend(hookwars_common::access::proof_metas(&p));
+        }
+        self.w.env.send_paid_by(&[as_launch(mint, ix)], payer, &[])
+    }
+
     /// A launch entry.
     pub fn entry(slot: u8, item: Option<Pubkey>, config: EquipConfig) -> LaunchEquip {
         LaunchEquip {
@@ -509,9 +667,9 @@ impl Hw {
                 proposal,
                 item,
                 template,
-                template_program: item.map(|_| ids::ITEMS_ID),
+                template_program: item.map(|i| self.template_program_of(self.read_item(&i).template_id)),
                 template_programdata: item
-                    .map(|_| hookwars_common::programdata_address(&ids::ITEMS_ID)),
+                    .map(|i| hookwars_common::programdata_address(&self.template_program_of(self.read_item(&i).template_id))),
                 proposer_holding: token::holding_address(mint, &proposer.pubkey()),
                 slot_authority: pda::slot_authority(mint).0,
                 token: token_accounts(),

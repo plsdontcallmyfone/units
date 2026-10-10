@@ -60,6 +60,7 @@ fn templates_register_in_order_and_refuse_what_rule_3_forbids() {
             template_program: ids::ITEMS_ID,
             programdata: Pubkey::new_unique(),
             system_program: anchor_lang::system_program::ID,
+            queued: Pubkey::default(),
             event_authority: armory_events(),
             program: ids::ARMORY_ID,
         },
@@ -68,8 +69,7 @@ fn templates_register_in_order_and_refuse_what_rule_3_forbids() {
         },
     );
     ix.accounts[4] = AccountMeta::new_readonly(Pubkey::new_unique(), false);
-    hw.w.env
-        .send_paid_by(&[ix], &admin, &[])
+    hw.send_gated(&admin, ix, &[ids::ITEMS_ID])
         .expect_code(armory_code(E::ProgramDataMissing));
     // A protocol program, even with an allowed upgrade authority.
     hw.w.env
@@ -137,6 +137,7 @@ fn items_are_supply_one_tokens_with_their_manifest() {
             admin: admin.pubkey(),
             config: pda::config().0,
             template: pda::template(T::WALL).0,
+            queued: Pubkey::default(),
             event_authority: armory_events(),
             program: ids::ARMORY_ID,
         },
@@ -144,7 +145,7 @@ fn items_are_supply_one_tokens_with_their_manifest() {
             template_id: T::WALL,
         },
     );
-    hw.w.env.send_paid_by(&[ix], &admin, &[]).ok();
+    hw.send_gated(&admin, ix, &[]).ok();
     let (tx, _, _) = hw.create_item(&a, T::WALL, params(&[500]), 0);
     tx.expect_code(armory_code(E::TemplateClosed));
 }

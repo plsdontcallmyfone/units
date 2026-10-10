@@ -105,9 +105,13 @@ pub fn check(job: Job) -> Value {
     let passed = suite.passed();
     let register = match (passed, job.template_id, job.admin) {
         (true, Some(id), Some(admin)) => register::args(&manifest, id, code_hash)
-            .map(|args| {
-                let ix = register::instruction(admin, manifest.program().expect("checked"), args.clone());
-                register::to_json(&ix, &args)
+            .and_then(|args| {
+                // Protocol pass 4a: the external registration and its admin queue entry.
+                let program = manifest.program().expect("checked");
+                let m = register::armory_manifest(&manifest)?;
+                let ix = register::instruction(admin, program, args.clone(), m);
+                let queue = register::queue_instruction(admin, program, &ix);
+                Ok(register::to_json_queued(&ix, &args, &m, &queue))
             })
             .unwrap_or(Value::Null),
         _ => Value::Null,

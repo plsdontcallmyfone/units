@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M2); security review 1 (H-2, M-2); integration pass 3: WearAccountsMissing, NotCraftSigner, NotItemHolder.
+// Changed by Hookwars: new file (M2); security review 1 (H-2, M-2); integration pass 3: WearAccountsMissing, NotCraftSigner, NotItemHolder.; protocol pass 4a: access, queue, submission and forge errors.
 //! Errors of the armory (docs/spec/02-armory.md section 12).
 
 use anchor_lang::prelude::*;
@@ -111,4 +111,29 @@ pub enum ArmoryError {
     NotCraftSigner,
     #[msg("the signer does not hold this item")]
     NotItemHolder,
+    // Protocol pass 4a (E-1, E-8, L-1, external templates, forge of composites).
+    #[msg("this token may not equip the item under its access mode")]
+    AccessDenied,
+    #[msg("the item is exclusive and already equipped on another token")]
+    ExclusiveInUse,
+    #[msg("the template does not allow this access mode")]
+    AccessNotAllowed,
+    #[msg("licence terms out of bounds, or given for a mode that takes none")]
+    BadLicenceTerms,
+    #[msg("the item's access mode does not take this instruction")]
+    WrongAccessMode,
+    #[msg("the item's access to this token is still valid")]
+    AccessStillValid,
+    #[msg("the agent's live directive forbids this")]
+    DirectiveForbids,
+    #[msg("the wallet's level is too low for this")]
+    LevelTooLow,
+    #[msg("this admin action was not queued, or the queue entry is for another action")]
+    NotQueued,
+    #[msg("the approval is not live")]
+    ApprovalNotLive,
+    #[msg("the submission is closed or does not match")]
+    SubmissionClosed,
+    #[msg("composites forge only with the same module sequence")]
+    ModulesMismatch,
 }

@@ -564,7 +564,9 @@ pub fn put_item(env: &mut Env, item_mint: Pubkey, template_id: u16, level: u8) -
         royalty_owner_bump: 0,
         created_at: 0,
         has_wear: false,
-        reserved: [0; 31],
+        access_mode: 0,
+        exclusive: false,
+        reserved: [0; 29],
     };
     put_anchor(env, key, ids::ARMORY_ID, &it, 0);
     key

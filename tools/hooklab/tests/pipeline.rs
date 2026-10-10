@@ -134,10 +134,12 @@ fn compute_over_the_declared_bound_is_named() {
 
 #[test]
 #[ignore = "builds with cargo build-sbf"]
-fn the_armory_refuses_an_external_template_id_today() {
-    // Integration gap (README "Gaps"): register_template takes only ids in hookwars_common::shape,
-    // so the instruction a passing report carries is refused until the armory accepts external
-    // templates. This test fails when that changes, so the README gets updated with it.
+fn the_armory_registers_and_equips_the_starter_end_to_end() {
+    // Protocol pass 4a (Hook Lab gaps 1 to 4): the instruction a passing report carries applies
+    // after the admin queue; items of the starter are authored through the real armory, equipped
+    // on a token's Fee slot, cut real transfers into the equip vault, and settle_equip pays them.
+    // The pinned refusal this test replaced failed as intended once the armory changed.
+    use bordrless_program_tests::external;
     let bytes = so(None);
     let m = manifest();
     let program = m.program().unwrap();
@@ -145,12 +147,20 @@ fn the_armory_refuses_an_external_template_id_today() {
     hw.w.env.svm.add_program(program, &bytes).unwrap();
     hw.w.env.set_upgrade_authority(program, None);
     let args = register::args(&m, 1000, executable_hash(&bytes)).unwrap();
-    let ix = register::instruction(hw.admin.pubkey(), program, args);
+    let am = register::armory_manifest(&m).unwrap();
+    let ix = register::instruction(hw.admin.pubkey(), program, args, am);
+    let queue = register::queue_instruction(hw.admin.pubkey(), program, &ix);
     let admin = hw.admin.insecure_clone();
-    let tx = hw.w.env.send_paid_by(&[ix], &admin, &[]);
-    let logs = tx.logs().join("\n");
-    assert!(tx.result.is_err());
-    assert!(logs.contains("InvalidSchema"), "{logs}");
+    // Before the queue: refused.
+    let early = hw.w.env.send_paid_by(&[ix.clone()], &admin, &[]);
+    assert!(early.result.is_err());
+    hw.w.env.send_paid_by(&[queue], &admin, &[]).ok();
+    hw.w.env.warp(i64::from(bordrless_program_tests::armory::TEST_PARAMS.admin_timelock_secs));
+    hw.w.env.send_paid_by(&[ix], &admin, &[]).ok();
+    let t: hookwars_armory::state::Template = hw.w.env.read(&hookwars_common::pda::template(1000).0);
+    assert!(t.external && t.program == program && t.ext_manifest == am);
+    // The starter's declared ceiling is 500 bps and its range 5 bytes (a 6-byte slot range).
+    external::cut_flow(&mut hw, 1000, 200, 500);
 }
 
 #[test]

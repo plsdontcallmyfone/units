@@ -142,6 +142,7 @@ fn h1_fail_stale_still_fails_a_proposal_that_no_longer_fits() {
             admin: admin.pubkey(),
             config: pda::config().0,
             template: pda::template(T::WAR_ORDERS).0,
+            queued: Pubkey::default(),
             event_authority: armory_events(),
             program: ids::ARMORY_ID,
         },
@@ -149,7 +150,7 @@ fn h1_fail_stale_still_fails_a_proposal_that_no_longer_fits() {
             template_id: T::WAR_ORDERS,
         },
     );
-    hw.w.env.send_paid_by(&[ix], &admin, &[]).ok();
+    hw.send_gated(&admin, ix, &[]).ok();
     let stranger = hw.w.env.funded(1_000_000_000);
     let ix = fail_stale_ix(
         proposal,

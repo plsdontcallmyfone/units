@@ -331,12 +331,15 @@ pub fn append_pool_items(
         }
         let info = infos.get(r).ok_or(LaunchError::ItemAccountsMissing)?;
         r += 1;
+        // Changed by Hookwars (protocol pass 4a): an external template's registry is the items
+        // program's (written at the armory's equip), not its own program's.
+        let owner = if *info.owner == ITEMS_ID { ITEMS_ID } else { s.program };
         let (expected, _) = Pubkey::find_program_address(
             &[HOOK_ACCOUNTS_SEED, launch_mint.as_ref(), s.item.as_ref()],
-            &s.program,
+            &owner,
         );
         require_keys_eq!(*info.key, expected, LaunchError::StaleRegistry);
-        require_keys_eq!(*info.owner, s.program, LaunchError::StaleRegistry);
+        require_keys_eq!(*info.owner, owner, LaunchError::StaleRegistry);
         let item_list = HookAccountList::decode(&info.try_borrow_data()?)
             .ok_or(LaunchError::StaleRegistry)?;
         require!(
