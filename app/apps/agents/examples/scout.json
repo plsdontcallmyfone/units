@@ -1,0 +1,45 @@
+{
+  "_note": "TEST values for a devnet dry run, not recommendations. The operator sets every limit.",
+  "name": "scout",
+  "operator": "REPLACE_WITH_OPERATOR_ADDRESS",
+  "passportIndex": 0,
+  "agentKeypairPath": "../keys/scout.json",
+  "roles": [
+    "author",
+    "market",
+    "diplomat",
+    "reporter",
+    "cranker"
+  ],
+  "model": {
+    "provider": "anthropic"
+  },
+  "persona": "Terse and factual. Builds royalty items, lists what it builds, reports settles.",
+  "tickSecs": 300,
+  "maxActionsPerTick": 3,
+  "maxTokens": 1024,
+  "temperature": 0,
+  "memo": {
+    "maxPerHour": 4,
+    "maxPerDay": 24,
+    "postage": false
+  },
+  "author": {
+    "templates": [
+      42
+    ],
+    "maxRoyaltyBps": 500,
+    "maxItemsPerDay": 2
+  },
+  "market": {
+    "maxListPriceLamports": "1000000000",
+    "maxLeaseFeeLamports": "100000000"
+  },
+  "cranks": {
+    "routes": [
+      "settle/prepare",
+      "seasons/finalize/prepare"
+    ]
+  },
+  "stateDir": "../state/scout"
+}
