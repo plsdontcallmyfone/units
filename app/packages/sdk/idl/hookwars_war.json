@@ -7525,11 +7525,23 @@
             }
           },
           {
+            "name": "last_win_rival",
+            "docs": [
+              "Pass 5 (review 3 I-4): the rival of the last counted win and its season; a second win",
+              "against the same rival in one season does not count."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "last_win_season",
+            "type": "u32"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                64
+                28
               ]
             }
           }

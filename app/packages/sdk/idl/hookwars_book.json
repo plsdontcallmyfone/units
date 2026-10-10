@@ -203,6 +203,32 @@
           "signer": true
         },
         {
+          "name": "config",
+          "docs": [
+            "Pass 5 (I-6): read for `min_rest_secs`."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "market",
           "writable": true,
           "pda": {
@@ -1667,6 +1693,11 @@
       "code": 6018,
       "name": "BadTerms",
       "msg": "the tick or minimum size is outside the config's bounds"
+    },
+    {
+      "code": 6019,
+      "name": "RestTooShort",
+      "msg": "the order has not rested the minimum time, or would expire before it"
     }
   ],
   "types": [
@@ -1911,6 +1942,14 @@
               "A fill counts toward the Trader skill only when its fees reach this (review 3 L-1)."
             ],
             "type": "u64"
+          },
+          {
+            "name": "min_rest_secs",
+            "docs": [
+              "Pass 5 (review 3 I-6): `BOOK_MIN_REST_SECS`, the least time an order rests before its",
+              "owner may cancel it, and the least time to its expiry (owner value, 00 section 6)."
+            ],
+            "type": "u32"
           }
         ]
       }
@@ -2379,6 +2418,13 @@
             "name": "expires_at",
             "docs": [
               "0 = never."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "placed_at",
+            "docs": [
+              "Pass 5 (I-6): when the order was placed."
             ],
             "type": "i64"
           }

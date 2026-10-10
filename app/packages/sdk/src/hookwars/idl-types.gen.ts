@@ -181,7 +181,7 @@ export namespace War {
   export interface WarConfig { version: number; bump: number; prizeVaultBump: number; admin: PublicKey; protocolTreasury: PublicKey; randomnessProgram: PublicKey; treatyTemplateId: number | null; currentSeason: number; lastWinner: PublicKey | null; lastWinnerSeason: number; params: WarParams; pending: PendingConfig | null; reserved: Buffer; }
   export interface WarFunded { mint: PublicKey; amount: bigint; balance: bigint; fundedTotal: bigint; }
   export interface WarParams { adminTimelockSecs: bigint; maxCrankBountyBps: number; siegeIntervalSecs: bigint; siegeMaxSpendBps: number; siegeMaxPremiumBps: number; siegeSlippageBps: number; siegeUnitLamports: bigint; counterMaxSpendBps: number; counterMinIntervalSecs: bigint; razeMaxBpsPerInterval: number; razeIntervalSecs: bigint; bountyMaxPerClaim: bigint; minTwapSecs: bigint; raidWindowSecs: bigint; rollExpirySecs: bigint; questPeriodSecs: bigint; questRaidPoints: number; seasonSecs: bigint; challengeSecs: bigint; seasonPrizeShareBps: number; pointUnitLamports: bigint; lootMinRaidLamports: bigint; razeMaxDiscountBps: number; bountyMaxPointBps: number; raidVolumePerFunded: bigint; bossShareBps: number; contributeIntervalSecs: bigint; coalitionMinTermSecs: bigint; coalitionGraceSecs: bigint; }
-  export interface WarState { version: number; bump: number; chestBump: number; inboxBump: number; mint: PublicKey; launch: PublicKey; lastSeenBalance: bigint; fundedTotal: bigint; spentSiege: bigint; spentCounter: bigint; paidBounties: bigint; paidCranks: bigint; razedProceeds: bigint; treatySharedTotal: bigint; lastSiegeAt: bigint; lastCounterAt: bigint; lastTreatyTick: bigint; underSiegeUntil: bigint; siegeByChest: PublicKey; captured: (Captured)[]; seasonId: number; season: SeasonCounters; prevSeason: SeasonCounters; receivedOther: bigint; sentCoalition: bigint; rivalry: RivalryBudget; reserved: Buffer; }
+  export interface WarState { version: number; bump: number; chestBump: number; inboxBump: number; mint: PublicKey; launch: PublicKey; lastSeenBalance: bigint; fundedTotal: bigint; spentSiege: bigint; spentCounter: bigint; paidBounties: bigint; paidCranks: bigint; razedProceeds: bigint; treatySharedTotal: bigint; lastSiegeAt: bigint; lastCounterAt: bigint; lastTreatyTick: bigint; underSiegeUntil: bigint; siegeByChest: PublicKey; captured: (Captured)[]; seasonId: number; season: SeasonCounters; prevSeason: SeasonCounters; receivedOther: bigint; sentCoalition: bigint; rivalry: RivalryBudget; lastWinRival: PublicKey; lastWinSeason: number; reserved: Buffer; }
 }
 
 export namespace Kit {
@@ -432,7 +432,7 @@ export namespace Book {
   export interface BookConfig { version: number; bump: number; admin: PublicKey; treasury: PublicKey; params: BookParams; protocolFeesTotal: bigint; markets: number; reserved: Buffer; }
   export interface BookEscrow { bump: number; market: PublicKey; }
   export interface BookMarket { version: number; bump: number; escrowBump: number; baseMint: PublicKey; materialId: number; tickLamports: bigint; minSize: bigint; seq: bigint; bids: (Order)[]; asks: (Order)[]; createdBy: PublicKey; fills: bigint; }
-  export interface BookParams { takerBps: number; makerBps: number; slots: number; matchMax: number; createLevel: number; orderBountyLamports: bigint; adminTimelockSecs: number; tickMinLamports: bigint; tickMaxLamports: bigint; minSizeMax: bigint; skillMinFeeLamports: bigint; }
+  export interface BookParams { takerBps: number; makerBps: number; slots: number; matchMax: number; createLevel: number; orderBountyLamports: bigint; adminTimelockSecs: number; tickMinLamports: bigint; tickMaxLamports: bigint; minSizeMax: bigint; skillMinFeeLamports: bigint; minRestSecs: number; }
   export interface BookParamsProposed { readyAt: bigint; }
   export interface Cancelled { market: PublicKey; id: bigint; owner: PublicKey; ts: bigint; }
   export interface ClassBid { version: number; bump: number; bidder: PublicKey; nonce: bigint; class: ClassKey; price: bigint; makerFee: bigint; expiresAt: bigint; createdAt: bigint; }
@@ -446,7 +446,7 @@ export namespace Book {
   export interface MarketCreated { market: PublicKey; baseMint: PublicKey; tickLamports: bigint; minSize: bigint; createdBy: PublicKey; ts: bigint; }
   export interface MarketTermsProposed { market: PublicKey; tickLamports: bigint; minSize: bigint; readyAt: bigint; }
   export interface MarketTermsSet { market: PublicKey; tickLamports: bigint; minSize: bigint; ts: bigint; }
-  export interface Order { id: bigint; owner: PublicKey; price: bigint; size: bigint; quoteLocked: bigint; bounty: bigint; expiresAt: bigint; }
+  export interface Order { id: bigint; owner: PublicKey; price: bigint; size: bigint; quoteLocked: bigint; bounty: bigint; expiresAt: bigint; placedAt: bigint; }
   export interface PendingBook { bump: number; treasury: PublicKey; params: BookParams; readyAt: bigint; active: boolean; }
   export interface PendingMarketTerms { bump: number; market: PublicKey; tickLamports: bigint; minSize: bigint; readyAt: bigint; active: boolean; }
   export interface Placed { market: PublicKey; id: bigint; owner: PublicKey; side: number; price: bigint; size: bigint; resting: bigint; reference: Buffer; ts: bigint; }
