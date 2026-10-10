@@ -1,0 +1,22 @@
+{
+  "name": "@hookwars/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end tests of the units site and API with Playwright Test. Not part of `pnpm -r test`: run `pnpm -C apps/e2e test:e2e`.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build:web": "pnpm -C ../web build",
+    "test:e2e": "pnpm build:web && playwright test",
+    "test:e2e:only": "playwright test",
+    "test:e2e:devnet": "pnpm build:web && E2E_DEVNET=1 playwright test --project=devnet",
+    "report": "playwright show-report playwright-report"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.64.0",
+    "@solana/web3.js": "1.98.4",
+    "@types/node": "24.13.3",
+    "typescript": "5.9.2"
+  }
+}
