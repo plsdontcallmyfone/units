@@ -2153,17 +2153,17 @@ pub mod economy {
 pub mod eco_cpi {
     use super::economy as eco;
     use super::*;
-    use anchor_lang::solana_program::hash::hash;
     use anchor_lang::solana_program::instruction::{AccountMeta, Instruction};
     use anchor_lang::solana_program::program::invoke_signed;
 
-    /// `sha256("global:<name>")[..8]`.
-    pub fn disc(name: &str) -> [u8; 8] {
-        let h = hash(format!("global:{name}").as_bytes()).to_bytes();
-        let mut d = [0u8; 8];
-        d.copy_from_slice(&h[..8]);
-        d
-    }
+    /// `sha256("global:<name>")[..8]` of the instructions called here (pinned against the craft,
+    /// social and armory crates in `programs/tests/tests/integ3.rs`).
+    pub const INIT_WEAR_DISC: [u8; 8] = [100, 183, 143, 44, 11, 50, 116, 42];
+    pub const WEAR_DISC: [u8; 8] = [65, 0, 227, 59, 243, 27, 116, 120];
+    pub const DROP_DISC: [u8; 8] = [91, 71, 28, 206, 130, 176, 162, 145];
+    pub const RECORD_WALLET_DISC: [u8; 8] = [127, 63, 108, 135, 212, 239, 13, 184];
+    /// The armory's `mint_crafted` (11 E-5).
+    pub const MINT_CRAFTED_DISC: [u8; 8] = [121, 196, 34, 30, 90, 249, 235, 177];
 
     /// An Anchor program's event authority.
     pub fn event_authority(program: &Pubkey) -> Pubkey {
@@ -2215,8 +2215,8 @@ pub mod eco_cpi {
         Some(d[50] != 0)
     }
 
-    fn cpi<'info>(program: Pubkey, name: &str, args: Vec<u8>, metas: Vec<AccountMeta>, infos: &[AccountInfo<'info>], seeds: &[&[u8]]) -> Result<()> {
-        let mut data = disc(name).to_vec();
+    fn cpi<'info>(program: Pubkey, disc: [u8; 8], args: Vec<u8>, metas: Vec<AccountMeta>, infos: &[AccountInfo<'info>], seeds: &[&[u8]]) -> Result<()> {
+        let mut data = disc.to_vec();
         data.extend(args);
         invoke_signed(&Instruction { program_id: program, accounts: metas, data }, infos, &[seeds])?;
         Ok(())
@@ -2261,7 +2261,7 @@ pub mod eco_cpi {
         args.extend_from_slice(item.as_ref());
         args.extend(max_charges.to_le_bytes());
         let infos = [s[3].clone(), payer.clone(), s[1].clone(), s[4].clone(), s[5].clone(), s[2].clone(), s[0].clone()];
-        cpi(eco::CRAFT_ID, "init_wear", args, metas, &infos, &[eco::CRAFT_CALLER_SEED, &[bump]])
+        cpi(eco::CRAFT_ID, INIT_WEAR_DISC, args, metas, &infos, &[eco::CRAFT_CALLER_SEED, &[bump]])
     }
 
     /// `craft::wear(caller_program, runs)` when the settle suffix's wear slot holds the item's
@@ -2282,7 +2282,7 @@ pub mod eco_cpi {
         let mut args = caller_program.as_ref().to_vec();
         args.extend(runs.to_le_bytes());
         let infos = [s[3].clone(), s[1].clone(), s[4].clone(), s[2].clone(), s[0].clone()];
-        cpi(eco::CRAFT_ID, "wear", args, metas, &infos, &[eco::CRAFT_CALLER_SEED, &[bump]])
+        cpi(eco::CRAFT_ID, WEAR_DISC, args, metas, &infos, &[eco::CRAFT_CALLER_SEED, &[bump]])
     }
 
     /// Craft's drop sources (11 section 5.2).
@@ -2334,7 +2334,7 @@ pub mod eco_cpi {
             head[3].clone(), c.payer.clone(), head[1].clone(), d[0].clone(), d[1].clone(), d[2].clone(), d[3].clone(), d[4].clone(), d[5].clone(),
             c.token_program.clone(), c.token_event_authority.clone(), c.system_program.clone(), head[2].clone(), head[0].clone(),
         ];
-        cpi(eco::CRAFT_ID, "drop", args, metas, &infos, &[eco::CRAFT_CALLER_SEED, &[bump]])
+        cpi(eco::CRAFT_ID, DROP_DISC, args, metas, &infos, &[eco::CRAFT_CALLER_SEED, &[bump]])
     }
 
     /// The social suffix `[social program, skills, profile (mut), social event authority, the
@@ -2365,7 +2365,7 @@ pub mod eco_cpi {
         args.push(counter);
         args.extend(value.to_le_bytes());
         let infos = [s[4].clone(), s[1].clone(), s[2].clone(), s[3].clone(), s[0].clone()];
-        cpi(eco::SOCIAL_ID, "record_wallet", args, metas, &infos, &[eco::SOCIAL_CALLER_SEED, &[bump]])
+        cpi(eco::SOCIAL_ID, RECORD_WALLET_DISC, args, metas, &infos, &[eco::SOCIAL_CALLER_SEED, &[bump]])
     }
 
     /// Client side: the init-wear suffix metas for `caller_program` and `item`.
@@ -2389,15 +2389,5 @@ pub mod eco_cpi {
             AccountMeta::new_readonly(event_authority(&eco::SOCIAL_ID), false),
             AccountMeta::new_readonly(eco::caller_pda(eco::SOCIAL_CALLER_SEED, caller_program).0, false),
         ]
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-        #[test]
-        fn discriminators_match_the_spec() {
-            assert_eq!(disc("mint_crafted"), [121, 196, 34, 30, 90, 249, 235, 177]);
-            assert_eq!(disc("record"), crate::agents_record::RECORD_DISCRIMINATOR);
-        }
     }
 }

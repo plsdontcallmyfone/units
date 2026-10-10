@@ -360,7 +360,8 @@ fn fuse_burns_the_components_into_one_composite() {
     let it = ew.hw.read_item(&comp);
     assert_eq!(it.template_id, t::COMPOSITE);
     assert_eq!(ew.holding(&it.item_mint, &author.pubkey()), 1);
-    let c: hookwars_common::composite::CompositeItem = ew.hw.w.env.read(&hookwars_common::composite::CompositeItem::address(&comp).0);
+    let data = ew.hw.w.env.account(&hookwars_common::composite::CompositeItem::address(&comp).0).expect("composite").data;
+    let c = hookwars_common::composite::CompositeItem::decode(&data).expect("decode");
     assert_eq!(c.modules.iter().map(|m| m.template_id).collect::<Vec<_>>(), vec![t::SIDE_SKEW, t::HALF_LIFE]);
     assert_eq!(c.provenance, vec![a, b]);
     // The components are burned: one-way, nothing left to fuse again.
@@ -368,4 +369,15 @@ fn fuse_burns_the_components_into_one_composite() {
     assert_eq!(ew.holding(&b_mint, &author.pubkey()), 0);
     let (ix, _) = fuse_ix(&ew.hw, &author.pubkey(), &parts, vec![(0, 0), (0, 0)]);
     ew.send(&author, &[ix]).expect_code(armory_code(AE::NotItemHolder));
+}
+
+#[test]
+fn the_hand_built_cpis_use_the_programs_discriminators() {
+    use anchor_lang::Discriminator;
+    assert_eq!(eco_cpi::INIT_WEAR_DISC, hookwars_craft::instruction::InitWear::DISCRIMINATOR);
+    assert_eq!(eco_cpi::WEAR_DISC, hookwars_craft::instruction::Wear::DISCRIMINATOR);
+    assert_eq!(eco_cpi::DROP_DISC, hookwars_craft::instruction::Drop::DISCRIMINATOR);
+    assert_eq!(eco_cpi::RECORD_WALLET_DISC, hookwars_social::instruction::RecordWallet::DISCRIMINATOR);
+    assert_eq!(eco_cpi::MINT_CRAFTED_DISC, hookwars_armory::instruction::MintCrafted::DISCRIMINATOR);
+    assert_eq!(eco_cpi::MINT_CRAFTED_DISC, [121, 196, 34, 30, 90, 249, 235, 177]);
 }

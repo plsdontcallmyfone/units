@@ -193,8 +193,8 @@ pub mod hookwars_armory {
     }
 
     /// Registers a template (02 section 3.1).
-    pub fn register_template(
-        ctx: Context<RegisterTemplate>,
+    pub fn register_template<'info>(
+        ctx: Context<'info, RegisterTemplate<'info>>,
         args: RegisterTemplateArgs,
     ) -> Result<()> {
         process_register_template(ctx, args)
@@ -257,8 +257,8 @@ pub mod hookwars_armory {
     }
 
     /// Anyone authors an item from an open template (02 section 4.2).
-    pub fn create_item(
-        ctx: Context<CreateItem>,
+    pub fn create_item<'info>(
+        ctx: Context<'info, CreateItem<'info>>,
         template_id: u16,
         params: [u32; PARAM_FIELDS],
         royalty_bps: u16,
@@ -290,8 +290,8 @@ pub mod hookwars_armory {
     }
 
     /// The war program mints a loot item (02 section 4.3).
-    pub fn mint_loot(
-        ctx: Context<MintLoot>,
+    pub fn mint_loot<'info>(
+        ctx: Context<'info, MintLoot<'info>>,
         template_id: u16,
         params: [u32; PARAM_FIELDS],
     ) -> Result<()> {
@@ -301,7 +301,7 @@ pub mod hookwars_armory {
     /// Integration pass 3 (E-5, 11 section 5.3): craft's output. Only `["craft-signer"]` under
     /// craft may call it; the crafter receives the item (`source = CRAFTED`).
     pub fn mint_crafted<'info>(
-        ctx: Context<'_, '_, 'info, 'info, MintCrafted<'info>>,
+        ctx: Context<'info, MintCrafted<'info>>,
         crafter: Pubkey,
         template_id: u16,
         param_min: Vec<u32>,
@@ -1014,8 +1014,8 @@ pub struct Forge<'info> {
 
 // ------------------------------------------------------------------------------ handlers
 
-fn process_register_template(
-    ctx: Context<RegisterTemplate>,
+fn process_register_template<'info>(
+    ctx: Context<'info, RegisterTemplate<'info>>,
     args: RegisterTemplateArgs,
 ) -> Result<()> {
     let config = &mut ctx.accounts.config;
@@ -1166,8 +1166,8 @@ fn write_item(
     item.reserved = [0; 31];
 }
 
-fn process_create_item(
-    ctx: Context<CreateItem>,
+fn process_create_item<'info>(
+    ctx: Context<'info, CreateItem<'info>>,
     template_id: u16,
     params: [u32; PARAM_FIELDS],
     royalty_bps: u16,
@@ -1370,7 +1370,9 @@ fn process_create_composite<'info>(
                     ArmoryError::NotItemHolder
                 );
                 require!(
-                    bordrless_token::client::read_holding(holding)?.amount == 1,
+                    *holding.owner == bordrless_token::ID
+                        && holding.data_len() > 0
+                        && bordrless_token::client::read_holding(holding)?.amount == 1,
                     ArmoryError::NotItemHolder
                 );
                 let data_bytes = hookwars_common::manifest(it.template_id, &it.params, count)
@@ -1487,7 +1489,7 @@ fn process_create_composite<'info>(
 /// midpoint of the recipe's range (so a range with `min == max` gives exactly that value). The
 /// loot randomness adapter is not wired here (deviation, 13-integration-3).
 fn process_mint_crafted<'info>(
-    ctx: Context<'_, '_, 'info, 'info, MintCrafted<'info>>,
+    ctx: Context<'info, MintCrafted<'info>>,
     crafter: Pubkey,
     template_id: u16,
     param_min: Vec<u32>,
@@ -1576,7 +1578,7 @@ fn process_mint_crafted<'info>(
     Ok(())
 }
 
-fn process_mint_loot(ctx: Context<MintLoot>, template_id: u16, params: Params) -> Result<()> {
+fn process_mint_loot<'info>(ctx: Context<'info, MintLoot<'info>>, template_id: u16, params: Params) -> Result<()> {
     let a = &ctx.accounts;
     require!(a.template.loot_enabled, ArmoryError::TemplateClosed);
     let signer = a.armory_signer.to_account_info();

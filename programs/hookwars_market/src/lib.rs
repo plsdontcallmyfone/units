@@ -224,7 +224,7 @@ pub mod hookwars_market {
 
     /// Buys a listed item. The buyer pays the protocol fee, the author's resale share and the
     /// seller directly; the escrow sends the item token to the buyer.
-    pub fn buy(ctx: Context<Buy>, max_price: u64) -> Result<()> {
+    pub fn buy<'info>(ctx: Context<'info, Buy<'info>>, max_price: u64) -> Result<()> {
         let a = &ctx.accounts;
         let ts = now()?;
         let l = &a.listing;
