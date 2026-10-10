@@ -1,6 +1,6 @@
 // Changed by Hookwars: new file (hook economy, docs/spec/11-hook-economy.md sections 1.4 and 2.3); integration pass 3: Template.author_bps (E-7).
 // Security review 3 lane: buy_license reads the armory's AccessPolicy terms (11 E-1, spec 14), renewals by the payer only (M-2),
-// no escrow holder (L-4), skill floor (L-1).
+// no escrow holder (L-4), skill floor (L-1). Gating (spec 18): licences for Token-2022 mints hooked by the gate.
 //! Licences: a token pays an item's holder for the right to equip the item for a term (R45).
 //!
 //! - Terms: when the armory's `AccessPolicy` at `["access", item]` is `Licensed` with
@@ -333,7 +333,12 @@ pub fn process_buy_license(mut ctx: Context<BuyLicense>, max_price: u64, renew_o
         (t.registered_by, t.author_bps)
     };
     require_keys_eq!(a.author.key(), registered_by, MarketError::WrongRecipient);
-    require_keys_eq!(*a.token_mint.owner, bordrless_token::ID, MarketError::WrongAccount);
+    // Gating (18 section 3.5): a units token, or a Token-2022 mint whose transfer hook is the gate.
+    require!(
+        *a.token_mint.owner == bordrless_token::ID
+            || hookwars_common::t22::hooked_by(&a.token_mint, &hookwars_common::gate::GATE_ID),
+        MarketError::WrongAccount
+    );
     let lp = a.licence_config.params;
     let price = terms.price_lamports;
     // Integration pass 3 (E-7): the template's own share once the admin has set one; the licence

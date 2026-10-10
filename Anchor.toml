@@ -43,6 +43,7 @@ members = [
   "programs/hookwars_book",
   "programs/econ_caller_stub",
   "programs/ext_template",
+  "programs/hookwars_gate",
 ]
 
 # One set of program IDs on every cluster (generated 2026-10-07; the keypairs are kept off the repo,
@@ -77,6 +78,7 @@ hookwars_agents = "GUTwa3zv83CKoq3TNYL9W1bJeUSEBVxR3MkGdxiXnZJ9"
 agents_caller_stub = "5vJnBvr33jpsfYxMY2pvNf6tF9tkj8eaZ6goFtByUWA2"
 hookwars_craft = "39LXQBGqZtg591jkGnZi9BELQ9hp1ZngbAxu6K1cC29Y"
 hookwars_book = "C4k2QquxzDdgHf74tnvyyWQyGUR8xvhPo1i1gFYb639g"
+hookwars_gate = "CKMGqUdYzVyTr4myZsXo8rEMeBA5QoqdABinbZfvh8Dj"
 econ_caller_stub = "D7wam6dwQDMApuXfgtnaEi8z3BoFh6GQ8tbnvLZDr5X1"
 
 [programs.devnet]
@@ -92,6 +94,7 @@ hookwars_war = "5vJnBvr33jpsfYxMY2pvNf6tF9tkj8eaZ6goFtByUWA2"
 hookwars_market = "FikEwNXoXqRWteX4kpCT8dJ34o8hWQ8w49whhZiqS2vv"
 hookwars_craft = "39LXQBGqZtg591jkGnZi9BELQ9hp1ZngbAxu6K1cC29Y"
 hookwars_book = "C4k2QquxzDdgHf74tnvyyWQyGUR8xvhPo1i1gFYb639g"
+hookwars_gate = "CKMGqUdYzVyTr4myZsXo8rEMeBA5QoqdABinbZfvh8Dj"
 hookwars_social = "CKf4SjuiYxy4C2eSjk6oSQb2AnqC3ADoDTm8d323jWAx"
 hookwars_agents = "GUTwa3zv83CKoq3TNYL9W1bJeUSEBVxR3MkGdxiXnZJ9"
 
@@ -108,6 +111,7 @@ hookwars_war = "5vJnBvr33jpsfYxMY2pvNf6tF9tkj8eaZ6goFtByUWA2"
 hookwars_market = "FikEwNXoXqRWteX4kpCT8dJ34o8hWQ8w49whhZiqS2vv"
 hookwars_craft = "39LXQBGqZtg591jkGnZi9BELQ9hp1ZngbAxu6K1cC29Y"
 hookwars_book = "C4k2QquxzDdgHf74tnvyyWQyGUR8xvhPo1i1gFYb639g"
+hookwars_gate = "CKMGqUdYzVyTr4myZsXo8rEMeBA5QoqdABinbZfvh8Dj"
 hookwars_social = "CKf4SjuiYxy4C2eSjk6oSQb2AnqC3ADoDTm8d323jWAx"
 hookwars_agents = "GUTwa3zv83CKoq3TNYL9W1bJeUSEBVxR3MkGdxiXnZJ9"
 

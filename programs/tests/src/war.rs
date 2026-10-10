@@ -317,7 +317,8 @@ impl WarWorld {
             charges_on_create: 0,
             external: false,
             ext_manifest: Default::default(),
-            reserved: [0; 7],
+            supply_flags: 0,
+            reserved: [0; 6],
         };
         self.put_anchor(template_address(id), war_armory_stub::ID, &t, 0);
     }

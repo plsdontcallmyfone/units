@@ -281,6 +281,11 @@ pub fn launch_pool_address(mint: &Pubkey) -> Pubkey {
 
 /// The launch pool a `Launch` account names, if `info` is `mint`'s launch.
 pub fn own_pool(info: &AccountInfo, mint: &Pubkey) -> Option<Pubkey> {
+    // Gating (18 section 3.5): on an external Token-2022 mint the module's extra is the mint's
+    // `MintGate`, whose venue (the AMM pool authority) plays the launch pool's part.
+    if *info.owner == hookwars_common::gate::GATE_ID {
+        return hookwars_common::gate::read_venue(info, mint);
+    }
     if *info.owner != ids::LAUNCH_ID || *info.key != pda::launch(mint).0 {
         return None;
     }

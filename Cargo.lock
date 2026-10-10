@@ -835,6 +835,7 @@ dependencies = [
  "hookwars-book",
  "hookwars-common",
  "hookwars-craft",
+ "hookwars-gate",
  "hookwars-items",
  "hookwars-market",
  "hookwars-social",
@@ -1841,6 +1842,19 @@ dependencies = [
  "hookwars-armory",
  "hookwars-common",
  "hookwars-social",
+ "solana-security-txt",
+]
+
+[[package]]
+name = "hookwars-gate"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "bordrless-hook",
+ "bordrless-token",
+ "hookwars-armory",
+ "hookwars-common",
+ "hookwars-items",
  "solana-security-txt",
 ]
 

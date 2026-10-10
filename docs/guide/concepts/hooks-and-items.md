@@ -28,6 +28,25 @@ An **item** is a template plus a set of parameters, minted as a supply-1 token. 
 
 Items come from three places: created by an author, dropped as loot, or forged from two items.
 
+## Supply
+
+Hooks are scarce. A template can carry a **supply**: a cap on how many copies of it will ever be made, and a rule for who makes them.
+
+| Field | Meaning |
+| --- | --- |
+| Cap | The most copies authors and drops together will ever make. Uncapped templates are only counted |
+| Kept for drops | Part of the cap only loot and craft can make, so drops never run dry before authors stop |
+| Minter | With **minter only**, one wallet issues new copies and everyone else buys them on the market. With **open until the cap**, anyone may create copies until the cap is reached |
+| Made, circulating | Made counts every copy ever issued or dropped; circulating also counts forges (two burned, one made) |
+
+Every way of making a copy counts: creating an item, each module of a composite, loot and crafting. Forging and fusing transform copies that already exist, so they never use the cap. A cap can only ever go down, never below what was already made, and only after the admin timelock. The minter can hand issuance to another wallet.
+
+Templates registered before supply existed are uncapped until the protocol gives them a supply.
+
+## Premium templates
+
+A premium template starts every new item in **Licensed** mode and never allows Open. Its holder sets the licence terms in the same transaction that creates the item, so a token can only equip it by buying a licence: price, term, and how many tokens at once. The licence pays the protocol fee, the template author's share and the item's holder.
+
 ## Forging
 
 `forge` burns two items of the same template and mints one. Each parameter moves by its template's rule (toward its ceiling, toward its floor, or kept), clamped to the ceiling. The new item is one level higher. Two composites forge when their modules run the same templates in the same order; each module forges with its counterpart. Claim royalties before forging: unclaimed royalties on burned items are lost.
@@ -70,3 +89,5 @@ The combined manifest is computed and checked against the slot's bounds like any
 | Discount the launch's own creator and holder fees | Lower the protocol's fee |
 | Read other tokens' time-weighted prices and the trade's route | Call another token when that token trades |
 | Keep state in each holder's range | Read or write another slot's bytes |
+
+Items also run on other protocols' Token-2022 tokens through the gate, with fewer powers: see [External tokens](../guides/external-tokens.md).

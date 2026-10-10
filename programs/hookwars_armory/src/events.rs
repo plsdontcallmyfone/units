@@ -289,3 +289,35 @@ pub struct SubmissionSettled {
     pub ts: i64,
 }
 
+/// Gating (18 section 1.2): a template's `Supply` was created.
+#[event]
+pub struct SupplyInitialized {
+    pub template_id: u16,
+    pub max_supply: u32,
+    pub loot_reserve: u32,
+    pub minter_rule: u8,
+    pub minter: Pubkey,
+    pub ts: i64,
+}
+
+/// Gating (18 section 1.3): a template's supply counters after a create path, or its cap after
+/// `set_supply_cap`.
+#[event]
+pub struct SupplyChanged {
+    pub template_id: u16,
+    pub max_supply: u32,
+    pub loot_reserve: u32,
+    pub issued: u32,
+    pub drops: u32,
+    pub forged: u32,
+    pub burned: u32,
+}
+
+/// Gating (18 section 1.2): a template's minter rule or minter changed.
+#[event]
+pub struct MinterSet {
+    pub template_id: u16,
+    pub minter_rule: u8,
+    pub minter: Pubkey,
+    pub ts: i64,
+}

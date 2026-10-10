@@ -13,8 +13,9 @@ import { hookwars, bridge, holderVaultAddress, programDataAddress, decodeLaunch,
 import type { Pool as Db } from 'pg';
 import { EXPANSION_PREPARES } from './expansion-prepares.ts';
 import { SOCIAL_PREPARES } from './social-prepares.ts';
-import { ECONOMY_PREPARES, settleTail } from './economy-prepares.ts';
+import { ECONOMY_PREPARES, settleTail, supplyAccounts } from './economy-prepares.ts';
 import { LOOT_PREPARES } from './loot-prepares.ts';
+import { GATING_PREPARES } from './gating.ts';
 import { FIXED_ADDRESSES, LP_FEE_BPS, remainderBuy, MAX_VIRTUAL_QUOTE, MIN_VIRTUAL_QUOTE, NO_RULES, PROGRAM_IDS, TEMPLATES, type LaunchRulesInput, type PreparedTx } from '@hookwars/shared';
 
 export class PrepareError extends Error {
@@ -167,7 +168,8 @@ export const PREPARES: Record<string, PrepareDef> = {
       if (a.templateId !== c.templateId) throw new PrepareError(409, 'NotForgeable', 'Only two items of the same template can be forged.');
       if (a.equippedCount > 0 || c.equippedCount > 0) throw new PrepareError(409, 'ItemEquipped', 'Unequip both items before forging them.');
       const itemsMinted = hookwars.armoryConfigCodec.decode(cfg.data).itemsMinted;
-      return [hookwars.forge(owner, { item: pk(b, 'itemA'), itemMint: a.itemMint }, { item: pk(b, 'itemB'), itemMint: c.itemMint }, a.templateId, itemsMinted)];
+      const [supply] = await supplyAccounts(conn, [a.templateId]);
+      return [hookwars.forge(owner, { item: pk(b, 'itemA'), itemMint: a.itemMint }, { item: pk(b, 'itemB'), itemMint: c.itemMint }, a.templateId, itemsMinted, supply)];
     },
   },
   'proposals/finalize/prepare': {
@@ -274,6 +276,7 @@ Object.assign(PREPARES, SOCIAL_PREPARES);
 Object.assign(PREPARES, ECONOMY_PREPARES);
 // D-4 (17-randomness): loot rolls and reveals on Switchboard randomness.
 Object.assign(PREPARES, LOOT_PREPARES);
+Object.assign(PREPARES, GATING_PREPARES);
 
 export async function raidContext(conn: Connection, mint: PublicKey, owner: PublicKey) {
   const ctx = await hookwars.fetchWarContext(conn, mint).catch(() => null);

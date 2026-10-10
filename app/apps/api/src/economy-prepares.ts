@@ -43,9 +43,34 @@ function modules(b: Body): hookwars.ModuleInput[] {
 
 /** The economy tail every item creation may carry: the author's counter when it exists, the craft
  * wear when the template wears, the social counter when the author has a profile. */
-async function createExtras(conn: Connection, author: PublicKey, templateId: number): Promise<hookwars.CreateExtras> {
-  const [t, counter, profile] = await Promise.all([template(conn, templateId), exists(conn, hookwars.authorCounterAddress(author)), exists(conn, hookwars.profileAddress(author))]);
-  return { counter, wear: t.chargesOnCreate > 0, social: profile };
+export async function createExtras(conn: Connection, author: PublicKey, templateId: number, supplyTemplates: number[] = [templateId]): Promise<hookwars.CreateExtras> {
+  const [t, counter, profile, supplies] = await Promise.all([
+    template(conn, templateId), exists(conn, hookwars.authorCounterAddress(author)), exists(conn, hookwars.profileAddress(author)), supplyAccounts(conn, supplyTemplates),
+  ]);
+  return { counter, wear: t.chargesOnCreate > 0, social: profile, supplies };
+}
+
+/** Spec 18: the `Supply` accounts of the tracked templates among `ids` (each once). */
+export async function supplyAccounts(conn: Connection, ids: number[]): Promise<PublicKey[]> {
+  const unique = [...new Set(ids)];
+  const infos = await conn.getMultipleAccountsInfo(unique.map((id) => hookwars.templateAddress(id)), 'confirmed');
+  const out: PublicKey[] = [];
+  unique.forEach((id, i) => {
+    const info = infos[i];
+    if (!info) return;
+    const t = hookwars.templateCodec().decode(info.data) as { supplyFlags?: number };
+    if (((t.supplyFlags ?? 0) & hookwars.SUPPLY_TRACKED) !== 0) out.push(hookwars.supplyAddress(id));
+  });
+  return out;
+}
+
+/** Spec 18: refuses early when a tracked template has nothing left for `who` to issue. */
+async function checkIssuable(conn: Connection, templateId: number, who: PublicKey): Promise<void> {
+  const info = await conn.getAccountInfo(hookwars.supplyAddress(templateId), 'confirmed');
+  if (!info) return;
+  const s = hookwars.decodeSupply(info.data);
+  if (s.minterRule === hookwars.MINTER_RULE.authorOnly && !s.minter.equals(who)) throw new PrepareError(409, 'NotMinter', `Only the template's minter (${s.minter.toBase58()}) issues its items; buy one on the market instead.`);
+  if (hookwars.authorRoom(s) === 0) throw new PrepareError(409, 'SupplyExhausted', 'Every copy authors may issue of this template exists; buy one on the market instead.');
 }
 
 /** The holder of an item (a one-unit mint): the owner of its only funded holding. */
@@ -238,14 +263,18 @@ export const ECONOMY_PREPARES: Record<string, PrepareDef> = {
   // ---------------------------------------------------------------- armory items (12, 13) --
   'items/create/prepare': one('Create an item', ['armory', 'items', 'token'], async (b, conn) => {
     const owner = pk(b, 'owner'); const templateId = int(b, 'templateId', 1, 65_535);
+    await checkIssuable(conn, templateId, owner);
     const [cfg, extras] = await Promise.all([armoryConfig(conn), createExtras(conn, owner, templateId)]);
     if (extras.wear && !(await exists(conn, hookwars.craftConfigAddress()))) throw new PrepareError(409, 'NoCraft', 'This template wears, and craft has no config on this cluster yet.');
     return [hookwars.createItemEco(owner, templateId, params(b, 'params'), int(b, 'royaltyBps', 0, 10_000), cfg.itemsMinted, extras)];
   }),
   'items/composite/prepare': one('Create a composite', ['armory', 'token'], async (b, conn) => {
     const owner = pk(b, 'owner');
-    const [cfg, extras] = await Promise.all([armoryConfig(conn), createExtras(conn, owner, hookwars.COMPOSITE_TEMPLATE_ID)]);
-    return [hookwars.createComposite(owner, modules(b), int(b, 'royaltyBps', 0, 10_000), cfg.itemsMinted, extras)];
+    const mods = modules(b);
+    for (const id of new Set(mods.map((m) => m.templateId))) await checkIssuable(conn, id, owner);
+    const ids = [hookwars.COMPOSITE_TEMPLATE_ID, ...mods.map((m) => m.templateId)];
+    const [cfg, extras] = await Promise.all([armoryConfig(conn), createExtras(conn, owner, hookwars.COMPOSITE_TEMPLATE_ID, ids)]);
+    return [hookwars.createComposite(owner, mods, int(b, 'royaltyBps', 0, 10_000), cfg.itemsMinted, extras)];
   }),
   'items/fuse/prepare': one('Fuse items', ['armory', 'token'], async (b, conn) => {
     const owner = pk(b, 'owner');
@@ -259,7 +288,7 @@ export const ECONOMY_PREPARES: Record<string, PrepareDef> = {
       if (it.equippedCount > 0) throw new PrepareError(409, 'ItemEquipped', 'An equipped item cannot be fused; it must be unequipped first.');
       components.push({ item: hookwars.itemAddress(itemMint), itemMint, templateId: it.templateId, start: int(c, 'start', 0, 255), count: int(c, 'count', 0, 255) });
     }
-    const [cfg, extras] = await Promise.all([armoryConfig(conn), createExtras(conn, owner, hookwars.COMPOSITE_TEMPLATE_ID)]);
+    const [cfg, extras] = await Promise.all([armoryConfig(conn), createExtras(conn, owner, hookwars.COMPOSITE_TEMPLATE_ID, [])]);
     return [hookwars.fuse(owner, components, int(b, 'royaltyBps', 0, 10_000), cfg.itemsMinted, extras)];
   }),
   'presets/mint/prepare': one('Mint a preset composite', ['armory', 'token'], async (b, conn) => {
@@ -267,7 +296,9 @@ export const ECONOMY_PREPARES: Record<string, PrepareDef> = {
     const preset = await need(conn, hookwars.presetAddress(presetId), (d) => hookwars.presetCodec.decode(d), 'No such preset.');
     const mods = modules(b);
     if (mods.length !== preset.templateIds.length || mods.some((m, i) => m.templateId !== preset.templateIds[i])) throw new PrepareError(400, 'BadRequest', `The modules must be the preset's templates in its order: ${preset.templateIds.join(', ')}.`);
-    const [cfg, extras] = await Promise.all([armoryConfig(conn), createExtras(conn, owner, hookwars.COMPOSITE_TEMPLATE_ID)]);
+    for (const id of new Set(mods.map((m) => m.templateId))) await checkIssuable(conn, id, owner);
+    const ids = [hookwars.COMPOSITE_TEMPLATE_ID, ...mods.map((m) => m.templateId)];
+    const [cfg, extras] = await Promise.all([armoryConfig(conn), createExtras(conn, owner, hookwars.COMPOSITE_TEMPLATE_ID, ids)]);
     return [hookwars.mintComposite(owner, presetId, mods, int(b, 'royaltyBps', 0, 10_000), cfg.itemsMinted, extras)];
   }),
   'counters/init/prepare': one('Open author and claim counters', ['armory'], async (b) => [hookwars.initCounters(pk(b, 'owner'), b.wallet === undefined ? pk(b, 'owner') : pk(b, 'wallet'))]),
@@ -294,10 +325,10 @@ export const ECONOMY_PREPARES: Record<string, PrepareDef> = {
     const recipe = await need(conn, hookwars.recipeAddress(recipeId), (d) => hookwars.recipeCodec.decode(d), 'No such recipe.');
     if (recipe.terms.kind !== 0) throw new PrepareError(409, 'NotACraft', 'This recipe repairs; it makes nothing.');
     if (!recipe.terms.active) throw new PrepareError(409, 'Inactive', 'This recipe is not active.');
-    const [cfg, armory, t] = await Promise.all([craftConfig(conn), armoryConfig(conn), template(conn, recipe.terms.templateId)]);
+    const [cfg, armory, t, supplies] = await Promise.all([craftConfig(conn), armoryConfig(conn), template(conn, recipe.terms.templateId), supplyAccounts(conn, [recipe.terms.templateId])]);
     return [hookwars.craftItem(owner, {
       recipeId, templateId: recipe.terms.templateId, materialIds: recipe.terms.inputs.map((x) => x.materialId), treasury: cfg.treasury, seasonPool: cfg.seasonPool,
-      itemsMinted: armory.itemsMinted, wear: t.chargesOnCreate > 0, reference: ref(b),
+      itemsMinted: armory.itemsMinted, wear: t.chargesOnCreate > 0, reference: ref(b), supply: supplies[0],
     })];
   }),
   'craft/repair/prepare': one('Repair', ['craft', 'social', 'token'], async (b, conn) => {

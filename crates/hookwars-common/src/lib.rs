@@ -9,6 +9,10 @@
 
 use anchor_lang::prelude::*;
 
+// Gating (docs/spec/18-gating.md part C).
+pub mod gate;
+pub mod t22;
+
 /// Parameter fields per item (`PARAM_FIELDS`, 00 section 6): the War orders template uses 11.
 pub const PARAM_FIELDS: usize = 11;
 /// An item's parameters.

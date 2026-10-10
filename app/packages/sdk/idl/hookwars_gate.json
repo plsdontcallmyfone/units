@@ -1,0 +1,1568 @@
+{
+  "address": "CKMGqUdYzVyTr4myZsXo8rEMeBA5QoqdABinbZfvh8Dj",
+  "metadata": {
+    "name": "hookwars_gate",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Hookwars (units): the external gate. Any Token-2022 mint whose transfer hook is this program runs units items (refusals, holder stamps, reads; never cuts) while it holds a live licence or owns the item (docs/spec/18-gating.md part C)."
+  },
+  "instructions": [
+    {
+      "name": "accept_admin",
+      "discriminator": [
+        112,
+        42,
+        45,
+        90,
+        116,
+        181,
+        13,
+        170
+      ],
+      "accounts": [
+        {
+          "name": "new_admin",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "bind",
+      "docs": [
+        "The mint's gate authority binds an item to a slot. Remaining accounts: the items program's",
+        "further accounts for the item (the composite's module list first, then each module's",
+        "extras, then the item's `Wear` when it wears), stored and resolved on every transfer."
+      ],
+      "discriminator": [
+        178,
+        57,
+        187,
+        254,
+        138,
+        43,
+        99,
+        134
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "mint_gate"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint_gate",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint_gate.mint",
+                "account": "MintGate"
+              }
+            ]
+          }
+        },
+        {
+          "name": "extra_metas",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  116,
+                  114,
+                  97,
+                  45,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint_gate.mint",
+                "account": "MintGate"
+              }
+            ]
+          }
+        },
+        {
+          "name": "item"
+        },
+        {
+          "name": "proof"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "slot",
+          "type": "u8"
+        },
+        {
+          "name": "binding_kind",
+          "type": "u8"
+        },
+        {
+          "name": "targets",
+          "type": {
+            "vec": "pubkey"
+          }
+        },
+        {
+          "name": "role",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "execute",
+      "docs": [
+        "The SPL transfer-hook interface's `Execute`, called by Token-2022 during a transfer.",
+        "Accounts: source, mint, destination, owner, the extra-account-metas list, then the metas."
+      ],
+      "discriminator": [
+        105,
+        37,
+        101,
+        197,
+        75,
+        251,
+        102,
+        26
+      ],
+      "accounts": [
+        {
+          "name": "source"
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "destination"
+        },
+        {
+          "name": "owner"
+        },
+        {
+          "name": "extra_metas"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "init_config",
+      "docs": [
+        "The upgrade authority opens the config once."
+      ],
+      "discriminator": [
+        23,
+        235,
+        115,
+        232,
+        168,
+        96,
+        1,
+        231
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program_data"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "admin",
+          "type": "pubkey"
+        },
+        {
+          "name": "require_holder_state_default",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "open_holder",
+      "docs": [
+        "Anyone opens a wallet's holder memory for a registered mint (the payer pays rent)."
+      ],
+      "discriminator": [
+        138,
+        210,
+        211,
+        159,
+        140,
+        172,
+        28,
+        65
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint_gate",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint_gate.mint",
+                "account": "MintGate"
+              }
+            ]
+          }
+        },
+        {
+          "name": "holder",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  104,
+                  111,
+                  108,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint_gate.mint",
+                "account": "MintGate"
+              },
+              {
+                "kind": "arg",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "owner",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "propose_admin",
+      "docs": [
+        "The admin proposes a successor; it accepts."
+      ],
+      "discriminator": [
+        121,
+        214,
+        199,
+        212,
+        87,
+        39,
+        117,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "admin",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "register_mint",
+      "docs": [
+        "A Token-2022 mint whose transfer hook is this program registers, signed by its",
+        "transfer-hook authority. `strict = None` takes the config's default."
+      ],
+      "discriminator": [
+        242,
+        43,
+        74,
+        162,
+        217,
+        214,
+        191,
+        171
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "The mint's transfer-hook authority."
+          ],
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "mint_gate",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "extra_metas",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "venue",
+          "type": "pubkey"
+        },
+        {
+          "name": "strict",
+          "type": {
+            "option": "bool"
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_config",
+      "docs": [
+        "The admin pauses or resumes registrations and binds, and sets the default `strict`.",
+        "Transfers are never blocked by the pause."
+      ],
+      "discriminator": [
+        108,
+        158,
+        154,
+        175,
+        212,
+        98,
+        52,
+        66
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": "bool"
+        },
+        {
+          "name": "require_holder_state_default",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "set_gate_authority",
+      "docs": [
+        "The mint's gate authority hands the gate to another wallet."
+      ],
+      "discriminator": [
+        183,
+        5,
+        42,
+        140,
+        101,
+        46,
+        152,
+        74
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "mint_gate"
+          ]
+        },
+        {
+          "name": "mint_gate",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint_gate.mint",
+                "account": "MintGate"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "authority",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_venue",
+      "docs": [
+        "The mint's gate authority sets the venue and `strict`."
+      ],
+      "discriminator": [
+        40,
+        70,
+        231,
+        44,
+        173,
+        112,
+        247,
+        25
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "mint_gate"
+          ]
+        },
+        {
+          "name": "mint_gate",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint_gate.mint",
+                "account": "MintGate"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "venue",
+          "type": "pubkey"
+        },
+        {
+          "name": "strict",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "unbind",
+      "docs": [
+        "Frees a slot: the mint's gate authority at any time, anyone once the binding's proof",
+        "lapsed (so a lapsed binding never keeps its accounts in every transfer)."
+      ],
+      "discriminator": [
+        241,
+        156,
+        8,
+        144,
+        82,
+        203,
+        1,
+        201
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "docs": [
+            "The mint's gate authority, or anyone once the binding lapsed (pays any rent difference)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint_gate",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint_gate.mint",
+                "account": "MintGate"
+              }
+            ]
+          }
+        },
+        {
+          "name": "extra_metas",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  116,
+                  114,
+                  97,
+                  45,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint_gate.mint",
+                "account": "MintGate"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proof"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "slot",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "withdraw_item",
+      "docs": [
+        "The mint's gate authority takes an item out of the gate's vault (only while unbound). The",
+        "vault is the owner of the item holding the owned binding kind proves."
+      ],
+      "discriminator": [
+        2,
+        124,
+        40,
+        69,
+        19,
+        218,
+        135,
+        173
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "mint_gate"
+          ]
+        },
+        {
+          "name": "mint_gate",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint_gate.mint",
+                "account": "MintGate"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault"
+        },
+        {
+          "name": "item_mint"
+        },
+        {
+          "name": "vault_holding",
+          "writable": true
+        },
+        {
+          "name": "destination",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+        },
+        {
+          "name": "token_event_authority",
+          "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "GateConfig",
+      "discriminator": [
+        161,
+        200,
+        10,
+        61,
+        185,
+        120,
+        92,
+        21
+      ]
+    },
+    {
+      "name": "HolderState",
+      "discriminator": [
+        222,
+        82,
+        176,
+        75,
+        3,
+        75,
+        155,
+        184
+      ]
+    },
+    {
+      "name": "MintGate",
+      "discriminator": [
+        155,
+        24,
+        147,
+        223,
+        89,
+        73,
+        35,
+        36
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "GateAuthoritySet",
+      "discriminator": [
+        34,
+        251,
+        146,
+        83,
+        244,
+        167,
+        95,
+        67
+      ]
+    },
+    {
+      "name": "GateConfigSet",
+      "discriminator": [
+        3,
+        114,
+        22,
+        11,
+        51,
+        103,
+        107,
+        245
+      ]
+    },
+    {
+      "name": "ItemBound",
+      "discriminator": [
+        249,
+        27,
+        120,
+        47,
+        131,
+        115,
+        162,
+        29
+      ]
+    },
+    {
+      "name": "ItemUnbound",
+      "discriminator": [
+        55,
+        111,
+        235,
+        233,
+        149,
+        9,
+        150,
+        201
+      ]
+    },
+    {
+      "name": "ItemWithdrawn",
+      "discriminator": [
+        251,
+        56,
+        147,
+        255,
+        87,
+        66,
+        207,
+        47
+      ]
+    },
+    {
+      "name": "MintRegistered",
+      "discriminator": [
+        91,
+        135,
+        88,
+        182,
+        239,
+        182,
+        5,
+        85
+      ]
+    },
+    {
+      "name": "VenueSet",
+      "discriminator": [
+        8,
+        118,
+        132,
+        131,
+        255,
+        165,
+        181,
+        202
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "NotUpgradeAuthority",
+      "msg": "the signer is not this program's upgrade authority"
+    },
+    {
+      "code": 6001,
+      "name": "NotAdmin",
+      "msg": "only the gate admin may do this"
+    },
+    {
+      "code": 6002,
+      "name": "Paused",
+      "msg": "the gate is paused for new registrations and binds"
+    },
+    {
+      "code": 6003,
+      "name": "NotHooked",
+      "msg": "the mint is not a Token-2022 mint whose transfer hook is this program"
+    },
+    {
+      "code": 6004,
+      "name": "NotHookAuthority",
+      "msg": "the signer is not the mint's transfer-hook authority"
+    },
+    {
+      "code": 6005,
+      "name": "NotGateAuthority",
+      "msg": "only the mint's gate authority may do this"
+    },
+    {
+      "code": 6006,
+      "name": "WrongAccount",
+      "msg": "a wrong account"
+    },
+    {
+      "code": 6007,
+      "name": "BadSlot",
+      "msg": "the slot is taken or out of range"
+    },
+    {
+      "code": 6008,
+      "name": "ItemNotGateable",
+      "msg": "this item cannot run on an external token"
+    },
+    {
+      "code": 6009,
+      "name": "ProofNotLive",
+      "msg": "the proof is not live"
+    },
+    {
+      "code": 6010,
+      "name": "NoRoom",
+      "msg": "the binding's holder memory does not fit"
+    },
+    {
+      "code": 6011,
+      "name": "TooManyAccounts",
+      "msg": "too many accounts for one transfer"
+    },
+    {
+      "code": 6012,
+      "name": "NotTransferring",
+      "msg": "the transfer is not a Token-2022 transfer of this mint"
+    },
+    {
+      "code": 6013,
+      "name": "HolderStateMissing",
+      "msg": "a wallet in this transfer has no holder state and the mint is strict"
+    },
+    {
+      "code": 6014,
+      "name": "StillLive",
+      "msg": "the binding is still live"
+    },
+    {
+      "code": 6015,
+      "name": "ItemBound",
+      "msg": "the item is bound"
+    },
+    {
+      "code": 6016,
+      "name": "Overflow",
+      "msg": "arithmetic overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "Binding",
+      "docs": [
+        "One bound item."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "item_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "proof",
+            "docs": [
+              "The `License` (licence kind) or the vault's holding of the item mint (owned kind)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "role",
+            "type": "u8"
+          },
+          {
+            "name": "targets",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "data_offset",
+            "docs": [
+              "The binding's range of holder memory."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "data_bytes",
+            "type": "u8"
+          },
+          {
+            "name": "generation",
+            "docs": [
+              "Holder bytes written under another generation read as zeros."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "extras",
+            "docs": [
+              "The items program's further accounts: the composite's module list, module extras, `Wear`."
+            ],
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "bound_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GateAuthoritySet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GateConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_admin",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "paused",
+            "docs": [
+              "Stops new registrations and binds (never blocks transfers)."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "require_holder_state_default",
+            "docs": [
+              "The default `strict` for new registrations."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "mints",
+            "type": "u64"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "GateConfigSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "require_holder_state_default",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HolderState",
+      "docs": [
+        "`[\"gate-holder\", mint, owner]`: one wallet's holder memory for one mint."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "data",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "generations",
+            "docs": [
+              "Per slot, the binding generation the slot's range was last written under."
+            ],
+            "type": {
+              "array": [
+                "u32",
+                4
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ItemBound",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "proof",
+            "type": "pubkey"
+          },
+          {
+            "name": "generation",
+            "type": "u32"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ItemUnbound",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "lapsed",
+            "type": "bool"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ItemWithdrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "item_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "to",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MintGate",
+      "docs": [
+        "`[\"gate-mint\", mint]`. The first fields' offsets are fixed (`hookwars_common::gate`): the items",
+        "program reads `venue` from them."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "docs": [
+              "Binds, unbinds, sets the venue (the mint's transfer-hook authority at registration)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "venue",
+            "docs": [
+              "The AMM pool authority whose transfers count as buys and sells (default = none)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "strict",
+            "docs": [
+              "Refuse transfers to or from wallets without a `HolderState` while a binding keeps memory."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "generation",
+            "docs": [
+              "Counts binds; each binding keeps the value it was bound under."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "bindings",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "Binding"
+                }
+              }
+            }
+          },
+          {
+            "name": "registered_at",
+            "type": "i64"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "MintRegistered",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "venue",
+            "type": "pubkey"
+          },
+          {
+            "name": "strict",
+            "type": "bool"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VenueSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "venue",
+            "type": "pubkey"
+          },
+          {
+            "name": "strict",
+            "type": "bool"
+          }
+        ]
+      }
+    }
+  ]
+}

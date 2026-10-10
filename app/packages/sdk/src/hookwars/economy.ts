@@ -88,7 +88,14 @@ export function suffixes(s: Suffixes): AccountMeta[] {
 
 /** What item creation may append: the author's `AuthorCounter` (only when it exists), the
  * init-wear suffix (when the template wears), the social and agents suffixes. */
-export interface CreateExtras { counter?: boolean; wear?: boolean; social?: boolean; record?: { passport: PublicKey; actor: PublicKey } }
+/** `supplies`: the `Supply` accounts of the tracked templates the call makes copies of (spec 18:
+ * the leading remaining accounts; a tracked template's is required). */
+export interface CreateExtras { counter?: boolean; wear?: boolean; social?: boolean; record?: { passport: PublicKey; actor: PublicKey }; supplies?: PublicKey[] }
+
+/** The leading `Supply` metas (spec 18 section 1.3). */
+export function supplyMetas(x: { supplies?: PublicKey[] } = {}): AccountMeta[] {
+  return (x.supplies ?? []).map((k) => rw(k));
+}
 
 function createTail(author: PublicKey, item: PublicKey, x: CreateExtras): AccountMeta[] {
   return [
@@ -105,7 +112,7 @@ export function createItemEco(author: PublicKey, templateId: number, params: num
   const item = itemAddress(itemMint);
   return idlIx('armory', 'create_item', {
     author, template: templateAddress(templateId), itemMint, item, recipientHolding: holdingAddr(itemMint, recipient),
-  }, { templateId, params, royaltyBps }, createTail(author, item, extras));
+  }, { templateId, params, royaltyBps }, [...supplyMetas(extras), ...createTail(author, item, extras)]);
 }
 
 /** The composite template id (`hookwars_common::template_id::COMPOSITE`). */
@@ -122,7 +129,7 @@ function compositeAccounts(author: PublicKey, itemsMinted: bigint) {
 /** `create_composite(modules, royalty_bps)`: remaining = each module's template, then the tail. */
 export function createComposite(author: PublicKey, modules: ModuleInput[], royaltyBps: number, itemsMinted: bigint, extras: CreateExtras = {}): TransactionInstruction {
   const { item, accounts } = compositeAccounts(author, itemsMinted);
-  return idlIx('armory', 'create_composite', accounts, { modules, royaltyBps }, [...modules.map((m) => ro(templateAddress(m.templateId))), ...createTail(author, item, extras)]);
+  return idlIx('armory', 'create_composite', accounts, { modules, royaltyBps }, [...supplyMetas(extras), ...modules.map((m) => ro(templateAddress(m.templateId))), ...createTail(author, item, extras)]);
 }
 
 /** One component of a `fuse`: an item the author holds, its template and its target range. */
@@ -134,6 +141,7 @@ export interface FuseComponent { item: PublicKey; itemMint: PublicKey; templateI
 export function fuse(author: PublicKey, components: FuseComponent[], royaltyBps: number, itemsMinted: bigint, extras: CreateExtras = {}): TransactionInstruction {
   const { item, accounts } = compositeAccounts(author, itemsMinted);
   return idlIx('armory', 'fuse', accounts, { targets: components.map((c) => ({ start: c.start, count: c.count })), royaltyBps }, [
+    ...supplyMetas(extras),
     ...components.map((c) => ro(templateAddress(c.templateId))),
     ...components.flatMap((c) => [ro(c.item), rw(c.itemMint), rw(holdingAddr(c.itemMint, author))]),
     ...createTail(author, item, extras),
@@ -150,7 +158,7 @@ export function registerPreset(admin: PublicKey, id: number, templateIds: number
 export function mintComposite(author: PublicKey, presetId: number, modules: ModuleInput[], royaltyBps: number, itemsMinted: bigint, extras: CreateExtras = {}): TransactionInstruction {
   const { item, accounts } = compositeAccounts(author, itemsMinted);
   return idlIx('armory', 'mint_composite', accounts, { presetId, modules, royaltyBps }, [
-    ro(presetAddress(presetId)), ...modules.map((m) => ro(templateAddress(m.templateId))), ...createTail(author, item, extras),
+    ...supplyMetas(extras), ro(presetAddress(presetId)), ...modules.map((m) => ro(templateAddress(m.templateId))), ...createTail(author, item, extras),
   ]);
 }
 
@@ -276,14 +284,15 @@ export function recipeInputMetas(owner: PublicKey, materialIds: number[]): Accou
  * make the item. Remaining: the inputs, then `mint_crafted`'s accounts after the craft signer (and
  * the init-wear suffix when the template wears). `itemsMinted` is `ArmoryConfig.items_minted` now.
  */
-export function craftItem(crafter: PublicKey, o: { recipeId: number; templateId: number; materialIds: number[]; treasury: PublicKey; seasonPool: PublicKey; itemsMinted: bigint; wear: boolean; reference?: Uint8Array }): TransactionInstruction {
+export function craftItem(crafter: PublicKey, o: { recipeId: number; templateId: number; materialIds: number[]; treasury: PublicKey; seasonPool: PublicKey; itemsMinted: bigint; wear: boolean; reference?: Uint8Array; supply?: PublicKey }): TransactionInstruction {
   const itemMint = itemMintAddress(o.itemsMinted);
   const item = itemAddress(itemMint);
   const mintCrafted = coderOf('armory').metas('mint_crafted', {
     craftSigner: PublicKey.findProgramAddressSync([Buffer.from('craft-signer')], CRAFT_ID)[0], payer: crafter, owner: crafter,
     template: templateAddress(o.templateId), itemMint, item, recipientHolding: holdingAddr(itemMint, crafter),
   }, { templateId: o.templateId });
-  const output = [...mintCrafted.slice(1).map((k) => ({ ...k, isSigner: k.pubkey.equals(crafter) })), ...(o.wear ? initWearSuffix(ARMORY_ID, item) : [])];
+  // Spec 18: a tracked template's `Supply` leads `mint_crafted`'s remaining accounts.
+  const output = [...mintCrafted.slice(1).map((k) => ({ ...k, isSigner: k.pubkey.equals(crafter) })), ...(o.supply ? [rw(o.supply)] : []), ...(o.wear ? initWearSuffix(ARMORY_ID, item) : [])];
   return idlIx('craft', 'craft', {
     crafter, recipe: recipeAddress(o.recipeId), treasury: o.treasury, seasonPool: o.seasonPool, outputProgram: ARMORY_ID, ...socialAccounts(CRAFT_ID, crafter), ...tok,
   }, { recipeId: o.recipeId, reference: Buffer.from(o.reference ?? new Uint8Array(32)) }, [...recipeInputMetas(crafter, o.materialIds), ...output]);

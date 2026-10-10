@@ -127,13 +127,14 @@ export function claimRoyalty(claimant: PublicKey, item: PublicKey, itemMint: Pub
 
 /** `forge`: burns two unequipped items of one template and mints one (02 9.1). Settle and claim
  * both items' royalties first (02 section 10). `itemsMinted` is `ArmoryConfig.items_minted` now. */
-export function forge(forger: PublicKey, a: { item: PublicKey; itemMint: PublicKey }, b: { item: PublicKey; itemMint: PublicKey }, templateId: number, itemsMinted: bigint): TransactionInstruction {
+export function forge(forger: PublicKey, a: { item: PublicKey; itemMint: PublicKey }, b: { item: PublicKey; itemMint: PublicKey }, templateId: number, itemsMinted: bigint, supply?: PublicKey): TransactionInstruction {
   const itemMint = itemMintAddress(itemsMinted);
+  // Spec 18: a tracked template's `Supply` leads the remaining accounts.
   return idlIx('armory', 'forge', {
     forger, forgeCounter: forgeCounterAddress(forger), itemA: a.item, itemB: b.item, mintA: a.itemMint, mintB: b.itemMint,
     holdingA: holdingAddr(a.itemMint, forger), holdingB: holdingAddr(b.itemMint, forger), template: templateAddress(templateId),
     itemMint, item: itemAddress(itemMint), recipientHolding: holdingAddr(itemMint, forger),
-  });
+  }, {}, supply ? [{ pubkey: supply, isSigner: false, isWritable: true }] : []);
 }
 
 // ---------------------------------------------------------------- war (IDL) --
