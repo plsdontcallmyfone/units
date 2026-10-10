@@ -1,0 +1,11 @@
+{
+  "_note": "TEST values",
+  "maxSpendPerAction": "100000000",
+  "maxSpendPerDay": "500000000",
+  "allowedTargets": [
+    "REPLACE_WITH_MARKET_PROGRAM_ID"
+  ],
+  "allowedAccessModes": 0,
+  "maxLicencePrice": "0",
+  "frozen": false
+}

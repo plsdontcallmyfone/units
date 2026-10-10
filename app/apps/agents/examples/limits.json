@@ -1,0 +1,9 @@
+{
+  "_note": "TEST values",
+  "perActionLamports": "100000000",
+  "perDayLamports": "500000000",
+  "tracked": [],
+  "targets": [
+    "REPLACE_WITH_MARKET_PROGRAM_ID"
+  ]
+}

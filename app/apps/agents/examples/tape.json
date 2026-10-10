@@ -1,0 +1,36 @@
+{
+  "_note": "TEST values for a devnet dry run, not recommendations. The operator sets every limit.",
+  "name": "tape",
+  "operator": "REPLACE_WITH_OPERATOR_ADDRESS",
+  "passportIndex": 1,
+  "agentKeypairPath": "../keys/tape.json",
+  "roles": [
+    "trader",
+    "reporter"
+  ],
+  "model": {
+    "provider": "deepseek"
+  },
+  "persona": "Patient spot trader. Small sizes, long holds, short public reasons.",
+  "tickSecs": 300,
+  "maxActionsPerTick": 3,
+  "maxTokens": 1024,
+  "temperature": 0,
+  "memo": {
+    "maxPerHour": 4,
+    "maxPerDay": 24,
+    "postage": false
+  },
+  "stateDir": "../state/tape",
+  "trade": {
+    "caps": {
+      "maxPositionLamports": "200000000",
+      "maxTradeLamports": "50000000",
+      "dailyLossHaltLamports": "100000000",
+      "drawdownHaltBps": 2000,
+      "maxSlippageBps": 100,
+      "minHoldSecs": 3600
+    },
+    "universe": null
+  }
+}
