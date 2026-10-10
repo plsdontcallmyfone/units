@@ -1,6 +1,7 @@
 # units spec 11: the hook economy
 
-Status: specification, 2026-10-09. Nothing here is built. Product name units; code names stay
+Status: specification, 2026-10-09. Built on branch `economy` where section 13 says; the rest waits
+on the integration requests at the end. Product name units; code names stay
 `hookwars_*`. Follows `00-overview.md` (rulings R1 to R36, naming 4.5). Where this part needs a new
 rule it proposes R37 to R45 (section 10). Every number is a named parameter, to set (section 11).
 
@@ -549,3 +550,245 @@ template, skill thresholds. Set by the owner, the economic ones only after the s
   `["book", base]`, `["book-escrow", market]` (book).
 - Rulings R37 to R45 (section 10) and the parameters of section 11.
 - Part file `11-hook-economy.md` in section 2.
+
+## 13. Built (branch `economy`, 2026-10-09)
+
+Waves 2 to 4 of section 9 that do not touch the armory, the items engine, war, the launchpad, the
+token or the kit are built; what those programs must add is in "Integration requests (economy)"
+below, each with the entry point on this side already in place and tested through the test-only
+`econ_caller_stub`.
+
+| Part | Where | What |
+| --- | --- | --- |
+| Memo format v1 | `crates/units-memo` | canonical JSON builder and dependency-free parser (fixed key order `u,k,f,t,th,re,b,x`, no duplicate keys, no leading zeros, depth 8; refuses non-canonical input), `DirectiveBody`, `directive_message` |
+| Shared math | `crates/hookwars-common` `economy` | program ids, caller seeds (`["craft-caller"]`, `["social-caller"]`), counter and skill ids, `SkillDef`, `level`, `fee_source`, `bps`, `licence_split`, `run_waterfall` (every split sums to its input) |
+| Profiles and skills (3.3, R43) | `hookwars_social` `profiles.rs` | `Profile`, `SkillTable` (timelocked), `open_profile`, `init_skills`, `propose_skills`, `apply_skills`, `record_wallet`, and `record_wallet_cpi` / `wallet_level` for callers |
+| Directives, commits, postage (4, R41) | `hookwars_agents` `handlers/directive.rs` | `MemoConfig` (timelocked), `set_directive`, `commit`, `post`, `live_constraints` for the armory |
+| Licences (1.4, 2.3, R45) | `hookwars_market` `licence.rs` | `LicenceConfig` (timelocked), `LicenceOffer`, `License`, `set_licence_offer`, `buy_license`, `renew_license`, `revoke_license`, `expire_license`, `license_live` for the armory |
+| Craft (5, R42) | `programs/hookwars_craft` (`39LXQBGqZtg591jkGnZi9BELQ9hp1ZngbAxu6K1cC29Y`) | config (timelocked), materials and mints, drop rules (timelocked), `drop`, recipes (timelocked), `craft`, `repair`, `Wear`, `init_wear`, `wear`, `read_wear` for the items engine |
+| Book (6, R44) | `programs/hookwars_book` (`C4k2QquxzDdgHf74tnvyyWQyGUR8xvhPo1i1gFYb639g`) | config (timelocked), material books (`create_market`, `place`, `cancel`, `crank`), class bids (`place_class_bid`, `cancel_class_bid`, `match_class`) |
+| Simulation (5.5) | `tools/econ-sim` | section 13.4 |
+| Test stand-in | `programs/econ_caller_stub` (`D7wam6dwQDMApuXfgtnaEi8z3BoFh6GQ8tbnvLZDr5X1`, test-only) | signs as any `[seed]` PDA of its id; stands in for the armory's `mint_crafted` |
+
+### 13.1 Deviations from sections 1 to 6 (each to confirm or reverse)
+
+1. **Licence terms live in the market.** `LicenceOffer` at `["licence-offer", item]` (set by the
+   item holder: price, term, `per`, `max_live`, `exclusive`, `active`) holds what 1.2 puts in
+   `AccessPolicy.licence_terms`, because the armory is outside this branch. When the armory gains
+   `AccessPolicy`, `buy_license` should read the terms there (integration request E-1).
+2. **Licence author share.** Paid to `Template.registered_by` at `LicenceConfig.author_bps` until
+   `Template.author_bps` exists (E-7). `expire_license` (permissionless) is new: it frees a live
+   slot of an ended licence, since `max_live` counts live licences.
+3. **Wear lives in craft.** `Wear` at `["wear", item]` under craft holds `max_charges`, `used`,
+   `dormant`, `repairs` instead of `Item.max_charges` and `EquipState.charges_used`, so the item
+   and equip layouts are unchanged. `repair` restores charges in `Wear` directly (no items
+   `restore_charges`). An item without `Wear` never wears.
+4. **Drop rate as a ratio.** `DropRule` carries `per_unit_num / per_unit_den` (one `per_unit` cannot
+   express "one unit per million lamports of cuts"). `drop` never fails for a spent cap or a rule
+   not yet in effect: it drops nothing, so the caller's own path (settle, reveal) is never
+   blocked. The season is time based (`season_secs` from the config's start) rather than the war
+   program's season; reading war's season is possible later without a layout change.
+5. **Crafted parameters.** `craft` sends the recipe's ranges to the output program, which draws
+   them with the loot randomness adapter (E-5), so craft itself never draws.
+6. **Book quote is native SOL.** Lamports, held by the `["book-escrow", market]` account above its
+   rent, not bridged SOL. Each order also leaves `order_bounty_lamports` in escrow: back to the
+   owner on fill, cancel or eviction, to the cranker on expiry (the crank bounty, rule 5). Matching
+   skips expired orders. A remainder below `min_size` after matching does not rest.
+   Escrow lamports are paid out after the instruction's last CPI (a direct lamport move followed by
+   a CPI that does not carry both accounts fails as `UnbalancedInstruction`).
+7. **Directive sequence.** `Passport.directive_seq` is not added (passport layout unchanged): the
+   chain is the `Directive` accounts themselves, each naming `superseded_by`. `set_directive(seq,
+   constraints)` takes no hash: it hashes the memo it finds. Postage goes to
+   `AgentsConfig.fee_collector` (the agents config has no `treasury`). The memo must list the
+   operator as a signer (`MemoNotSigned`); a memo over `MEMO_MAX_BYTES` or not canonical is not
+   read.
+8. **Counter caller seed.** `record_wallet` accepts `["social-caller"]` PDAs (not
+   `["agents-caller"]`), so a program's social calls and agents calls stay separate.
+9. **Not built here:** `SKILL_DISTINCT_ONLY` (counters count every call), the new
+   `TrackRecord` counters in agents (layout unchanged; the wallet `Profile` carries them), the
+   `ref` argument on existing market, book-external and armory settling instructions (every new
+   settling instruction here carries `reference: [u8; 32]`), and the level gates the armory checks
+   (E-8). `MarketConfig` is unchanged; licence totals are on `LicenceConfig`.
+10. **App request folded in:** `PolicyLimits.tracked` is `Vec<TrackedLimit { mint, per_action,
+    per_day }>` (same bytes as the former tuple) so the agents IDL builds.
+
+### 13.2 Tests (LiteSVM, server B)
+
+| Suite | Tests | Covers |
+| --- | --- | --- |
+| `craft.rs` | 7 | drops only from registered caller PDAs and within season caps, season reset; rule and cap timelocks; craft burns, fee split exact, output request signed by `["craft-signer"]`; level gate, closed and malformed recipes; wear dormant exactly at `max_charges`, `ItemWorn` once, never a failure; repair; `max_charges` 0 never wears; config timelock; material supply equals emitted minus burned |
+| `book.rs` | 9 | price-time priority, partial fills, exact taker and maker fees; sells into bids with the reserve kept; cancel owner-only; eviction only for a strictly better order; crank with bounty; post-only, tick and size; markets only for materials; class bids fill only fitting free items (range, template, listed, equipped refused) and cancel in full; escrow conservation checked after every step |
+| `directives.rs` | 6 | memo hash bound; memo before or after; missing, mismatched, non-canonical, oversized and unsigned memos refused; sequence chain; directive limits enforced by `spend` (limit, targets, frozen); commit and postage; memo params timelock |
+| `licences.rs` | 6 | split exact; income follows the item (R45); `max_live`, exclusive, slippage, expiry; renew; per-period refund exact; per-token not revocable; params timelock |
+| `profiles.rs` | 2 | counters only from registered caller PDAs, no-op without a profile, computed levels; skill table timelock and validation |
+| `budgets_economy.rs` | 4 | section 13.3 |
+
+### 13.3 Measured budgets (07 section 3)
+
+One transaction each, compute limit 1.4M in front; "with table" is the v0 size with one lookup
+table holding every key.
+
+| Path | Keys | v0 bytes | With table | Trace | Height | CU |
+| --- | --- | --- | --- | --- | --- | --- |
+| craft `create_material` | 10 | 477 | 294 | 7 | 3 | 37,160 |
+| craft `drop` (new holding, via a caller) | 16 | 719 | 350 | 9 | 4 | 79,188 |
+| craft `craft` (2 inputs, counter) | 24 | 948 | 331 | 12 | 3 | 107,532 |
+| craft `craft` (4 inputs, level gate, counter) | 30 | 1,146 | 343 | 16 | 3 | 155,832 |
+| craft `init_wear` (via a caller) | 9 | 515 | 363 | 5 | 3 | 27,454 |
+| craft `wear` turning dormant (via a caller) | 8 | 449 | 328 | 4 | 3 | 21,761 |
+| craft `repair` (1 input) | 23 | 915 | 329 | 8 | 3 | 69,106 |
+| social `open_profile` | 6 | 352 | 293 | 4 | 2 | 11,300 |
+| social `record_wallet` (via a caller) | 8 | 455 | 334 | 4 | 3 | 16,728 |
+| book `create_market` | 15 | 633 | 295 | 8 | 3 | 50,222 |
+| book `place` resting, no fill | 19 | 807 | 345 | 6 | 3 | 40,031 to 44,107 |
+| book `place` filling 4 makers (counter) | 27 | 1,071 | 361 | 27 | 3 | 194,031 |
+| book `place` evicting the worst | 21 | 873 | 349 | 4 | 2 | 33,744 |
+| book `cancel` | 12 | 526 | 281 | 3 | 2 | 21,782 |
+| book `place_class_bid` | 7 | 468 | 378 | 5 | 2 | 16,970 |
+| book `match_class` | 17 | 715 | 315 | 8 | 3 | 89,334 |
+| market `set_licence_offer` | 10 | 469 | 286 | 4 | 2 | 20,967 |
+| market `buy_license` (2 counters) | 22 | 888 | 333 | 11 | 3 | 76,233 |
+| market `renew_license` | 22 | 888 | 333 | 10 | 3 | 73,832 |
+| market `revoke_license` | 10 | 452 | 269 | 4 | 2 | 15,528 |
+| agents memo + `set_directive` | 12 | 883 | 669 | 5 | 2 | 52,697 |
+
+Each book fill adds two keys (64 bytes without a table) and about six trace entries, so
+`BOOK_MATCH_MAX` above 4 needs a lookup table, and the trace cap of 64 bounds it near 9 fills.
+A craft recipe with 4 inputs fits without a table at 1,146 bytes; `RECIPE_MAX_INPUTS` above 4
+needs one.
+
+### 13.4 Simulation (section 5.5), measured
+
+`tools/econ-sim` (run on server B: `cargo run -p econ-sim --release -- 16 84`): deterministic
+SplitMix64 per seed, 16 seeds, 84 days (12 seasons of 7 days), splits by `hookwars-common`
+(`bps`, `licence_split`). Two materials: A drops from settled cuts (1 unit per 1,000,000 lamports
+settled), B from raid reveals (1 per reveal). Populations: 200 traders (cuts 0.001 to 0.04 SOL
+per day each), 40 raiders (30% reveal chance per day), 30 crafters (50% craft chance when they
+hold inputs). Crafts burn 20 A + 2 B and 0.02 SOL; 30% of crafted items are never equipped, the
+rest run 5 or 60 times a day (Poisson), earn 20,000 lamports holder royalty per run and sell a
+0.05 SOL licence with 5% chance a day; a worn item is repaired when its restored charges are
+expected to earn at least the repair cost (fee plus inputs at 500,000 lamports per A unit),
+otherwise retired after 14 dormant days. **Every one of these is a TEST value of the model**,
+chosen to exercise it, not a proposal.
+
+| Set | Change from baseline | A supply, season 1 → 12 (mean) | A change in season 12 | Dormant share, season 12 | Worn items repaired | Used item income per charge life vs repair cost (SOL) |
+| --- | --- | --- | --- | --- | --- | --- |
+| baseline | caps A/B 20,000/2,000 | 19,490 → 225,504 | +18,234 | 0.000 | 100% | 0.057 vs 0.009 |
+| tight-caps | caps 6,000/600 | 5,445 → 57,792 | +4,337 | 0.000 | 100% | 0.057 vs 0.009 |
+| loose-caps | caps 80,000/8,000 | 27,548 → 321,374 | +26,250 | 0.000 | 100% | 0.057 vs 0.009 |
+| high-wear | 300 charges, repair restores 150 | 19,490 → 230,284 | +19,099 | 0.168 | 0% | 0.044 vs 0.009 |
+| low-activity | 50 traders, 10 raiders | 6,924 → 80,665 | +6,532 | 0.000 | 100% | 0.058 vs 0.009 |
+| pricey-repair | repair 30 A + 0.04 SOL | 19,490 → 230,295 | +19,168 | 0.073 | 0% | 0.056 vs 0.055 |
+| balanced | cap A 1,600 | 1,198 → 5,606 | +75 (−196 to +284) | 0.000 | 100% | 0.055 vs 0.009 |
+| balanced-high-wear | cap A 1,600; 300 charges, repair 4 A + 0.001 SOL restores 300 | 1,192 → 5,487 | +58 (−76 to +188) | 0.000 | 100% | 0.046 vs 0.003 |
+
+What the runs say (for the owner's choice, nothing set):
+
+1. **Material supply follows the scarcer input.** Crafting needs both materials; B (raids) limits
+   it to about 42 crafts per season in every full-activity set (about 10 in `low-activity`), so A grows without bound whenever A's cap is
+   above what about 42 crafts and the repairs burn (about 1,500 to 1,800 A per season here). In
+   `balanced` and `balanced-high-wear` the season change of A swings around zero (−196 to +284)
+   and A never reaches zero after season 1 (lowest 1,840 and 1,780). So each material's cap has
+   to be set against the burn its recipes can reach, not against activity alone.
+2. **Dormancy appears only when repair does not pay.** With repairs priced under the income of the
+   restored charges, every worn item is repaired and the dormant share stays 0. When a repair
+   restores too few charges (`high-wear`) or costs about as much as a charge life earns
+   (`pricey-repair`), no holder repairs and 7% to 17% of live items sit dormant until retired.
+3. **Used versus unused.** Unused items never wear (no runs) and earn nothing in the model, so a
+   repair is never worth it for them, as 5.5 asks; used items earn 0.044 to 0.058 SOL per charge
+   life against repair costs of 0.003 to 0.055 SOL depending on the set.
+4. **SOL flows.** In season 12 the protocol receives 0.22 to 0.45 SOL and the season pool 0.75 to
+   1.28 SOL across the full-activity sets (0.10 and 0.29 SOL in `low-activity`), from recipe fees
+   at `RECIPE_PROTOCOL_BPS` 1,000 TEST and licences at `LICENCE_PROTOCOL_BPS` 500 TEST; holders
+   receive most of the money (2.4 to 6.7 SOL in season 12; least where items sit dormant) through
+   royalties and licences.
+
+The model leaves out the order book price (materials are valued at a fixed TEST price) and any
+response of activity to material scarcity; both are the next refinements before parameters are
+set.
+
+## Integration requests (economy)
+
+Each is a change in a program this branch does not own. The economy side is built and tested
+against `econ_caller_stub`; the request names the exact call.
+
+**E-1 Access modes in the armory (1.2, 1.3).** Add `AccessPolicy` and `Approval` and the
+instructions `set_access`, `approve`, `revoke_approval`, `enforce_access` as specified, and the
+`check_fits` row at `equip_launch`, `propose` and `execute`: for `Licensed`, pass the market's
+`License` at `["license", item, token_mint]` and call
+`hookwars_market::licence::license_live(&info, &item, &token_mint, now)`; for `Exclusive`, require
+`Item.equipped_count == 0`; `enforce_access` reads the same function after the slot's notice.
+When `AccessPolicy.licence_terms` exists, `buy_license` should read it instead of
+`LicenceOffer` (a one-line account swap in `BuyLicense`). `set_access` for an item held by an
+agent vault reads the agent's live directive with
+`hookwars_agents::handlers::directive::live_constraints(&info, &passport)` and refuses modes not in
+`allowed_access_modes` or a price above `max_licence_price` (`DirectiveForbids`).
+
+**E-2 R37 protocol fee in `settle_equip` (2.2).** Replace the token-side split with
+`hookwars_common::economy::run_waterfall(b, ITEM_PROTOCOL_BPS, Item.royalty_bps,
+Template.author_bps, Lease.rent_bps or 0, MAX_CRANK_BOUNTY_BPS)` (sums exactly; unit-tested in
+common), send `protocol` to the items config's `treasury` through `transfer_from_protocol`, add
+`protocol_fees_total: u128` to that config, and emit `ProtocolFee { source: fee_source::ITEM_RUN,
+mint, amount, reference, ts }`. The pool side stays without `ITEM_PROTOCOL_BPS`.
+
+**E-3 Items read craft wear (5.4).** At item creation (armory `create_item`, `create_composite`,
+`mint_loot`, `mint_crafted`) CPI craft `init_wear(caller_program = <that program>, item,
+max_charges = Template.charges_on_create)` signed by `["craft-caller"]` under the calling program.
+In `settle_equip`, CPI craft `wear(caller_program = ITEMS_ID, runs)` with the runs that applied an
+effect since the last settle (signed by items' `["craft-caller"]`). In every callback that applies
+an effect, pass the item's `Wear` at `["wear", item]` under `<CRAFT_ID>` and answer the default
+(nothing, never a refusal, R38) when `hookwars_craft::state::read_wear(&info, &item)?` returns a
+`Wear` with `dormant`. Then add ITEMS_ID (and ARMORY_ID) to `CraftConfig.callers` through
+`propose_config`.
+
+**E-4 Drops from verified activity (5.2, R42).** CPI craft `drop(caller_program, source,
+measured)` signed by `["craft-caller"]` under the calling program, with accounts `caller, payer,
+config, drop_rule ["drop", source], material ["material", id], material_mint, minter
+["craft-minter"], recipient, recipient_holding, token_program, token_event_authority,
+system_program, event_authority, program`: items `settle_equip` (source `SETTLE_CRANK` 0, measured
+= token-side lamports settled, recipient the item holder), war raid reveal (`RAID_REVEAL` 1,
+measured 1 per revealed raid, recipient the raider), season finish (`SEASON_FINISH` 2), quest
+claim (`QUEST_CLAIM` 3). `drop` never fails for a spent cap. Add ITEMS_ID and WAR_ID to
+`CraftConfig.callers`.
+
+**E-5 Armory `mint_crafted` (5.3).** New entry point `mint_crafted(crafter: Pubkey, template_id:
+u16, param_min: Vec<u32>, param_max: Vec<u32>, recipe_id: u16)` (discriminator
+`sha256("global:mint_crafted")[..8]` = `[121, 196, 34, 30, 90, 249, 235, 177]`), accepting only the
+signer `["craft-signer"]` under `<CRAFT_ID>` = `PVsZeqXtarrckJNUKpYCJVKGf4PuJNRHp5HVkXK6s8U`
+(like `mint_loot` and `LOOT_SIGNER`), drawing each field in its range with the loot randomness
+adapter (fixed when `min == max`), `source = CRAFTED` (new value 3), holder the crafter; craft passes
+the armory's accounts after its own signer as remaining accounts. Then set
+`CraftConfig.output_program = ARMORY_ID` through `propose_config`.
+
+**E-6 Counters from protocol programs (3.1, 3.3, R43).** After their own effects, CPI social
+`record_wallet(caller_program, counter, value)` with `hookwars_social::record_wallet_cpi`, signed
+by `["social-caller"]` under the calling program: armory `create_item` and `create_composite`
+(`ITEMS_AUTHORED` 0, the author), template registration (`TEMPLATES_REGISTERED` 1, the
+registrant), market `buy` (`ITEMS_SOLD` 4, the seller), war treaty held (`TREATIES_HELD` 8) and
+raids (`RAIDS` 9). Craft (`ITEMS_CRAFTED`, `REPAIRS`), book (`BOOK_FILLS`) and market licences
+(`LICENCES_SOLD`, `LICENCE_REVENUE_LAMPORTS`) already call it. Add each program id to
+`SkillTable.callers` through `propose_skills`. The agents `TrackRecord` counters of 3.1 are a
+separate layout change in agents (not made here).
+
+**E-7 Template fields (1.2, 2.2, 5.4).** `Template` gains `author_bps`, `default_access`,
+`allowed_access`, `charges_on_create` in its reserved bytes; licences then pay
+`Template.author_bps` instead of `LicenceConfig.author_bps`.
+
+**E-8 Level gates in the armory (3.3).** `set_access` (`LICENCE_TIER_1_LAMPORTS` needs `Builder >=
+LICENCE_TIER_1_LEVEL`) and `submit_template` (`LAB_BOND_DISCOUNT_LEVEL`) call
+`hookwars_social::wallet_level(&profile, &skills, &wallet, skill::BUILDER)`.
+
+**E-9 Overview (section 12).** Programs `hookwars_craft` and `hookwars_book` with the ids above;
+seeds `["licence-config"]`, `["licence-offer", item]` (market), `["memo-config"]` (agents),
+`["craft-config"]`, `["craft-pending"]`, `["material-mint", id]`, `["wear", item]` (craft),
+`["book-config"]`, `["book-pending"]`, `["class-bid", bidder, nonce]` (book) in addition to 12;
+parameters `order_bounty_lamports` (book), `season_secs` (craft) and the TEST values in 13.5.
+
+### 13.5 TEST values used by the suites (none is a decision)
+
+`TEST_CRAFT`: `recipe_protocol_bps` 1,000, `max_inputs` 4, `season_secs` 604,800,
+`admin_timelock_secs` 600. `TEST_BOOK`: `taker_bps` 30, `maker_bps` 10, `slots` 4, `match_max` 8,
+`create_level` 0, `order_bounty_lamports` 10,000, `admin_timelock_secs` 600. `TEST_LICENCE`:
+`protocol_bps` 500, `author_bps` 1,000, `min_secs` 3,600, `max_secs` 2,592,000. `TEST_MEMO`:
+`memo_max_bytes` 600, `postage_lamports` 5,000, `min_proof` 1. Skill table: Crafter from
+`items_crafted` (1, 3, 10), Trader from `book_fills` (1, 5, 20), Builder from `licences_sold` (1, 5).
