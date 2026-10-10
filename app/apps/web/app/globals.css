@@ -41,7 +41,7 @@ code, pre, kbd, samp, .mono, .tabular { font-family: var(--sans); font-variant-n
 pre { margin: 0; white-space: pre; }
 
 .wrap { width: 100%; max-width: var(--maxw); margin: 0 auto; padding-left: var(--gutter); padding-right: var(--gutter); }
-.shell { padding-top: var(--s6); padding-bottom: var(--s9); }
+.shell { padding-top: var(--s5); padding-bottom: var(--s9); }
 
 /* Nav: pill groups on the left, a dark pill and a purple pill on the right */
 .nav { position: sticky; top: 0; z-index: 40; isolation: isolate; background: rgba(248, 248, 248, 0.86); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); border-bottom: 1px solid var(--line); font-family: var(--display); }
@@ -262,9 +262,6 @@ td.r, th.r { text-align: right; }
 .demo-banner { margin: 0 0 var(--s4); padding: var(--s2) var(--s3); border-radius: 12px; corner-shape: var(--corner); background: rgba(227, 178, 16, 0.18); color: #6b5200; font-size: 13px; }
 
 /* Cursors, doodles and the landing frame, from the plnty reference */
-body { cursor: url(/cursors/pointer.svg) 3 2, default; }
-a, button, label, select, summary, [role="tab"], [role="button"] { cursor: url(/cursors/grabbing.svg) 11 4, pointer; }
-input, textarea { cursor: text; }
 .lede a, .empty a, .doodle-link { text-decoration: none; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='8' viewBox='0 0 120 8'%3E%3Cpath d='M1 5c12-4 20 3 32-1s20 1 30-2 20 3 30-1 18 1 26-1' fill='none' stroke='%2372AFFF' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x left bottom / 120px 8px; padding-bottom: 5px; color: var(--ink); }
 .lede a:hover, .empty a:hover, .doodle-link:hover { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='8' viewBox='0 0 120 8'%3E%3Cpath d='M1 5c12-4 20 3 32-1s20 1 30-2 20 3 30-1 18 1 26-1' fill='none' stroke='%232600ff' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E"); }
 .hero-box { position: relative; }
@@ -275,7 +272,7 @@ input, textarea { cursor: text; }
 .shell, .foot { position: relative; z-index: 1; }
 .nav { z-index: 40; }
 @media (max-width: 800px) { .doodle { display: none; } }
-.landing { display: block; height: calc(100vh - var(--nav-h)); border: 0; margin: calc(-1 * var(--s6)) calc(-1 * var(--gutter)) calc(-1 * var(--s9)); width: calc(100% + 2 * var(--gutter)); background: var(--bg); }
+.landing { display: block; height: calc(100vh - var(--hp-top-height)); border: 0; margin: calc(-1 * var(--s6)) calc(-1 * var(--gutter)) calc(-1 * var(--s9)); width: calc(100% + 2 * var(--gutter)); background: var(--bg); }
 body:has(.landing) > .foot { display: none; }
 body:has(.landing) > .shell { padding-bottom: 0; }
 body:has(.landing) .demo-banner { display: none; }
@@ -293,3 +290,11 @@ dd.num, span.num { font-variant-numeric: tabular-nums; }
 .waiting { color: #6b5200; }
 .members { display: flex; flex-wrap: wrap; gap: var(--s2); }
 @media (max-width: 720px) { .access-head { grid-template-columns: 1fr; } }
+
+/* The reference's cursor: five drawn states following the pointer (components/cursor.tsx). */
+html[data-hp-cursor-active], html[data-hp-cursor-active] * { cursor: none !important; }
+.hp-cursor { position: fixed; top: 0; left: 0; z-index: 100; pointer-events: none; will-change: transform; }
+.hp-cursor[hidden] { display: none; }
+.hp-cursor .layer { position: absolute; left: var(--hx); top: var(--hy); display: none; max-width: none; transform-origin: var(--px, calc(-1 * var(--hx))) var(--py, calc(-1 * var(--hy))); transform: rotate(var(--hp-tilt, 0deg)); }
+.hp-cursor .layer[data-state=click], .hp-cursor .layer[data-state=grab] { transform: translateY(var(--hp-lift, 0px)); }
+.hp-cursor[data-hp-state=pointer] .layer[data-state=pointer], .hp-cursor[data-hp-state=hover] .layer[data-state=hover], .hp-cursor[data-hp-state=click] .layer[data-state=click], .hp-cursor[data-hp-state=grab] .layer[data-state=grab], .hp-cursor[data-hp-state=text] .layer[data-state=text] { display: block; }
