@@ -263,7 +263,9 @@ fn forward_items<'info>(
             // Protocol pass 4a: an external template's program cannot write the items program's
             // equip state; its registry ends `[EquipState, our items signer, items program]` and the cut is recorded
             // there, signed by this program's `["hook-authority", items]`.
-            if s.program != ITEMS_ID {
+            // An armory item (its `Item`, the first extra, is the armory's) on another program
+            // is an external template; any other program keeps its own books.
+            if s.program != ITEMS_ID && accounts.len() > 2 && *accounts[2].owner == ARMORY_ID {
                 record_external_cut(accounts, &launch.mint, index as u8, &s.item, answer.cut, u8::from(!buy) + 1)?;
             }
         }

@@ -167,13 +167,15 @@ pub fn queued_for(data: &[u8], bound: &[Pubkey]) -> Pubkey {
 }
 
 /// Protocol pass 4a (L-1): sets the queue entry of a gated instruction built with
-/// `queued: Pubkey::default()`.
+/// `queued: Pubkey::default()` (the last such account: the system program, whose id is also all
+/// zeros, always comes before it).
 pub fn fill_queued(ix: &mut Instruction, bound: &[Pubkey]) -> Pubkey {
     let q = queued_for(&ix.data, bound);
-    for m in ix.accounts.iter_mut() {
-        if m.pubkey == Pubkey::default() {
-            m.pubkey = q;
-        }
+    if ix.accounts.iter().any(|m| m.pubkey == q) {
+        return q;
+    }
+    if let Some(m) = ix.accounts.iter_mut().rev().find(|m| m.pubkey == Pubkey::default()) {
+        m.pubkey = q;
     }
     q
 }
