@@ -1959,6 +1959,9 @@ pub mod market {
             ends_at: i64::from_le_bytes(d[161..169].try_into().ok()?),
             state: d[169],
         })
+    }
+}
+
 /// Hookwars hook economy (docs/spec/11-hook-economy.md): program ids, caller seeds, the counters
 /// levels are computed from, the level function and the fee splits every economy program uses.
 /// Appended for the economy branch; nothing above changes.
