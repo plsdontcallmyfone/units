@@ -33,7 +33,7 @@ body:has(.cv3) > .shell { padding: var(--g, 12px) clamp(10px, 1.6vw, 24px) var(-
 .cv3-links .btn.sm { height: 28px; padding: 0 12px; font-size: 12px; }
 .cx-mint { display: inline-flex; align-items: center; gap: 10px; height: 28px; padding: 0 10px; border: 0; border-radius: var(--r-chip); corner-shape: var(--corner); background: var(--chip); color: var(--ink); font: 11.5px var(--display); cursor: pointer; transition: border-color .2s; }
 .cx-mint:hover { border-color: var(--ink); }
-.cx-mint em { font-style: normal; color: var(--muted); font-size: 11px; letter-spacing: -.01em; }
+.cx-mint em { font-style: normal; color: var(--muted-chip); font-size: 11px; letter-spacing: -.01em; }
 .cx-market { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); border-left: 1px solid var(--line); }
 .cx-mc { padding: 10px 18px; display: grid; gap: 2px; align-content: center; border-right: 1px solid var(--line); }
 .cx-label { display: inline-flex; align-items: center; gap: 8px; font: 500 10px var(--display); letter-spacing: -.01em; color: var(--muted); }
@@ -47,7 +47,7 @@ body:has(.cv3) > .shell { padding: var(--g, 12px) clamp(10px, 1.6vw, 24px) var(-
 .cx-stats dd { margin: 0; font: 700 clamp(15px, 1.3vw, 19px)/1.1 var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cx-state { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 0; border-radius: var(--r-chip); corner-shape: var(--corner); background: var(--chip); font: 500 10px var(--display); letter-spacing: -.01em; color: var(--muted); }
 .cx-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
-.cx-state.on { color: var(--good); border-color: rgba(121,166,54,.35); }
+.cx-state.on { color: var(--good-ink); border-color: rgba(121,166,54,.35); }
 .cx-state.on i { background: var(--good); box-shadow: 0 0 10px rgba(121,166,54,.7); animation: cxPulse 2s ease-in-out infinite; }
 .cx-state.halted { color: var(--bad); border-color: rgba(208,70,59,.35); }
 .cx-state.halted i { background: var(--bad); }
@@ -79,8 +79,8 @@ body:has(.cv3) > .shell { padding: var(--g, 12px) clamp(10px, 1.6vw, 24px) var(-
 .mf-th p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--ink-2); overflow-wrap: anywhere; }
 .mf-th.k-decision p { color: var(--ink); font-size: 14.5px; font-weight: 600; line-height: 1.5; letter-spacing: -.01em; }
 .mf-th.k-decision .mf-k { color: var(--ink); }
-.mf-th.k-doubt .mf-k { color: #8a6a00; }
-.mf-th.k-error .mf-k { color: var(--bad); }
+.mf-th.k-doubt .mf-k { color: var(--warn-ink); }
+.mf-th.k-error .mf-k { color: var(--bad-ink); }
 .mf-th.k-system .mf-k { color: var(--good); }
 .mf-empty { padding: var(--s6) 0; text-align: center; color: var(--muted); font-size: 14px; }
 .cv3-mid { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: var(--g); }
@@ -109,15 +109,15 @@ body:has(.cv3) > .shell { padding: var(--g, 12px) clamp(10px, 1.6vw, 24px) var(-
 .mv p { margin: 0 0 2px; font-size: 13px; line-height: 1.4; color: var(--ink-2); overflow-wrap: anywhere; }
 .mv span { display: block; margin-top: 2px; font: 10.5px var(--display); color: var(--muted); }
 .mv em { font-style: normal; font-weight: 500; letter-spacing: -.01em; font-size: 11px; }
-.mv em.ok { color: var(--good); } .mv em.bad { color: var(--bad); } .mv em.wait { color: #8a6a00; }
+.mv em.ok { color: var(--good-ink); } .mv em.bad { color: var(--bad-ink); } .mv em.wait { color: var(--warn-ink); }
 .mv-tx { flex: none; font: 10.5px var(--display); color: var(--muted); }
 .mv-tx:hover { color: var(--ink); }
 .ms-done { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
 .ms-done li { display: flex; gap: 8px; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tag { display: inline-block; padding: 0 6px; border-radius: 6px; corner-shape: var(--corner); background: var(--chip); font: 500 9.5px/1.7 var(--display); letter-spacing: -.01em; color: var(--ink-2); white-space: nowrap; }
-.tag.t-active { color: var(--good); border-color: rgba(121,166,54,.4); }
-.tag.t-empty { color: var(--muted); }
-.tag.t-locked { color: #8a6a00; border-color: rgba(227,178,16,.4); }
+.tag.t-active { color: var(--good-ink); border-color: rgba(121,166,54,.4); }
+.tag.t-empty { color: var(--muted-chip); }
+.tag.t-locked { color: var(--warn-ink); border-color: rgba(227,178,16,.4); }
 .split { display: flex; height: 8px; gap: 2px; }
 .split i { display: block; min-width: 4px; }
 .legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 3px 12px; font: 11.5px var(--display); color: var(--ink-2); }
@@ -157,3 +157,5 @@ body:has(.cv3) > .shell { padding: var(--g, 12px) clamp(10px, 1.6vw, 24px) var(-
 @media (max-width: 1200px) { .cv3-hero { grid-template-columns: 76px minmax(0, 1fr); } .cx-market { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); } .cv3-top { height: auto; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); } .cv3-mid, .cv3-mind { height: var(--h); } .cv3-side { grid-column: 1 / -1; grid-template-rows: none; grid-template-columns: repeat(3, minmax(0, 1fr)); height: 380px; } .cv3-base { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cv3-base > :first-child { grid-column: 1 / -1; } }
 @media (max-width: 800px) { .cv3-top { grid-template-columns: minmax(0, 1fr); } .cv3-mind { height: 70vh; } .cv3-mid { height: auto; grid-template-rows: auto auto; } .cv3-chart { height: 360px; } .cv3-side { grid-template-columns: minmax(0, 1fr); height: auto; } .cv3-side > .pn { max-height: 380px; } .cv3-pair { grid-template-columns: minmax(0, 1fr); } .cv3-pair > .pn { max-height: none; } .cv3-base { grid-template-columns: minmax(0, 1fr); } .cv3-base > :first-child { grid-column: auto; } .cx-market { grid-template-columns: minmax(0, 1fr); } .cx-mc { border-right: 0; border-bottom: 1px solid var(--line); } .cx-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cx-stats > div:nth-child(2n) { border-right: 0; } .cx-stats > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); } .cv3-name h1 { white-space: normal; } }
 .cv3 .pn-b:focus-visible, .cv3 .scroll:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+/* Text on the light panels and chips at WCAG AA: the semantic colors stay for bars, dots and charts, these darker inks are for words. */
+.cv3 { --good-ink: #385a12; --bad-ink: #9b2f27; --warn-ink: #6b5200; --muted-chip: #4f4c46; }

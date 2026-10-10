@@ -56,7 +56,7 @@ export function TokenChart({ series, symbol }: { series: Candle[]; symbol: strin
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px' }}>
         <span className="k">{symbol} · 24h · 15m</span>
-        <span style={{ font: '600 13px var(--sans)', color: tab === 'raids' ? 'var(--ink)' : (tab === 'price' ? delta : chestDelta) >= 0 ? 'var(--good)' : 'var(--bad)' }}>
+        <span style={{ font: '600 13px var(--sans)', color: tab === 'raids' ? 'var(--ink)' : (tab === 'price' ? delta : chestDelta) >= 0 ? 'var(--good-ink, var(--good))' : 'var(--bad-ink, var(--bad))' }}>
           {tab === 'price' ? `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%` : tab === 'chest' ? `${chestDelta >= 0 ? '+' : ''}${chestDelta.toFixed(2)} SOL` : `${raided.toLocaleString('en-US', { maximumFractionDigits: 1 })} SOL raided`}
         </span>
         {last ? <span className="k" style={{ marginLeft: 4 }}>{tab === 'price' ? `O ${last.open.toPrecision(3)} H ${last.high.toPrecision(3)} L ${last.low.toPrecision(3)} C ${last.close.toPrecision(3)}` : ''}</span> : null}
