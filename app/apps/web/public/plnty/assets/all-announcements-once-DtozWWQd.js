@@ -1,0 +1,1 @@
+import{x as t}from"./main-DamfXklH.js";import{a as c}from"./announcements-Iz3Y_PZq.js";const o=t("announcements");let n=null;function r(){return n??=c().catch(e=>(o.warn("announcements fetch failed",e),n=null,[])),n}export{r as l};

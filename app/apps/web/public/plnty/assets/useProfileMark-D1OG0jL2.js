@@ -1,0 +1,1 @@
+import{b as a}from"./react-C9WEJgbf.js";import{p as o,f as i}from"./profile-marks-D0Q581Zh.js";function k(e){const[l,t]=a.useState(()=>o(e));return a.useEffect(()=>{if(!e){t(null);return}let r=!1;const f=o(e);return t(f||null),i(e).then(n=>{r||t(n)}),()=>{r=!0}},[e]),l}export{k as u};

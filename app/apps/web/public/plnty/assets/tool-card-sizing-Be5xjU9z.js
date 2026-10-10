@@ -1,0 +1,1 @@
+const n=280,O=520,e=20,o={type:"spring",duration:.28,bounce:.32};function E(_,A){if(!Number.isFinite(_)||!Number.isFinite(A)||_<=0||A<=0)return{width:280,height:280};const D=_/A,t=280,i=Math.min(520,Math.max(t,Math.round(t*D))),s=Math.min(520,Math.max(t,Math.round(t/D)));return{width:i,height:s}}function R(_){return _.width+20}export{o as G,O as T,e as a,n as b,R as c,E as d};

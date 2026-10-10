@@ -1,0 +1,1 @@
+var e=`message-ref`,t={type:`text`,name:e,tabIndex:-1,readOnly:!0,autoComplete:`off`,"aria-hidden":!0,"data-1p-ignore":``,"data-lpignore":`true`,"data-bwignore":``,"data-protonpass-ignore":``,"data-form-type":`other`};export{t as n,e as t};

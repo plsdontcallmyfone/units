@@ -1,0 +1,1 @@
+import{aK as a}from"./main-DamfXklH.js";const e=a,c={chip:7.6};function i(s){return{borderRadius:s,cornerShape:"squircle"}}const t="'KMR Apparat', 'Suisse Intl', system-ui, sans-serif",n={duration:"180ms",ease:"cubic-bezier(0.16, 1, 0.3, 1)"};export{n as W,e as a,t as b,c,i as s};

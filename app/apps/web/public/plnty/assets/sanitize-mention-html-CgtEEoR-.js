@@ -1,0 +1,1 @@
+import a from"./purify.es-DBIK8olT.js";const n={ALLOWED_TAGS:["b","i","u","s","br","p","span","strong","em"],ALLOWED_ATTR:["data-user-id","data-user-name","data-mention-id","data-mention-kind","data-mention-label"],ALLOW_DATA_ATTR:!1,RETURN_TRUSTED_TYPE:!1};function i(t){return String(a.sanitize(t,n))}export{i as s};

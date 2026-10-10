@@ -1,0 +1,1 @@
+function r(n){if(n instanceof Error)return n.message;if(n&&typeof n=="object"){const t=n.plntyError;if(t)return t.technicalMessage??t.userMessage??t.code??"Unknown error";const e=n.message;if(typeof e=="string")return e;try{return JSON.stringify(n)}catch{return"Unknown error"}}return String(n)}export{r as e};

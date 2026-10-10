@@ -1,0 +1,46 @@
+{
+  "id": "/",
+  "name": "Plnty",
+  "short_name": "Plnty",
+  "description": "Plnty is a powerful suite of design tools that turns ideas into finished work across image, video, vector, 3D and audio, all inside one shared canvas.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#19181c",
+  "background_color": "#050505",
+  "icons": [
+    {
+      "src": "/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/web-app-manifest-maskable-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/web-app-manifest-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/install/discover.jpg",
+      "sizes": "1920x1200",
+      "type": "image/jpeg",
+      "form_factor": "wide",
+      "label": "The Discover page: work from the Plnty community and the tools behind it"
+    }
+  ]
+}

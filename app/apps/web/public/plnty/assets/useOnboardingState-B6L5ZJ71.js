@@ -1,0 +1,1 @@
+import{b as a}from"./react-C9WEJgbf.js";import{u as b,bZ as d,b_ as e,b$ as S,c0 as O,c1 as g,c2 as l}from"./main-DamfXklH.js";function E(s,n){const{user:r}=b(),t=r?.id??null;t&&!n&&s&&d(t,s);const o=a.useSyncExternalStore(e,()=>S(t),()=>O),c=a.useSyncExternalStore(e,()=>g(t),()=>!1),i=a.useCallback(u=>{l(t,u)},[t]);return{state:o,ready:c,patch:i}}export{E as u};

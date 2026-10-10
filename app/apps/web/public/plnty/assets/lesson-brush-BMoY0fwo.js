@@ -1,0 +1,1 @@
+const n=new Set;function u(e){if(n.size===0)return!1;for(const o of[...n])o(e);return!0}function a(e){return n.add(e),()=>{n.delete(e)}}let s=0;const r=new Set,t=()=>{for(const e of[...r])e()};function i(){s+=1,t();let e=!1;return()=>{e||(e=!0,s-=1,t())}}function l(){return s>0}function f(e){return r.add(e),()=>{r.delete(e)}}export{u as a,i as m,a as o,l as r,f as s};

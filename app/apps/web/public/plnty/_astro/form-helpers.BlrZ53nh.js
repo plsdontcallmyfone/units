@@ -1,0 +1,1 @@
+var e=/^[\x20-\x7E]+$/,t=/^[^@\s<>"'()\[\],;:]+@[^@\s<>"'()\[\],;:]+\.[^@\s<>"'()\[\],;:]+$/;function n(n){if(!n)return!1;let r=n.trim();return!r||r.length>254?!1:e.test(r)&&t.test(r)}export{n as t};

@@ -1,0 +1,1 @@
+const t="@plnty-app",p={discord:"https://discord.gg/e3MPm2RrgF",instagram:"https://www.instagram.com/plntyapp/",youtube:`https://www.youtube.com/${t}/videos`},s="support@plnty.app",a={terms:"https://plnty.app/legal/terms",privacy:"https://plnty.app/legal/privacy"},o="https://plnty.app/docs/";export{o as D,a as L,p as S,t as Y,s as a};
