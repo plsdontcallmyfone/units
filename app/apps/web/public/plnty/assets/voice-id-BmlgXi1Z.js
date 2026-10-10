@@ -1,0 +1,1 @@
+const r="pv:",o=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;function i(t){if(!o.test(t))throw new Error(`not a voice id: ${t}`);return"pv:"+t.toLowerCase()}function e(t){if(typeof t!="string"||!t.startsWith("pv:"))return null;const n=t.slice(3);return o.test(n)?n.toLowerCase():null}function s(t){return e(t)!==null}export{r as P,s as i,e as p,i as t};

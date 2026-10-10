@@ -1,0 +1,1 @@
+function e(a){const t=(a??"").trim().replace(/^@+/,"").toLowerCase();return t===""?void 0:`@${t}`}function r(a){const t=(a??"").trim().replace(/^@+/,"");return t===""?"":`@${t}`}export{e as a,r as b};

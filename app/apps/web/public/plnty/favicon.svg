@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="394" height="394" viewBox="0 0 394 394">
+  <!-- Plnty mark. Adapts to the browser/OS colour scheme:
+       light mode shows the dark mark (#100D04), dark mode shows the cream mark (#DCD8D0).
+       A CSS rule overrides the inline presentation attribute, so the inline fill is the
+       light-mode default and the safe fallback for engines without prefers-color-scheme. -->
+  <style>
+    @media (prefers-color-scheme: dark) { path { fill: #DCD8D0; } }
+  </style>
+  <path fill="#100D04" d="M288.044 0C346.11 0.00180656 393.182 47.0721 393.183 105.138C393.183 127.039 386.486 147.37 375.024 164.199C363.065 181.759 363.055 211.407 375.011 228.97C386.474 245.804 393.183 266.14 393.183 288.044C393.18 346.109 346.109 393.181 288.044 393.183C266.14 393.183 245.802 386.475 228.97 375.011C211.408 363.055 181.76 363.054 164.199 375.011C147.371 386.474 127.039 393.183 105.138 393.183C47.0734 393.181 0.0027098 346.109 0 288.044C0 266.142 6.69716 245.805 18.1582 228.97C30.1145 211.409 30.1157 181.759 18.1582 164.199C6.69844 147.369 0 127.039 0 105.138C0.00090327 47.0721 47.0723 0.00180661 105.138 0C127.039 0 147.37 6.69699 164.199 18.1582C181.761 30.1183 211.407 30.1171 228.97 18.1582C245.803 6.69581 266.14 0 288.044 0Z"/>
+</svg>

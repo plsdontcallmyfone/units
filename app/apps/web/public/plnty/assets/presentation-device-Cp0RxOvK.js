@@ -1,0 +1,1 @@
+const _=.75;function r(e,n){return e<900&&n>0}function s(e,n,t){if(!n)return!0;const E=(e.pixelWidth??0)*(e.pixelHeight??0);return E>0&&E<=4e6}function A(e,n){return e<=0||n<=0?.75:n/e}export{_ as D,s as a,r as i,A as s};

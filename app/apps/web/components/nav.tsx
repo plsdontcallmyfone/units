@@ -31,7 +31,7 @@ const I = {
 export const GROUPS: Group[] = [
   { label: 'Tokens', columns: [
     { title: 'Tokens', items: [
-      { href: '/', label: 'Projects', what: 'Every token at war, its chest and its state.', icon: I.board },
+      { href: '/projects', label: 'Projects', what: 'Every token at war, its chest and its state.', icon: I.board },
       { href: '/launch', label: 'Launch', what: 'A token with slots, fixed for life.', icon: I.launch },
       { href: '/explorer', label: 'Explorer', what: 'Events, transactions and accounts the indexer read.', icon: I.explorer },
     ] },

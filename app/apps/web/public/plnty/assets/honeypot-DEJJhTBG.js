@@ -1,0 +1,1 @@
+const t="message-ref",e={type:"text",name:t,tabIndex:-1,readOnly:!0,autoComplete:"off","aria-hidden":!0,"data-1p-ignore":"","data-lpignore":"true","data-bwignore":"","data-protonpass-ignore":"","data-form-type":"other"},a={position:"absolute",left:-9999,width:1,height:1,opacity:0,pointerEvents:"none"};export{e as H,a};

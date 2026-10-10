@@ -31,6 +31,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
+        <div className="scene" aria-hidden>
+          <img className="scene-a" src="/scene/dog-orange.webp" alt="" />
+          <img className="scene-b" src="/scene/chicken-blue.webp" alt="" />
+          <img className="scene-c" src="/scene/fists-clouds.webp" alt="" />
+          <img className="scene-d" src="/scene/rooster.webp" alt="" />
+          <span className="edge edge-l edge-1" /><span className="edge edge-l edge-2" /><span className="edge edge-l edge-3" /><span className="edge edge-r edge-1" /><span className="edge edge-r edge-2" /><span className="edge edge-r edge-3" />
+        </div>
         <header className="nav">
           <div className="wrap nav-row">
             <a href="/" className="nav-logo" aria-label="units home">units</a>

@@ -1,0 +1,1 @@
+const t="plnty:retry-error",n=new EventTarget;function c(e){n.dispatchEvent(new CustomEvent(t,{detail:{correlationId:e}}))}function a(e){const r=o=>{e(o.detail.correlationId)};return n.addEventListener(t,r),()=>n.removeEventListener(t,r)}export{a as o,c as r};

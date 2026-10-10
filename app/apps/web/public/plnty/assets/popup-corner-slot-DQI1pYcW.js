@@ -1,0 +1,1 @@
+let t=null;const r=new Set;function e(){for(const n of r)try{n()}catch{}}function o(n){return t=n,e(),()=>{t===n&&(t=null,e())}}function u(){return t}function s(n){return r.add(n),()=>{r.delete(n)}}export{u as g,o as r,s};

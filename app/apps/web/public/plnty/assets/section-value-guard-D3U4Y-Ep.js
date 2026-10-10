@@ -1,0 +1,1 @@
+import"./main-DamfXklH.js";import{i as r}from"./voice-id-BmlgXi1Z.js";function p(t,o){const e=t.widget;return e.type==="dropdown"?e.options.some(i=>i.value===o):e.type==="voice-slides"?r(o):e.type==="slider"&&e.snapTo?e.snapTo.some(i=>i===o):!0}export{p as i};
