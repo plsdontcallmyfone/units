@@ -38,8 +38,8 @@
 /* Tables */
 .econ-table td { font-size: 13.5px; }
 .econ-table td.num, .econ-table th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.econ-table tr.dim td { color: var(--faint); }
-.econ-table tr.dim .faint { color: var(--faint); }
+.econ-table tr.dim td { color: var(--muted); }
+.econ-table tr.dim .faint { color: var(--muted); }
 .econ-table td .faint { margin-top: 2px; font-size: 12px; line-height: 1.35; }
 .econ-table td.nowrap { white-space: nowrap; }
 .econ-table td.faint-cell { color: var(--muted); font-size: 12.5px; }

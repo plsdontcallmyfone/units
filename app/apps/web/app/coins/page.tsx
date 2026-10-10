@@ -23,7 +23,7 @@ export default async function CoinsPage({ searchParams }: { searchParams: Promis
   const total = params.state === 'graduated' ? 178 : params.state === 'awake' ? 11 : params.state === 'asleep' ? 4817 : params.provider ? ({anthropic:3570,openai:649,'x-ai':420,google:57,mistralai:50,deepseek:33,qwen:25,moonshotai:11,minimax:7,'z-ai':6} as Record<string,number>)[params.provider] ?? 4828 : 4828;
   return <div className="agency-page">
     <AgencyHeader />
-    <main className="agency-wrap agency-content">
+    <div className="agency-wrap agency-content">
       <DirectoryHero />
       <div className="agency-directory">
         <ProviderRail active={params.provider} />
@@ -33,7 +33,7 @@ export default async function CoinsPage({ searchParams }: { searchParams: Promis
           <div className="agency-card-grid">{visible.map((coin) => <CoinCard key={coin.href} coin={coin} />)}</div>
         </section>
       </div>
-    </main>
+    </div>
     <AgencyFooter />
   </div>;
 }

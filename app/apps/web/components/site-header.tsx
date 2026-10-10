@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { BookOpen, Bridge, Briefcase, Buildings, ChartBar, CheckSquare, FileText, MagnifyingGlass, Medal, Robot, RocketLaunch, Shield, SquaresFour, Storefront, Sword, Trophy, UserCircle } from '@phosphor-icons/react';
+import { BookOpen, Bridge, Briefcase, Buildings, ChartBar, CheckSquare, FileText, MagnifyingGlass, Medal, Robot, RocketLaunch, Shield, SquaresFour, Scales, Storefront, Sword, Trophy, UserCircle, UsersThree } from '@phosphor-icons/react';
 
 export type TickerItem = { who: string; verb: string; what: string; tool: string };
 type Item = { href: string; label: string; what: string; icon: ReactNode };
@@ -24,6 +24,7 @@ const GROUPS: Group[] = [
     { href: '/seasons', label: 'Seasons', what: 'King of the hill, scored from each\ntoken\'s own war counters', icon: <Trophy /> },
     { href: '/generals', label: 'Generals', what: 'Top raiders across tokens this\nseason. The title gives no control', icon: <UserCircle /> },
     { href: '/quests', label: 'Quests', what: 'Raid and forge quests that pay\na loot ticket when done', icon: <CheckSquare /> },
+    { href: '/war/coalitions', label: 'Coalitions', what: 'Shared war chests and season\nboss pools', icon: <UsersThree /> },
   ], promo: { img: '/agency/coins/002.webp', title: 'Every war, live', body: 'Raids, sieges, counter-strikes and treaties between\ntokens, read from the chain as they land.' } },
   { label: 'Armory', w: 76, items: [
     { href: '/armory', label: 'Armory', what: 'Templates, items, forging and\nloot, with every royalty', icon: <Shield /> },
@@ -33,6 +34,7 @@ const GROUPS: Group[] = [
     { href: '/craft', label: 'Craft', what: 'Materials, recipes, repairs\nand presets', icon: <Shield /> },
     { href: '/book', label: 'Order book', what: 'Material orders and bids for\nclasses of items', icon: <Storefront /> },
     { href: '/bridge', label: 'Bridge', what: 'Bridged SOL in and out', icon: <Bridge /> },
+    { href: '/governance', label: 'Governance', what: 'Admin changes waiting out\ntheir timelock', icon: <Scales /> },
   ], promo: { img: '/agency/coins/004.webp', title: 'Hooks are items', body: 'Each item is a registered template with its own\nparameters. Its owner earns every time it runs.' } },
   { label: 'Community', w: 98, items: [
     { href: '/agents', label: 'Agents', what: 'Passports, proof levels and\nthe league. No prize', icon: <Robot /> },
@@ -53,6 +55,10 @@ const Chev = () => <svg viewBox="0 0 16 16" focusable="false" aria-hidden><path 
 export function SiteHeader({ ticker }: { ticker: TickerItem[] }) {
   const path = usePathname();
   const [open, setOpen] = useState<string | null>(null);
+  // A menu opened by pointing stays open until the pointer leaves; a click or Enter on its pill pins
+  // it open (a second one closes it), so the click that follows a hover never shuts the menu.
+  const [pinned, setPinned] = useState<string | null>(null);
+  const pills = useRef<Record<string, HTMLButtonElement | null>>({});
   const [mobile, setMobile] = useState(false);
   const [wallet, setWallet] = useState<string | null>(null);
   async function connect() {
@@ -61,11 +67,19 @@ export function SiteHeader({ ticker }: { ticker: TickerItem[] }) {
     try { const r = await w.connect(); setWallet(r.publicKey.toBase58()); } catch { /* the user closed the wallet prompt */ }
   }
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const show = (l: string) => { if (timer.current) clearTimeout(timer.current); setOpen(l); };
-  const hide = () => { if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => setOpen(null), 220); };
-  useEffect(() => { setOpen(null); setMobile(false); }, [path]);
+  const show = (l: string) => { if (timer.current) clearTimeout(timer.current); setOpen(l); setPinned((p) => (p === l ? p : null)); };
+  const hide = (force = false) => { if (timer.current) clearTimeout(timer.current); if (!force && pinned && pinned === open) return; timer.current = setTimeout(() => { setOpen(null); setPinned(null); }, 220); };
+  const toggle = (l: string) => {
+    if (open === l && pinned === l) { if (timer.current) clearTimeout(timer.current); setOpen(null); setPinned(null); return; }
+    show(l); setPinned(l);
+  };
+  useEffect(() => { setOpen(null); setPinned(null); setMobile(false); }, [path]);
   useEffect(() => {
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(null); setMobile(false); } };
+    const k = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setOpen((o) => { if (o) pills.current[o]?.focus(); return null; });
+      setPinned(null); setMobile(false);
+    };
     const sc = () => document.documentElement.toggleAttribute('data-hp-scrolled', window.scrollY > 8);
     window.addEventListener('keydown', k); window.addEventListener('scroll', sc, { passive: true }); sc();
     return () => { window.removeEventListener('keydown', k); window.removeEventListener('scroll', sc); };
@@ -92,8 +106,8 @@ export function SiteHeader({ ticker }: { ticker: TickerItem[] }) {
             const isOpen = open === g.label;
             const rows = Math.ceil(g.items.length / 2);
             return (
-              <li className="group" key={g.label} onMouseEnter={() => show(g.label)} onMouseLeave={hide} onFocus={() => show(g.label)} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) hide(); }}>
-                <button type="button" className={`pill pill-group hp-squircle ${active ? 'on' : ''}`} style={{ ['--hp-pill-w' as string]: g.w }} aria-expanded={isOpen} aria-controls={`menu-${g.label}`} onClick={() => setOpen(isOpen ? null : g.label)}><span>{g.label}</span><span className="chev hp-squircle" aria-hidden><Chev /></span></button>
+              <li className="group" key={g.label} onMouseEnter={() => show(g.label)} onMouseLeave={() => hide()} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node) && open === g.label) hide(true); }}>
+                <button type="button" className={`pill pill-group hp-squircle ${active ? 'on' : ''}`} style={{ ['--hp-pill-w' as string]: g.w }} aria-expanded={isOpen} aria-controls={`menu-${g.label}`} ref={(el) => { pills.current[g.label] = el; }} onClick={() => toggle(g.label)} onKeyDown={(e) => { if (e.key === 'ArrowDown') { e.preventDefault(); show(g.label); setPinned(g.label); requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector<HTMLAnchorElement>(`#menu-${g.label} a`)?.focus())); } }}><span>{g.label}</span><span className="chev hp-squircle" aria-hidden><Chev /></span></button>
                 <div className="panel hp-squircle" id={`menu-${g.label}`} data-open={isOpen || undefined} style={{ ['--rows' as string]: rows }} aria-label={g.label}>
                   <div className="items">
                     {g.items.map((it, i) => <Link className={`item ${on(it.href, path) ? 'on' : ''}`} key={it.href} href={it.href} style={{ ['--x' as string]: i % 2 ? 220 : 20, ['--baseline' as string]: 30.2 + Math.floor(i / 2) * 68, ['--i' as string]: i }}><span className="icon" aria-hidden>{it.icon}</span><span className="title">{it.label}</span><span className="body">{it.what.split('\n').map((l, j) => <span key={j}>{j ? <br /> : null}{l}</span>)}</span></Link>)}

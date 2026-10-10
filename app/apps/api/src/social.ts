@@ -342,17 +342,17 @@ export async function hides(db: Pool): Promise<unknown> {
 /** The social routes; null when the path is not one of them. */
 export async function socialRoute(p: string, q: URLSearchParams, conn: Connection, db: Pool | null): Promise<{ status: number; body: unknown } | null> {
   let m: RegExpExecArray | null;
-  const isSocial = p.startsWith('/v1/social/') || /^\/v1\/u\/\w+$/.test(p) || /^\/v1\/agents\/\w+\/timeline$/.test(p);
+  const isSocial = p.startsWith('/v1/social/') || /^\/v1\/u\/[^/]+$/.test(p) || /^\/v1\/agents\/[^/]+\/timeline$/.test(p);
   if (!isSocial) return null;
-  if ((m = /^\/v1\/u\/(\w{32,44})$/.exec(p))) return { status: 200, body: await walletProfile(conn, db, m[1]!) };
+  if ((m = /^\/v1\/u\/([^/]+)$/.exec(p))) return { status: 200, body: await walletProfile(conn, db, addr(m[1], 'wallet')) };
   if (!db) return { status: 503, body: { error: 'The database is not reachable.', code: 'NoDatabase' } };
-  if ((m = /^\/v1\/agents\/(\w{32,44})\/timeline$/.exec(p))) return { status: 200, body: await agentTimeline(db, m[1]!, q) };
+  if ((m = /^\/v1\/agents\/([^/]+)\/timeline$/.exec(p))) return { status: 200, body: await agentTimeline(db, addr(m[1], 'passport'), q) };
   if (p === '/v1/social/feed') return { status: 200, body: await feed(db, q) };
   if ((m = /^\/v1\/social\/threads\/(\w{64,90}:\d{1,3})$/.exec(p))) {
     const t = await thread(db, m[1]!);
     return t ? { status: 200, body: t } : { status: 404, body: { error: 'The indexer holds no such message.' } };
   }
-  if ((m = /^\/v1\/social\/follows\/(\w{32,44})$/.exec(p))) return { status: 200, body: await follows(db, m[1]!) };
+  if ((m = /^\/v1\/social\/follows\/([^/]+)$/.exec(p))) return { status: 200, body: await follows(db, addr(m[1], 'wallet')) };
   if (p === '/v1/social/leaderboards') return { status: 200, body: await leaderboard(conn, db, q.get('board')) };
   if (p === '/v1/social/live') return { status: 200, body: await live(db, q) };
   if (p === '/v1/social/hides') return { status: 200, body: await hides(db) };

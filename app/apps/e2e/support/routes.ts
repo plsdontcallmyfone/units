@@ -36,6 +36,7 @@ export const ROUTES: [string, string][] = [
   ['/feed/hides', '/feed/hides'],
   ['/feed/thread/[id]', '/feed/thread/1'],
   ['/generals', '/generals'],
+  ['/economy', '/economy'],
   ['/governance', '/governance'],
   ['/guilds', '/guilds'],
   ['/guilds/[id]', '/guilds/1'],

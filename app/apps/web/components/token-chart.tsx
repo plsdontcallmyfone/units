@@ -7,7 +7,7 @@ import type { Candle } from '@/lib/mock';
  * at the bottom. Chest: an area. Raids: a histogram. Figures come from the market read as they are. */
 type Tab = 'price' | 'chest' | 'raids';
 const TABS: [Tab, string][] = [['price', 'Price'], ['chest', 'Chest'], ['raids', 'Raids']];
-const INK = '#1a1a19', INK2 = '#55554f', MUTED = '#6c6962', GOOD = '#79a636', BAD = '#d0463b', BG = '#f8f8f8';
+const INK = '#1a1a19', INK2 = '#55554f', MUTED = '#65625b', GOOD = '#79a636', BAD = '#d0463b', BG = '#f8f8f8';
 const GRID = 'rgba(26,26,25,0.07)', BORDER = 'rgba(26,26,25,0.14)';
 const hhmm = (t: number) => { const d = new Date(t * 1000); return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`; };
 
@@ -56,7 +56,7 @@ export function TokenChart({ series, symbol }: { series: Candle[]; symbol: strin
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px' }}>
         <span className="k">{symbol} · 24h · 15m</span>
-        <span style={{ font: '600 13px var(--sans)', color: tab === 'raids' ? 'var(--ink)' : (tab === 'price' ? delta : chestDelta) >= 0 ? 'var(--good)' : 'var(--bad)' }}>
+        <span style={{ font: '600 13px var(--sans)', color: tab === 'raids' ? 'var(--ink)' : (tab === 'price' ? delta : chestDelta) >= 0 ? 'var(--good-ink, var(--good))' : 'var(--bad-ink, var(--bad))' }}>
           {tab === 'price' ? `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%` : tab === 'chest' ? `${chestDelta >= 0 ? '+' : ''}${chestDelta.toFixed(2)} SOL` : `${raided.toLocaleString('en-US', { maximumFractionDigits: 1 })} SOL raided`}
         </span>
         {last ? <span className="k" style={{ marginLeft: 4 }}>{tab === 'price' ? `O ${last.open.toPrecision(3)} H ${last.high.toPrecision(3)} L ${last.low.toPrecision(3)} C ${last.close.toPrecision(3)}` : ''}</span> : null}

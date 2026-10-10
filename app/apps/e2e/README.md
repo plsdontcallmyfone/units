@@ -78,20 +78,11 @@ the route checks, inline for the others); fix the page, remove the entry, and th
 | Test | Reason |
 | --- | --- |
 | routes: `/` renders cleanly | The landing frames the archived plnty site (`public/plnty`). Its scripts load Google Tag Manager (AW-18440458478) and call plnty's Supabase activity feed (both blocked by the CSP), throw "Invalid or unexpected token", and request archive assets that 404 (`/_astro/*`, `/homepage/canvas/*`, `/plnty/agency/coins/*`): about 150 errors per load |
-| routes: `/coins` (one check) | The page renders its own `<main>` inside the layout's `<main>`: two main landmarks. The page's other checks run |
-| nav: clicking a menu pill leaves its menu open | Pointing at a pill opens its menu (mouse enter, or focus from the keyboard) and the click or Enter that follows toggles it shut, so a click on a pill closes the menu it just opened (`components/site-header.tsx`) |
-| api: a malformed key in a path is a 400 | `GET /v1/agents/<not a key>` answers 500 ("Invalid public key input" in the log) instead of a 400 with a sentence |
-| nav: the pages added in app pass 5 are in the menu | The header (`components/site-header.tsx`) has no entry for `/governance` or `/war/coalitions`; app pass 5 added them to `components/nav.tsx`, which the layout no longer renders |
 | flows: licence buy appears for a Licensed item | Demo data has no Licensed item (`lib/mock.ts` answers every `/v1/access` read with mode 0), so the form never renders in demo mode; covered by the API test of `licences/buy` and the devnet project |
 
 ## Accessibility baseline
 
-Recorded 2026-10-10 in `support/a11y-baseline.json` (serious or critical only):
-
-| Page | Rules |
-| --- | --- |
-| every checked page | `color-contrast` (text below 4.5:1 against its background) |
-| `/t/[mint]` | also `scrollable-region-focusable` (a scrolling region keyboard users cannot reach) |
+Recorded 2026-10-10 in `support/a11y-baseline.json` (serious or critical only): empty. Every checked page passes axe's serious and critical rules, color contrast included, so any new violation fails the suite.
 
 ## Also seen while running
 

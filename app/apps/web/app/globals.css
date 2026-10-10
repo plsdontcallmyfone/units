@@ -11,7 +11,7 @@
 
 :root {
   --bg: #f8f8f8; --bg-2: #e6e5e1; --bg-3: #e6e3dc; --bg-4: #d1cbbd; --chip: #d1cfc9; --white: #fcfcfc;
-  --ink: #1a1a19; --ink-soft: #33332f; --ink-2: #55554f; --muted: #6c6962; --faint: #9a9a92;
+  --ink: #1a1a19; --ink-soft: #33332f; --ink-2: #55554f; --muted: #65625b; --faint: #9a9a92;
   --line: rgba(26, 26, 25, 0.08); --line-2: rgba(26, 26, 25, 0.12); --line-3: rgba(26, 26, 25, 0.2); --line-hover: rgba(26, 26, 25, 0.3);
   --purple: #a68aff; --purple-hover: #7b54f5; --purple-ink: #47146e; --blue: #76c1f5; --blue-hover: #2ba1f2; --blue-ink: #092538; --yellow: #e3b210;
   --good: #79a636; --warn: #e3b210; --bad: #d0463b;
