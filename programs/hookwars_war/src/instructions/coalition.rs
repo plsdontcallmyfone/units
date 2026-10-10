@@ -395,7 +395,7 @@ pub struct CoalitionRaze<'info> {
 }
 
 /// `coalition_raze(rival)`: sells captured rival tokens of the shared chest back into the rival's
-/// pool at the raze rate limit, waiting below the M-3 floor (window `min_twap_secs`); the crank
+/// pool at the raze rate limit (none after the term), waiting below the M-3 floor (window `min_twap_secs`); the crank
 /// bounty is `max_crank_bounty_bps` of the proceeds.
 pub fn process_coalition_raze<'info>(ctx: Context<'info, CoalitionRaze<'info>>, args: SliceArgs) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
@@ -411,6 +411,7 @@ pub fn process_coalition_raze<'info>(ctx: Context<'info, CoalitionRaze<'info>>, 
     let sell = {
         let c = &mut ctx.accounts.coalition;
         note_coalition(c, balance_now);
+        let ends_at = c.ends_at;
         let e = c
             .captured
             .iter_mut()
@@ -421,8 +422,13 @@ pub fn process_coalition_raze<'info>(ctx: Context<'info, CoalitionRaze<'info>>, 
             e.raze_window_base = e.amount;
             e.razed_in_window = 0;
         }
-        let allowance = bps_of(e.raze_window_base, u64::from(params.raze_max_bps_per_interval))
-            .saturating_sub(e.razed_in_window);
+        // After the term the shared chest winds down: no rate limit, still the pool-share bound and
+        // the M-3 floor (the rate limit alone would never reach zero, and dissolving waits for it).
+        let allowance = if now >= ends_at {
+            e.amount
+        } else {
+            bps_of(e.raze_window_base, u64::from(params.raze_max_bps_per_interval)).saturating_sub(e.razed_in_window)
+        };
         require!(allowance > 0, WarError::RazeLimit);
         let side = u128::from(pool.base_reserve) + u128::from(pool.virtual_base);
         let pool_cap = (side * u128::from(pool_share_bps(&rival_launch)) / u128::from(BPS)).min(u128::from(u64::MAX)) as u64;

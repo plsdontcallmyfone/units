@@ -1,3 +1,4 @@
+// Changed by Hookwars: pass 4b: the economy suffixes (11 E-4 drops, E-6 counters) war steps take.
 //! What every war step shares: calling other programs by built instruction (the companion's way,
 //! upstream `invoke.rs`), signer seeds, balances, paying SOL, reading the War orders, the kit and the
 //! Raid range.
@@ -333,4 +334,53 @@ pub fn touch_raid<'info>(
     let bump = [war_signer_bump];
     let seeds: [&[u8]; 2] = [WAR_SIGNER_SEED, &bump];
     invoke_built(&ix, available, &[&seeds])
+}
+
+// ------------------------------------------------------------------------- the economy (11 E-4, E-6)
+
+/// Pass 4b: the optional economy suffixes at the end of a step's remaining accounts (after the
+/// agents record suffix is split off): `[..., craft drop suffix (eco_cpi::DROP_SUFFIX), social
+/// suffix (eco_cpi::SOCIAL_SUFFIX)]`, each recognised by its first account.
+pub struct Economy<'a, 'info> {
+    pub rest: &'a [AccountInfo<'info>],
+    pub craft: Option<&'a [AccountInfo<'info>]>,
+    pub social: Option<&'a [AccountInfo<'info>]>,
+}
+
+pub fn split_economy<'a, 'info>(rem: &'a [AccountInfo<'info>]) -> Economy<'a, 'info> {
+    use hookwars_common::{economy as eco, eco_cpi};
+    let (rem, social) = eco_cpi::split_tagged(rem, &eco::SOCIAL_ID, eco_cpi::SOCIAL_SUFFIX);
+    let (rest, craft) = eco_cpi::split_tagged(rem, &eco::CRAFT_ID, eco_cpi::DROP_SUFFIX);
+    Economy { rest, craft, social }
+}
+
+/// After a step's own effects: craft's `drop(source, measured)` to `recipient` when the craft suffix
+/// is given (its recipient must be `recipient`), and social's `record_wallet(counter, 1)` for
+/// `recipient` when the social suffix is given. Both are no-ops without their suffix, and craft and
+/// social are no-ops themselves when no rule, profile or caller listing is set up.
+pub fn economy_effects<'info>(
+    e: &Economy<'_, 'info>,
+    all: &[AccountInfo<'info>],
+    payer: &AccountInfo<'info>,
+    recipient: &Pubkey,
+    source: u8,
+    measured: u64,
+    counter: Option<u8>,
+) -> Result<()> {
+    use hookwars_common::eco_cpi;
+    if let Some(c) = e.craft {
+        let (head, d) = c.split_at(eco_cpi::CRAFT_HEAD);
+        require_keys_eq!(*d[4].key, *recipient, WarError::WrongAccount);
+        let common = eco_cpi::DropCommon {
+            payer,
+            token_program: find(all, &TOKEN_ID)?,
+            token_event_authority: find(all, &token_client::event_authority())?,
+            system_program: find(all, &system_program::ID)?,
+        };
+        eco_cpi::drop(head, d, &common, &crate::ID, source, measured)?;
+    }
+    if let (Some(s), Some(counter)) = (e.social, counter) {
+        eco_cpi::record_wallet(s, &crate::ID, recipient, counter, 1)?;
+    }
+    Ok(())
 }

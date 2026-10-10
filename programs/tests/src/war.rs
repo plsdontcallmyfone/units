@@ -260,7 +260,7 @@ impl WarWorld {
 
     // ---------------------------------------------------------------------------- foreign accounts
 
-    fn put_anchor<T: AccountSerialize>(&mut self, key: Pubkey, owner: Pubkey, value: &T, len: usize) {
+    pub fn put_anchor<T: AccountSerialize>(&mut self, key: Pubkey, owner: Pubkey, value: &T, len: usize) {
         let mut data = Vec::with_capacity(len);
         value.try_serialize(&mut data).expect("serialize");
         data.resize(data.len().max(len), 0);
@@ -432,7 +432,7 @@ impl WarWorld {
 
     // ---------------------------------------------------------------------------- mints and slots
 
-    fn write_mint(&mut self, key: &Pubkey, f: impl FnOnce(&mut Mint)) {
+    pub fn write_mint(&mut self, key: &Pubkey, f: impl FnOnce(&mut Mint)) {
         let mut account = self.w.env.account(key).expect("mint");
         let mut mint = Mint::try_deserialize(&mut &account.data[..]).expect("mint decodes");
         f(&mut mint);

@@ -857,3 +857,41 @@ pub fn settle_rivalry(mint: Pubkey, rival: Pubkey) -> Instruction {
     .to_account_metas(None);
     ix(accounts, crate::instruction::SettleRivalry {}.data())
 }
+
+/// Pass 4b (11 E-4): the craft drop suffix a war step takes (`[craft program, craft config, craft
+/// event authority, war's ["craft-caller"], drop rule ["drop", source], material ["material", id],
+/// material mint ["material-mint", id], craft minter ["craft-minter"], recipient, the recipient's
+/// material holding]`). The drop's token program, its event authority and the system program must
+/// also be among the step's accounts ([`drop_common`]).
+pub fn drop_suffix(source: u8, material_id: u16, recipient: Pubkey) -> Vec<AccountMeta> {
+    use hookwars_common::{economy as eco, eco_cpi};
+    let craft = eco::CRAFT_ID;
+    let pda = |seeds: &[&[u8]]| Pubkey::find_program_address(seeds, &craft).0;
+    let material_mint = pda(&[b"material-mint", &material_id.to_le_bytes()]);
+    vec![
+        AccountMeta::new_readonly(craft, false),
+        AccountMeta::new_readonly(eco_cpi::craft_config(), false),
+        AccountMeta::new_readonly(eco_cpi::event_authority(&craft), false),
+        AccountMeta::new_readonly(eco::caller_pda(eco::CRAFT_CALLER_SEED, &crate::ID).0, false),
+        AccountMeta::new(pda(&[b"drop", &[source]]), false),
+        AccountMeta::new(pda(&[b"material", &material_id.to_le_bytes()]), false),
+        AccountMeta::new(material_mint, false),
+        AccountMeta::new_readonly(pda(&[b"craft-minter"]), false),
+        AccountMeta::new_readonly(recipient, false),
+        AccountMeta::new(token_client::holding_address(&material_mint, &recipient), false),
+    ]
+}
+
+/// Pass 4b: the token program and its event authority, for a step whose own accounts lack them;
+/// placed before the drop suffix.
+pub fn drop_common() -> Vec<AccountMeta> {
+    vec![
+        AccountMeta::new_readonly(TOKEN_ID, false),
+        AccountMeta::new_readonly(token_client::event_authority(), false),
+    ]
+}
+
+/// Pass 4b (11 E-6): the social suffix for `wallet`.
+pub fn social_suffix(wallet: Pubkey) -> Vec<AccountMeta> {
+    hookwars_common::eco_cpi::social_metas(&crate::ID, &wallet)
+}

@@ -6,6 +6,7 @@
 //! normal rules; no wallet is paid for an outcome.
 
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::instruction::AccountMeta;
 use bordrless_token::client as token_client;
 
 use crate::common::*;
@@ -148,11 +149,12 @@ pub fn process_claim_boss_share<'info>(ctx: Context<'info, ClaimBossShare<'info>
         let all = available(ctx.accounts.to_account_infos(), ctx.remaining_accounts);
         let chest = ctx.accounts.war_chest.key();
         let seeds = KeyedSeeds::new(CHEST_SEED, mint, ctx.accounts.war_state.chest_bump);
-        invoke_built(
-            &bordrless_bridge::client::wrap_sol(chest, amount),
-            &all,
-            &[&seeds.seeds()],
-        )?;
+        // The pool's direct debit must reach the runtime with the chest's credit: the CPI syncs
+        // only the accounts it names, so the pool rides along as an extra writable account (the
+        // bridge ignores it) and the caller's lamports stay balanced.
+        let mut wrap = bordrless_bridge::client::wrap_sol(chest, amount);
+        wrap.accounts.push(AccountMeta::new(ctx.accounts.pool.key(), false));
+        invoke_built(&wrap, &all, &[&seeds.seeds()])?;
     }
     let after = chest_balance(&ctx.accounts.chest_holding)?;
     let s = &mut ctx.accounts.war_state;
