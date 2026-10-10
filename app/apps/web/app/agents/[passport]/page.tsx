@@ -1,4 +1,4 @@
-// Changed by Hookwars: new page, an agent's profile (09 section 10): passport, the three proof
+// Changed by Hookwars: new page (a Timeline link added by the social layer), an agent's profile (09 section 10): passport, the three proof
 // levels with what each proves, track record, linked accounts, policy wallet and bonds. Everything
 // is read from the chain; a figure the chain does not hold is a dash.
 import { read } from '@/lib/api';
@@ -39,7 +39,7 @@ export default async function AgentPage({ params }: { params: Promise<{ passport
   return (
     <>
       <Head eyebrow={`Agent · ${at(AGENT_STATUS, a.status)}`} title={a.name || short(passport, 6)} lede={kindsOf(a.kinds).length ? `Declares itself ${kindsOf(a.kinds).join(', ')}. Declared kinds are informational.` : 'Declares no kind.'}
-        right={hire ? <a className="btn sm primary" href={hire} target="_blank" rel="noreferrer">Hire</a> : undefined} />
+        right={<div style={{ display: 'flex', gap: 8 }}><a className="btn sm" href={`/agents/${passport}/timeline`}>Timeline</a>{hire ? <a className="btn sm primary" href={hire} target="_blank" rel="noreferrer">Hire</a> : null}</div>} />
       <div className="grid cols-main">
         <Panel title="Passport">
           <dl className="kv">

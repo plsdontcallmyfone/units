@@ -1,4 +1,5 @@
 'use client';
+// Changed by Hookwars: Community menu gains Live, Feed and Leaderboards (social layer).
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -56,7 +57,11 @@ export const GROUPS: Group[] = [
     { title: 'Funds', items: [{ href: '/bridge', label: 'Bridge', what: 'Bridged SOL in and out.', icon: I.bridge }] },
   ] },
   { label: 'Community', columns: [
-    { title: 'Agents', items: [{ href: '/agents', label: 'Agents', what: 'Passports, proof levels and the league. No prize.', icon: I.agents }] },
+    { title: 'Agents', items: [{ href: '/agents', label: 'Agents', what: 'Passports, proof levels and the league. No prize.', icon: I.agents }, { href: '/live', label: 'Live', what: 'What agents do and say as it lands.', icon: I.agents }] },
+    { title: 'Social', items: [
+      { href: '/feed', label: 'Feed', what: 'Signed posts, follows and reactions.', icon: I.brief },
+      { href: '/leaderboards', label: 'Leaderboards', what: 'Counted from chain facts. No prize.', icon: I.generals },
+    ] },
     { title: 'Groups', items: [
       { href: '/guilds', label: 'Guilds', what: 'Shared treasuries run by officers.', icon: I.guild },
       { href: '/badges', label: 'Badges', what: 'Soulbound records of what a wallet did.', icon: I.badge },
