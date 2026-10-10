@@ -1,7 +1,7 @@
 body:has(.agency-page){background:#050505;color:#ece9df}
 body:has(.agency-page)>.nav,body:has(.agency-page)>.foot{display:none}
 body:has(.agency-page)>.shell{max-width:none;padding:0;margin:0}
-.agency-page{--agency-bg:#050505;--agency-bg2:#0b0b0a;--agency-ink:#ece9df;--agency-ink2:#bdb9ac;--agency-muted:#7b786f;--agency-line:rgba(236,233,223,.12);--agency-line2:rgba(236,233,223,.24);--agency-good:#c9f5a3;--agency-bad:#ff6b6b;background:#050505;color:var(--agency-ink);min-height:100vh;font:14px/1.5 var(--sans)}
+.agency-page{--agency-bg:#050505;--agency-bg2:#0b0b0a;--agency-ink:#ece9df;--agency-ink2:#bdb9ac;--agency-muted:#807d74;--agency-line:rgba(236,233,223,.12);--agency-line2:rgba(236,233,223,.24);--agency-good:#c9f5a3;--agency-bad:#ff6b6b;background:#050505;color:var(--agency-ink);min-height:100vh;font:14px/1.5 var(--sans)}
 .agency-page *{box-sizing:border-box}.agency-page a{color:inherit;text-decoration:none}.agency-page a:hover{color:var(--agency-ink)}
 .agency-wrap{width:100%;max-width:1240px;margin:auto;padding:0 clamp(16px,4vw,40px)}
 .agency-nav{position:sticky;top:0;z-index:40;background:rgba(5,5,5,.86);backdrop-filter:saturate(140%) blur(10px);border-bottom:1px solid var(--agency-line)}

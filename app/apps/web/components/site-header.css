@@ -4,8 +4,8 @@
 :root {
   --hp-u: clamp(1px, .06944vw, 1.3333px); --hp-gutter: calc(24 * var(--hp-u)); --hp-gap-pill: calc(8 * var(--hp-u)); --hp-frame-inset: 0px;
   --hp-bar-height: calc(60 * var(--hp-u)); --hp-ticker-height: calc(20 * var(--hp-u)); --hp-top-height: calc(var(--hp-ticker-height) + var(--hp-bar-height));
-  --hp-ink: #1a1a19; --hp-ink-hover: #000; --hp-ink-muted: #6c6962; --hp-ink-soft: #33332f; --hp-surface: #f8f8f8; --hp-panel: #e6e5e1; --hp-pill: #e6e3dc; --hp-pill-hover: #d1cbbd;
-  --hp-menu-body: #6c6962; --hp-menu-rule: #cfccc6; --hp-ticker-bg: #1a1a19; --hp-ticker-ink: #cac7bf; --hp-ticker-duration: 66s;
+  --hp-ink: #1a1a19; --hp-ink-hover: #000; --hp-ink-muted: #65625b; --hp-ink-soft: #33332f; --hp-surface: #f8f8f8; --hp-panel: #e6e5e1; --hp-pill: #e6e3dc; --hp-pill-hover: #d1cbbd;
+  --hp-menu-body: #65625b; --hp-menu-rule: #cfccc6; --hp-ticker-bg: #1a1a19; --hp-ticker-ink: #cac7bf; --hp-ticker-duration: 66s;
   --hp-cta-purple: #a68aff; --hp-cta-purple-hover: #7b54f5; --hp-cta-purple-ink: #47146e;
   --hp-size-nav: calc(12 * var(--hp-u)); --hp-size-ticker: calc(11.3466 * var(--hp-u)); --hp-tracking-nav: -.01em; --hp-running-weight: 450;
   --hp-pill-height-group: calc(28 * var(--hp-u)); --hp-pill-height-action: calc(26 * var(--hp-u));

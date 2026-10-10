@@ -35,7 +35,7 @@ function sentence(e: BattleEvent, mint: string): string {
 function hhmm(ts: number): string { const d = new Date(ts * 1000); return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`; }
 
 function Pn({ title, aside, className = '', flush, children }: { title: string; aside?: string; className?: string; flush?: boolean; children: React.ReactNode }) {
-  return <section className={`pn ${className}`}><header className="pn-h"><h2>{title}</h2>{aside ? <span className="pn-aside">{aside}</span> : null}</header><div className={flush ? 'pn-b flush' : 'pn-b'}>{children}</div></section>;
+  return <section className={`pn ${className}`}><header className="pn-h"><h2>{title}</h2>{aside ? <span className="pn-aside">{aside}</span> : null}</header><div className={flush ? 'pn-b flush' : 'pn-b'} tabIndex={0} role="region" aria-label={title}>{children}</div></section>;
 }
 
 export default async function TokenPage({ params }: { params: Promise<{ mint: string }> }) {
@@ -154,7 +154,7 @@ export default async function TokenPage({ params }: { params: Promise<{ mint: st
             )}
           </Pn>
           <Pn title="Moves" aside="on chain" className="cv3-moves">
-            <div className="scroll">
+            <div className="scroll" tabIndex={0} role="region" aria-label="Moves list">
               {mine.length === 0 ? <p className="dim" style={{ padding: '12px 0' }}>No moves yet.</p> : (
                 <ul className="mv">{mine.map((e) => <li key={`${e.signature}:${e.ordinal}`}><a href={`https://solscan.io/tx/${e.signature}?cluster=devnet`} target="_blank" rel="noreferrer"><p>{sentence(e, mint)}</p><span><em className={e.kind === 'siege' && e.otherMint === mint ? 'bad' : 'ok'}>on chain</em> · {ago(e.ts)}</span></a><span className="mv-tx">tx ↗</span></li>)}</ul>
               )}

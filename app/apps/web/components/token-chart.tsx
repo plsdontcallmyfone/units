@@ -7,7 +7,7 @@ import type { Candle } from '@/lib/mock';
  * at the bottom. Chest: an area. Raids: a histogram. Figures come from the market read as they are. */
 type Tab = 'price' | 'chest' | 'raids';
 const TABS: [Tab, string][] = [['price', 'Price'], ['chest', 'Chest'], ['raids', 'Raids']];
-const INK = '#1a1a19', INK2 = '#55554f', MUTED = '#6c6962', GOOD = '#79a636', BAD = '#d0463b', BG = '#f8f8f8';
+const INK = '#1a1a19', INK2 = '#55554f', MUTED = '#65625b', GOOD = '#79a636', BAD = '#d0463b', BG = '#f8f8f8';
 const GRID = 'rgba(26,26,25,0.07)', BORDER = 'rgba(26,26,25,0.14)';
 const hhmm = (t: number) => { const d = new Date(t * 1000); return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`; };
 
