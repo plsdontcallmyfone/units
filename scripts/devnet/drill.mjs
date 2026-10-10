@@ -134,6 +134,18 @@ if (cmd === 'wallets') {
   const sig = await web3.sendAndConfirmTransaction(conn, new web3.Transaction().add(ed, ix), [payer], { commitment: 'confirmed' });
   log({ step: 'agents link_social', passport: passport.toBase58(), platform: Number(platform), handle, signature: sig });
   console.log(`linked: ${sig}`);
+} else if (cmd === 'season') {
+  // season <number> <starts in secs>: war `propose_season` by the admin (the deployer), TEST weights
+  // (raid volume won 1, the m_b e2e's), not owner values (spec 00 section 6). No API route exists.
+  const admin = loadKey(DEPLOYER);
+  const number = Number(argv[1]);
+  const startsAt = BigInt(Math.floor(Date.now() / 1000) + Number(argv[2]));
+  const season = sdk.hookwars.seasonAddress(number);
+  const weights = { raidVolumeWon: 1n, sieges: 0n, siegeSpend: 0n, timesBesieged: 0n, counterStrikes: 0n, treatySecs: 0n, rivalryWins: 0n };
+  const ix = sdk.hookwars.idlIx('war', 'propose_season', { admin: admin.publicKey, config: sdk.hookwars.WAR_CONFIG, season }, { args: { number, startsAt, weights, penalizeBesieged: false } });
+  const sig = await web3.sendAndConfirmTransaction(conn, new web3.Transaction().add(ix), [admin], { commitment: 'confirmed' });
+  log({ step: 'war propose_season', number, startsAt: String(startsAt), signature: sig });
+  console.log(`season ${number} proposed, starts ${startsAt}: ${sig}`);
 } else if (cmd === 'save-fresh') {
   // Saves the address of a "$new:" key as <name> (a launch whose --save did not run).
   const s5 = state();

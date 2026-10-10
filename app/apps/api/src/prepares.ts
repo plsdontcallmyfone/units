@@ -9,7 +9,7 @@ import {
   AddressLookupTableAccount, AddressLookupTableProgram, ComputeBudgetProgram, Connection, PublicKey, TransactionMessage, VersionedTransaction,
   type AccountMeta, type TransactionInstruction,
 } from '@solana/web3.js';
-import { hookwars, holderVaultAddress, programDataAddress, decodeLaunch, decodeKitConfig, decodePool, decodeLaunchConfig, launchHookExtras, launchPoolAddress, launchRulesFromInput, checkProtocolLookupTable, token, LAUNCH_CONFIG, companion, companionCreatorAddress, COMPANION_DEFAULTS, type CompanionArgs } from '@hookwars/sdk';
+import { hookwars, bridge, holderVaultAddress, programDataAddress, decodeLaunch, decodeKitConfig, decodePool, decodeLaunchConfig, launchHookExtras, launchPoolAddress, launchRulesFromInput, checkProtocolLookupTable, token, LAUNCH_CONFIG, companion, companionCreatorAddress, COMPANION_DEFAULTS, type CompanionArgs } from '@hookwars/sdk';
 import type { Pool as Db } from 'pg';
 import { EXPANSION_PREPARES } from './expansion-prepares.ts';
 import { SOCIAL_PREPARES } from './social-prepares.ts';
@@ -138,7 +138,9 @@ export const PREPARES: Record<string, PrepareDef> = {
       const owner = pk(b, 'owner'); const mint = pk(b, 'mint');
       const { orders, raid, extras } = await raidContext(conn, mint, owner);
       if (!orders) throw new PrepareError(409, 'NoWarOrders', 'This token has no War orders equipped, so its chest pays no bounties.');
-      return [hookwars.claimBounty(owner, mint, orders, raid.slot, extras)];
+      // The chest pays in SOL through the bridge's `unwrap_sol` (the war client's inner list; without it
+      // the claim fails with MissingAccount, found on the devnet drill).
+      return [hookwars.claimBounty(owner, mint, orders, raid.slot, extras, [bridge.unwrapSol(hookwars.warChestAddress(mint), 0n)])];
     },
   },
   'quests/prepare': {
