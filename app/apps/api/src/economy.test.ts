@@ -140,6 +140,7 @@ withDb('economy reads', () => {
     await db.query(`insert into wear (item, max_charges, used, dormant, repairs) values ('Item1', 10, 10, true, 2), ('Item2', 10, 1, false, 0)`);
     const c = await craft(db, null, W(NOW - 7 * DAY));
     expect(c.chain).toBe(false);
+    expect(c.bookChain).toBe(false);
     expect(c.dropsBySource).toEqual([{ source: 0, materialId: 1, amount: '40', drops: 1 }, { source: 1, materialId: 1, amount: '2', drops: 1 }]);
     expect(c.recipes).toEqual({ crafts: 1, repairs: 1, feesLamports: '20' });
     expect(c.classFills).toEqual({ count: 1, volumeLamports: '444' });

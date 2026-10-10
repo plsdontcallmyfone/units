@@ -93,24 +93,25 @@ export default async function EconomyPage({ searchParams }: { searchParams: Prom
         <Failed r={rev} what="protocol revenue">{(d) => {
           const series: Series[] = FEE_SOURCES.filter((s) => d.sources.find((x) => x.source === s)?.lamports).map((s) => ({ key: s, label: SOURCE_LABEL[s], color: SOURCE_COLOR[s] }));
           return (
-            <div className="grid cols-main">
+            <div className="econ-rev">
               <Card title="By period" meta={d.totalLamports ? `${sol(d.totalLamports)} in all` : undefined}>
-                {d.series.length === 0 ? <Empty title="No protocol fees in this period" what="Fees appear once swaps, settles, sales, licences, fills or recipes pay the protocol and the indexer has read them." next={<>Try <Link href="/economy?period=all">all time</Link>, or check the <Link href="/explorer">explorer</Link> for indexed events.</>} />
+                {d.series.length === 0 ? <Empty title="No protocol fees in this period" what="Fees appear once swaps, sales, licences, fills or recipes pay the protocol and the indexer has read them." next={<>Try <Link href="/economy?period=all">all time</Link>, or check the <Link href="/explorer">explorer</Link> for indexed events.</>} />
                   : <Columns label="Protocol revenue by source over time" series={series} buckets={d.series.map((b) => ({ t: b.t, values: Object.fromEntries(Object.entries(b.bySource).map(([k, v]) => [k, Number(v)])) }))} from={d.window.from} to={d.window.to} bucketSecs={d.window.bucketSecs} />}
               </Card>
               <Card title="By source" flush>
                 <table className="econ-table">
-                  <thead><tr><th>Source</th><th className="num">Collected</th><th className="num">Events</th></tr></thead>
+                  <thead><tr><th>Source</th><th className="hide-sm">What it is</th><th className="num">Collected</th><th className="num">Events</th></tr></thead>
                   <tbody>{d.sources.map((s) => (
                     <tr key={s.source} className={s.lamports ? '' : 'dim'}>
-                      <td><i className="sw" style={{ background: SOURCE_COLOR[s.source] }} aria-hidden />{SOURCE_LABEL[s.source]}<div className="faint">{SOURCE_WHAT[s.source]}</div></td>
+                      <td className="nowrap"><i className="sw" style={{ background: SOURCE_COLOR[s.source] }} aria-hidden />{SOURCE_LABEL[s.source]}<div className="faint show-sm">{SOURCE_WHAT[s.source]}</div></td>
+                      <td className="hide-sm faint-cell">{SOURCE_WHAT[s.source]}</td>
                       <td className="num">{sol(s.lamports)}</td><td className="num">{s.events ? int(s.events) : DASH}</td>
                     </tr>
                   ))}</tbody>
                 </table>
                 <div className="econ-foot">
-                  <span>Lifetime, from program configs: book {sol(d.configTotals.book)}, craft {sol(d.configTotals.craft)}</span>
                   {d.otherMints.length ? <span>Item-run fees in each token&apos;s own units: {d.otherMints.slice(0, 4).map((o) => <span key={o.mint + o.source}><Link href={`/t/${o.mint}`}>{short(o.mint)}</Link> {compact(o.amount)}</span>).reduce<ReactNode[]>((a, x, i) => (i ? [...a, ', ', x] : [x]), [])}{d.otherMints.length > 4 ? `, and ${d.otherMints.length - 4} more` : ''}</span> : <span>No item-run fees in this period; they are paid in each token&apos;s own units.</span>}
+                  {d.configTotals.book || d.configTotals.craft ? <span>Lifetime totals the programs keep: order book {sol(d.configTotals.book)}, recipes {sol(d.configTotals.craft)}.</span> : null}
                 </div>
               </Card>
             </div>
@@ -216,10 +217,10 @@ export default async function EconomyPage({ searchParams }: { searchParams: Prom
               <Fig label="Class fills" value={int(d.classFills.count)} sub={d.classFills.volumeLamports ? sol(d.classFills.volumeLamports) : 'no class bids filled'} />
               <Fig label="Items dormant" value={int(d.wear.dormant)} sub={`of ${int(d.wear.tracked)} that wear`} />
             </div>
-            {!d.chain ? <div className="panel"><div className="panel-body econ-pad"><Empty title="Material supply and the books could not be read" what="Supply, season caps and resting orders live on the chain, and the backend could not read the craft and book programs just now." next={<>Drops and fills above are from indexed events. <Link href="/craft">Craft</Link> and the <Link href="/book">order book</Link> read the chain directly.</>} /></div></div> : (
+            {!d.chain && !d.bookChain ? <div className="panel"><div className="panel-body econ-pad"><Empty title="Material supply and the books could not be read" what="Supply, season caps and resting orders live on the chain, and the backend could not read the craft and book programs just now." next={<>Drops and fills above are from indexed events. <Link href="/craft">Craft</Link> and the <Link href="/book">order book</Link> read the chain directly.</>} /></div></div> : (
             <div className="grid cols-2">
               <Card title="Materials" meta="supply against the season cap" flush>
-                {d.materials.length === 0 ? <Empty title="No materials" what="The admin creates materials behind the timelock, each with a season cap." next={<Link href="/craft">Craft</Link>} /> : (
+                {!d.chain ? <Empty title="Materials could not be read" what="The backend could not read the craft program just now; drops above are from indexed events." /> : d.materials.length === 0 ? <Empty title="No materials" what="The admin creates materials behind the timelock, each with a season cap." next={<Link href="/craft">Craft</Link>} /> : (
                   <table className="econ-table">
                     <thead><tr><th>Material</th><th>This season</th><th className="num">Dropped</th><th className="num">Burned</th><th className="num">Net</th></tr></thead>
                     <tbody>{d.materials.map((m) => {
@@ -237,7 +238,7 @@ export default async function EconomyPage({ searchParams }: { searchParams: Prom
                 {d.dropsBySource.length ? <div className="econ-foot"><span>Drops by source: {d.dropsBySource.map((x) => `${DROP_SOURCE[x.source] ?? `source ${x.source}`} ${int(x.amount)} of material ${x.materialId}`).join('; ')}</span><span>Burned counts this period&apos;s recipe uses at each recipe&apos;s current inputs.</span></div> : null}
               </Card>
               <Card title="Order books" meta="resting orders from the chain" flush>
-                {d.books.length === 0 ? <Empty title="No material books" what="A book opens for a material once someone creates its market." next={<Link href="/book">Order book</Link>} /> : (
+                {!d.bookChain ? <Empty title="The books could not be read" what="The backend could not read the book program just now, so resting orders and depth are not shown." next={<Link href="/book">Order book</Link>} /> : d.books.length === 0 ? <Empty title="No material books" what="A book opens for a material once someone creates its market." next={<Link href="/book">Order book</Link>} /> : (
                   <table className="econ-table">
                     <thead><tr><th>Material</th><th className="num">Bid</th><th className="num">Ask</th><th className="num">Depth</th><th className="num">Fills</th></tr></thead>
                     <tbody>{d.books.map((b) => (
@@ -261,8 +262,11 @@ export default async function EconomyPage({ searchParams }: { searchParams: Prom
         <Failed r={crk} what="crank bounties">{(d) => (
           <div className="econ-three">
             <Card title="Bounties by step" flush>
-              <table className="econ-table"><thead><tr><th>Step</th><th className="num">Runs</th><th className="num">Bounties</th></tr></thead>
-                <tbody>{d.byKind.map((k) => <tr key={k.kind} className={k.runs ? '' : 'dim'}><td>{CRANK_LABEL[k.kind] ?? k.kind}</td><td className="num">{k.runs ? int(k.runs) : DASH}</td><td className="num">{sol(k.bountyLamports)}</td></tr>)}</tbody></table>
+              {d.byKind.some((k) => k.runs) ? (
+                <table className="econ-table"><thead><tr><th>Step</th><th className="num">Runs</th><th className="num">Bounties</th></tr></thead>
+                  <tbody>{d.byKind.filter((k) => k.runs).map((k) => <tr key={k.kind}><td>{CRANK_LABEL[k.kind] ?? k.kind}</td><td className="num">{int(k.runs)}</td><td className="num">{sol(k.bountyLamports)}</td></tr>)}</tbody></table>
+              ) : <Empty title="No cranks ran" what="Settles, sieges, razes, prizes, order expiries and companion steps pay whoever runs them." />}
+              {d.byKind.some((k) => !k.runs) ? <div className="econ-foot"><span>Not run this period: {d.byKind.filter((k) => !k.runs).map((k) => (CRANK_LABEL[k.kind] ?? k.kind).toLowerCase()).join(', ')}.</span></div> : null}
             </Card>
             <Card title="Top crankers" meta="settles name no cranker" flush>
               {d.top.length === 0 ? <Empty title="No named crankers" what="Sieges, razes, prizes, expiries and companion cranks name who ran them." /> : (

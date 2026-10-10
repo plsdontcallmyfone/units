@@ -285,7 +285,9 @@ export interface Craft {
   books: { materialId: number; name: string | null; market: string; bestBid: string | null; bestAsk: string | null; spread: string | null; bidDepth: string; askDepth: string; bidOrders: number; askOrders: number; fills: number; volumeLamports: string | null; lastPrice: string | null; lastTs: number | null }[];
   classFills: { count: number; volumeLamports: string | null };
   wear: { tracked: number; dormant: number; repairs: number };
+  /** Whether the craft program (materials, recipes) and the book program could be read. */
   chain: boolean;
+  bookChain: boolean;
 }
 
 /** Drops come from `Dropped`, burns from the recipes used in the window times each recipe's inputs
@@ -293,12 +295,12 @@ export interface Craft {
  * terms, so the per-window burn is labelled as such). Supply and caps are the chain's. */
 export async function craft(db: Pool, conn: Connection | null, w: Window): Promise<Craft> {
   const p = [w.from, w.to];
-  let mats: Mat[] = []; let recs: Rec[] = []; let mkts: Mkt[] = []; let chain = false;
+  let mats: Mat[] = []; let recs: Rec[] = []; let mkts: Mkt[] = []; let chain = false; let bookChain = false;
   if (conn) {
-    try {
-      const [c, b] = await Promise.all([craftOverview(conn) as Promise<{ materials: Mat[]; recipes: Rec[] }>, books(conn, null) as Promise<{ markets: Mkt[] }>]);
-      mats = c.materials; recs = c.recipes; mkts = b.markets; chain = true;
-    } catch { /* the chain read failed: chain figures stay empty */ }
+    // Each program read on its own: a book that cannot be read leaves the materials standing.
+    const [c, b] = await Promise.allSettled([craftOverview(conn) as Promise<{ materials: Mat[]; recipes: Rec[] }>, books(conn, null) as Promise<{ markets: Mkt[] }>]);
+    if (c.status === 'fulfilled') { mats = c.value.materials; recs = c.value.recipes; chain = true; }
+    if (b.status === 'fulfilled') { mkts = b.value.markets; bookChain = true; }
   }
   const drops = await rows(db, 'select source::int as source, material_id::int as material_id, sum(amount) as amount, count(*) as c from ev_craft_dropped where ts >= $1 and ts <= $2 group by 1, 2 order by 3 desc', p);
   const used = await rows(db, `
@@ -342,7 +344,7 @@ export async function craft(db: Pool, conn: Connection | null, w: Window): Promi
     }),
     classFills: { count: n(cf.c), volumeLamports: n(cf.c) ? sum(cf.v) : null },
     wear: { tracked: n(wr.c), dormant: n(wr.d), repairs: n(wr.r) },
-    chain,
+    chain, bookChain,
   };
 }
 

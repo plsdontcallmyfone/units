@@ -62,6 +62,7 @@ export interface Craft {
   classFills: { count: number; volumeLamports: string | null };
   wear: { tracked: number; dormant: number; repairs: number };
   chain: boolean;
+  bookChain: boolean;
 }
 export interface Cranks {
   window: Window;
@@ -95,7 +96,7 @@ export function emptyEconomy(section: string, period: Period): unknown {
     case 'settlement': return { window, quote: { holderRoyalty: null, author: null, rent: null, bounty: null, destinations: null, settles: 0 }, dexShare: null, tokenSide: [] } satisfies Settlement;
     case 'builders': return { window, templates: [], holders: [], items: [] } satisfies Builders;
     case 'market': return { window, sales: { count: 0, volumeLamports: null, feeLamports: null, resaleLamports: null }, classes: [], activeListings: 0, licences: { live: 0, bought: 0, incomeLamports: null, protocolLamports: null, authorLamports: null, holderLamports: null }, leases: { active: 0, started: 0, feesLamports: null, rentLamports: null }, commissions: { open: 0, openBountyLamports: null, paid: 0, paidLamports: null, refunded: 0 } } satisfies Market;
-    case 'craft': return { window, materials: [], dropsBySource: [], recipes: { crafts: 0, repairs: 0, feesLamports: null }, books: [], classFills: { count: 0, volumeLamports: null }, wear: { tracked: 0, dormant: 0, repairs: 0 }, chain: false } satisfies Craft;
+    case 'craft': return { window, materials: [], dropsBySource: [], recipes: { crafts: 0, repairs: 0, feesLamports: null }, books: [], classFills: { count: 0, volumeLamports: null }, wear: { tracked: 0, dormant: 0, repairs: 0 }, chain: false, bookChain: false } satisfies Craft;
     case 'cranks': return { window, byKind: Object.keys(CRANK_LABEL).map((kind) => ({ kind, runs: 0, bountyLamports: null })), top: [], agents: [] } satisfies Cranks;
     case 'war': return { window, inflows: { funded: null, fundings: 0, fromCompanions: null, treatyShared: null, coalitionContributed: null }, outflows: { siegeSpent: null, sieges: 0, counterStrikeSpent: null, razeProceeds: null, razes: 0, coalitionSiegeSpent: null, bountiesPaid: null }, boss: { funded: null, claimed: null, sealed: 0 }, prize: { toWinner: null, toTreasury: null, paid: 0 }, chests: [], series: [] } satisfies War;
     default: return undefined;
