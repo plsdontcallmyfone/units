@@ -91,9 +91,11 @@ fn the_switchboard_layout_reads_the_documented_offsets() {
     let sb = SbRandomness::parse(&d).unwrap();
     assert_eq!(sb, SbRandomness { authority, seed_slot: 41, reveal_slot: 42, value: [5; 32] });
     let mut fixture = sb.to_bytes();
+    assert_eq!(fixture.len(), SbRandomness::ACCOUNT_LEN);
     fixture[40..104].copy_from_slice(&d[40..104]);
     fixture[112..144].copy_from_slice(&d[112..144]);
-    assert_eq!(fixture, d);
+    assert_eq!(&fixture[..SbRandomness::LEN], &d[..]);
+    assert_eq!(SbRandomness::parse(&fixture).unwrap(), sb);
     // A short account or another discriminator is refused.
     assert!(SbRandomness::parse(&d[..400]).is_err());
     let mut other = d.clone();

@@ -81,7 +81,7 @@ describe('loot rolls on Switchboard randomness (D-4)', () => {
   it('the SDK reads the Switchboard layout and draws like the war program', () => {
     const r = { authority: owner, seedSlot: 41n, revealSlot: 42n, value: Uint8Array.from({ length: 32 }, (_, i) => i) };
     const bytes = hookwars.encodeSbRandomness(r);
-    expect(bytes.length).toBe(408);
+    expect(bytes.length).toBe(480);
     expect([...bytes.subarray(0, 8)]).toEqual([10, 66, 229, 135, 220, 239, 217, 114]);
     expect(hookwars.decodeSbRandomness(bytes)).toEqual(r);
     expect(() => hookwars.decodeSbRandomness(bytes.subarray(0, 400))).toThrow();

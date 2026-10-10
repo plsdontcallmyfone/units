@@ -15,11 +15,14 @@ export const SWITCHBOARD_DEVNET = new PublicKey('Aio4gaXjXzJNVLtzwtNVmSqGKpANtXh
 /** Whether the war config's randomness program is Switchboard (read directly, no adapter). */
 export const isSwitchboard = (program: PublicKey): boolean => program.equals(SWITCHBOARD_MAINNET) || program.equals(SWITCHBOARD_DEVNET);
 
-/** The fields of Switchboard's `RandomnessAccountData` the war program reads (408 bytes). */
+/** The fields of Switchboard's `RandomnessAccountData` the war program reads (the struct is 408 bytes; live accounts are 480). */
 export interface SbRandomness { authority: PublicKey; seedSlot: bigint; revealSlot: bigint; value: Uint8Array }
 
 export const SB_RANDOMNESS_DISCRIMINATOR = Uint8Array.from([10, 66, 229, 135, 220, 239, 217, 114]);
+/** The shortest account accepted (the struct with its discriminator). */
 export const SB_RANDOMNESS_LEN = 408;
+/** A live account's length (devnet, 2026-10-10). */
+export const SB_RANDOMNESS_ACCOUNT_LEN = 480;
 
 /** Decodes a Switchboard randomness account: `disc | authority | queue | seed_slothash | seed_slot | oracle | reveal_slot | value | reserved`. */
 export function decodeSbRandomness(data: Uint8Array): SbRandomness {
@@ -37,7 +40,7 @@ export function decodeSbRandomness(data: Uint8Array): SbRandomness {
 
 /** Encodes the same layout (fixtures and tests). */
 export function encodeSbRandomness(r: SbRandomness): Uint8Array {
-  const d = new Uint8Array(SB_RANDOMNESS_LEN);
+  const d = new Uint8Array(SB_RANDOMNESS_ACCOUNT_LEN);
   d.set(SB_RANDOMNESS_DISCRIMINATOR, 0);
   d.set(r.authority.toBytes(), 8);
   const view = new DataView(d.buffer);

@@ -70,7 +70,9 @@ pub fn is_switchboard(program: &Pubkey) -> bool {
 /// The fields of Switchboard's `RandomnessAccountData` the war program reads. The account is
 /// `discriminator (8) | authority (32) | queue (32) | seed_slothash (32) | seed_slot u64 |
 /// oracle (32) | reveal_slot u64 | value (32) | 224 reserved`, 408 bytes (`#[repr(C)]`, little
-/// endian), as `switchboard-on-demand` 0.13.0 `accounts/randomness.rs` defines it.
+/// endian), as `switchboard-on-demand` 0.13.0 `accounts/randomness.rs` defines it. Live accounts
+/// are 480 bytes (read on devnet 2026-10-10, 168,519 accounts, all 480): the fields read here sit at
+/// the same offsets, the rest is Switchboard's.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SbRandomness {
     pub authority: Pubkey,
@@ -82,8 +84,10 @@ pub struct SbRandomness {
 impl SbRandomness {
     /// `RandomnessAccountData::DISCRIMINATOR`.
     pub const DISCRIMINATOR: [u8; 8] = [10, 66, 229, 135, 220, 239, 217, 114];
-    /// The full account length.
+    /// The struct's length with its discriminator: the shortest account accepted.
     pub const LEN: usize = 408;
+    /// A live account's length (the test fixture's).
+    pub const ACCOUNT_LEN: usize = 480;
     const AUTHORITY: usize = 8;
     const SEED_SLOT: usize = 8 + 96;
     const REVEAL_SLOT: usize = 8 + 104 + 32;
@@ -112,7 +116,7 @@ impl SbRandomness {
 
     /// The test fixture's bytes (the same layout).
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut d = vec![0u8; Self::LEN];
+        let mut d = vec![0u8; Self::ACCOUNT_LEN];
         d[..8].copy_from_slice(&Self::DISCRIMINATOR);
         d[Self::AUTHORITY..Self::AUTHORITY + 32].copy_from_slice(self.authority.as_ref());
         d[Self::SEED_SLOT..Self::SEED_SLOT + 8].copy_from_slice(&self.seed_slot.to_le_bytes());
