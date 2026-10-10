@@ -5,6 +5,9 @@
 // kit tokens pay token-side cuts only to on-curve wallets or mint vaults (review 1 H-2).
 // Changed by Hookwars: integration pass 3: the protocol fee (E-2, R37) and the template author's share
 // (R34, spec 10 I-2) through a fee suffix; craft wear and the settle drop (E-3, E-4) through a craft suffix.
+// Changed by Hookwars: protocol pass 4a (Hook Lab gap 3): an external template's vault balance is what it
+// collected (its program cannot write EquipState), paid by the same waterfall to its first target, or to
+// the item's royalty holding when it names none; its pool cuts are what the launchpad recorded.
 //! `settle_equip` (04 section 2.5, 08 section 2.11): pays what a slot's item collected. For each
 //! module, token side and pool side apart: the royalty (`Item.royalty_bps`) to the item's royalty
 //! holding, the sender's bounty (the armory's `settle_bounty_bps`), the rest to the module's
@@ -251,7 +254,30 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
     let cuts_seeds: &[&[u8]] = &[hookwars_common::seeds::POOL_CUTS, mint_key.as_ref(), &cuts_bump_seed];
     let royalty_bps = item.royalty_bps;
 
-    let token_owed: [u64; MAX_MODULES] = a.equip_state.token_unsettled;
+    let mut token_owed: [u64; MAX_MODULES] = a.equip_state.token_unsettled;
+    let external = hookwars_common::access::is_external(item.template_id);
+    if external {
+        if let Some(v) = a.equip_vault.as_ref() {
+            require_keys_eq!(v.key(), pda::holding(&mint_key, &state_key), ItemsError::WrongAccount);
+            if *v.owner == bordrless_token::ID && v.data_len() > 0 {
+                token_owed[0] = bordrless_token::client::read_holding(&v.to_account_info())?.amount;
+            }
+        }
+    }
+    let token_dest = |id: u16, targets: &[Pubkey]| {
+        if external {
+            Destination::Owner(hookwars_common::access::external_destination(targets).unwrap_or(royalty_owner))
+        } else {
+            templates::token_destination(id, targets)
+        }
+    };
+    let pool_dest = |id: u16, targets: &[Pubkey]| {
+        if external {
+            Destination::Owner(hookwars_common::access::external_destination(targets).unwrap_or(royalty_owner))
+        } else {
+            templates::pool_destination(id, &mint_key, targets)
+        }
+    };
     let pool_owed: [u64; MAX_MODULES] = a.equip_state.pool_unsettled;
     // What stays owed: a module whose destination holding does not exist yet is skipped and keeps
     // its counter (L-C); anyone can create the holding (`create_holding`) and settle again.
@@ -298,7 +324,7 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
             // E-2 (R37): the protocol's share comes first, on the token side only.
             let protocol = bps(x, protocol_bps);
             let (royalty, bounty, left) = split(x - protocol, royalty_bps, bounty_bps);
-            match templates::token_destination(m.template_id, targets) {
+            match token_dest(m.template_id, targets) {
                 Destination::Burn => {
                     cpi.burn(&state_info, &vault, &mint_info, left, state_seeds)?;
                     burned += left;
@@ -330,7 +356,7 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
         let y = pool_owed.get(i).copied().unwrap_or(0);
         if y > 0 {
             let (royalty, bounty, left) = split(y, royalty_bps, bounty_bps);
-            match templates::pool_destination(m.template_id, &mint_key, targets) {
+            match pool_dest(m.template_id, targets) {
                 Destination::Owner(o) => {
                     let d = &dests[2 * i + 1];
                     require_keys_eq!(d.key(), pda::holding(&quote, &o), ItemsError::WrongAccount);

@@ -28,6 +28,8 @@ bordrless-swap = { path = "../bordrless_swap", features = ["no-entrypoint"] }
 # Security review 2, L-D: reads the Launch account to refresh a slot launch's pool registry.
 bordrless-launch = { path = "../bordrless_launch", features = ["no-entrypoint"] }
 hookwars-common = { path = "../../crates/hookwars-common" }
+# Protocol pass 4a (L-1): the admin queue hashes the gated instruction data.
+solana-sha256-hasher = "3.1"
 
 [lints]
 workspace = true

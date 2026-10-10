@@ -6,6 +6,9 @@
 // guard, agent record calls, lease gate, revert_for_lease_end, listed claim refusal, badge counters.
 // Integration pass 3: set_template_economy, set_item_protocol_bps (E-7, E-2), Template and Item economy fields,
 // mint_crafted (E-5), wear on creation (E-3), social counters (E-6), fuse and presets (08 wave F).
+// Protocol pass 4a (docs/spec/14-pass-4a.md): access modes and enforce_access (E-1), level gates (E-8), the
+// admin queue on registration, retirement and the newer setters (L-1), external templates (Hook Lab gaps 1
+// to 3), template submissions, forge of composites.
 //! `hookwars_armory` (docs/spec/02-armory.md): templates, items as supply-1 tokens on the token
 //! standard, royalties and their claims, equip rules (holder vote with notice, performance revert,
 //! locked), equipping at launch (signed by the launchpad), loot minting (signed by the war program),
@@ -24,11 +27,13 @@ use hookwars_common::{
 pub mod cpi;
 pub mod error;
 pub mod events;
+pub mod gates;
 pub mod state;
 
 use cpi::*;
 use error::ArmoryError;
 use events::*;
+pub use gates::*;
 use state::*;
 
 declare_id!("7xnkyX5B7Ywz86Cu2ofM5T2z2UPmy1qhpgrAuK9Kk5MU");
@@ -138,7 +143,8 @@ pub mod hookwars_armory {
         c.templates = 0;
         c.params = params;
         c.item_protocol_bps = 0;
-        c.reserved = [0; 60];
+        c.access = AccessParams::default();
+        c.reserved = [0; 32];
         Ok(())
     }
 
@@ -192,16 +198,92 @@ pub mod hookwars_armory {
         Ok(())
     }
 
-    /// Registers a template (02 section 3.1).
+    /// Registers a template (02 section 3.1). Protocol pass 4a (L-1): queued first with
+    /// `queue_admin(sha256(data || template program))`.
     pub fn register_template<'info>(
         ctx: Context<'info, RegisterTemplate<'info>>,
         args: RegisterTemplateArgs,
     ) -> Result<()> {
-        process_register_template(ctx, args)
+        let program = ctx.accounts.template_program.key();
+        let hash = action_hash_of(&instruction::RegisterTemplate { args: args.clone() }, &[program]);
+        consume_queued(&ctx.accounts.queued, hash, &ctx.accounts.admin.key())?;
+        process_register_template(ctx, args, None)
     }
 
-    /// Retires a template (02 section 3.2).
+    /// Protocol pass 4a (Hook Lab gaps 1 to 3): registers a template whose program is its own
+    /// (not the items program), with the manifest ceiling its registrant declared and the lab
+    /// checked. Queued like `register_template` (bound to the template program).
+    pub fn register_external_template<'info>(
+        ctx: Context<'info, RegisterTemplate<'info>>,
+        args: RegisterTemplateArgs,
+        manifest: hookwars_common::Manifest,
+    ) -> Result<()> {
+        let program = ctx.accounts.template_program.key();
+        let hash = action_hash_of(&instruction::RegisterExternalTemplate { args: args.clone(), manifest }, &[program]);
+        consume_queued(&ctx.accounts.queued, hash, &ctx.accounts.admin.key())?;
+        process_register_template(ctx, args, Some(manifest))
+    }
+
+    /// Protocol pass 4a (L-1): the admin queues a gated action; it may apply after
+    /// `admin_timelock_secs`.
+    pub fn queue_admin(ctx: Context<QueueAdmin>, action_hash: [u8; 32]) -> Result<()> {
+        process_queue_admin(ctx, action_hash)
+    }
+
+    /// Protocol pass 4a (L-1): the admin drops a queued action before it applies.
+    pub fn cancel_admin(ctx: Context<CancelAdmin>) -> Result<()> {
+        process_cancel_admin(ctx)
+    }
+
+    /// Protocol pass 4a (E-1, E-8): sets the access and lab numbers (queued).
+    pub fn set_access_params(ctx: Context<AdminQueued>, params: AccessParams) -> Result<()> {
+        process_set_access_params(ctx, params)
+    }
+
+    /// Protocol pass 4a (E-1, 11 section 1.3): the item holder sets the access mode.
+    pub fn set_access<'info>(
+        ctx: Context<'info, SetAccess<'info>>,
+        mode: u8,
+        exclusive: bool,
+        licence_terms: Option<LicenceTerms>,
+    ) -> Result<()> {
+        process_set_access(ctx, mode, exclusive, licence_terms)
+    }
+
+    /// Protocol pass 4a (E-1): the holder approves a token for a Gated item.
+    pub fn approve<'info>(ctx: Context<'info, Approve<'info>>, token_mint: Pubkey) -> Result<()> {
+        process_approve(ctx, token_mint)
+    }
+
+    /// Protocol pass 4a (E-1): the holder revokes an approval; it ends after the slot's notice.
+    pub fn revoke_approval<'info>(ctx: Context<'info, RevokeApproval<'info>>) -> Result<()> {
+        process_revoke_approval(ctx)
+    }
+
+    /// Protocol pass 4a (E-1): anyone removes an item whose access lapsed, after the notice.
+    pub fn enforce_access<'info>(ctx: Context<'info, EnforceAccess<'info>>, slot: u8) -> Result<()> {
+        process_enforce_access(ctx, slot)
+    }
+
+    /// Protocol pass 4a (10 section 11.5, E-8): anyone submits a template program with a bond.
+    pub fn submit_template<'info>(
+        ctx: Context<'info, SubmitTemplate<'info>>,
+        template_program: Pubkey,
+        code_hash: [u8; 32],
+        uri_hash: [u8; 32],
+    ) -> Result<()> {
+        process_submit_template(ctx, template_program, code_hash, uri_hash)
+    }
+
+    /// Protocol pass 4a: the admin closes a submission (approved, rejected or forfeited).
+    pub fn settle_submission(ctx: Context<SettleSubmission>, approved: bool, forfeit: bool) -> Result<()> {
+        process_settle_submission(ctx, approved, forfeit)
+    }
+
+    /// Retires a template (02 section 3.2). Protocol pass 4a (L-1): queued.
     pub fn retire_template(ctx: Context<RetireTemplate>, template_id: u16) -> Result<()> {
+        let hash = action_hash_of(&instruction::RetireTemplate { template_id }, &[]);
+        consume_queued(&ctx.accounts.queued, hash, &ctx.accounts.admin.key())?;
         let t = &mut ctx.accounts.template;
         require!(t.id == template_id, ArmoryError::WrongAccount);
         t.status = template_status::RETIRED;
@@ -213,8 +295,7 @@ pub mod hookwars_armory {
     }
 
     /// Integration pass 3 (E-7, 11 sections 1.2, 2.2, 5.4): the admin sets a template's economy
-    /// fields. Admin-direct like `register_template` and `retire_template` (review 1 L-1 puts all
-    /// three behind the timelock; see 13-integration-3).
+    /// fields. Protocol pass 4a (L-1): queued.
     pub fn set_template_economy(
         ctx: Context<RetireTemplate>,
         template_id: u16,
@@ -223,11 +304,18 @@ pub mod hookwars_armory {
         allowed_access: u8,
         charges_on_create: u32,
     ) -> Result<()> {
+        let hash = action_hash_of(
+            &instruction::SetTemplateEconomy { template_id, author_bps, default_access, allowed_access, charges_on_create },
+            &[],
+        );
+        consume_queued(&ctx.accounts.queued, hash, &ctx.accounts.admin.key())?;
         let t = &mut ctx.accounts.template;
         require!(t.id == template_id, ArmoryError::WrongAccount);
         require!(author_bps <= 10_000, ArmoryError::RoyaltyTooHigh);
         require!(
-            allowed_access == 0 || allowed_access & (1u8 << default_access.min(7)) != 0,
+            default_access <= hookwars_common::access::MAX_MODE
+                && default_access != hookwars_common::access::LEASED
+                && hookwars_common::access::mode_allowed(allowed_access, default_access),
             ArmoryError::InvalidSchema
         );
         t.author_bps = author_bps;
@@ -245,8 +333,10 @@ pub mod hookwars_armory {
     }
 
     /// Integration pass 3 (E-2, R37): the admin sets `ITEM_PROTOCOL_BPS`, the protocol's share of
-    /// each token-side cut `settle_equip` settles. Admin-direct (see L-1 in 13-integration-3).
-    pub fn set_item_protocol_bps(ctx: Context<AdminOnly>, item_protocol_bps: u16) -> Result<()> {
+    /// each token-side cut `settle_equip` settles. Protocol pass 4a (L-1): queued.
+    pub fn set_item_protocol_bps(ctx: Context<AdminQueued>, item_protocol_bps: u16) -> Result<()> {
+        let hash = action_hash_of(&instruction::SetItemProtocolBps { item_protocol_bps }, &[]);
+        consume_queued(&ctx.accounts.queued, hash, &ctx.accounts.admin.key())?;
         require!(
             item_protocol_bps <= ctx.accounts.config.params.max_royalty_bps,
             ArmoryError::RoyaltyTooHigh
@@ -290,8 +380,13 @@ pub mod hookwars_armory {
     }
 
     /// Integration pass 3 (08 section 4.8): the admin registers a composite preset (the module
-    /// templates in order). Admin-direct like `register_template` (see L-1 in 13-integration-3).
+    /// templates in order). Protocol pass 4a (L-1): queued.
     pub fn register_preset(ctx: Context<RegisterPreset>, id: u16, template_ids: Vec<u16>, name: String) -> Result<()> {
+        let hash = action_hash_of(
+            &instruction::RegisterPreset { id, template_ids: template_ids.clone(), name: name.clone() },
+            &[],
+        );
+        consume_queued(&ctx.accounts.queued, hash, &ctx.accounts.admin.key())?;
         require!(
             template_ids.len() >= 2 && template_ids.len() <= hookwars_common::MAX_MODULES && name.len() <= 32,
             ArmoryError::InvalidSchema
@@ -353,7 +448,7 @@ pub mod hookwars_armory {
     }
 
     /// The launchpad equips one slot of a fresh mint (02 section 7.1).
-    pub fn equip_launch(ctx: Context<EquipLaunch>, entry: LaunchEquip) -> Result<()> {
+    pub fn equip_launch<'info>(ctx: Context<'info, EquipLaunch<'info>>, entry: LaunchEquip) -> Result<()> {
         process_equip_launch(ctx, entry)
     }
 
@@ -466,7 +561,7 @@ pub mod hookwars_armory {
     }
 
     /// Forges two items of one template into one (02 section 9).
-    pub fn forge(ctx: Context<Forge>) -> Result<()> {
+    pub fn forge<'info>(ctx: Context<'info, Forge<'info>>) -> Result<()> {
         process_forge(ctx)
     }
 
@@ -546,16 +641,23 @@ pub struct RegisterTemplate<'info> {
     /// CHECK: its ProgramData (checked in the handler).
     pub programdata: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
+    /// Protocol pass 4a (L-1): the queue entry of this registration (closed here).
+    #[account(mut, close = admin)]
+    pub queued: Box<Account<'info, QueuedAction>>,
 }
 
 #[event_cpi]
 #[derive(Accounts)]
 pub struct RetireTemplate<'info> {
+    #[account(mut)]
     pub admin: Signer<'info>,
     #[account(seeds = [seeds::CONFIG], bump = config.bump, has_one = admin @ ArmoryError::NotAdmin)]
     pub config: Box<Account<'info, ArmoryConfig>>,
     #[account(mut, seeds = [seeds::TEMPLATE, &template.id.to_le_bytes()], bump = template.bump)]
     pub template: Box<Account<'info, Template>>,
+    /// Protocol pass 4a (L-1): the queue entry (closed here).
+    #[account(mut, close = admin)]
+    pub queued: Box<Account<'info, QueuedAction>>,
 }
 
 /// Token-program accounts every path that calls it takes.
@@ -624,6 +726,9 @@ pub struct RegisterPreset<'info> {
     #[account(init, payer = admin, space = 8 + Preset::INIT_SPACE, seeds = [b"preset".as_ref(), &id.to_le_bytes()], bump)]
     pub preset: Box<Account<'info, Preset>>,
     pub system_program: Program<'info, System>,
+    /// Protocol pass 4a (L-1): the queue entry (closed here).
+    #[account(mut, close = admin)]
+    pub queued: Box<Account<'info, QueuedAction>>,
 }
 
 /// Accounts of `create_composite` (M3b).
@@ -994,6 +1099,21 @@ pub struct RevertForLeaseEnd<'info> {
     pub equip: EquipCtx<'info>,
 }
 
+/// Protocol pass 4a (E-1): accounts of `enforce_access`.
+#[event_cpi]
+#[derive(Accounts)]
+#[instruction(slot: u8)]
+pub struct EnforceAccess<'info> {
+    #[account(seeds = [seeds::CONFIG], bump = config.bump)]
+    pub config: Box<Account<'info, ArmoryConfig>>,
+    #[account(mut, seeds = [seeds::SLOT_STATE, equip.token_mint.key().as_ref(), &[slot]], bump = slot_state.bump)]
+    pub slot_state: Box<Account<'info, SlotState>>,
+    /// CHECK: the `Approval` (Gated) or the market's `License` (Licensed) that lapsed (checked in
+    /// the handler).
+    pub proof: UncheckedAccount<'info>,
+    pub equip: EquipCtx<'info>,
+}
+
 /// Integration pass 2 (I-5).
 #[derive(Accounts)]
 #[instruction(wallet: Pubkey)]
@@ -1064,14 +1184,37 @@ pub struct Forge<'info> {
 fn process_register_template<'info>(
     ctx: Context<'info, RegisterTemplate<'info>>,
     args: RegisterTemplateArgs,
+    ext: Option<hookwars_common::Manifest>,
 ) -> Result<()> {
     let config = &mut ctx.accounts.config;
     // Hookwars M3b: ids follow the template list (04, 08 section 6), so they may be sparse; each id
     // is registered once (its `Template` account is created here) and must be a known template.
-    require!(
-        args.id >= 1 && hookwars_common::shape(args.id).is_some(),
-        ArmoryError::InvalidSchema
-    );
+    // Protocol pass 4a: an external template takes an id no built-in template uses, its own
+    // program (never the items program), a recorded code hash and a declared manifest.
+    match ext {
+        None => require!(
+            args.id >= 1 && hookwars_common::shape(args.id).is_some(),
+            ArmoryError::InvalidSchema
+        ),
+        Some(m) => {
+            require!(
+                args.id >= 1
+                    && hookwars_common::shape(args.id).is_none()
+                    && args.id != hookwars_common::template_id::COMPOSITE
+                    && ctx.accounts.template_program.key() != ids::ITEMS_ID
+                    && args.code_hash != [0; 32],
+                ArmoryError::InvalidSchema
+            );
+            require!(
+                m.kind == args.kind
+                    && m.kind != hookwars_common::kind::WAR
+                    && m.token_flags & hookwars_common::token_flags::MINT == 0
+                    && m.reads_other_pools == 0
+                    && !args.forge_enabled,
+                ArmoryError::InvalidSchema
+            );
+        }
+    }
     let program = ctx.accounts.template_program.to_account_info();
     let deploy_slot = hookwars_common::check_program_authority(
         &program,
@@ -1162,7 +1305,9 @@ fn process_register_template<'info>(
     t.default_access = 0;
     t.allowed_access = 0;
     t.charges_on_create = 0;
-    t.reserved = [0; 24];
+    t.external = ext.is_some();
+    t.ext_manifest = ext.unwrap_or_default();
+    t.reserved = [0; 7];
     emit_cpi!(TemplateRegistered {
         template_id: args.id,
         program: program.key(),
@@ -1210,7 +1355,15 @@ fn write_item(
     item.royalty_owner_bump = pda::royalty_owner(&item_key).1;
     item.created_at = ts;
     item.has_wear = false;
-    item.reserved = [0; 31];
+    item.access_mode = hookwars_common::access::OPEN;
+    item.exclusive = false;
+    item.reserved = [0; 29];
+}
+
+/// Protocol pass 4a (E-7, 11 section 1.2): a new item takes its template's default access mode.
+fn default_access(item: &mut Item, t: &Template) {
+    item.access_mode = t.default_access;
+    item.exclusive = t.default_access == hookwars_common::access::EXCLUSIVE;
 }
 
 fn process_create_item<'info>(
@@ -1269,6 +1422,7 @@ fn process_create_item<'info>(
         source::AUTHORED,
         ts,
     );
+    default_access(&mut ctx.accounts.item, &ctx.accounts.template);
     ctx.accounts.config.items_minted = n + 1;
     emit_cpi!(ItemCreated {
         item: item_key,
@@ -1526,6 +1680,7 @@ fn process_create_composite<'info>(
         source::AUTHORED,
         ts,
     );
+    default_access(&mut ctx.accounts.item, &ctx.accounts.template);
     let c = &mut ctx.accounts.composite;
     c.version = VERSION;
     c.bump = ctx.bumps.composite;
@@ -1621,6 +1776,7 @@ fn process_mint_crafted<'info>(
         source::CRAFTED,
         ts,
     );
+    default_access(&mut ctx.accounts.item, &ctx.accounts.template);
     let (_, craft, _) = split_eco(ctx.remaining_accounts);
     let charges = ctx.accounts.template.charges_on_create;
     let payer = ctx.accounts.payer.to_account_info();
@@ -1692,6 +1848,7 @@ fn process_mint_loot<'info>(ctx: Context<'info, MintLoot<'info>>, template_id: u
         source::LOOT,
         ts,
     );
+    default_access(&mut ctx.accounts.item, &ctx.accounts.template);
     // Integration pass 3 (E-3): wear for a wearing template (the war program passes the suffix).
     let (_, craft, _) = split_eco(ctx.remaining_accounts);
     let charges = ctx.accounts.template.charges_on_create;
@@ -1849,6 +2006,7 @@ impl<'info> EquipCtx<'info> {
         config: &EquipConfig,
         launch: bool,
         revert: bool,
+        proof: Option<&AccountInfo<'info>>,
     ) -> Result<(Option<Pubkey>, Option<Pubkey>)> {
         let mint_key = self.token_mint.key();
         let (auth, auth_bump) = pda::slot_authority(&mint_key);
@@ -1886,7 +2044,12 @@ impl<'info> EquipCtx<'info> {
                 launch,
                 revert,
             )?;
-            new_equip = Some((item.template_id, item.manifest, template.max_targets));
+            // Protocol pass 4a (E-1): the access row; a revert never checks it (R38).
+            if !revert {
+                gates::check_access(item, &k, &mint_key, slot, proof, now()?)?;
+            }
+            let program = if template.external { template.program } else { ids::ITEMS_ID };
+            new_equip = Some((item.template_id, item.manifest, template.max_targets, program));
         }
         let old_vault = self.old_equip_vault.as_ref().map(|a| a.to_account_info());
         let new_vault = self.new_equip_vault.as_ref().map(|a| a.to_account_info());
@@ -1904,6 +2067,7 @@ impl<'info> EquipCtx<'info> {
         let items = self.items_program.to_account_info();
         let new_item_info = self.new_item.as_ref().map(|a| a.to_account_info());
         let composite_info = self.new_composite.as_ref().map(|a| a.to_account_info());
+        let template_program = self.template_program.as_ref().map(|a| a.to_account_info());
         let e = EquipInfos {
             payer: &payer,
             mint: &mint_info,
@@ -1924,15 +2088,17 @@ impl<'info> EquipCtx<'info> {
                 event_authority: &ea,
                 system_program: &sp,
             },
+            template_program: template_program.as_ref(),
         };
         let new = match (new_equip, new_item_info.as_ref()) {
-            (Some((template_id, manifest, max_targets)), Some(info)) => Some(NewEquip {
+            (Some((template_id, manifest, max_targets, program)), Some(info)) => Some(NewEquip {
                 item: info,
                 template_id,
                 manifest,
                 max_targets,
                 config: config.clone(),
                 composite: composite_info.as_ref(),
+                program,
             }),
             _ => None,
         };
@@ -1951,7 +2117,7 @@ impl<'info> EquipCtx<'info> {
     }
 }
 
-fn process_equip_launch(ctx: Context<EquipLaunch>, entry: LaunchEquip) -> Result<()> {
+fn process_equip_launch<'info>(ctx: Context<'info, EquipLaunch<'info>>, entry: LaunchEquip) -> Result<()> {
     let mint_key = ctx.accounts.equip.token_mint.key();
     let mint = read_mint(&ctx.accounts.equip.token_mint.to_account_info())?;
     let caller = ctx.accounts.launch_caller.key();
@@ -2001,9 +2167,12 @@ fn process_equip_launch(ctx: Context<EquipLaunch>, entry: LaunchEquip) -> Result
         None
     };
     if let Some(item) = entry.item {
+        // Protocol pass 4a (E-1): the access proof suffix, before the agent suffix.
+        let (rem, _) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+        let (_, proof) = hookwars_common::access::split_proof(rem);
         ctx.accounts
             .equip
-            .equip_to(&params, entry.slot, Some(item), &entry.config, true, false)?;
+            .equip_to(&params, entry.slot, Some(item), &entry.config, true, false, proof)?;
     }
     let st = &mut ctx.accounts.slot_state;
     st.version = VERSION;
@@ -2176,6 +2345,12 @@ fn process_propose(
         a.template_program.as_ref(),
         a.template_programdata.as_ref(),
     )?;
+    // Protocol pass 4a (E-1): the access row, with the proof suffix at the end of the remaining
+    // accounts (after the lease).
+    if let (Some(k), Some(it)) = (item, a.item.as_deref()) {
+        let (_, proof) = hookwars_common::access::split_proof(&ctx.remaining_accounts[1.min(ctx.remaining_accounts.len())..]);
+        gates::check_access(it, &k, &a.token_mint.key(), slot, proof, now()?)?;
+    }
     if mint.slots[usize::from(slot)].item != Pubkey::default() || item.is_some() {
         require!(
             mint.slots[usize::from(slot)].item != item.unwrap_or_default(),
@@ -2406,7 +2581,15 @@ fn refresh_after_equip<'info>(
     if !slot_launch {
         return Ok(());
     }
-    require!(remaining.len() >= 3, ArmoryError::WrongAccount);
+    // Protocol pass 4a: the tail is `[launch program, launch, pool registry, the launchpad's
+    // event authority, item registries...]`; `refresh_pool_registry` is an `#[event_cpi]`
+    // instruction, so its event authority and program follow the system program.
+    require!(remaining.len() >= 4, ArmoryError::WrongAccount);
+    require_keys_eq!(
+        remaining[3].key(),
+        hookwars_common::eco_cpi::event_authority(&ids::LAUNCH_ID),
+        ArmoryError::WrongAccount
+    );
     let payer = equip.payer.to_account_info();
     let system = equip.token.system_program.to_account_info();
     let mut metas = vec![
@@ -2415,6 +2598,8 @@ fn refresh_after_equip<'info>(
         AccountMeta::new_readonly(mint_key, false),
         AccountMeta::new(remaining[2].key(), false),
         AccountMeta::new_readonly(system.key(), false),
+        AccountMeta::new_readonly(remaining[3].key(), false),
+        AccountMeta::new_readonly(ids::LAUNCH_ID, false),
     ];
     let mut infos = vec![
         payer,
@@ -2422,8 +2607,9 @@ fn refresh_after_equip<'info>(
         equip.token_mint.to_account_info(),
         remaining[2].clone(),
         system,
+        remaining[3].clone(),
     ];
-    for r in &remaining[3..] {
+    for r in &remaining[4..] {
         metas.push(AccountMeta {
             pubkey: r.key(),
             is_signer: false,
@@ -2460,11 +2646,14 @@ fn process_execute<'info>(ctx: Context<'info, Execute<'info>>) -> Result<()> {
     );
     let (slot, item, config) = (p.slot, p.item, p.config.clone());
     let params = ctx.accounts.config.params;
+    let (rem, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    // Protocol pass 4a (E-1): the access proof suffix sits between the refresh accounts and the
+    // agent suffix, so every existing caller's layout is unchanged for an `Open` item.
+    let (rem, proof) = hookwars_common::access::split_proof(rem);
     let (old, new) = ctx
         .accounts
         .equip
-        .equip_to(&params, slot, item, &config, false, false)?;
-    let (rem, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+        .equip_to(&params, slot, item, &config, false, false, proof)?;
     refresh_after_equip(&ctx.accounts.equip, slot, rem)?;
     ctx.accounts.proposal.status = proposal_status::EXECUTED;
     ctx.accounts.slot_state.open_proposal = None;
@@ -2639,7 +2828,7 @@ fn process_check_performance<'info>(ctx: Context<'info, CheckPerformance<'info>>
     let (old, new) = ctx
         .accounts
         .equip
-        .equip_to(&params, slot, launch_item, &config, false, true)?;
+        .equip_to(&params, slot, launch_item, &config, false, true, None)?;
     refresh_after_equip(&ctx.accounts.equip, slot, ctx.remaining_accounts)?;
     ctx.accounts.slot_state.condition_since = None;
     emit_cpi!(PerformanceReverted {
@@ -2660,7 +2849,10 @@ fn process_check_performance<'info>(ctx: Context<'info, CheckPerformance<'info>>
     Ok(())
 }
 
-fn process_forge(ctx: Context<Forge>) -> Result<()> {
+fn process_forge<'info>(ctx: Context<'info, Forge<'info>>) -> Result<()> {
+    if ctx.accounts.item_a.template_id == hookwars_common::template_id::COMPOSITE {
+        return forge_composite(ctx);
+    }
     let a = &ctx.accounts;
     let forger = a.forger.key();
     require_keys_neq!(a.item_a.key(), a.item_b.key(), ArmoryError::NotItemOwner);
@@ -2699,6 +2891,7 @@ fn process_forge(ctx: Context<Forge>) -> Result<()> {
     )?;
     // Clamp again: a defect in combine_params can never exceed the ceiling (02 section 9.1).
     let s = shape(t.id);
+    #[allow(clippy::needless_range_loop)]
     for i in 0..PARAM_FIELDS {
         if i < usize::from(t.field_count) {
             let off = s.is_some_and(|s| s.zero_off[i]) && params[i] == 0;
@@ -2762,6 +2955,7 @@ fn process_forge(ctx: Context<Forge>) -> Result<()> {
         source::FORGED,
         ts,
     );
+    default_access(&mut ctx.accounts.item, &ctx.accounts.template);
     ctx.accounts.config.items_minted = n + 1;
     let fc = &mut ctx.accounts.forge_counter;
     fc.wallet = forger;
@@ -2793,35 +2987,6 @@ fn process_forge(ctx: Context<Forge>) -> Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    /// Hookwars R21: burns fit only slots that allow them.
-    #[test]
-    fn a_burning_item_fits_only_a_may_burn_slot() {
-        use crate::cpi::burn_fits;
-        assert!(burn_fits(false, false));
-        assert!(burn_fits(false, true));
-        assert!(burn_fits(true, true));
-        assert!(!burn_fits(true, false));
-    }
-
-    use super::*;
-
-    #[test]
-    fn signer_constants_match_their_seeds() {
-        assert_eq!(pda::armory_signer(), (ARMORY_SIGNER, ARMORY_SIGNER_BUMP));
-        assert_eq!(pda::minter(), (MINTER, MINTER_BUMP));
-        assert_eq!(pda::loot_signer().0, LOOT_SIGNER);
-        assert_eq!(ids::ARMORY_ID, crate::ID);
-        assert_eq!(bordrless_token::constants::ARMORY_ID, crate::ID);
-        assert_eq!(bordrless_token::constants::ITEMS_ID, ids::ITEMS_ID);
-        assert_eq!(bordrless_token::constants::WAR_ID, ids::WAR_ID);
-        assert_eq!(bordrless_token::ID, ids::TOKEN_ID);
-        assert_eq!(bordrless_swap::ID, ids::SWAP_ID);
-        assert_eq!(bordrless_token::constants::LAUNCH_ID, ids::LAUNCH_ID);
-        assert_eq!(bordrless_swap::constants::BRIDGED_SOL_MINT, ids::BRIDGED_SOL_MINT);
-    }
-}
 
 
 /// Integration pass 2 (10 section 17 I-3): see `revert_for_lease_end`.
@@ -2851,7 +3016,7 @@ fn process_revert_for_lease_end<'info>(
     let (old, new) = ctx
         .accounts
         .equip
-        .equip_to(&params, slot, launch_item, &config, false, true)?;
+        .equip_to(&params, slot, launch_item, &config, false, true, None)?;
     refresh_after_equip(&ctx.accounts.equip, slot, ctx.remaining_accounts)?;
     emit_cpi!(EquipApplied {
         mint: ctx.accounts.equip.token_mint.key(),
@@ -2862,4 +3027,251 @@ fn process_revert_for_lease_end<'info>(
         ts
     });
     Ok(())
+}
+
+/// Protocol pass 4a (E-1, 11 section 1.3): removes an item whose approval was revoked (from its
+/// `revoke_after`) or whose licence lapsed (from the lapse plus the slot's notice), by the
+/// performance-revert path: the vault must be settled, the slot goes back to its launch item, or
+/// empty when the launch item is this item. The equipped item is `equip.old_item`; the launch
+/// item's accounts are the `new_*` accounts. Remaining accounts: what `execute` takes to refresh a
+/// slot launch's pool registry.
+fn process_enforce_access<'info>(ctx: Context<'info, EnforceAccess<'info>>, slot: u8) -> Result<()> {
+    use hookwars_common::access as acc;
+    let ts = now()?;
+    let mint_key = ctx.accounts.equip.token_mint.key();
+    let mint = read_mint(&ctx.accounts.equip.token_mint.to_account_info())?;
+    require!(slot < mint.slot_count, ArmoryError::SlotIndexOutOfRange);
+    let current = mint.slots[usize::from(slot)].item;
+    let item = ctx.accounts.equip.old_item.as_deref().ok_or(ArmoryError::WrongAccount)?;
+    require_keys_eq!(item.key(), current, ArmoryError::WrongAccount);
+    let notice = i64::from(ctx.accounts.slot_state.notice_secs);
+    let proof = ctx.accounts.proof.to_account_info();
+    let lapsed = match item.access_mode {
+        acc::GATED => {
+            require_keys_eq!(proof.key(), acc::approval_address(&current, &mint_key).0, ArmoryError::WrongAccount);
+            require_keys_eq!(*proof.owner, crate::ID, ArmoryError::AccessStillValid);
+            let a = Approval::try_deserialize(&mut &proof.try_borrow_data()?[..])?;
+            a.revoke_after != 0 && ts >= a.revoke_after
+        }
+        acc::LICENSED => {
+            let l = acc::read_license(&proof, &current, &mint_key).ok_or(ArmoryError::AccessStillValid)?;
+            !l.live_at(ts) && ts >= l.lapsed_at().saturating_add(notice)
+        }
+        _ => false,
+    };
+    require!(lapsed, ArmoryError::AccessStillValid);
+    let launch_item = ctx.accounts.slot_state.launch_item;
+    let to = if launch_item == Some(current) { None } else { launch_item };
+    let config = if to.is_some() { ctx.accounts.slot_state.launch_config.clone() } else { EquipConfig::default() };
+    let params = ctx.accounts.config.params;
+    let (old, new) = ctx
+        .accounts
+        .equip
+        .equip_to(&params, slot, to, &config, false, true, None)?;
+    refresh_after_equip(&ctx.accounts.equip, slot, ctx.remaining_accounts)?;
+    let by = ctx.accounts.equip.payer.key();
+    emit_cpi!(AccessEnforced { mint: mint_key, slot, item: current, to_item: new, by, ts });
+    emit_cpi!(EquipApplied {
+        mint: mint_key,
+        slot,
+        old_item: old,
+        new_item: new,
+        by: equip_by::ACCESS,
+        ts
+    });
+    Ok(())
+}
+
+/// Protocol pass 4a (08 section 2.11): forges two composites with the same module sequence (the
+/// same template ids and target slices, in order). Each module's fields combine by its template's
+/// forge rule (`combine`, the same pure function the items program runs) and are clamped to its
+/// ceiling; level = max + 1, capped at the lowest `max_level` of the module templates; every
+/// module template must allow forging. Both items and both module lists are closed to the forger;
+/// one composite is minted with a new module list (provenance: the two burned items). Remaining
+/// accounts: composite a's list (mut), composite b's list (mut), the new list
+/// `["composite", new item]` (mut, created here), then each module's `Template` in order, then the
+/// optional agent suffix.
+fn forge_composite<'info>(ctx: Context<'info, Forge<'info>>) -> Result<()> {
+    use hookwars_common::composite::{validate_modules, CompositeError};
+    let a = &ctx.accounts;
+    let forger = a.forger.key();
+    require_keys_neq!(a.item_a.key(), a.item_b.key(), ArmoryError::NotItemOwner);
+    for (holding, item) in [(&a.holding_a, &a.item_a), (&a.holding_b, &a.item_b)] {
+        let h = bordrless_token::client::read_holding(&holding.to_account_info())
+            .map_err(|_| ArmoryError::NotItemOwner)?;
+        require!(
+            h.mint == item.item_mint && h.owner == forger && h.amount == 1 && !h.frozen,
+            ArmoryError::NotItemOwner
+        );
+    }
+    require!(a.item_b.template_id == hookwars_common::template_id::COMPOSITE, ArmoryError::TemplateMismatch);
+    require!(a.template.status == template_status::ACTIVE, ArmoryError::TemplateClosed);
+    require!(a.item_a.equipped_count == 0 && a.item_b.equipped_count == 0, ArmoryError::ItemEquipped);
+    let (rem, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    require!(rem.len() >= 3, ArmoryError::WrongAccount);
+    let (lists, templates) = rem.split_at(3);
+    let read_list = |info: &AccountInfo, item: &Pubkey| -> Result<hookwars_common::composite::CompositeItem> {
+        require_keys_eq!(*info.owner, crate::ID, ArmoryError::WrongAccount);
+        require_keys_eq!(info.key(), hookwars_common::composite::CompositeItem::address(item).0, ArmoryError::WrongAccount);
+        hookwars_common::composite::CompositeItem::decode(&info.try_borrow_data()?).ok_or(error!(ArmoryError::WrongAccount))
+    };
+    let ca = read_list(&lists[0], &a.item_a.key())?;
+    let cb = read_list(&lists[1], &a.item_b.key())?;
+    let same = ca.modules.len() == cb.modules.len()
+        && ca.modules.iter().zip(cb.modules.iter()).all(|(x, y)| {
+            x.template_id == y.template_id && x.target_start == y.target_start && x.target_count == y.target_count && x.reads_module == y.reads_module
+        });
+    require!(same, ArmoryError::ModulesMismatch);
+    require!(templates.len() == ca.modules.len(), ArmoryError::WrongAccount);
+    let gain = a.config.params.forge_gain_bps;
+    let mut cap = a.template.max_level;
+    let mut fields: Vec<(u16, Params, Params)> = Vec::with_capacity(ca.modules.len());
+    let mut modules = ca.modules.clone();
+    for (i, info) in templates.iter().enumerate() {
+        let id = ca.modules[i].template_id;
+        require_keys_eq!(*info.owner, crate::ID, ArmoryError::WrongAccount);
+        require_keys_eq!(info.key(), pda::template(id).0, ArmoryError::WrongAccount);
+        let t = Template::try_deserialize(&mut &info.try_borrow_data()?[..])?;
+        require!(t.status == template_status::ACTIVE && t.forge_enabled, ArmoryError::TemplateClosed);
+        cap = cap.min(t.max_level);
+        let mut p = hookwars_common::combine(id, &t.field_min, &t.field_max, gain, &ca.modules[i].params, &cb.modules[i].params)
+            .map_err(|_| error!(ArmoryError::TemplateClosed))?;
+        let sh = shape(id);
+        for (f, v) in p.iter_mut().enumerate() {
+            if f < usize::from(t.field_count) {
+                let off = sh.is_some_and(|s| s.zero_off[f]) && *v == 0;
+                if !off {
+                    *v = (*v).clamp(t.field_min[f], t.field_max[f]);
+                }
+            } else {
+                *v = 0;
+            }
+        }
+        modules[i].params = p;
+        modules[i].data_bytes = hookwars_common::manifest(id, &p, modules[i].target_count)
+            .map_err(|_| error!(ArmoryError::InvalidSchema))?
+            .data_bytes;
+        fields.push((id, t.field_min, t.field_max));
+    }
+    let level = a.item_a.level.max(a.item_b.level) + 1;
+    require!(level <= cap, ArmoryError::MaxLevel);
+    let lookup = |id: u16| fields.iter().find(|f| f.0 == id).map(|f| (f.1, f.2));
+    let manifest = validate_modules(&modules, lookup, a.template.max_targets, 63).map_err(|e| match e {
+        CompositeError::BadParams => error!(ArmoryError::ParamOutOfRange),
+        CompositeError::KindMismatch => error!(ArmoryError::KindMismatch),
+        _ => error!(ArmoryError::InvalidSchema),
+    })?;
+    let (tp, ea, sp) = a.token.infos();
+    for (holding, mint) in [(&a.holding_a, &a.mint_a), (&a.holding_b, &a.mint_b)] {
+        let ix = bordrless_token::client::burn(forger, holding.key(), mint.key(), None, vec![], 1);
+        anchor_lang::solana_program::program::invoke(
+            &ix,
+            &[a.forger.to_account_info(), holding.to_account_info(), mint.to_account_info(), ea.clone(), tp.clone()],
+        )?;
+    }
+    let tinfo = TokenInfos { token_program: &tp, event_authority: &ea, system_program: &sp };
+    let n = a.config.items_minted;
+    mint_item(
+        &tinfo,
+        &a.forger.to_account_info(),
+        &a.minter.to_account_info(),
+        &a.item_mint.to_account_info(),
+        ctx.bumps.item_mint,
+        n,
+        &a.forger.to_account_info(),
+        &a.recipient_holding.to_account_info(),
+        &a.template.name,
+    )?;
+    let item_key = a.item.key();
+    // The new module list at `["composite", new item]`.
+    let (list_key, list_bump) = hookwars_common::composite::CompositeItem::address(&item_key);
+    require_keys_eq!(lists[2].key(), list_key, ArmoryError::WrongAccount);
+    let space = hookwars_common::composite::CompositeItem::SPACE;
+    let bump_seed = [list_bump];
+    let list_seeds: &[&[u8]] = &[hookwars_common::composite::SEED, item_key.as_ref(), &bump_seed];
+    anchor_lang::system_program::create_account(
+        CpiContext::new_with_signer(
+            anchor_lang::system_program::ID,
+            anchor_lang::system_program::CreateAccount { from: a.forger.to_account_info(), to: lists[2].clone() },
+            &[list_seeds],
+        ),
+        Rent::get()?.minimum_balance(space),
+        space as u64,
+        &crate::ID,
+    )?;
+    let burned = [a.item_a.key(), a.item_b.key()];
+    let list = CompositeItem { version: VERSION, bump: list_bump, item: item_key, modules, provenance: burned.to_vec() };
+    {
+        let mut d = lists[2].try_borrow_mut_data()?;
+        let mut out: &mut [u8] = &mut d[..];
+        list.try_serialize(&mut out)?;
+    }
+    // Close the two burned items' module lists to the forger.
+    let forger_info = a.forger.to_account_info();
+    for info in &lists[..2] {
+        let lamports = info.lamports();
+        **info.try_borrow_mut_lamports()? = 0;
+        **forger_info.try_borrow_mut_lamports()? += lamports;
+        info.assign(&anchor_lang::system_program::ID);
+        info.resize(0)?;
+    }
+    let royalty_bps = a.item_a.royalty_bps.max(a.item_b.royalty_bps);
+    let params = a.item_a.params;
+    let template_id = hookwars_common::template_id::COMPOSITE;
+    let ts = now()?;
+    let item_mint = a.item_mint.key();
+    write_item(
+        &mut ctx.accounts.item,
+        item_key,
+        ctx.bumps.item,
+        item_mint,
+        template_id,
+        params,
+        manifest,
+        forger,
+        royalty_bps,
+        level,
+        source::FORGED,
+        ts,
+    );
+    default_access(&mut ctx.accounts.item, &ctx.accounts.template);
+    ctx.accounts.config.items_minted = n + 1;
+    let fc = &mut ctx.accounts.forge_counter;
+    fc.wallet = forger;
+    fc.bump = ctx.bumps.forge_counter;
+    fc.count += 1;
+    emit_cpi!(ItemCreated { item: item_key, item_mint, template_id, params, manifest, author: forger, royalty_bps, level, source: source::FORGED, ts });
+    emit_cpi!(Forged { burned, item: item_key, template_id, params, level, forger, ts });
+    hookwars_common::agents_record::record(rec, &crate::ID, &forger, hookwars_common::agents_record::ITEMS_FORGED, 0)?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    /// Hookwars R21: burns fit only slots that allow them.
+    #[test]
+    fn a_burning_item_fits_only_a_may_burn_slot() {
+        use crate::cpi::burn_fits;
+        assert!(burn_fits(false, false));
+        assert!(burn_fits(false, true));
+        assert!(burn_fits(true, true));
+        assert!(!burn_fits(true, false));
+    }
+
+    use super::*;
+
+    #[test]
+    fn signer_constants_match_their_seeds() {
+        assert_eq!(pda::armory_signer(), (ARMORY_SIGNER, ARMORY_SIGNER_BUMP));
+        assert_eq!(pda::minter(), (MINTER, MINTER_BUMP));
+        assert_eq!(pda::loot_signer().0, LOOT_SIGNER);
+        assert_eq!(ids::ARMORY_ID, crate::ID);
+        assert_eq!(bordrless_token::constants::ARMORY_ID, crate::ID);
+        assert_eq!(bordrless_token::constants::ITEMS_ID, ids::ITEMS_ID);
+        assert_eq!(bordrless_token::constants::WAR_ID, ids::WAR_ID);
+        assert_eq!(bordrless_token::ID, ids::TOKEN_ID);
+        assert_eq!(bordrless_swap::ID, ids::SWAP_ID);
+        assert_eq!(bordrless_token::constants::LAUNCH_ID, ids::LAUNCH_ID);
+        assert_eq!(bordrless_swap::constants::BRIDGED_SOL_MINT, ids::BRIDGED_SOL_MINT);
+    }
 }

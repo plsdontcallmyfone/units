@@ -1,4 +1,5 @@
 // Changed by Hookwars: integration pass 3 (E-3): the registry ends with the craft Wear of an item that wears.
+// Changed by Hookwars: protocol pass 4a: external templates (targets, kit payee, their registry).
 // Changed by Hookwars: integration pass 2 (08 arsenal 2 request 1): registries carry derived extra sources;
 // kit tokens refuse off-curve token-side payees (review 1 H-2 carried to settle).
 // Changed by Hookwars: new file (M3b), the armory-facing entry points moved out of lib.rs (M2) and; agents branch: template 42 takes no targets.
@@ -96,6 +97,14 @@ pub fn check_module_targets(template_id: u16, targets: &[Pubkey], role: u8) -> R
 
 fn check_targets(template_id: u16, config: &EquipConfig, max_targets: u8, modules: Option<&[Module]>) -> Result<()> {
     require!(config.targets.len() <= usize::from(max_targets), ItemsError::BadTargets);
+    // Protocol pass 4a: an external template takes any distinct targets up to its `max_targets`.
+    if hookwars_common::access::is_external(template_id) {
+        let mut seen = config.targets.clone();
+        seen.sort();
+        seen.dedup();
+        require!(seen.len() == config.targets.len() && config.role == 0, ItemsError::BadTargets);
+        return Ok(());
+    }
     match modules {
         None => check_module_targets(template_id, &config.targets, config.role),
         Some(ms) => {
@@ -117,6 +126,7 @@ fn check_targets(template_id: u16, config: &EquipConfig, max_targets: u8, module
 /// The registry of an equipped item (04 section 2.2): `Item`, `EquipState`, the equip vault when
 /// it cuts on the token side, the module list for a composite, then each module's own extras,
 /// then (integration pass 3, E-3) the item's craft `Wear` when it wears.
+#[allow(clippy::too_many_arguments)]
 pub fn registry_list(
     template_id: u16,
     mint: &Pubkey,
@@ -131,6 +141,20 @@ pub fn registry_list(
         writable,
         source: AccountSource::Key(k),
     };
+    // Protocol pass 4a: an external template's registry is `[Item, equip vault (when it cuts),
+    // EquipState, the launchpad's ["hook-authority", items], this program]`: the Hook Lab ABI puts
+    // the vault right after the item (account 6 of a callback); the launchpad reads the last three
+    // to record an external pool cut here.
+    if hookwars_common::access::is_external(template_id) {
+        let mut v = vec![key(*item, false)];
+        if let Some(vault) = equip_vault {
+            v.push(key(vault, true));
+        }
+        v.push(key(*equip_state, true));
+        v.push(key(crate::LAUNCH_ITEMS_SIGNER, false));
+        v.push(key(crate::ID, false));
+        return HookAccountList::new(v);
+    }
     let mut v = vec![key(*item, false), key(*equip_state, true)];
     if let Some(vault) = equip_vault {
         v.push(key(vault, true));
@@ -290,6 +314,12 @@ pub fn process_init_equip<'info>(
                     .collect(),
                 None => vec![(template_id, 0, config.targets.len())],
             };
+            // Protocol pass 4a: an external template pays its rest to its first target.
+            if hookwars_common::access::is_external(template_id) {
+                if let Some(o) = hookwars_common::access::external_destination(&config.targets) {
+                    require!(crate::templates::kit_payee_ok(&mint, &o), ItemsError::BadTargets);
+                }
+            }
             for (id, start, count) in modules {
                 let end = (start + count).min(config.targets.len());
                 if let crate::templates::Destination::Owner(o) =

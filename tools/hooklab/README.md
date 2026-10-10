@@ -64,7 +64,7 @@ own limits come from `bordrless_hook` and `hookwars_common`.
 
 | Field | Meaning |
 | --- | --- |
-| `kind` | `fee`, `reward`, `defense` or `relation`. Pool and war templates are refused for now (see Gaps) |
+| `kind` | `fee`, `reward`, `defense` or `relation`. Pool templates are refused by this lab's suite for now (see Gaps); war templates are refused by the armory |
 | `max_cut_transfer_bps` | The most a transfer may cut. It becomes the slot's bound, and the lab checks it again |
 | `may_refuse` | `false` means any failure of your program counts as a violation |
 | `data_bytes` | Your range in each holding. The token program adds 1 epoch byte, and the whole range must fit the holding's 64 bytes |
@@ -210,20 +210,18 @@ The pipeline tests build the starter and its four fixture builds. The lab must n
 The pipeline tests also cover these:
 
 - the CLI writes a report that it then verifies;
-- the armory refuses the report's instruction today (see Gaps).
+- the report's instructions (queue, then `register_external_template`) apply against the real armory, and the starter is authored, equipped, cuts a transfer and settles.
 
 ## Gaps (integration requests for the armory and items lanes)
 
-1. **`register_template` takes only known ids.** It requires `hookwars_common::shape(id)`, so an
-   external template id is refused (`InvalidSchema`). A pipeline test pins this; it fails when
-   the armory changes.
-2. **`create_item` and equip validate parameters through the items program.** Templates outside
-   it cannot be authored or equipped through the real armory yet. The suite stands in a fake
-   `Item` and the armory stub.
-3. **`settle_equip` in the items program cannot settle an external template's equip vault.** The
-   cut collects, but nothing pays it out yet.
-4. **The pool-side ABI is not tested.** `kind: pool` and `pool_callbacks` are refused by the
-   manifest check.
+Gaps 1 to 4 are closed by protocol pass 4a (docs/spec/14-pass-4a.md section 3): the armory
+registers an external template with `register_external_template` behind its admin queue (the
+report carries both instructions), authors and equips its items, the items program settles its
+equip vault by the same waterfall, and the launchpad records its pool cuts. The pipeline test
+`the_armory_registers_and_equips_the_starter_end_to_end` runs the starter through the real armory.
+The lab's own suite still refuses `pool_callbacks` (it has no pool model yet); the armory accepts
+pool manifests.
+
 5. **`on_touch` is accepted by the manifest but not driven by the suite yet.**
 6. **The build is not yet a verifiable build.** Neither `solana-verify` nor Docker is installed on
    the build server. The report records the toolchain line, and the admin compares `code_hash`

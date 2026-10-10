@@ -1,4 +1,6 @@
 // Changed by Hookwars: M3b forwarding to pool items on slot launches (spec 03 section 5).
+// Changed by Hookwars: protocol pass 4a (Hook Lab gap 4): an external template's pool cut is recorded in the
+// items program, which keeps its equip state, so settle_equip can pay it.
 //! The pool hook callbacks (`docs/hooks-v2.md` §5.4): the DEX calls these, signing with its
 //! signer for this program, `["hook-authority", LAUNCH_ID]` under the DEX ([`DEX_HOOK_AUTHORITY`]).
 //! Only the DEX can sign for it, and only when it calls this program as a pool's hook: the signer
@@ -258,6 +260,14 @@ fn forward_items<'info>(
         );
         if answer.cut > 0 {
             require!(cut_side, LaunchError::ItemCutWrongSide);
+            // Protocol pass 4a: an external template's program cannot write the items program's
+            // equip state; its registry ends `[EquipState, our items signer, items program]` and the cut is recorded
+            // there, signed by this program's `["hook-authority", items]`.
+            // An armory item (its `Item`, the first extra, is the armory's) on another program
+            // is an external template; any other program keeps its own books.
+            if s.program != ITEMS_ID && accounts.len() > 2 && *accounts[2].owner == ARMORY_ID {
+                record_external_cut(accounts, &launch.mint, index as u8, &s.item, answer.cut, u8::from(!buy) + 1)?;
+            }
         }
         if answer.burn > 0 {
             require!(!cut_side && s.bounds.may_burn, LaunchError::ItemBurnWrongSide);
@@ -306,6 +316,36 @@ fn forward_items<'info>(
         });
     }
     Ok(out)
+}
+
+/// Protocol pass 4a: `items::record_pool_cut(mint, slot, item, cut, side)` with the last three
+/// accounts of an external slot's slice (`EquipState`, this program's `["hook-authority", items]`,
+/// the items program).
+fn record_external_cut<'info>(accounts: &[AccountInfo<'info>], mint: &Pubkey, slot: u8, item: &Pubkey, cut: u64, side: u8) -> Result<()> {
+    let n = accounts.len();
+    let (signer, bump) = Pubkey::find_program_address(&[HOOK_AUTHORITY_SEED, ITEMS_ID.as_ref()], &crate::ID);
+    require!(
+        n >= 5 && *accounts[n - 1].key == ITEMS_ID && *accounts[n - 2].key == signer,
+        LaunchError::ItemAccountsMissing
+    );
+    let state = &accounts[n - 3];
+    // `sha256("global:record_pool_cut")[..8]`.
+    let mut data = vec![119, 109, 14, 167, 96, 253, 125, 130];
+    (*mint, slot, *item, cut, side).serialize(&mut data)?;
+    let ix = Instruction {
+        program_id: ITEMS_ID,
+        accounts: vec![
+            anchor_lang::solana_program::instruction::AccountMeta::new_readonly(signer, true),
+            anchor_lang::solana_program::instruction::AccountMeta::new(*state.key, false),
+        ],
+        data,
+    };
+    invoke_signed(
+        &ix,
+        &[accounts[n - 2].clone(), state.clone(), accounts[n - 1].clone()],
+        &[&[HOOK_AUTHORITY_SEED, ITEMS_ID.as_ref(), &[bump]]],
+    )?;
+    Ok(())
 }
 
 /// Hookwars M3b: applies the items' merged answer to the launch's own cut `L` (03 section 5.3):

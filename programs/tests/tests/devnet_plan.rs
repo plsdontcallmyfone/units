@@ -2,6 +2,9 @@
 // suites use, runs it in LiteSVM to prove it lands in order, and writes it as JSON for
 // scripts/devnet/send-plan.mjs. Ignored by default: run it explicitly (docs/DEVNET.md).
 // Integration pass 3: craft, book and the social skill table join the plan.
+// Protocol pass 4a (L-1): template registration goes through the armory's admin queue: every
+// registration is queued, one wait step covers the timelock, then each registration applies; the
+// access numbers (TEST_ACCESS) are set the same way.
 //
 //   cargo test -p bordrless-program-tests --test devnet_plan -- --ignored --nocapture
 //
@@ -12,7 +15,7 @@
 use anchor_lang::prelude::Pubkey;
 use anchor_lang::solana_program::instruction::Instruction;
 use bordrless_program_tests::agents::{agents_events, agents_ix, TEST_AGENTS_PARAMS};
-use bordrless_program_tests::armory::{armory_events, armory_ix, test_schema, token_accounts, Hw, TEST_PARAMS};
+use bordrless_program_tests::armory::{armory_events, armory_ix, fill_queued, queue_ix, test_schema, token_accounts, Hw, TEST_ACCESS, TEST_PARAMS};
 use bordrless_program_tests::env::Env;
 use bordrless_program_tests::expansion::{market_ix, social_config, social_ix, TEST_MARKET, TEST_SOCIAL};
 use bordrless_program_tests::fixture::policy_launch_config;
@@ -32,6 +35,12 @@ struct Step {
     creates: Option<Pubkey>,
     /// Which keypair signs besides the fee payer (the deployer pays every step).
     signers: Vec<&'static str>,
+    /// Protocol pass 4a: the step is also done when this account exists (a queue step is done
+    /// once its registration applied, which closes the queue entry).
+    skip_if: Option<Pubkey>,
+    /// Protocol pass 4a: a wait step (no instruction): the sender sleeps this long when a later
+    /// step still has to be sent.
+    wait_secs: u32,
 }
 
 fn root() -> PathBuf {
@@ -155,6 +164,8 @@ fn plan(deployer: Pubkey, code_hash: [u8; 32]) -> Vec<Step> {
             ),
             creates: Some(bordrless_launch::constants::DEX_CONFIG),
             signers: vec![],
+            skip_if: None,
+            wait_secs: 0,
         },
         Step {
             label: "bridge init_config".into(),
@@ -164,18 +175,24 @@ fn plan(deployer: Pubkey, code_hash: [u8; 32]) -> Vec<Step> {
             ),
             creates: Some(Pubkey::find_program_address(&[b"config"], &bordrless_bridge::ID).0),
             signers: vec![],
+            skip_if: None,
+            wait_secs: 0,
         },
         Step {
             label: "launch init_config (TEST, fixture policy)".into(),
             ix: bordrless_launch::client::init_config(deployer, policy_launch_config(deployer, deployer, sol)),
             creates: Some(bordrless_launch::constants::CONFIG_ADDRESS),
             signers: vec![],
+            skip_if: None,
+            wait_secs: 0,
         },
         Step {
             label: "bridge register_sol (bridged SOL wrapper)".into(),
             ix: bordrless_bridge::client::register_sol(deployer),
             creates: Some(sol),
             signers: vec![],
+            skip_if: None,
+            wait_secs: 0,
         },
         Step {
             label: "armory init (TEST_PARAMS)".into(),
@@ -190,31 +207,75 @@ fn plan(deployer: Pubkey, code_hash: [u8; 32]) -> Vec<Step> {
             ),
             creates: Some(pda::config().0),
             signers: vec![],
+            skip_if: None,
+            wait_secs: 0,
         },
     ];
+    // Protocol pass 4a (L-1): queue every registration and the access numbers, wait once, apply.
+    let mut gated: Vec<(String, Instruction, Pubkey, Option<Pubkey>)> = Vec::new();
     for (id, name) in template_names() {
         if shape(id).is_none() {
             continue;
         }
         let args = register_args(id, &name, code_hash);
+        let mut ix = armory_ix(
+            hookwars_armory::accounts::RegisterTemplate {
+                admin: deployer,
+                config: pda::config().0,
+                template: pda::template(id).0,
+                template_program: ids::ITEMS_ID,
+                programdata: hookwars_common::programdata_address(&ids::ITEMS_ID),
+                system_program: anchor_lang::system_program::ID,
+                queued: Pubkey::default(),
+                event_authority: armory_events(),
+                program: ids::ARMORY_ID,
+            },
+            hookwars_armory::instruction::RegisterTemplate { args },
+        );
+        let q = fill_queued(&mut ix, &[ids::ITEMS_ID]);
+        gated.push((format!("armory register_template {id} {name}"), ix, q, Some(pda::template(id).0)));
+    }
+    {
+        let mut ix = armory_ix(
+            hookwars_armory::accounts::AdminQueued {
+                admin: deployer,
+                config: pda::config().0,
+                queued: Pubkey::default(),
+                event_authority: armory_events(),
+                program: ids::ARMORY_ID,
+            },
+            hookwars_armory::instruction::SetAccessParams { params: TEST_ACCESS },
+        );
+        let q = fill_queued(&mut ix, &[]);
+        gated.push(("armory set_access_params (TEST_ACCESS)".into(), ix, q, None));
+    }
+    for (label, ix, q, done) in &gated {
+        let bound: Vec<Pubkey> = if ix.data[..8] == *<hookwars_armory::instruction::RegisterTemplate as anchor_lang::Discriminator>::DISCRIMINATOR {
+            vec![ids::ITEMS_ID]
+        } else {
+            vec![]
+        };
+        let (qix, q2) = queue_ix(&deployer, &ix.data, &bound);
+        assert_eq!(*q, q2);
         steps.push(Step {
-            label: format!("armory register_template {id} {name}"),
-            ix: armory_ix(
-                hookwars_armory::accounts::RegisterTemplate {
-                    admin: deployer,
-                    config: pda::config().0,
-                    template: pda::template(id).0,
-                    template_program: ids::ITEMS_ID,
-                    programdata: hookwars_common::programdata_address(&ids::ITEMS_ID),
-                    system_program: anchor_lang::system_program::ID,
-                    event_authority: armory_events(),
-                    program: ids::ARMORY_ID,
-                },
-                hookwars_armory::instruction::RegisterTemplate { args },
-            ),
-            creates: Some(pda::template(id).0),
+            label: format!("queue: {label}"),
+            ix: qix,
+            creates: Some(*q),
             signers: vec![],
+            skip_if: *done,
+            wait_secs: 0,
         });
+    }
+    steps.push(Step {
+        label: "wait out the armory admin timelock (TEST_PARAMS.admin_timelock_secs)".into(),
+        ix: Instruction { program_id: anchor_lang::system_program::ID, accounts: vec![], data: vec![] },
+        creates: None,
+        signers: vec![],
+        skip_if: None,
+        wait_secs: TEST_PARAMS.admin_timelock_secs,
+    });
+    for (label, ix, _q, done) in gated {
+        steps.push(Step { label, ix, creates: done, signers: vec![], skip_if: None, wait_secs: 0 });
     }
     // The one Soulbound item every agent badge equips (item number 0 on a fresh armory).
     let item_mint = pda::item_mint(0).0;
@@ -245,6 +306,8 @@ fn plan(deployer: Pubkey, code_hash: [u8; 32]) -> Vec<Step> {
         ),
         creates: Some(soulbound),
         signers: vec![],
+        skip_if: None,
+        wait_secs: 0,
     });
     steps.push(Step {
         label: "war init_config (TEST_PARAMS; randomness = randomness_stub id, TEST only)".into(),
@@ -260,6 +323,8 @@ fn plan(deployer: Pubkey, code_hash: [u8; 32]) -> Vec<Step> {
         ),
         creates: Some(Pubkey::find_program_address(&[b"war-config"], &ids::WAR_ID).0),
         signers: vec![],
+        skip_if: None,
+        wait_secs: 0,
     });
     steps.push(Step {
         label: "market init (TEST_MARKET)".into(),
@@ -274,6 +339,8 @@ fn plan(deployer: Pubkey, code_hash: [u8; 32]) -> Vec<Step> {
         ),
         creates: Some(hookwars_market::state::config_address().0),
         signers: vec![],
+        skip_if: None,
+        wait_secs: 0,
     });
     steps.push(Step {
         label: "social init (TEST_SOCIAL)".into(),
@@ -288,6 +355,8 @@ fn plan(deployer: Pubkey, code_hash: [u8; 32]) -> Vec<Step> {
         ),
         creates: Some(social_config()),
         signers: vec![],
+        skip_if: None,
+        wait_secs: 0,
     });
     steps.push(Step {
         label: "agents init_config (TEST_AGENTS_PARAMS; verifiers = deployer and protocol authority, quorum 2, TEST only)".into(),
@@ -313,6 +382,8 @@ fn plan(deployer: Pubkey, code_hash: [u8; 32]) -> Vec<Step> {
         ),
         creates: Some(hookwars_agents::constants::pda::config().0),
         signers: vec![],
+        skip_if: None,
+        wait_secs: 0,
     });
     // Integration pass 3 (13): the economy, wired to the real programs: craft's output is the
     // armory and its callers the armory and items; social counts calls from craft, book, market and
@@ -338,6 +409,8 @@ fn plan(deployer: Pubkey, code_hash: [u8; 32]) -> Vec<Step> {
         ),
         creates: Some(hookwars_craft::state::config_address().0),
         signers: vec![],
+        skip_if: None,
+        wait_secs: 0,
     });
     steps.push(Step {
         label: "book init (TEST_BOOK)".into(),
@@ -352,6 +425,8 @@ fn plan(deployer: Pubkey, code_hash: [u8; 32]) -> Vec<Step> {
         ),
         creates: Some(hookwars_book::state::config_address().0),
         signers: vec![],
+        skip_if: None,
+        wait_secs: 0,
     });
     steps.push(Step {
         label: "social init_skills (TEST skills; callers craft, book, market, armory)".into(),
@@ -369,6 +444,8 @@ fn plan(deployer: Pubkey, code_hash: [u8; 32]) -> Vec<Step> {
         ),
         creates: Some(hookwars_social::skills_address().0),
         signers: vec![],
+        skip_if: None,
+        wait_secs: 0,
     });
     steps
 }
@@ -388,6 +465,14 @@ fn to_json(steps: &[Step], deployer: &Pubkey, code_hash: &[u8; 32]) -> String {
         s.push_str("    {\n");
         s.push_str(&format!("      \"step\": {},\n", i + 1));
         s.push_str(&format!("      \"label\": \"{}\",\n", st.label.replace('"', "'")));
+        if st.wait_secs > 0 {
+            s.push_str(&format!("      \"wait_secs\": {}\n", st.wait_secs));
+            s.push_str(if i + 1 < steps.len() { "    },\n" } else { "    }\n" });
+            continue;
+        }
+        if let Some(k) = st.skip_if {
+            s.push_str(&format!("      \"skip_if\": \"{k}\",\n"));
+        }
         s.push_str(&format!("      \"program\": \"{}\",\n", st.ix.program_id));
         match st.creates {
             Some(k) => s.push_str(&format!("      \"creates\": \"{k}\",\n")),
@@ -462,6 +547,11 @@ fn devnet_init_plan() {
     }
     let before = env.lamports(&deployer);
     for (i, st) in steps.iter().enumerate() {
+        if st.wait_secs > 0 {
+            env.warp(i64::from(st.wait_secs));
+            println!("plan step {} ok: {}", i + 1, st.label);
+            continue;
+        }
         let tx = env.send_paid_by(&[st.ix.clone()], &deployer_kp, &[]);
         tx.ok();
         println!("plan step {} ok: {} ({} CU)", i + 1, st.label, tx.cu());
@@ -491,7 +581,7 @@ fn devnet_init_plan() {
     let params = format!(
         "{{\n  \"note\": \"TEST values copied from the test suites' constants by programs/tests/tests/devnet_plan.rs. None is an owner decision (docs/spec/00 section 6).\",\n  \"launch_config\": \"{}\",\n  \"armory\": \"{}\",\n  \"war\": \"{}\",\n  \"market\": \"{}\",\n  \"social\": \"{}\",\n  \"agents\": \"{}\",\n  \"templates\": [\n{}\n  ]\n}}\n",
         esc(format!("{:?}", policy_launch_config(deployer, deployer, sol))),
-        esc(format!("{:?}", TEST_PARAMS)),
+        esc(format!("{:?} access {:?}", TEST_PARAMS, TEST_ACCESS)),
         esc(format!("{:?}", bordrless_program_tests::war::TEST_PARAMS)),
         esc(format!("{:?}", TEST_MARKET)),
         esc(format!("{:?}", TEST_SOCIAL)),

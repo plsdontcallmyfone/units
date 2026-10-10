@@ -1,0 +1,27 @@
+[package]
+name = "ext-template"
+description = "Hookwars, test-only, never deployed: an external hook template (the Hook Lab starter's transfer cut, plus a pool-side cut) registered with register_external_template, for the protocol pass 4a suites."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "ext_template"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "bordrless-hook/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+anchor-lang = { workspace = true }
+bordrless-hook = { path = "../../crates/bordrless-hook" }
+
+[lints]
+workspace = true

@@ -294,27 +294,24 @@ fn l_d_a_pool_item_re_equipped_by_vote_trades_at_once() {
     let chest_quote = pda::holding(&hw.w.sol, &hookwars_war::state::chest_address(&mint).0);
     let ix = settle_ix(&hw, &cranker.pubkey(), &mint, 0, &[(ids::ITEMS_ID, chest_quote)]);
     send(&mut hw.w.env, &[ix], &cranker, &[]).ok();
-    // `execute` with the refresh tail of a slot launch: launch program, launch, pool registry, then
-    // what the armory forwards after the system program: the launchpad's event authority and
-    // program (its `refresh_pool_registry` is an `#[event_cpi]` instruction; the armory does not add
-    // them itself, finding recorded in docs/spec/14-pass-4b.md), then the forwarded pool slots' item
-    // registries as they will be after the equip.
+    // `execute` with the refresh tail of a slot launch as the armory documents it (protocol pass
+    // 4a fixed the omission 14-pass-4b recorded): launch program, launch, pool registry, the
+    // launchpad's event authority, then the forwarded pool slots' item registries as they will be
+    // after the equip.
     let pool = hw.w.launch_pool_key(&mint);
     let mut ix = hw.execute_ix(&trader.pubkey(), &proposal);
     let n = ix.accounts.len();
-    ix.accounts.truncate(n - 3);
+    ix.accounts.truncate(n - 4);
     ix.accounts.extend([
         AccountMeta::new_readonly(ids::LAUNCH_ID, false),
         AccountMeta::new_readonly(pda::launch(&mint).0, false),
         AccountMeta::new(launch::registry_address(&pool), false),
         AccountMeta::new_readonly(hookwars_common::eco_cpi::event_authority(&ids::LAUNCH_ID), false),
-        AccountMeta::new_readonly(ids::LAUNCH_ID, false),
         AccountMeta::new_readonly(item_registry(&mint, &second), false),
     ]);
-    // The tail as the armory documents it (no event-cpi accounts) fails against the real launchpad.
+    // Without the event authority the armory refuses the tail.
     let mut bare = ix.clone();
-    bare.accounts.remove(n - 3 + 3);
-    bare.accounts.remove(n - 3 + 3);
+    bare.accounts.remove(n - 4 + 3);
     send(&mut hw.w.env, &[bare], &trader, &[]).expect_fail();
     let tx = send(&mut hw.w.env, &[ix], &trader, &[]);
     tx.ok();

@@ -11,6 +11,7 @@ pub mod economy;
 pub mod env;
 pub mod events;
 pub mod expansion;
+pub mod external;
 pub mod fixture;
 pub mod hooks;
 pub mod items;

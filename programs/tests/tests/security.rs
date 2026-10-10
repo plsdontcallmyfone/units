@@ -142,6 +142,7 @@ fn h1_fail_stale_still_fails_a_proposal_that_no_longer_fits() {
             admin: admin.pubkey(),
             config: pda::config().0,
             template: pda::template(T::WAR_ORDERS).0,
+            queued: Pubkey::default(),
             event_authority: armory_events(),
             program: ids::ARMORY_ID,
         },
@@ -149,7 +150,7 @@ fn h1_fail_stale_still_fails_a_proposal_that_no_longer_fits() {
             template_id: T::WAR_ORDERS,
         },
     );
-    hw.w.env.send_paid_by(&[ix], &admin, &[]).ok();
+    hw.send_gated(&admin, ix, &[]).ok();
     let stranger = hw.w.env.funded(1_000_000_000);
     let ix = fail_stale_ix(
         proposal,
@@ -411,7 +412,8 @@ fn l_d_an_equip_of_a_pool_kind_slot_names_the_launch_for_the_registry_refresh() 
     hw.w.env.warp(600);
     let full = hw.execute_ix(&o, &proposal);
     let tail = hw.refresh_tail(&mint, 3).len();
-    assert_eq!(tail, 3);
+    // Protocol pass 4a: the tail ends with the launchpad's event authority.
+    assert_eq!(tail, 4);
     let mut bare = full.clone();
     bare.accounts.truncate(bare.accounts.len() - tail);
     hw.w.env
@@ -420,7 +422,7 @@ fn l_d_an_equip_of_a_pool_kind_slot_names_the_launch_for_the_registry_refresh() 
     // A wrong launch address: refused too.
     let mut wrong = full.clone();
     let n = wrong.accounts.len();
-    wrong.accounts[n - 2].pubkey = Pubkey::new_unique();
+    wrong.accounts[n - 3].pubkey = Pubkey::new_unique();
     hw.w.env
         .send_paid_by(&[wrong], &owner, &[])
         .expect_code(armory_code(E::WrongAccount));

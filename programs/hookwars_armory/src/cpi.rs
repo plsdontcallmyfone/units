@@ -1,4 +1,6 @@
-// Changed by Hookwars: new file (M2); R21 burns fit only may_burn slots; integration pass 3: init_equip's wear flag (E-3).
+// Changed by Hookwars: new file (M2); R21 burns fit only may_burn slots; integration pass 3: init_equip's wear flag (E-3);
+// protocol pass 4a: external templates validate against their declared manifest and go into the slot with
+// their own program.
 //! Calls out of the armory: into `hookwars_items` (signed by `["armory"]`, 02 section 2.2) and into
 //! the token program (signed by `["minter"]`, `["slots", mint]` or `["royalty", item]`), plus the
 //! compatibility check (`check_fits`, 02 section 6.1) and the equip steps every path shares
@@ -124,6 +126,20 @@ pub fn validate_item<'info>(
         template.status == template_status::ACTIVE,
         ArmoryError::TemplateClosed
     );
+    // Protocol pass 4a: an external template's fields are checked against its floors and
+    // ceilings; its items carry the manifest its registrant declared (the lab measured the
+    // program against it).
+    if template.external {
+        for (i, p) in params.iter().enumerate() {
+            let ok = if i < usize::from(template.field_count) {
+                *p >= template.field_min[i] && *p <= template.field_max[i]
+            } else {
+                *p == 0
+            };
+            require!(ok, ArmoryError::ParamOutOfRange);
+        }
+        return Ok(template.ext_manifest);
+    }
     hookwars_common::check_fields(template.id, &template.field_min, &template.field_max, params)
         .map_err(|_| ArmoryError::ParamOutOfRange)?;
     validate_params(signer, items, template, params)?;
@@ -303,14 +319,14 @@ pub fn agents_armory_caller(mint: &Pubkey) -> Pubkey {
     Pubkey::find_program_address(&[b"armory-caller", mint.as_ref()], &hookwars_common::ids::AGENTS_ID).0
 }
 
-/// The compatibility check (02 section 6.1). `launch`: the `equip_launch` path (fills a slot whose
-/// rule is `Locked` once). `revert`: a performance revert (staleness allowed, 02 section 3.3).
-#[allow(clippy::too_many_arguments)]
 /// Hookwars R21: an item that may burn fits only a slot whose bounds allow burns.
 pub fn burn_fits(item_may_burn: bool, slot_may_burn: bool) -> bool {
     !item_may_burn || slot_may_burn
 }
 
+/// The compatibility check (02 section 6.1). `launch`: the `equip_launch` path (fills a slot whose
+/// rule is `Locked` once). `revert`: a performance revert (staleness allowed, 02 section 3.3).
+#[allow(clippy::too_many_arguments)]
 pub fn check_fits(
     mint: &Mint,
     slot: u8,
@@ -379,7 +395,7 @@ pub fn check_fits(
     if writes || manifest.data_bytes > 0 {
         require!(s.bounds.may_write_data, ArmoryError::OverBounds);
         require!(
-            u16::from(manifest.data_bytes) + 1 <= u16::from(s.data_len),
+            u16::from(manifest.data_bytes) < u16::from(s.data_len),
             ArmoryError::DataRangeTooSmall
         );
     }
@@ -400,6 +416,9 @@ pub struct NewEquip<'a, 'info> {
     pub config: EquipConfig,
     /// Hookwars M3b: the module list of a composite.
     pub composite: Option<&'a AccountInfo<'info>>,
+    /// Protocol pass 4a: the program the slot calls (the items program, or an external
+    /// template's own program).
+    pub program: Pubkey,
 }
 
 /// Accounts `apply_equip` uses, all already checked by the caller's context.
@@ -419,6 +438,8 @@ pub struct EquipInfos<'a, 'info> {
     pub armory_signer: &'a AccountInfo<'info>,
     pub items_program: &'a AccountInfo<'info>,
     pub token: TokenInfos<'a, 'info>,
+    /// Protocol pass 4a: the new template's program (needed when it is external).
+    pub template_program: Option<&'a AccountInfo<'info>>,
 }
 
 /// The equip steps (02 section 6.4 steps 2 to 4): unequip the slot's current item (if any),
@@ -569,10 +590,11 @@ pub fn apply_equip<'info>(
     let extra_count = ret[0];
     // 4. set_slot_item.
     let returns = m.token_flags & token_flags::TRANSFER_RETURNS_DELTA != 0;
+    let program = new.program;
     let ix = bordrless_token::client::set_slot_item(
         e.slot_authority.key(),
         mint_key,
-        ids::ITEMS_ID,
+        program,
         if returns { vault.map(|v| v.key()) } else { None },
         slot,
         item_key,
@@ -580,10 +602,16 @@ pub fn apply_equip<'info>(
         u16::from(m.pool_flags),
         extra_count,
     );
+    let program_info = if program == ids::ITEMS_ID {
+        items.clone()
+    } else {
+        e.template_program.ok_or(ArmoryError::WrongAccount)?.clone()
+    };
+    require_keys_eq!(program_info.key(), program, ArmoryError::WrongAccount);
     let mut infos = vec![
         e.slot_authority.clone(),
         e.mint.clone(),
-        items.clone(),
+        program_info,
         e.token.event_authority.clone(),
         e.token.token_program.clone(),
     ];
