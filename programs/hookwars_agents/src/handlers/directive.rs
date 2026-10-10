@@ -18,6 +18,9 @@ use hookwars_common::economy::MEMO_PROGRAM_ID;
 
 use crate::constants::*;
 use crate::error::AgentsError;
+
+/// This module's errors are `AgentsError` variants (one error enum per program, so the IDL builds).
+pub type DirectiveError = AgentsError;
 use crate::handlers::common::*;
 use crate::handlers::policy::apply_limits;
 use crate::state::*;
@@ -93,22 +96,6 @@ pub struct Commitment {
     pub bump: u8,
 }
 
-/// Errors of this module (offset away from `AgentsError`).
-#[error_code(offset = 7200)]
-pub enum DirectiveError {
-    #[msg("no memo instruction with this directive in the transaction")]
-    DirectiveMemoMissing,
-    #[msg("the memo is not the directive this instruction names")]
-    MemoMismatch,
-    #[msg("the sequence is not the next one")]
-    BadSeq,
-    #[msg("the operator did not sign the memo")]
-    MemoNotSigned,
-    #[msg("memo parameters out of range")]
-    BadMemoParams,
-    #[msg("the signer is not the passport's agent key")]
-    NotAgent,
-}
 
 #[event]
 pub struct DirectiveSet {

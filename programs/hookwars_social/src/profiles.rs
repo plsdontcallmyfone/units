@@ -12,6 +12,9 @@ use hookwars_common::economy::{self as eco, SkillDef};
 
 use crate::{seeds as social_seeds, SocialConfig, SocialError};
 
+/// This module's errors are `SocialError` variants (one error enum per program, so the IDL builds).
+pub type ProfileError = SocialError;
+
 /// Seeds of this module.
 pub mod pseeds {
     pub const PROFILE: &[u8] = b"profile";
@@ -70,22 +73,6 @@ impl SkillTable {
     }
 }
 
-/// Profile errors (offset away from `SocialError`).
-#[error_code(offset = 7100)]
-pub enum ProfileError {
-    #[msg("a skill is malformed (counter out of range or thresholds not ascending)")]
-    BadSkill,
-    #[msg("too many skills or callers")]
-    TooMany,
-    #[msg("the signer is not a registered caller's PDA")]
-    NotCaller,
-    #[msg("no pending skill change, or not ready yet")]
-    NotReady,
-    #[msg("unknown counter")]
-    BadCounter,
-    #[msg("two skills share an id")]
-    DuplicateSkill,
-}
 
 #[event]
 pub struct ProfileOpened {
@@ -177,8 +164,8 @@ pub fn process_propose_skills(
 pub fn process_apply_skills(ctx: Context<ApplySkills>) -> Result<()> {
     let t = now()?;
     let s = &mut ctx.accounts.skills;
-    let p = s.pending.clone().ok_or(ProfileError::NotReady)?;
-    require!(t >= p.eta, ProfileError::NotReady);
+    let p = s.pending.clone().ok_or(ProfileError::SkillsNotReady)?;
+    require!(t >= p.eta, ProfileError::SkillsNotReady);
     s.skills = p.skills;
     s.callers = p.callers;
     s.pending = None;
@@ -343,10 +330,18 @@ pub struct RecordAccs<'a, 'info> {
     pub program: &'a AccountInfo<'info>,
 }
 
-/// For callers (craft, book, market): bumps `counter` of the profile in `s` through
+/// For callers (craft, book, market): bumps `counter` of `wallet`'s profile through
 /// `record_wallet`, signed as `caller_program`'s `["social-caller"]`, when the skill table names
-/// `caller_program`; otherwise nothing is counted and nothing fails.
-pub fn record_wallet_cpi<'info>(s: &RecordAccs<'_, 'info>, caller_program: &Pubkey, counter: u8, value: u64) -> Result<()> {
+/// `caller_program`; otherwise nothing is counted and nothing fails. The profile account must be
+/// `wallet`'s (a caller never credits another wallet's counters).
+pub fn record_wallet_cpi<'info>(
+    s: &RecordAccs<'_, 'info>,
+    caller_program: &Pubkey,
+    wallet: &Pubkey,
+    counter: u8,
+    value: u64,
+) -> Result<()> {
+    require_keys_eq!(*s.profile.key, profile_address(wallet).0, SocialError::WrongAccount);
     use anchor_lang::solana_program::instruction::Instruction;
     use anchor_lang::solana_program::program::invoke_signed;
     use anchor_lang::{InstructionData, ToAccountMetas};

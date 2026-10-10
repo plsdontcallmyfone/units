@@ -19,6 +19,9 @@ use hookwars_social::profiles::{record_wallet_cpi, RecordAccs};
 
 use crate::cpi::{holding_amount, pay_sol, read_item};
 use crate::error::MarketError;
+
+/// This module's errors are `MarketError` variants (one error enum per program, so the IDL builds).
+pub type LicenceError = MarketError;
 use crate::state::{seeds as market_seeds, MarketConfig};
 
 pub mod lseeds {
@@ -102,23 +105,6 @@ impl License {
     }
 }
 
-#[error_code(offset = 7300)]
-pub enum LicenceError {
-    #[msg("licence terms are out of bounds")]
-    BadLicenceTerms,
-    #[msg("the item is not offered for licence")]
-    NotLicensable,
-    #[msg("every live licence of this item is taken")]
-    LicenceSoldOut,
-    #[msg("the licence is not live")]
-    NotLive,
-    #[msg("per-token licences cannot be revoked")]
-    NotRevocable,
-    #[msg("the licence has not ended yet")]
-    NotEnded,
-    #[msg("licence parameters out of bounds")]
-    BadLicenceParams,
-}
 
 #[event]
 pub struct LicenceOfferSet {
@@ -321,8 +307,8 @@ pub fn process_buy_license(mut ctx: Context<BuyLicense>, max_price: u64, renew_o
         event_authority: &a.social_event_authority,
         program: &a.social_program,
     };
-    record_wallet_cpi(&s, &crate::ID, counter::LICENCES_SOLD, 1)?;
-    record_wallet_cpi(&s, &crate::ID, counter::LICENCE_REVENUE_LAMPORTS, to_holder)?;
+    record_wallet_cpi(&s, &crate::ID, a.holder.key, counter::LICENCES_SOLD, 1)?;
+    record_wallet_cpi(&s, &crate::ID, a.holder.key, counter::LICENCE_REVENUE_LAMPORTS, to_holder)?;
     let holder = a.holder.key();
     let item_key = a.item.key();
     let token_mint = a.token_mint.key();

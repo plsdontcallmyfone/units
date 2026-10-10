@@ -218,6 +218,19 @@ pub enum SocialError {
     ZeroAmount,
     #[msg("arithmetic overflow")]
     Overflow,
+    // Profiles and skills (11 section 3.3).
+    #[msg("a skill is malformed (counter out of range or thresholds not ascending)")]
+    BadSkill,
+    #[msg("too many skills or callers")]
+    TooMany,
+    #[msg("the signer is not a registered caller's PDA")]
+    NotCaller,
+    #[msg("no pending skill change, or not ready yet")]
+    SkillsNotReady,
+    #[msg("unknown counter")]
+    BadCounter,
+    #[msg("two skills share an id")]
+    DuplicateSkill,
 }
 
 #[event]

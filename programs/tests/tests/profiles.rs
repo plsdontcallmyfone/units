@@ -12,7 +12,7 @@ use hookwars_social::{profile_address, skills_address, ProfileError as P, SkillT
 use solana_signer::Signer;
 
 fn pcode(e: P) -> u32 {
-    7_100 + e as u32
+    anchor_lang::error::ERROR_CODE_OFFSET + e as u32
 }
 
 #[test]
@@ -99,7 +99,7 @@ fn the_skill_table_changes_only_behind_the_timelock() {
     let ix = skills_ix(&ew, true, vec![diplomat], vec![]);
     ew.send(&d, &[ix]).ok();
     let ix = skills_ix(&ew, false, vec![], vec![]);
-    ew.send(&d, &[ix]).expect_code(pcode(P::NotReady));
+    ew.send(&d, &[ix]).expect_code(pcode(P::SkillsNotReady));
     let alice = ew.funded(SOL);
     ew.open_profile(&alice);
     ew.stub_record(&alice.pubkey(), counter::TREATIES_HELD, 2).ok();

@@ -413,7 +413,7 @@ pub mod hookwars_book {
         let a = &mut ctx.accounts;
         let m = &mut a.market;
         require!(side_ <= side::ASK, BookError::BadParams);
-        require!(price > 0 && price % m.tick_lamports == 0, BookError::BadPrice);
+        require!(price > 0 && price.checked_rem(m.tick_lamports) == Some(0), BookError::BadPrice);
         require!(size >= m.min_size, BookError::BadSize);
         require!(expires_at == 0 || expires_at > ts, BookError::BadParams);
         let p = a.config.params;
@@ -591,7 +591,7 @@ pub mod hookwars_book {
                 event_authority: &a.social_event_authority,
                 program: &a.social_program,
             };
-            record_wallet_cpi(&s, &crate::ID, counter::BOOK_FILLS, u64::from(fills))?;
+            record_wallet_cpi(&s, &crate::ID, &owner.key(), counter::BOOK_FILLS, u64::from(fills))?;
         }
         emit_cpi!(Placed {
             market,

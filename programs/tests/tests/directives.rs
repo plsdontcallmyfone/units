@@ -32,7 +32,7 @@ const TEST_MEMO: MemoParams = MemoParams {
 };
 
 fn dcode(e: D) -> u32 {
-    7_200 + e as u32
+    anchor_lang::error::ERROR_CODE_OFFSET + e as u32
 }
 
 fn memo_ix(signer: &Pubkey, text: &str) -> Instruction {
@@ -316,7 +316,7 @@ fn memo_parameters_wait_for_the_timelock() {
         ),
         data: hookwars_agents::instruction::ApplyMemoConfig {}.data(),
     };
-    dw.aw.hw.w.env.send_paid_by(&[apply.clone()], &admin, &[]).expect_code(agents_code(A::TimelockActive));
+    dw.aw.hw.w.env.send_paid_by(std::slice::from_ref(&apply), &admin, &[]).expect_code(agents_code(A::TimelockActive));
     dw.aw.hw.w.env.warp(600);
     dw.aw.hw.w.env.send_paid_by(&[apply], &admin, &[]).ok();
     let c: MemoConfig = dw.aw.hw.w.env.read(&memo_config_address().0);

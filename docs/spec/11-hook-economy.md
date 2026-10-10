@@ -609,7 +609,13 @@ below, each with the entry point on this side already in place and tested throug
    `ref` argument on existing market, book-external and armory settling instructions (every new
    settling instruction here carries `reference: [u8; 32]`), and the level gates the armory checks
    (E-8). `MarketConfig` is unchanged; licence totals are on `LicenceConfig`.
-10. **App request folded in:** `PolicyLimits.tracked` is `Vec<TrackedLimit { mint, per_action,
+10. **One error enum per program.** Anchor's IDL builder refuses a second `#[error_code]` in a
+    program, so the directive, profile and licence errors are appended to `AgentsError`,
+    `SocialError` and `MarketError` (existing codes unchanged; `DirectiveError`, `ProfileError` and
+    `LicenceError` are aliases). `scripts/solana/programs.sh idl` builds the agents, social,
+    market, craft and book IDLs; on this base it stops earlier at `hookwars_items` ("Multiple error
+    definitions are not allowed"), which is outside this branch.
+11. **App request folded in:** `PolicyLimits.tracked` is `Vec<TrackedLimit { mint, per_action,
     per_day }>` (same bytes as the former tuple) so the agents IDL builds.
 
 ### 13.2 Tests (LiteSVM, server B)
@@ -632,24 +638,24 @@ table holding every key.
 | --- | --- | --- | --- | --- | --- | --- |
 | craft `create_material` | 10 | 477 | 294 | 7 | 3 | 37,160 |
 | craft `drop` (new holding, via a caller) | 16 | 719 | 350 | 9 | 4 | 79,188 |
-| craft `craft` (2 inputs, counter) | 24 | 948 | 331 | 12 | 3 | 107,532 |
-| craft `craft` (4 inputs, level gate, counter) | 30 | 1,146 | 343 | 16 | 3 | 155,832 |
+| craft `craft` (2 inputs, counter) | 24 | 948 | 331 | 12 | 3 | 109,081 |
+| craft `craft` (4 inputs, level gate, counter) | 30 | 1,146 | 343 | 16 | 3 | 157,381 |
 | craft `init_wear` (via a caller) | 9 | 515 | 363 | 5 | 3 | 27,454 |
 | craft `wear` turning dormant (via a caller) | 8 | 449 | 328 | 4 | 3 | 21,761 |
-| craft `repair` (1 input) | 23 | 915 | 329 | 8 | 3 | 69,106 |
-| social `open_profile` | 6 | 352 | 293 | 4 | 2 | 11,300 |
+| craft `repair` (1 input) | 23 | 915 | 329 | 8 | 3 | 73,655 |
+| social `open_profile` | 6 | 352 | 293 | 4 | 2 | 12,800 |
 | social `record_wallet` (via a caller) | 8 | 455 | 334 | 4 | 3 | 16,728 |
 | book `create_market` | 15 | 633 | 295 | 8 | 3 | 50,222 |
-| book `place` resting, no fill | 19 | 807 | 345 | 6 | 3 | 40,031 to 44,107 |
-| book `place` filling 4 makers (counter) | 27 | 1,071 | 361 | 27 | 3 | 194,031 |
-| book `place` evicting the worst | 21 | 873 | 349 | 4 | 2 | 33,744 |
-| book `cancel` | 12 | 526 | 281 | 3 | 2 | 21,782 |
-| book `place_class_bid` | 7 | 468 | 378 | 5 | 2 | 16,970 |
-| book `match_class` | 17 | 715 | 315 | 8 | 3 | 89,334 |
-| market `set_licence_offer` | 10 | 469 | 286 | 4 | 2 | 20,967 |
-| market `buy_license` (2 counters) | 22 | 888 | 333 | 11 | 3 | 76,233 |
-| market `renew_license` | 22 | 888 | 333 | 10 | 3 | 73,832 |
-| market `revoke_license` | 10 | 452 | 269 | 4 | 2 | 15,528 |
+| book `place` resting, no fill | 19 | 807 | 345 | 6 | 3 | 39,110 to 43,448 |
+| book `place` filling 4 makers (counter) | 27 | 1,071 | 361 | 27 | 3 | 189,584 |
+| book `place` evicting the worst | 21 | 873 | 349 | 4 | 2 | 29,294 |
+| book `cancel` | 12 | 526 | 281 | 3 | 2 | 18,782 |
+| book `place_class_bid` | 7 | 468 | 378 | 5 | 2 | 15,470 |
+| book `match_class` | 17 | 715 | 315 | 8 | 3 | 69,834 |
+| market `set_licence_offer` | 10 | 469 | 286 | 4 | 2 | 25,467 |
+| market `buy_license` (2 counters) | 22 | 888 | 333 | 11 | 3 | 82,330 |
+| market `renew_license` | 22 | 888 | 333 | 10 | 3 | 79,929 |
+| market `revoke_license` | 10 | 452 | 269 | 4 | 2 | 20,028 |
 | agents memo + `set_directive` | 12 | 883 | 669 | 5 | 2 | 52,697 |
 
 Each book fill adds two keys (64 bytes without a table) and about six trace entries, so

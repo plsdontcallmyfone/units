@@ -247,6 +247,7 @@ fn burn_inputs<'info>(
 }
 
 /// Pays a recipe fee: `RECIPE_PROTOCOL_BPS` to the treasury, the rest to the season pool.
+#[allow(clippy::too_many_arguments)]
 fn pay_fee<'info>(
     config: &mut CraftConfig,
     system: &AccountInfo<'info>,
@@ -682,7 +683,7 @@ pub mod hookwars_craft {
         infos.push(a.output_program.to_account_info());
         invoke_signed(&ix, &infos, &[&[seeds::SIGNER, &[bump]]])?;
         a.recipe.uses = a.recipe.uses.saturating_add(1);
-        record_wallet_cpi(&s, &crate::ID, counter::ITEMS_CRAFTED, 1)?;
+        record_wallet_cpi(&s, &crate::ID, &a.crafter.key(), counter::ITEMS_CRAFTED, 1)?;
         let crafter = a.crafter.key();
         emit_cpi!(Crafted {
             recipe: recipe_id,
@@ -769,7 +770,7 @@ pub mod hookwars_craft {
         w.updated_at = ts;
         let used = w.used;
         a.recipe.uses = a.recipe.uses.saturating_add(1);
-        record_wallet_cpi(&s, &crate::ID, counter::REPAIRS, 1)?;
+        record_wallet_cpi(&s, &crate::ID, &a.holder.key(), counter::REPAIRS, 1)?;
         let (item, holder) = (a.item.key(), a.holder.key());
         emit_cpi!(Repaired {
             recipe: recipe_id,

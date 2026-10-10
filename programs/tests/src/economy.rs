@@ -378,6 +378,7 @@ impl Ew {
     }
 
     /// `drop` signed by `caller` claiming `caller_program`.
+    #[allow(clippy::too_many_arguments)]
     pub fn drop_ix(&self, caller: &Pubkey, caller_program: &Pubkey, payer: &Pubkey, source: u8, material_id: u16, measured: u64, recipient: &Pubkey) -> Instruction {
         let mint = cs::material_mint_address(material_id).0;
         craft_ix(

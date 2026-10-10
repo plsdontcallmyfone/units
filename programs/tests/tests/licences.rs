@@ -18,7 +18,7 @@ use solana_signer::Signer;
 const TERM: u32 = 86_400;
 
 fn lcode(e: L) -> u32 {
-    7_300 + e as u32
+    anchor_lang::error::ERROR_CODE_OFFSET + e as u32
 }
 
 struct Lw {
@@ -200,7 +200,7 @@ fn licence_parameters_wait_for_the_timelock() {
         hookwars_market::accounts::ApplyLicenceParams { licence_config: lic::licence_config_address().0 },
         hookwars_market::instruction::ApplyLicenceParams {},
     );
-    ew.send(&d, &[apply.clone()]).expect_code(market_code(M::NotReady));
+    ew.send(&d, std::slice::from_ref(&apply)).expect_code(market_code(M::NotReady));
     ew.warp(600);
     ew.send(&d, &[apply]).ok();
     let c: LicenceConfig = ew.hw.w.env.read(&lic::licence_config_address().0);

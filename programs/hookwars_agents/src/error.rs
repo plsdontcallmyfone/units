@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (09).
+// Changed by Hookwars: new file (09); directive errors (11 section 4).
 //! Errors of `hookwars_agents` (09 section 16).
 
 use anchor_lang::prelude::*;
@@ -88,4 +88,17 @@ pub enum AgentsError {
     BadBondStatus,
     #[msg("arithmetic overflow")]
     MathOverflow,
+    // Directives, commits and postage (11 section 4).
+    #[msg("no memo instruction with this directive in the transaction")]
+    DirectiveMemoMissing,
+    #[msg("the memo is not the directive this instruction names")]
+    MemoMismatch,
+    #[msg("the sequence is not the next one")]
+    BadSeq,
+    #[msg("the operator did not sign the memo")]
+    MemoNotSigned,
+    #[msg("memo parameters out of range")]
+    BadMemoParams,
+    #[msg("the signer is not the passport's agent key")]
+    NotAgent,
 }

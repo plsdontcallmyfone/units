@@ -174,6 +174,13 @@ fn craft_refusals_and_the_crafter_level_gate() {
     }
     let ix = ew.craft_item_ix(&c.pubkey(), 2, &inputs);
     ew.send(&c, &[ix]).ok();
+    // Another wallet's profile cannot be credited (nor lend its level).
+    let other = ew.funded(SOL);
+    ew.open_profile(&other);
+    let mut ix = ew.craft_item_ix(&c.pubkey(), 3, &inputs);
+    ix.accounts[8].pubkey = hookwars_social::profile_address(&other.pubkey()).0;
+    ew.send(&c, &[ix]).expect_fail();
+    assert_eq!(ew.profile(&other.pubkey()).counters[usize::from(counter::ITEMS_CRAFTED)], 0);
     // A repair recipe cannot craft.
     let ix = ew.craft_item_ix(&c.pubkey(), 4, &inputs);
     ew.send(&c, &[ix]).expect_code(craft_code(E::WrongRecipe));
@@ -299,7 +306,7 @@ fn config_changes_wait_for_the_timelock() {
         },
         hookwars_craft::instruction::ApplyConfig {},
     );
-    ew.send(&d, &[apply.clone()]).expect_code(craft_code(E::NotReady));
+    ew.send(&d, std::slice::from_ref(&apply)).expect_code(craft_code(E::NotReady));
     ew.warp(i64::from(TEST_CRAFT.admin_timelock_secs));
     ew.send(&d, &[apply]).ok();
     let c = ew.craft_config();

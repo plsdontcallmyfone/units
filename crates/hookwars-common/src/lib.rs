@@ -1868,7 +1868,7 @@ pub mod economy {
 
     /// `ceil(amount * bps / 10_000)`.
     pub fn bps_up(amount: u64, bps: u16) -> u64 {
-        ((u128::from(amount) * u128::from(bps) + 9_999) / 10_000) as u64
+        (u128::from(amount) * u128::from(bps)).div_ceil(10_000) as u64
     }
 
     /// Licence split (11 section 2.3): protocol first, then the template author's share of the
