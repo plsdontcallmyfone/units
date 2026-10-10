@@ -60,21 +60,21 @@ describe('template supply (spec 18 part A)', () => {
     expect(await templateSupply(conn, 99)).toBeNull();
   });
   it('a tracked template leads create with its Supply; a stranger is refused before signing', async () => {
-    await expect(build('items/create', { templateId: 19, params: [100] })).rejects.toThrow(/minter/);
-    const [ix] = await build('items/create', { templateId: 19, params: [100] }, minter);
+    await expect(build('items/create', { templateId: 19, params: [100], royaltyBps: 0 })).rejects.toThrow(/minter/);
+    const [ix] = await build('items/create', { templateId: 19, params: [100], royaltyBps: 0 }, minter);
     expect(tail(ix!, 'armory', 'create_item')[0]).toBe(S(hookwars.supplyAddress(19)));
-    const [plain] = await build('items/create', { templateId: 22, params: [10] }, minter);
+    const [plain] = await build('items/create', { templateId: 22, params: [10], royaltyBps: 0 }, minter);
     expect(tail(plain!, 'armory', 'create_item')).not.toContain(S(hookwars.supplyAddress(22)));
   });
   it('a composite carries the Supply of each tracked module template', async () => {
     const mods = [19, 22].map((templateId) => ({ templateId, params: [1], targetStart: 0, targetCount: 0 }));
-    const [ix] = await build('items/composite', { modules: mods }, minter);
+    const [ix] = await build('items/composite', { modules: mods, royaltyBps: 0 }, minter);
     const t = tail(ix!, 'armory', 'create_composite');
     expect(t[0]).toBe(S(hookwars.supplyAddress(19)));
     expect(t.slice(1, 3)).toEqual([S(hookwars.templateAddress(19)), S(hookwars.templateAddress(22))]);
   });
   it('the premium flow creates the item and sets Licensed terms in one transaction', async () => {
-    const ixs = await build('items/premium', { templateId: 22, params: [10], priceLamports: '1000', termSecs: 3600, per: 0, maxLive: 2 });
+    const ixs = await build('items/premium', { templateId: 22, params: [10], royaltyBps: 0, priceLamports: '1000', termSecs: 3600, per: 0, maxLive: 2 });
     expect(ixs.map((i) => S(i.programId))).toEqual([S(hookwars.ARMORY_ID), S(hookwars.ARMORY_ID)]);
     const setAccess = hookwars.coderOf('armory').instruction('set_access').discriminator;
     expect([...ixs[1]!.data.subarray(0, 8)]).toEqual(setAccess);
