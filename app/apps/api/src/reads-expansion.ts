@@ -144,3 +144,37 @@ export async function badges(conn: Connection, db: Pool | null): Promise<unknown
   const recent = await safeRows<Record<string, unknown>>(db, 'select signature, slot, ts, id, recipient, claimant from ev_social_badge_awarded order by slot desc limit 100', []);
   return json({ items: types.map((t) => ({ badge: t.address, ...t.data })), recent });
 }
+
+// ---------------------------------------------------------------- economy (11 sections 5 and 6, 13) --
+
+/** Craft: its config, every material and recipe, and the presets (chain state, bounded). */
+export async function craftOverview(conn: Connection): Promise<unknown> {
+  const cfg = await conn.getAccountInfo(hookwars.craftConfigAddress(), 'confirmed');
+  const [materials, recipes, presets] = await Promise.all([
+    accountsOf(conn, hookwars.CRAFT_ID, hookwars.materialCodec), accountsOf(conn, hookwars.CRAFT_ID, hookwars.recipeCodec), accountsOf(conn, hookwars.ARMORY_ID, hookwars.presetCodec),
+  ]);
+  return json({
+    config: cfg ? hookwars.craftConfigCodec.decode(cfg.data) : null,
+    materials: materials.map((r) => ({ address: r.address, ...r.data })), recipes: recipes.map((r) => ({ address: r.address, ...r.data })),
+    presets: presets.map((r) => ({ address: r.address, ...r.data })),
+  });
+}
+
+/** The order books: every market, or one material's book with its resting orders and class bids. */
+export async function books(conn: Connection, materialId: number | null): Promise<unknown> {
+  const cfg = await conn.getAccountInfo(hookwars.bookConfigAddress(), 'confirmed');
+  const config = cfg ? hookwars.bookConfigCodec.decode(cfg.data) : null;
+  if (materialId === null) {
+    const [markets, bids] = await Promise.all([accountsOf(conn, hookwars.BOOK_ID, hookwars.bookMarketCodec), accountsOf(conn, hookwars.BOOK_ID, hookwars.classBidCodec)]);
+    return json({ config, markets: markets.map((r) => ({ address: r.address, ...r.data })), classBids: bids.map((r) => ({ address: r.address, ...r.data })) });
+  }
+  const key = hookwars.bookMarketAddress(hookwars.materialMintAddress(materialId));
+  const info = await conn.getAccountInfo(key, 'confirmed');
+  return json({ config, market: info ? { address: key.toBase58(), ...hookwars.bookMarketCodec.decode(info.data) } : null });
+}
+
+/** An item's craft `Wear` (charges, dormancy, repairs), or null for an item that does not wear. */
+export async function itemWear(conn: Connection, itemKey: string): Promise<unknown> {
+  const info = await conn.getAccountInfo(hookwars.wearAddress(new PublicKey(itemKey)), 'confirmed');
+  return info ? json(hookwars.wearCodec.decode(info.data)) : null;
+}

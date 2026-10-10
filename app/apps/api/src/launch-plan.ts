@@ -51,7 +51,8 @@ export async function launchPlan(conn: Connection, b: Body) {
   if (missing.length) throw new PrepareError(409, 'NotDeployed', `Not on this cluster yet: the ${missing.join(', ')} program${missing.length > 1 ? 's are' : ' is'} not deployed, so this cannot be prepared.`);
   const owner = new PublicKey(String(b.owner));
   const mint = new PublicKey(String(b.mint));
-  const stages: Stage[] = await launchStages(b, conn);
+  // Changed by Hookwars (app pass v3): a companion slot launch when `companion` is true.
+  const stages: Stage[] = await launchStages(b, conn, b.companion === true);
   if (b.phase === 'launch') {
     const info = await conn.getAccountInfo(mint, 'confirmed');
     const regs = info ? poolItemRegistries(hookwars.decodeSlotMint(info.data), mint) : [];

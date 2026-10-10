@@ -9,12 +9,18 @@ export interface Router {
   prepare(route: string, body: Record<string, unknown>): Promise<{ instructions: TransactionInstruction[]; tables: AddressLookupTableAccount[] }>;
   /** Token base units a buy of `lamportsIn` would return to `owner` now (simulated, nothing sent). */
   quoteBuy(owner: PublicKey, mint: PublicKey, lamportsIn: bigint): Promise<bigint>;
+  /** Lamports a sell of `tokensIn` would return to `owner` now (simulated, nothing sent). */
+  quoteSell(owner: PublicKey, mint: PublicKey, tokensIn: bigint): Promise<bigint>;
 }
 
 export class RouterError extends Error {}
 
 /** Prepare routes the cranker role may call (all permissionless). */
-export const CRANK_ROUTES = ['settle/prepare', 'seasons/open/prepare', 'seasons/finalize/prepare', 'prize/split/prepare', 'proposals/finalize/prepare', 'votes/close/prepare', 'agents/bonds/resolve/prepare'] as const;
+export const CRANK_ROUTES = [
+  'settle/prepare', 'seasons/open/prepare', 'seasons/finalize/prepare', 'prize/split/prepare', 'proposals/finalize/prepare', 'votes/close/prepare', 'agents/bonds/resolve/prepare',
+  // R-2: the war steps (05 sections 7 to 9) and the economy's permissionless cranks.
+  'war/siege/prepare', 'war/counter-strike/prepare', 'war/raze/prepare', 'book/crank/prepare', 'proposals/close/prepare', 'loyalty/reslot/prepare',
+] as const;
 
 export class ApiRouter implements Router {
   readonly apiUrl: string;
@@ -55,5 +61,16 @@ export class ApiRouter implements Router {
     if (!acct) throw new RouterError('quote simulation returned no holding');
     const post = hookwars.holdingCodec.decode(Buffer.from(acct.data[0] ?? '', 'base64')).amount as bigint;
     return post - pre;
+  }
+
+  async quoteSell(owner: PublicKey, mint: PublicKey, tokensIn: bigint): Promise<bigint> {
+    const [tx] = await this.call('sell/prepare', { owner: owner.toBase58(), mint: mint.toBase58(), amount: tokensIn.toString(), minOut: '0' });
+    if (!tx) throw new RouterError('sell/prepare returned nothing');
+    const pre = BigInt(await this.conn.getBalance(owner, 'confirmed'));
+    const sim = await this.conn.simulateTransaction(tx, { sigVerify: false, replaceRecentBlockhash: true, commitment: 'confirmed', accounts: { encoding: 'base64', addresses: [owner.toBase58()] } });
+    if (sim.value.err) throw new RouterError(`quote simulation failed: ${JSON.stringify(sim.value.err)}`);
+    const acct = sim.value.accounts?.[0];
+    if (!acct) throw new RouterError('quote simulation returned no account');
+    return BigInt(acct.lamports) - pre;
   }
 }

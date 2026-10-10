@@ -213,24 +213,47 @@ export async function planAction(action: Action, ctx: TickContext, deps: Deps, p
       const caps = ctx.eff.caps;
       if (!caps) return refuse('no trade caps configured');
       if (ctx.eff.universe && !ctx.eff.universe.includes(action.mint)) return refuse('the token is outside the trading universe');
-      if (action.side === 'sell') return refuse('sells are not routed yet: the API has no sell prepare route (integration request R-1 in the README)');
       const mint = new PublicKey(action.mint);
       const facts = await deps.chain.mintFacts(mint);
       if (!facts) return refuse('no such token');
+      const sell = action.side === 'sell';
       let quotedOut: bigint;
-      try { quotedOut = await deps.router.quoteBuy(vault, mint, action.amountIn); } catch (e) { return refuse(`quote failed: ${(e as Error).message}`); }
+      try { quotedOut = sell ? await deps.router.quoteSell(vault, mint, action.amountIn) : await deps.router.quoteBuy(vault, mint, action.amountIn); } catch (e) { return refuse(`quote failed: ${(e as Error).message}`); }
       const req: TradeRequest = { side: action.side, mint: action.mint, amountIn: action.amountIn, quotedOut, minOut: action.minOut, reason: action.reason };
       const book: Book = observe(ctx.state.book!, { vaultLamports: ctx.vaultLamports, values: {} }, caps, ctx.now);
       const r = checkTrade(book, caps, req, facts, ctx.identity, ctx.now).map((x) => `${x.code}: ${x.detail}`);
-      const room = spendRoom(ctx.policy, ctx.now, action.amountIn); if (room) r.push(room);
+      // A buy spends lamports from the vault; a sell spends tokens (the chain's tracked-mint limits apply).
+      if (!sell) { const room = spendRoom(ctx.policy, ctx.now, action.amountIn); if (room) r.push(room); } else if (ctx.policy.frozen) r.push('the policy is frozen');
       if (r.length) return refuse(...r);
+      const route = sell ? 'sell/prepare' : 'buy/prepare';
       let prepared;
-      try { prepared = await deps.router.prepare('buy/prepare', { owner: vault.toBase58(), mint: action.mint, amount: action.amountIn.toString(), minOut: action.minOut.toString() }); } catch (e) { return refuse(`prepare failed: ${(e as Error).message}`); }
+      try { prepared = await deps.router.prepare(route, { owner: vault.toBase58(), mint: action.mint, amount: action.amountIn.toString(), minOut: action.minOut.toString() }); } catch (e) { return refuse(`prepare failed: ${(e as Error).message}`); }
       const v = vaultInstructions(prepared.instructions, agent, passport, vault);
-      if (v.foreignSigner) return refuse('the prepared buy needs a signer other than the agent and its vault');
+      if (v.foreignSigner) return refuse(`the prepared ${action.side} needs a signer other than the agent and its vault`);
       for (const ix of v.instructions) if (ix.programId.equals(hookwars.AGENTS_ID)) { const t = targetAllowed(ctx, new PublicKey(ix.keys[5]!.pubkey)); if (t) return refuse(t); }
-      const memo = actionMemo(ctx, 'trade', `bought ${mint.toBase58()} with ${action.amountIn} lamports, floor ${action.minOut}, quote ${quotedOut}`, pv, [['reason', action.reason.trim()]]);
-      return done('buy', v.instructions, memo, prepared.tables, { req, holding: hookwars.holdingAddr(mint, vault) });
+      const text = sell
+        ? `sold ${action.amountIn} base units of ${mint.toBase58()}, floor ${action.minOut} lamports, quote ${quotedOut}`
+        : `bought ${mint.toBase58()} with ${action.amountIn} lamports, floor ${action.minOut}, quote ${quotedOut}`;
+      const memo = actionMemo(ctx, 'trade', text, pv, [['reason', action.reason.trim()]]);
+      return done(sell ? 'sell' : 'buy', v.instructions, memo, prepared.tables, { req, holding: hookwars.holdingAddr(mint, vault) });
+    }
+    case 'set_access': {
+      // R-4: `set_access` (11 section 1.1, spec 13 E-1) is deferred in the armory. The action is
+      // checked against the directive now and is built once the armory IDL carries the instruction.
+      const k = ctx.eff.constraints;
+      const r: string[] = [];
+      if ((k.allowedAccessModes & (1 << action.mode)) === 0) r.push(`access mode ${action.mode} is not allowed by the directive`);
+      if (action.licencePrice > k.maxLicencePrice) r.push(`licence price ${action.licencePrice} is over the directive's ${k.maxLicencePrice}`);
+      const itemMint = new PublicKey(action.itemMint);
+      if ((await deps.chain.tokenBalance(itemMint, vault)) < 1n) r.push('the agent vault does not hold this item');
+      if (ctx.policy.frozen) r.push('the policy is frozen');
+      if (r.length) return refuse(...r);
+      if (!hookwars.coderOf('armory').idl.instructions.some((i) => i.name === 'set_access')) return refuse('set_access is not in the armory program yet (spec 13 E-1 is deferred); the action activates when the regenerated IDL carries it');
+      let inner: TransactionInstruction;
+      try {
+        inner = hookwars.idlIx('armory', 'set_access', { holder: vault, owner: vault, item: hookwars.itemAddress(itemMint), itemMint, holding: hookwars.holdingAddr(itemMint, vault) }, { mode: action.mode, licencePrice: action.licencePrice, price: action.licencePrice });
+      } catch (e) { return refuse(`set_access could not be built from the IDL: ${(e as Error).message}`); }
+      return done('set access', [wrapSpend(inner, agent, passport, vault)], actionMemo(ctx, 'set_access', `set access mode ${action.mode} on item ${itemMint.toBase58()}, licence ${action.licencePrice} lamports`, pv));
     }
     case 'status': {
       const lim = memoLimit(); if (lim) return refuse(lim);

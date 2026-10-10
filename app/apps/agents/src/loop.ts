@@ -140,7 +140,9 @@ export async function tick(rt: Runtime): Promise<TickReport> {
     const out = await planAction(action, ctx, { chain, router: rt.router }, pv);
     if (!out.ok) { report.results.push({ type: action.type, ok: false, refusals: out.refusals }); log.log('info', 'action-refused', { type: action.type, refusals: out.refusals }); continue; }
     const p = out.plan;
-    const before = p.trade ? await chain.tokenBalance(new PublicKey(p.trade.req.mint), vault) : 0n;
+    // A buy is measured in tokens received, a sell in lamports received by the vault.
+    const measure = async (): Promise<bigint> => (!p.trade ? 0n : p.trade.req.side === 'sell' ? chain.lamports(vault) : chain.tokenBalance(new PublicKey(p.trade.req.mint), vault));
+    const before = await measure();
     const res = await rt.sender.submit(p.instructions, p.tables);
     report.results.push({ type: action.type, ok: res.error === null, label: p.label, sent: res.sent, signature: res.signature, error: res.error });
     log.log(res.error ? 'warn' : 'info', 'action', { type: action.type, label: p.label, sent: res.sent, signature: res.signature, error: res.error, units: res.unitsConsumed });
@@ -149,7 +151,7 @@ export async function tick(rt: Runtime): Promise<TickReport> {
     if (action.type === 'status') state.pendingFacts = [];
     if (action.type === 'create_item') state.itemTimes.push(now);
     if (p.trade) {
-      const after = await chain.tokenBalance(new PublicKey(p.trade.req.mint), vault);
+      const after = await measure();
       state.book = applyFill(state.book, p.trade.req, after - before, now);
     }
   }

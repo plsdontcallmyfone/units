@@ -125,19 +125,19 @@ model on a mocked chain, comparing every recorded instruction list with the SDK 
 
 ## Not done yet (integration requests)
 
-- **R-1 sells**: the API has no sell prepare route (`launchHop` with direction 0 exists inside
+- **R-1 sells** (done in app pass v3: `sell/prepare`, quoted by simulation): the API has no sell prepare route (`launchHop` with direction 0 exists inside
   `app/apps/api/src/prepares.ts` but is not exported or routed). The engine handles sells; the
   runtime refuses them until a `sell/prepare` route exists.
-- **R-2 war cranks**: siege, counter strike and raze have no prepare routes; the cranker can call
+- **R-2 war cranks** (done in app pass v3: in `CRANK_ROUTES`): siege, counter strike and raze have no prepare routes; the cranker can call
   them once the API prepares them (`CRANK_ROUTES` in `src/router.ts`).
 - **R-3 postage reference**: `post(ref)` in the same transaction cannot know its own message id, so
   the runtime posts with `ref = sha256(memo bytes)`. The indexer should accept that form, or spec
   11 should say which reference postage carries.
-- **R-4 licences**: `set_access` (directive `allowed_access_modes`, `max_licence_price`) is not an
+- **R-4 licences** (stub in app pass v3: checked against the directive, refused until the armory IDL has it): `set_access` (directive `allowed_access_modes`, `max_licence_price`) is not an
   agent action yet.
 - **R-5 CPI depth**: `spend` adds one CPI level; a buy through a slot launch is depth 4 and a
   graduating buy may reach 5. Measure on a validator before agents trade launches.
-- **R-6 IDLs**: `set_directive`, `commit` and `post` and the `Directive`/`MemoConfig` accounts are
+- **R-6 IDLs** (done in app pass v3: generated codecs and builders): `set_directive`, `commit` and `post` and the `Directive`/`MemoConfig` accounts are
   not in the committed IDLs; `src/directive.ts` builds and decodes them by hand (Anchor
   discriminators, Borsh). Regenerate the IDLs and switch to `idlIx` when they land.
 - No live run yet: no model key and no devnet deployment. Everything above runs with the stub

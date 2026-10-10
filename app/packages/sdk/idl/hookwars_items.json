@@ -501,6 +501,10 @@
         {
           "name": "max_targets",
           "type": "u8"
+        },
+        {
+          "name": "wear",
+          "type": "bool"
         }
       ]
     },
@@ -1314,6 +1318,19 @@
   ],
   "events": [
     {
+      "name": "AuthorSharePaid",
+      "discriminator": [
+        198,
+        113,
+        165,
+        240,
+        243,
+        174,
+        12,
+        143
+      ]
+    },
+    {
       "name": "EquipClosed",
       "discriminator": [
         231,
@@ -1402,6 +1419,19 @@
         23,
         131,
         42
+      ]
+    },
+    {
+      "name": "ProtocolFee",
+      "discriminator": [
+        152,
+        79,
+        46,
+        229,
+        127,
+        92,
+        192,
+        21
       ]
     },
     {
@@ -1597,6 +1627,41 @@
     }
   ],
   "types": [
+    {
+      "name": "AuthorSharePaid",
+      "docs": [
+        "Integration pass 3 (R34, spec 10 I-2): the template author's share of a settle's royalty."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "author_token",
+            "type": "u64"
+          },
+          {
+            "name": "author_quote",
+            "type": "u64"
+          }
+        ]
+      }
+    },
     {
       "name": "EquipClosed",
       "docs": [
@@ -1851,6 +1916,13 @@
             }
           },
           {
+            "name": "runs_at_settle",
+            "docs": [
+              "Integration pass 3 (E-3): `runs` at the last `settle_equip`; the difference is the wear."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "reserved",
             "docs": [
               "Reserved."
@@ -1858,7 +1930,7 @@
             "type": {
               "array": [
                 "u8",
-                32
+                24
               ]
             }
           }
@@ -2453,6 +2525,42 @@
           },
           {
             "name": "Swap"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProtocolFee",
+      "docs": [
+        "Integration pass 3 (E-2, R37): the protocol's share of a settle."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "source",
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "reference",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
           }
         ]
       }

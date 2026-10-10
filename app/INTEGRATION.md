@@ -212,10 +212,77 @@ Operator settings, none with a default in code: `MEMO_MAX_BYTES` (indexer and pr
 
 Gaps:
 - S-1 `crates/units-memo` refuses the social kinds, so no program reads them; add them there if a program must (not edited here: program-adjacent).
-- S-2 The app IDLs predate the economy merge: `DirectiveSet`, `Committed`, `MessagePosted`, `ProfileOpened`, `WalletRecorded` are in `SPEC_ONLY` (events.ts) and `open_profile` is hand-built (social-prepares.ts); `Profile` and `SkillTable` are decoded from the program source (api social.ts). Regenerate the IDLs and drop these.
-- S-3 Postage (`hookwars_agents::post(reference)`) has no prepare: the reference needs the memo's signature, so it is a second transaction, and the app's agents IDL lacks `post`.
+- S-2 (done in app pass v3, section 7) The app IDLs predate the economy merge: `DirectiveSet`, `Committed`, `MessagePosted`, `ProfileOpened`, `WalletRecorded` are in `SPEC_ONLY` (events.ts) and `open_profile` is hand-built (social-prepares.ts); `Profile` and `SkillTable` are decoded from the program source (api social.ts). Regenerate the IDLs and drop these.
+- S-3 (done in app pass v3: `social/postage/prepare`) Postage (`hookwars_agents::post(reference)`) has no prepare: the reference needs the memo's signature, so it is a second transaction, and the app's agents IDL lacks `post`.
 - S-4 Wallet posts are indexed only for wallets with a profile (or listed in `SOCIAL_EXTRA_AUTHORS`); the indexer walks one signature cursor per author, so cost grows with authors. Memos sent by CPI are not read.
 - S-5 Spec 11 4.5 reads memos only with an Active passport signer; this layer also reads wallet posts (shown by default, agents filtered by status and proof). Owner to confirm.
 - S-6 "Crank reliability" is shown as cranks landed (SiegeExecuted.cranker): a failed crank never reaches the chain, so no success rate exists. Royalties earned is EquipSettled.royalty_quote of items each author created; claims are listed per cut mint (mixed mints are not summed).
 - S-7 Live is polling (5 s), not SSE.
 - S-8 Not run against devnet data: the deployed programs may predate profiles; real-mode pages were checked against an empty indexer only.
+
+## 7. App pass v3 (branch `appv3`, 2026-10-10)
+
+### IDLs
+Regenerated on server B from main `3d39bb6` (`anchor idl build` per program, as `programs.sh idl`):
+armory (fuse, presets, `mint_crafted`, `set_template_economy`, `set_item_protocol_bps`; `Preset`;
+`TemplateEconomySet`, `ItemProtocolBpsSet`, `ItemCrafted`, `PresetRegistered`; `WearAccountsMissing`,
+`NotCraftSigner`, `NotItemHolder`; the new `Template`, `Item`, `ArmoryConfig` fields), items
+(`init_equip(.., wear)`, `EquipState.runs_at_settle`, `ProtocolFee`, `AuthorSharePaid`), agents (type
+updates). The others were already current. `idl-types.gen.ts` regenerated. The IDL builder refuses
+`fuse(targets: Vec<(u8, u8)>)` (tuples), so the armory IDL was built with `Vec<FuseTarget { start,
+count }>`, the same Borsh bytes; request below.
+
+### SDK (`economy.ts`, new)
+- Suffixes as the programs split them, `[..., rent, craft, fee, social, agents]`: `recordSuffix`,
+  `socialSuffix`, `initWearSuffix`, `rentSuffix`, `feeSuffix`, `settleCraftSuffix`, `suffixes`.
+- Builders: `createItemEco`, `createComposite`, `fuse`, `registerPreset`, `mintComposite`,
+  `setTemplateEconomy`, `setItemProtocolBps`, `initCounters`, `claimRoyaltyEco`, `revertForLeaseEndMetas`,
+  `marketEndLease`, `marketBuyEco`, `reslotLoyalty`, `agentsSetDirective`, `agentsCommit`, `agentsPost`,
+  `socialOpenProfile`, `craftItem`, `repairItem`, the book (`bookPlace`, `bookCancel`, `bookCrank`,
+  `bookCreateMarket`, class bids, `bookMatchClass`, `bookMakers`, `bookCrankOwners`), licences
+  (`setLicenceOffer`, `buyLicense`), `companionLaunchSlots`.
+- `propose` appends `["lease", item]` when it names an item and now passes the proposer's holding
+  (it threw "missing account" before); `close_proposal` passes `bond_mark` and `bond` (it threw before);
+  `settleEquip` takes the suffix tail. Craft and book: program ids, IDLs, events, codecs, addresses.
+- Hand-written layouts removed: `SPEC_ONLY` events, the agents runtime's `Directive`/`MemoConfig`/
+  `set_directive`/`commit`/`post`, the API's `open_profile`, `Profile`, `SkillTable`.
+
+### API
+New prepares (`economy-prepares.ts`): `items/create` (counter, init-wear, social tail),
+`items/composite`, `items/fuse`, `presets/mint`, `presets/register`, `counters/init`, `proposals/close`,
+`loyalty/reslot`, `craft`, `craft/repair`, `book/place`, `book/cancel`, `book/crank`, `book/market`,
+`book/class-bid`, `book/class-bid/cancel`, `book/class-bid/match`, `licences/offer`, `licences/buy`,
+`sell` (R-1), `war/siege`, `war/counter-strike`, `war/raze` (R-2), `armory/template-economy`,
+`armory/protocol-bps`, `social/postage`, the staged `launch/companion` (and `companion: true` on
+`/v1/launch/plan`). Existing routes now carry their suffixes: `settle` (rent when an Active lease names
+the slot, craft when the item wears and ran, fee when the protocol or the author takes a share),
+`royalties` (ClaimCounter), `market/buy` (seller's social counter), `market/lease/end` (the slot revert).
+Reads: `/v1/craft`, `/v1/book`, `/v1/book/:material`, `/v1/items/:item/wear`.
+
+### Indexer, agents, site
+Indexer: craft and book cursors, a `wear` table, views `lease_rents`, `author_shares`, `protocol_fees`,
+`crafts`, `repairs`, `drops`, `book_fills`, `class_fills`; source `crafted`. Agents runtime: sells
+through `sell/prepare` (quoted by simulation, measured in lamports), the war and book cranks in
+`CRANK_ROUTES`, a `set_access` action checked against the directive and refused until the armory
+IDL has the instruction (R-4). Site: `/craft`, `/book`, wear status, dormant badge, repair, licences
+and fuse on the item page, the companion option on the launch form.
+
+### Explorer fixtures
+`programs/tests/tests/explorer_fixtures_2.rs` (new) records `war_siege`, `market_list`, `market_buy`,
+`craft_item`, `book_place_ask`, `book_fill`, `memo_directive`; the JSON is in
+`packages/sdk/src/hookwars/fixtures/explorer2/` and `explore.fixtures2.test.ts` checks them (every
+instruction decoded, the events in order).
+
+### Requests and gaps
+- hookwars_armory: take `fuse(targets: Vec<FuseTarget>)` with `struct FuseTarget { start: u8, count: u8 }`
+  (same bytes) so `anchor idl build` runs without the stand-in.
+- `set_access`, `approve`, `revoke_approval` (13 E-1) are deferred in the programs; the agent action and
+  any page wait for them.
+- `end_lease` does not append the launchpad's L-D refresh tail; a slot launch whose reverted slot holds
+  a pool item needs `refresh_pool_registry` after it.
+- War drops and counters (13 E-4, E-6 war parts) are deferred in the programs; the war cranks pass no
+  craft or social suffix.
+- Screenshots: `app/screenshots/appv3/` (`demo_*` with MOCK_DATA=1, `api_*` against the API with no
+  craft or book config on the cluster), checked by `shots.mjs` there: 12 of 12 pass.
+- Not simulated against deployed programs: nothing is on devnet yet. Every prepare is tested for its
+  IDL account list and suffix order on a mocked chain.

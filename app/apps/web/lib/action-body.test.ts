@@ -29,4 +29,8 @@ describe('action form bodies', () => {
     bodyOf([{ name: 'kind.to', label: 'To', kind: 'key' }], { 'kind.to': 'X' }, fixed);
     expect(fixed).toEqual({ kind: { name: 'SpendSol' } });
   });
+  it('parses a JSON field and refuses what is not JSON', () => {
+    expect(bodyOf([{ name: 'modules', label: 'Modules', kind: 'json' }], { modules: '[{"templateId":1}]' }, {})).toEqual({ body: { modules: [{ templateId: 1 }] } });
+    expect(bodyOf([{ name: 'modules', label: 'Modules', kind: 'json' }], { modules: '[oops' }, {})).toEqual({ error: 'Modules must be JSON.' });
+  });
 });

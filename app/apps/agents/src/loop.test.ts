@@ -6,6 +6,8 @@ import { tick } from './loop.ts';
 import { memoInstruction, messageRef, parseMessage, toJson } from './memo.ts';
 import { replay } from './models/stub.ts';
 import { wrapSpend } from './plan.ts';
+import { emptyBook } from './policy.ts';
+import { CRANK_ROUTES } from './router.ts';
 import { memoMatches, provenanceOf, verifyProvenance } from './provenance.ts';
 import { AGENT, kit, SentSender } from './testkit.ts';
 
@@ -122,6 +124,37 @@ describe('agent loop with the stub model on a mocked chain', () => {
     expect(shape(ixs.slice(0, 2))).toEqual(shape([token.createHolding(AGENT.publicKey, TOKEN_MINT, k.vault), wrapSpend(swap, AGENT.publicKey, k.passport, k.vault)]));
     expect((toJson(memoOf(ixs).body) as { reason: string }).reason).toBe(reason);
     expect(k.store.current.book!.positions[TOKEN_MINT.toBase58()]).toMatchObject({ costLamports: 100_000_000n, lastBuyAt: k.chain.time });
+  });
+
+  it('sells through the vault (R-1): sell/prepare for the vault, quoted in lamports, the position closed by lamports received', async () => {
+    const k = kit(replay([{ actions: [{ type: 'trade', side: 'sell', mint: TOKEN_MINT.toBase58(), amountIn: '1000000', minOut: '99500000', reason: 'taking the position down' }] }]), {}, '{"v":1}');
+    k.chain.mints.set(TOKEN_MINT.toBase58(), { creator: OTHER.toBase58(), itemAuthors: [] });
+    k.router.sellQuotes.set(TOKEN_MINT.toBase58(), 100_000_000n);
+    const t0 = k.chain.time;
+    k.store.current.book = { ...emptyBook(t0 - 7_200, 0n), positions: { [TOKEN_MINT.toBase58()]: { qty: 1_000_000n, costLamports: 90_000_000n, lastBuyAt: t0 - 7_200 } } };
+    const swap = new TransactionInstruction({ programId: hookwars.SWAP_ID, keys: [{ pubkey: k.vault, isSigner: true, isWritable: true }, { pubkey: TOKEN_MINT, isSigner: false, isWritable: true }], data: Buffer.from([9]) });
+    k.router.builders.set('sell/prepare', () => [swap]);
+    const sender = new SentSender();
+    k.rt.sender = sender;
+    sender.onSubmit = () => { k.chain.balances.set(k.vault.toBase58(), (k.chain.balances.get(k.vault.toBase58()) ?? 0n) + 100_000_000n); };
+    const r = await tick(k.rt);
+    expect(r.results[0]).toMatchObject({ ok: true, sent: true, label: 'sell' });
+    expect(k.router.prepared[0]).toEqual({ route: 'sell/prepare', body: { owner: k.vault.toBase58(), mint: TOKEN_MINT.toBase58(), amount: '1000000', minOut: '99500000' } });
+    expect(shape(sender.submitted[0]!.instructions.slice(0, 1))).toEqual(shape([wrapSpend(swap, AGENT.publicKey, k.passport, k.vault)]));
+    expect(k.store.current.book!.positions[TOKEN_MINT.toBase58()]).toBeUndefined();
+    expect(k.store.current.book!.realizedTodayLamports).toBe(10_000_000n);
+  });
+
+  it('the cranker may call the war steps the API prepares now (R-2)', () => {
+    for (const r of ['war/siege/prepare', 'war/counter-strike/prepare', 'war/raze/prepare', 'book/crank/prepare']) expect(CRANK_ROUTES).toContain(r);
+  });
+
+  it('set_access is checked against the directive and refused until the armory has it (R-4)', async () => {
+    const k = kit(replay([{ actions: [{ type: 'set_access', itemMint: ITEM_MINT.toBase58(), mode: 1, licencePrice: '5' }] }]), { roles: ['market'] });
+    k.chain.tokens.set(`${ITEM_MINT.toBase58()}:${k.vault.toBase58()}`, 1n);
+    const r = await tick(k.rt);
+    expect(r.results[0]!.ok).toBe(false);
+    expect(r.results[0]!.refusals!.join()).toMatch(/access mode 1 is not allowed|not in the armory program yet/);
   });
 
   it('refuses trades on its own or its operator tokens before asking the router to prepare', async () => {

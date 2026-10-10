@@ -14,7 +14,7 @@ import { PublicKey, TransactionInstruction, type AccountMeta } from '@solana/web
 import { idlIx } from './from-idl.ts';
 import {
   ITEMS_EVENT_AUTHORITY, ITEMS_ID, LAUNCH_ID, SWAP_ID, TOKEN_ID, TOKEN_ITEMS_SIGNER, WAR_ID,
-  equipStateAddress, forgeCounterAddress, holdingAddr, itemAddress, itemMintAddress, launchAddr, lootTableAddress,
+  bondMarkAddress, equipStateAddress, forgeCounterAddress, leaseAddress, holdingAddr, itemAddress, itemMintAddress, launchAddr, lootTableAddress,
   poolCutsAddress, proposalAddress, questMarkAddress, raidLedgerAddress, rollAddress, royaltyOwner, seasonAddress, slotAuthority, slotStateAddress,
   templateAddress, tokenHookSigner, treatyInboxAddress, voteAddress, warChestAddress, warStateAddress,
 } from './addresses.ts';
@@ -61,12 +61,13 @@ export function vote(voter: PublicKey, mint: PublicKey, slot: number, nonce: big
   }, { support, amount });
 }
 
-/** `propose(slot, item, equip_config)`. The template accounts are given when proposing an item. */
+/** `propose(slot, item, equip_config)`. The template accounts are given when proposing an item.
+ * Naming an item appends `["lease", item]` under the market, the lease gate (12 section 3 I-3). */
 export function propose(proposer: PublicKey, mint: PublicKey, slot: number, nextNonce: bigint, item: PublicKey | null, targets: PublicKey[], role: number, template?: { address: PublicKey; program: PublicKey; programData: PublicKey }): TransactionInstruction {
   return idlIx('armory', 'propose', {
-    proposer, tokenMint: mint, slotState: slotStateAddress(mint, slot), proposal: proposalAddress(mint, slot, nextNonce),
+    proposer, tokenMint: mint, slotState: slotStateAddress(mint, slot), proposal: proposalAddress(mint, slot, nextNonce), proposerHolding: holdingAddr(mint, proposer),
     item, template: template?.address ?? null, templateProgram: template?.program ?? null, templateProgramdata: template?.programData ?? null,
-  }, { slot, item, equipConfig: { targets, role } });
+  }, { slot, item, equipConfig: { targets, role } }, item ? [ro(leaseAddress(item))] : []);
 }
 
 /** `finalize`: counts the vote after its period. `launch` accounts are given for a launch-pool token. */
@@ -82,6 +83,7 @@ export interface EquipChange {
   oldItem?: PublicKey | null; oldEquipVault?: PublicKey | null; newItem?: PublicKey | null; newTemplate?: PublicKey | null;
   templateProgram?: PublicKey | null; templateProgramdata?: PublicKey | null; registry?: PublicKey | null; newEquipVault?: PublicKey | null;
   royaltyOwner?: PublicKey | null; royaltyHoldingToken?: PublicKey | null; quoteMint?: PublicKey | null; royaltyHoldingQuote?: PublicKey | null;
+  newComposite?: PublicKey | null;
 }
 
 /** `execute`: applies a passed proposal after its notice, signed by the armory as `SlotAuthority`. */
@@ -106,9 +108,11 @@ export function closeVote(voter: PublicKey, mint: PublicKey, slot: number, nonce
   });
 }
 
-/** `close_proposal`: returns a resolved proposal's rent to its proposer. */
-export function closeProposal(proposer: PublicKey, mint: PublicKey, slot: number, nonce: bigint): TransactionInstruction {
-  return idlIx('armory', 'close_proposal', { proposer, proposal: proposalAddress(mint, slot, nonce) });
+/** `close_proposal`: returns a resolved proposal's rent to its proposer. `bond_mark` is always
+ * passed; `bond` is the bond the mark names when one exists (12 section 2, `BondStillPosted`). */
+export function closeProposal(proposer: PublicKey, mint: PublicKey, slot: number, nonce: bigint, bond: PublicKey | null = null): TransactionInstruction {
+  const proposal = proposalAddress(mint, slot, nonce);
+  return idlIx('armory', 'close_proposal', { proposer, proposal, bondMark: bondMarkAddress(proposal), bond });
 }
 
 /** `claim_royalty(amount)` by the item's current holder, into the claimant's holding of the cut mint. */

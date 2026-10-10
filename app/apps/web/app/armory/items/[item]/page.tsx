@@ -5,14 +5,19 @@ import { short } from '@/lib/format';
 import { Empty, Head, Panel, ReadFailed } from '@/components/ui';
 import { Action, Actions } from '@/components/action';
 
+type Wear = { maxCharges: number; used: number; dormant: boolean; repairs: number };
+
 export default async function ItemPage({ params }: { params: Promise<{ item: string }> }) {
   const { item } = await params;
   const r = await read<ItemSummary & { history: BattleEvent[] }>(`/v1/items/${item}`);
   if (!r.ok) return <><Head eyebrow="Item" title={short(item, 6)} /><Panel title="Item"><ReadFailed what="this item" error={r.error} /></Panel></>;
   const it = r.data;
+  // Changed by Hookwars (app pass v3): craft wear (13 E-3); null for an item that does not wear.
+  const w = await read<Wear | null>(`/v1/items/${it.item}/wear`);
+  const wear = w.ok ? w.data : null;
   return (
     <>
-      <Head eyebrow={`${it.templateName} · level ${it.level}`} title={it.paramsText} lede={`Royalty ${it.royaltyBps / 100}% of what it collects, paid to whoever holds it.`} />
+      <Head eyebrow={`${it.templateName} · level ${it.level}`} right={wear?.dormant ? <span className="chip warn" title="Worn out: every hook call gets its default answer until it is repaired">dormant</span> : undefined} title={it.paramsText} lede={`Royalty ${it.royaltyBps / 100}% of what it collects, paid to whoever holds it.`} />
       <div className="grid cols-main">
         <Panel title="Record">
           <dl className="kv">
@@ -21,6 +26,7 @@ export default async function ItemPage({ params }: { params: Promise<{ item: str
             <dt>Author</dt><dd className="addr">{it.author}</dd>
             <dt>Source</dt><dd>{it.source}</dd>
             <dt>Params</dt><dd>{it.params.join(', ')}</dd>
+            <dt>Wear</dt><dd>{!w.ok ? 'could not be read' : !wear ? 'does not wear' : `${wear.used} of ${wear.maxCharges} charges used${wear.repairs ? `, repaired ${wear.repairs} times` : ''}${wear.dormant ? ', dormant' : ''}`}</dd>
             <dt>Equipped on</dt><dd>{it.equippedOn.length ? it.equippedOn.map((e) => <Link key={e.mint} href={`/t/${e.mint}`}>{e.symbol} </Link>) : 'no token'}</dd>
           </dl>
         </Panel>
@@ -40,6 +46,10 @@ export default async function ItemPage({ params }: { params: Promise<{ item: str
         <Actions>
           <Action route="royalties" title="Claim royalty" what="Settled royalty in one cut mint goes to the holder." fixed={{ item: it.item, itemMint: it.itemMint }} fields={[{ name: 'cutMint', label: 'Cut mint', kind: 'key' }, { name: 'amount', label: 'Amount (base units)', kind: 'amount' }]} />
           <Action route="forge" title="Forge" what="Burns this item and another of the same template into one a level higher." fixed={{ itemA: it.item }} fields={[{ name: 'itemB', label: 'Second item', kind: 'key' }]} />
+          {wear ? <Action route="craft/repair" title="Repair" what={wear.dormant ? 'This item is dormant: a repair restores charges and wakes it.' : 'Restores charges before the item wears out.'} fixed={{ itemMint: it.itemMint }} fields={[{ name: 'recipeId', label: 'Repair recipe', kind: 'int' }]} /> : null}
+          <Action route="licences/offer" title="Offer licences" what="Tokens pay you for the right to equip this item for a term, without buying it." fixed={{ itemMint: it.itemMint }} fields={[{ name: 'priceLamports', label: 'Price', kind: 'sol' }, { name: 'termSecs', label: 'Term (seconds)', kind: 'int' }, { name: 'maxLive', label: 'Licences at once', kind: 'int', optional: true }, { name: 'exclusive', label: 'Exclusive', kind: 'bool' }]} />
+          <Action route="licences/buy" title="Buy a licence" what="Your token may equip this item for the offer's term." fixed={{ itemMint: it.itemMint }} fields={[{ name: 'tokenMint', label: 'Token mint', kind: 'key' }]} />
+          <Action route="items/fuse" title="Fuse" what={<>Burns this item and others you hold into one composite. One way. <Link href="/craft">Presets and recipes</Link></>} fields={[{ name: 'components', label: 'Components', kind: 'json', hint: `[{"itemMint":"${it.itemMint}","start":0,"count":1}, ...]` }, { name: 'royaltyBps', label: 'Royalty (bps)', kind: 'int' }]} />
         </Actions>
       </Panel>
     </>

@@ -13,13 +13,14 @@ export type Action =
   | { type: 'post_bond'; proposalA: string; proposalB: string; treatyItem: string }
   | { type: 'crank'; route: string; body: Record<string, string | number | boolean> }
   | { type: 'trade'; side: 'buy' | 'sell'; mint: string; amountIn: bigint; minOut: bigint; reason: string }
+  | { type: 'set_access'; itemMint: string; mode: number; licencePrice: bigint }
   | { type: 'status'; voice: string };
 
 /** The role each action needs. */
 export function roleOf(a: Action): Role {
   switch (a.type) {
     case 'create_item': return 'author';
-    case 'list_item': case 'offer_lease': return 'market';
+    case 'list_item': case 'offer_lease': case 'set_access': return 'market';
     case 'message': return a.kind === 'listing' ? 'market' : 'diplomat';
     case 'commit': case 'post_bond': return 'diplomat';
     case 'crank': return 'cranker';
@@ -66,6 +67,8 @@ export function parseAction(x: unknown): Action {
     case 'commit':
       need(typeof a.hash === 'string' && /^[0-9a-f]{64}$/.test(a.hash), 'hash must be 64 hex characters');
       return { type: 'commit', messageId: text(a.messageId, 'messageId', 120), hash: a.hash as string };
+    case 'set_access':
+      return { type: 'set_access', itemMint: key(a.itemMint, 'itemMint'), mode: int(a.mode, 'mode', 7), licencePrice: u64(a.licencePrice ?? 0, 'licencePrice') };
     case 'post_bond':
       return { type: 'post_bond', proposalA: key(a.proposalA, 'proposalA'), proposalB: key(a.proposalB, 'proposalB'), treatyItem: key(a.treatyItem, 'treatyItem') };
     case 'crank': {
@@ -110,10 +113,11 @@ export const ACTION_GUIDE = `Reply with one JSON object and nothing else: {"acti
 {"type":"create_item","templateId":<id>,"params":[<int>...],"royaltyBps":<0..10000>}            role author
 {"type":"list_item","itemMint":"<base58>","priceLamports":"<int>","expiresAt":"<unix or 0>"}       role market
 {"type":"offer_lease","itemMint":"<base58>","tokenMint":"<base58>","slot":<n>,"rentBps":<n>,"feeLamports":"<int>","termSecs":<n>}  role market
+{"type":"set_access","itemMint":"<base58>","mode":<0..7>,"licencePrice":"<int>"}                  role market (refused until the armory has set_access)
 {"type":"message","kind":"offer|counter|accept|listing|treaty|ack","to":"<passport or *>","thread":"<message id or empty>","re":"<message id or empty>","body":{...},"expiresAt":"<unix or 0>"}  role diplomat (listing: market)
 {"type":"commit","messageId":"<sig:index>","hash":"<64 hex>"}                                        role diplomat
 {"type":"post_bond","proposalA":"<base58>","proposalB":"<base58>","treatyItem":"<base58>"}          role diplomat
 {"type":"crank","route":"<allowed route>","body":{...}}                                             role cranker
-{"type":"trade","side":"buy|sell","mint":"<base58>","amountIn":"<int>","minOut":"<int>","reason":"<public reason>"}  role trader
+{"type":"trade","side":"buy|sell","mint":"<base58>","amountIn":"<int: lamports to buy with, or base units to sell>","minOut":"<int>","reason":"<public reason>"}  role trader
 {"type":"status","voice":"<a few words in your voice, no numbers>"}                                 role reporter
 Use only your roles. Propose nothing when nothing is worth doing: {"actions":[]}.`;

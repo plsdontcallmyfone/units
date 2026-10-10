@@ -4021,11 +4021,20 @@
             }
           },
           {
+            "name": "item_protocol_bps",
+            "docs": [
+              "Integration pass 3 (11 section 2.2, R37, E-2): the protocol's share of every token-side cut",
+              "`settle_equip` settles, taken first (`ITEM_PROTOCOL_BPS`, to set; 0 until the admin sets",
+              "it with `set_economy`). Paid to the admin's holding."
+            ],
+            "type": "u16"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                62
+                60
               ]
             }
           }
@@ -5073,11 +5082,20 @@
             "type": "i64"
           },
           {
+            "name": "has_wear",
+            "docs": [
+              "Integration pass 3 (E-3): a craft `Wear` exists for this item (made at creation when its",
+              "template's `charges_on_create` is above 0); the items engine then reads it last in the",
+              "registry and answers the default while it is dormant (R38)."
+            ],
+            "type": "bool"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                32
+                31
               ]
             }
           }

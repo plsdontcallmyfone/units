@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file, prepares for the social layer: posts, follows, reactions, admin hides (memo v1) and opening a profile.
+// Changed by Hookwars: new file, prepares for the social layer: posts, follows, reactions, admin hides (memo v1), opening a profile and postage.
 /**
  * Every social action is one Memo v2 instruction that lists its signer, so the wallet's signature is
  * the statement (11 4.2). The wallet signs it and sends it through `/v1/submit` like any prepare.
@@ -9,11 +9,11 @@
  * - A hide is refused here unless the wallet is one of the current admins (`SOCIAL_ADMINS`, an
  *   operator setting); every hide stays on chain as the public record either way.
  * - Postage (`hookwars_agents::post(reference)`) needs the reference of a message id, which is known
- *   only after the memo lands, so it is a second transaction; the agents IDL in the app does not
- *   carry `post` yet (a gap in INTEGRATION.md).
+ *   only after the memo lands, so it is a second transaction: `social/postage/prepare` with the
+ *   message id (`signature:index`); the reference is its sha256, as the agents runtime writes it.
  */
 import { createHash } from 'node:crypto';
-import { PublicKey, SystemProgram, TransactionInstruction, type Connection } from '@solana/web3.js';
+import { PublicKey, TransactionInstruction, type Connection } from '@solana/web3.js';
 import { hookwars } from '@hookwars/sdk';
 import { pk, PrepareError, type Body, type PrepareDef } from './prepares.ts';
 import { socialAdmins } from './social.ts';
@@ -65,26 +65,27 @@ const memoOnly = (label: string, build: (b: Body, conn: Connection) => Promise<h
   build: async (b, conn) => [memoIx(pk(b, 'owner'), await build(b, conn))],
 });
 
-/** `hookwars_social::open_profile(wallet)`; the app's social IDL predates profiles, so the
- * instruction is written from the program source (Anchor discriminator, accounts in order). */
+/** `hookwars_social::open_profile(wallet)` from the generated social IDL. */
 export function openProfileIx(payer: PublicKey, wallet: PublicKey): TransactionInstruction {
-  const disc = createHash('sha256').update('global:open_profile').digest().subarray(0, 8);
-  const [profile] = PublicKey.findProgramAddressSync([Buffer.from('profile'), wallet.toBuffer()], hookwars.SOCIAL_ID);
-  const [eventAuthority] = PublicKey.findProgramAddressSync([Buffer.from('__event_authority')], hookwars.SOCIAL_ID);
-  return new TransactionInstruction({
-    programId: hookwars.SOCIAL_ID,
-    keys: [
-      { pubkey: payer, isSigner: true, isWritable: true },
-      { pubkey: profile, isSigner: false, isWritable: true },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      { pubkey: eventAuthority, isSigner: false, isWritable: false },
-      { pubkey: hookwars.SOCIAL_ID, isSigner: false, isWritable: false },
-    ],
-    data: Buffer.concat([disc, wallet.toBuffer()]),
-  });
+  return hookwars.socialOpenProfile(payer, wallet);
 }
 
+/** A message id `signature:index` as the memo indexer writes it. */
+const MESSAGE_ID = /^[1-9A-HJ-NP-Za-km-z]{64,90}:\d{1,3}$/;
+
 export const SOCIAL_PREPARES: Record<string, PrepareDef> = {
+  'social/postage/prepare': {
+    programs: ['agents'], label: 'Pay postage', payer: (b) => pk(b, 'owner'),
+    build: async (b, conn) => {
+      const passport = pk(b, 'passport');
+      const id = b.messageId;
+      if (typeof id !== 'string' || !MESSAGE_ID.test(id)) throw new PrepareError(400, 'BadRequest', '"messageId" must be a message id (signature:index).');
+      const info = await conn.getAccountInfo(hookwars.agentsConfigAddress(), 'confirmed');
+      if (!info) throw new PrepareError(409, 'NotFound', 'Agents has no config on this cluster yet.');
+      const cfg = hookwars.agentsConfigCodec.decode(info.data);
+      return [hookwars.agentsPost(pk(b, 'owner'), passport, cfg.feeCollector, createHash('sha256').update(id, 'utf8').digest())];
+    },
+  },
   'social/post/prepare': memoOnly('Post', async (b, conn) => {
     const from = await sender(b, conn);
     const mint = b.mint === undefined || b.mint === '' ? undefined : pk(b, 'mint').toBase58();
@@ -110,7 +111,7 @@ export const SOCIAL_PREPARES: Record<string, PrepareDef> = {
     programs: ['social'], label: 'Open profile', payer: (b) => pk(b, 'owner'),
     build: async (b, conn) => {
       const owner = pk(b, 'owner');
-      const [profile] = PublicKey.findProgramAddressSync([Buffer.from('profile'), owner.toBuffer()], hookwars.SOCIAL_ID);
+      const profile = hookwars.profileAddress(owner);
       if (await conn.getAccountInfo(profile, 'confirmed')) throw new PrepareError(409, 'ProfileExists', 'This wallet already has a profile.');
       return [openProfileIx(owner, owner)];
     },

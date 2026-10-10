@@ -145,6 +145,10 @@ export function mock(path: string): unknown {
   if (p === '/v1/items') return { items: ITEMS, next: null } satisfies Page<ItemSummary>;
   if ((m = /^\/v1\/items\/(\w+)$/.exec(p!))) { const it = ITEMS.find((x) => x.item === m![1]); return it ? { ...it, history: FEED.filter((e) => e.actor === it.owner) } : undefined; }
   if (p === '/v1/seasons/current') return SEASON;
+  // Changed by Hookwars (app pass v3): invented craft, book and wear rows for the demo.
+  if (p === '/v1/craft') return CRAFT;
+  if (p === '/v1/book') return BOOK;
+  if ((m = /^\/v1\/items\/(\w+)\/wear$/.exec(p!))) return ITEMS.findIndex((x) => x.item === m![1]) === 0 ? { maxCharges: 40, used: 40, dormant: true, repairs: 1 } : null;
   if (p === '/v1/prize-vault') return PRIZE;
   if ((m = /^\/v1\/launches\/(\w+)\/market$/.exec(p!))) { const i = TOKENS.findIndex((t) => t.mint === m![1]); return i < 0 ? undefined : market(TOKENS[i]!, i); }
   if ((m = /^\/v1\/launches\/(\w+)\/(slots|proposals|war|treaties|generals)$/.exec(p!))) {
@@ -190,3 +194,25 @@ function explorerMock(p: string, q: URLSearchParams): unknown {
   }
   return undefined;
 }
+
+// Demo craft and book rows (MOCK_DATA=1 only; invented for display).
+const DK = (n: number) => `Demo${String(n).padStart(2, '0')}11111111111111111111111111111111`.slice(0, 44);
+const CRAFT = {
+  config: { treasury: DK(1), seasonPool: DK(2) },
+  materials: [
+    { address: DK(3), id: 1, mint: DK(4), name: 'Iron', emissionCapPerSeason: '1000000', emittedThisSeason: '412000', emittedTotal: '412000', burnedTotal: '91000' },
+    { address: DK(5), id: 2, mint: DK(6), name: 'Ember', emissionCapPerSeason: '250000', emittedThisSeason: '38000', emittedTotal: '38000', burnedTotal: '4000' },
+  ],
+  recipes: [
+    { address: DK(7), id: 1, uses: '27', terms: { kind: 0, inputs: [{ materialId: 1, amount: '500' }, { materialId: 2, amount: '50' }], feeLamports: '20000000', templateId: 7, chargesRestored: 0, minLevel: 0, active: true } },
+    { address: DK(8), id: 2, uses: '9', terms: { kind: 1, inputs: [{ materialId: 1, amount: '200' }], feeLamports: '5000000', templateId: 7, chargesRestored: 40, minLevel: 0, active: true } },
+  ],
+  presets: [{ address: DK(9), id: 1, name: 'Siege kit', templateIds: [1, 2] }],
+};
+const BOOK = {
+  config: { params: { takerBps: 50, makerBps: 0, slots: 16 } },
+  markets: [{ address: DK(10), baseMint: DK(4), materialId: 1, tickLamports: '1000', minSize: '10', fills: '64',
+    bids: [{ id: '12', owner: DK(11), price: '41000', size: '300', expiresAt: '0' }, { id: '9', owner: DK(12), price: '39000', size: '1200', expiresAt: '0' }],
+    asks: [{ id: '14', owner: DK(13), price: '44000', size: '500', expiresAt: '0' }] }],
+  classBids: [{ address: DK(14), bidder: DK(15), nonce: '1', price: '250000000', expiresAt: '0', class: { templateId: 7, minLevel: 2 } }],
+};

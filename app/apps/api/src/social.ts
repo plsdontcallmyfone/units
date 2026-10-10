@@ -36,30 +36,15 @@ function addr(v: string | undefined, what: string): string {
 
 // ---------------------------------------------------------------- chain reads --
 
-/** `Profile` at `["profile", wallet]` (social, 11 3.3): counters by id. Written from the program
- * source (the app's social IDL predates profiles). */
+/** `Profile` at `["profile", wallet]` (social, 11 3.3): counters by id (generated social IDL). */
 export function decodeProfile(d: Buffer): { wallet: string; counters: bigint[]; createdAt: number; updatedAt: number } {
-  let o = 8 + 2;
-  const wallet = new PublicKey(d.subarray(o, o + 32)).toBase58(); o += 32;
-  const counters: bigint[] = [];
-  for (let i = 0; i < COUNTER_COUNT; i++) { counters.push(d.readBigUInt64LE(o)); o += 8; }
-  const createdAt = Number(d.readBigInt64LE(o)); o += 8;
-  const updatedAt = Number(d.readBigInt64LE(o));
-  return { wallet, counters, createdAt, updatedAt };
+  const p = hookwars.profileCodec.decode(d);
+  return { wallet: p.wallet.toBase58(), counters: p.counters, createdAt: Number(p.createdAt), updatedAt: Number(p.updatedAt) };
 }
 
-/** `SkillTable` at `["skills"]`: `{id, counter, thresholds[8]}` each. */
+/** `SkillTable` at `["skills"]`: `{id, counter, thresholds[8]}` each (generated social IDL). */
 export function decodeSkills(d: Buffer): { id: number; counter: number; thresholds: bigint[] }[] {
-  let o = 8 + 2;
-  const n = d.readUInt32LE(o); o += 4;
-  const out: { id: number; counter: number; thresholds: bigint[] }[] = [];
-  for (let i = 0; i < n; i++) {
-    const id = d[o]!; const counter = d[o + 1]!; o += 2;
-    const thresholds: bigint[] = [];
-    for (let j = 0; j < MAX_LEVELS; j++) { thresholds.push(d.readBigUInt64LE(o)); o += 8; }
-    out.push({ id, counter, thresholds });
-  }
-  return out;
+  return hookwars.skillTableCodec.decode(d).skills.map((k) => ({ id: k.id, counter: k.counter, thresholds: k.thresholds }));
 }
 
 /** `hookwars_common::economy::level`: thresholds met, stopping at the first 0. */
@@ -69,14 +54,15 @@ export function level(thresholds: bigint[], value: bigint): number {
   return l;
 }
 
+/** `Profile.counters` length (`hookwars_common::economy::COUNTERS`). */
+const COUNTER_COUNT = 16;
+
 /** Counter ids (`hookwars_common::economy::counter`) and skill ids. */
 export const COUNTERS = ['itemsAuthored', 'templatesRegistered', 'licencesSold', 'licenceRevenueLamports', 'itemsSold', 'itemsCrafted', 'repairs', 'bookFills', 'treatiesHeld', 'raids'] as const;
-const COUNTER_COUNT = 16;
-const MAX_LEVELS = 8;
 export const SKILLS = ['builder', 'crafter', 'trader', 'diplomat'] as const;
 
-const profileAddress = (wallet: PublicKey) => PublicKey.findProgramAddressSync([Buffer.from('profile'), wallet.toBuffer()], hookwars.SOCIAL_ID)[0];
-const skillsAddress = () => PublicKey.findProgramAddressSync([Buffer.from('skills')], hookwars.SOCIAL_ID)[0];
+const profileAddress = hookwars.profileAddress;
+const skillsAddress = hookwars.skillsAddress;
 
 async function levelsOf(conn: Connection, wallet: PublicKey) {
   const [p, s] = await conn.getMultipleAccountsInfo([profileAddress(wallet), skillsAddress()], 'confirmed');

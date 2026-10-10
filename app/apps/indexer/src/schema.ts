@@ -1,4 +1,4 @@
-// Changed by Hookwars: mint lookup tables; views over the market, social and agents events; the social layer's tables.
+// Changed by Hookwars: mint lookup tables; views over the market, social and agents events; the social layer's tables; craft wear and economy views.
 /**
  * The indexer's Postgres schema (docs/spec/06-app.md 2.3). Amounts are `numeric(39,0)`, addresses
  * `text`, times `timestamptz` plus raw unix seconds. Every event row is keyed by
@@ -69,6 +69,8 @@ export const CORE_DDL: string[] = [
   `create table if not exists vote_locks (holding text primary key, mint text, owner text, amount numeric(39,0), until bigint, updated_slot bigint)`,
   `create table if not exists holding_hook_data (holding text primary key, mint text, owner text, data text, updated_slot bigint)`,
   `create table if not exists templates (template_id int primary key, program text, code_hash text, deploy_slot numeric(39,0), kind int, field_count int, field_min jsonb, field_max jsonb, name text, status text not null default 'active', registered_slot bigint)`,
+  // Craft wear per item (13 E-3), kept from craft's WearOpened, ItemWorn and Repaired.
+  `create table if not exists wear (item text primary key, max_charges bigint not null, used bigint not null, dormant boolean not null, repairs int not null, updated_slot bigint)`,
   `create table if not exists mint_tables (mint text primary key, lookup_table text not null, updated_slot bigint)`,
   `create table if not exists bot_posts (signature text not null, ordinal int not null, channel text not null, posted_at timestamptz not null default now(), primary key (signature, ordinal, channel))`,
 ];
@@ -94,6 +96,17 @@ export const VIEWS_DDL: string[] = [
   `create or replace view item_listings as select * from ev_market_listed`,
   `create or replace view badge_awards as select * from ev_social_badge_awarded`,
   `create or replace view passports as select * from ev_agents_passport_registered`,
+  // Economy (11, 12 section 3, 13 section 2): the fee waterfall at settle, crafting and the book.
+  `create or replace view lease_rents as select * from ev_items_lease_rent_paid`,
+  `create or replace view author_shares as select * from ev_items_author_share_paid`,
+  `create or replace view protocol_fees as select signature, ordinal, slot, ts, 'items' as program, source, mint, amount from ev_items_protocol_fee
+     union all select signature, ordinal, slot, ts, 'craft', source, mint, amount from ev_craft_protocol_fee
+     union all select signature, ordinal, slot, ts, 'book', source, mint, amount from ev_book_protocol_fee`,
+  `create or replace view crafts as select * from ev_craft_crafted`,
+  `create or replace view repairs as select * from ev_craft_repaired`,
+  `create or replace view drops as select * from ev_craft_dropped`,
+  `create or replace view book_fills as select * from ev_book_filled`,
+  `create or replace view class_fills as select * from ev_book_class_filled`,
 ];
 
 export function allDdl(): string[] {

@@ -73,6 +73,12 @@ export class MockRouter implements Router {
     if (q === undefined) throw new Error('no quote');
     return q;
   }
+  sellQuotes = new Map<string, bigint>();
+  async quoteSell(_owner: PublicKey, mint: PublicKey, _tokensIn: bigint): Promise<bigint> {
+    const q = this.sellQuotes.get(mint.toBase58());
+    if (q === undefined) throw new Error('no quote');
+    return q;
+  }
 }
 
 /** Addresses of one agent, as the loop derives them. */

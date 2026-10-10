@@ -1,4 +1,4 @@
-// Changed by Hookwars: every program's events from its IDL; log events for items and the launchpad; economy events not yet in the IDLs.
+// Changed by Hookwars: every program's events from its IDL (craft and book too); log events for items and the launchpad.
 /**
  * Hookwars events (06 2.1). Self-CPI events (`emit_cpi!`) arrive as inner instructions to the
  * program's event authority: `EVENT_IX_TAG` (Anchor's `sha256("anchor:event")[..8]`), then the
@@ -7,58 +7,32 @@
  * lines around them.
  *
  * Every program's events come from its generated IDL (`from-idl.ts`): token, armory, items, war,
- * companion, launchpad, DEX, agents, market and social.
+ * companion, launchpad, DEX, agents, market, social, craft and book.
  */
 import { PublicKey } from '@solana/web3.js';
 import { EVENT_IX_TAG as UPSTREAM_EVENT_IX_TAG } from '../events.ts';
 import { eventCodec, type EventCodec, type Field } from './codec.ts';
 import { idlEventSpecs } from './from-idl.ts';
-import { AGENTS_ID, ARMORY_ID, ITEMS_ID, LAUNCH_ID, MARKET_ID, SOCIAL_ID, SWAP_ID, TOKEN_ID, WAR_ID, COMPANION_ID } from './addresses.ts';
+import { AGENTS_ID, ARMORY_ID, BOOK_ID, CRAFT_ID, ITEMS_ID, LAUNCH_ID, MARKET_ID, SOCIAL_ID, SWAP_ID, TOKEN_ID, WAR_ID, COMPANION_ID } from './addresses.ts';
 
 /** `sha256("anchor:event")[..8]` as Anchor writes it (little-endian u64), upstream's constant. */
 export const EVENT_IX_TAG = UPSTREAM_EVENT_IX_TAG;
 
 type Spec = [name: string, fields: Field[]];
 
-/** Spec tables for events not in any IDL yet. The app IDLs predate the economy merge (11): its
- * directive, postage and profile events are written from the program source until the IDLs are
- * regenerated (an IDL event of the same name wins). */
-const SPEC_ONLY: Record<string, Spec[]> = {
-  agents: [
-    ['DirectiveSet', [['passport', 'pubkey'], ['seq', 'u32'], ['memoHash', { bytes: 32 }], ['ts', 'i64']]],
-    ['Committed', [['passport', 'pubkey'], ['reference', { bytes: 32 }], ['hash', { bytes: 32 }], ['ts', 'i64']]],
-    ['MessagePosted', [['passport', 'pubkey'], ['reference', { bytes: 32 }], ['postage', 'u64'], ['ts', 'i64']]],
-  ],
-  social: [
-    ['ProfileOpened', [['wallet', 'pubkey'], ['ts', 'i64']]],
-    ['WalletRecorded', [['wallet', 'pubkey'], ['callerProgram', 'pubkey'], ['counter', 'u8'], ['value', 'u64'], ['total', 'u64'], ['ts', 'i64']]],
-  ],
-};
+/** The programs whose events come from their IDLs (every program the app reads; the economy
+ * events that were spec tables before are in the regenerated agents and social IDLs). */
+const IDL_PROGRAMS = ['token', 'armory', 'items', 'war', 'companion', 'launch', 'swap', 'agents', 'market', 'social', 'craft', 'book'] as const;
 
-/** The programs whose events come from their IDLs. */
-const IDL_PROGRAMS = ['token', 'armory', 'items', 'war', 'companion', 'launch', 'swap', 'agents', 'market', 'social'] as const;
+/** Per program: the event schemas, from the IDLs. */
+export const EVENT_SPECS: Record<string, Spec[]> = Object.fromEntries(IDL_PROGRAMS.map((p) => [p, idlEventSpecs(p)]));
 
-function buildSpecs(): Record<string, Spec[]> {
-  const out: Record<string, Spec[]> = {};
-  for (const p of IDL_PROGRAMS) out[p] = idlEventSpecs(p);
-  for (const [p, specs] of Object.entries(SPEC_ONLY)) {
-    const have = new Set((out[p] ?? []).map(([n]) => n));
-    out[p] = [...(out[p] ?? []), ...specs.filter(([n]) => !have.has(n))];
-  }
-  return out;
-}
-
-/** Per program: the event schemas (IDL first, then the remaining spec tables). */
-export const EVENT_SPECS: Record<string, Spec[]> = buildSpecs();
-
-/** Which events of `EVENT_SPECS` are still spec layouts (for INTEGRATION.md and the indexer). */
-export const SPEC_EVENTS: Record<string, string[]> = Object.fromEntries(
-  Object.entries(SPEC_ONLY).map(([p, specs]) => [p, specs.map(([n]) => n).filter((n) => !(IDL_PROGRAMS as readonly string[]).includes(p) || !idlEventSpecs(p).some(([m]) => m === n))]),
-);
+/** Events still written as spec layouts (none: every event comes from an IDL). */
+export const SPEC_EVENTS: Record<string, string[]> = {};
 
 export const PROGRAM_OF: Record<string, PublicKey> = {
   token: TOKEN_ID, armory: ARMORY_ID, swap: SWAP_ID, launch: LAUNCH_ID, companion: COMPANION_ID, items: ITEMS_ID, war: WAR_ID,
-  agents: AGENTS_ID, market: MARKET_ID, social: SOCIAL_ID,
+  agents: AGENTS_ID, market: MARKET_ID, social: SOCIAL_ID, craft: CRAFT_ID, book: BOOK_ID,
 };
 
 export interface HookwarsEvent { program: string; name: string; data: Record<string, unknown>; ordinal: number; via: 'cpi' | 'log' }

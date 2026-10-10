@@ -14,7 +14,7 @@
 import { PublicKey } from '@solana/web3.js';
 import { decode, discriminator, fixedSize, Reader, type Field, type Ty } from './codec.ts';
 import { idlAccountCodec, structFields } from './from-idl.ts';
-import type { Agents, Armory, Items, Market, Social, Token, War } from './idl-types.gen.ts';
+import type { Agents, Armory, Book, Craft, Items, Market, Social, Token, War } from './idl-types.gen.ts';
 
 /** PARAM_FIELDS of the armory build (crates/hookwars-common `PARAM_FIELDS`), read from the IDL. */
 export const PARAM_FIELDS: number = (() => {
@@ -233,3 +233,22 @@ export const badgeTypeCodec = idlAccountCodec<Social.BadgeType>('social', 'Badge
 export const badgeAwardCodec = idlAccountCodec<Social.BadgeAward>('social', 'BadgeAward');
 export const guildCodec = idlAccountCodec<Social.Guild>('social', 'Guild');
 export const guildActionCodec = idlAccountCodec<Social.GuildAction>('social', 'GuildAction');
+
+// ---------------------------------------------------------------- economy (11, 12, 13; IDL) --
+
+export const directiveCodec = idlAccountCodec<Agents.Directive>('agents', 'Directive');
+export const memoConfigCodec = idlAccountCodec<Agents.MemoConfig>('agents', 'MemoConfig');
+export const commitmentCodec = idlAccountCodec<Agents.Commitment>('agents', 'Commitment');
+export const profileCodec = idlAccountCodec<Social.Profile>('social', 'Profile');
+export const skillTableCodec = idlAccountCodec<Social.SkillTable>('social', 'SkillTable');
+export const authorCounterCodec = idlAccountCodec<Armory.AuthorCounter>('armory', 'AuthorCounter');
+export const claimCounterCodec = idlAccountCodec<Armory.ClaimCounter>('armory', 'ClaimCounter');
+export const presetCodec = idlAccountCodec<Armory.Preset>('armory', 'Preset');
+export const craftConfigCodec = idlAccountCodec<Craft.CraftConfig>('craft', 'CraftConfig');
+export const materialCodec = idlAccountCodec<Craft.Material>('craft', 'Material');
+export const recipeCodec = idlAccountCodec<Craft.Recipe>('craft', 'Recipe');
+export const wearCodec = idlAccountCodec<Craft.Wear>('craft', 'Wear');
+export const dropRuleCodec = idlAccountCodec<Craft.DropRule>('craft', 'DropRule');
+export const bookConfigCodec = idlAccountCodec<Book.BookConfig>('book', 'BookConfig');
+export const bookMarketCodec = idlAccountCodec<Book.BookMarket>('book', 'BookMarket');
+export const classBidCodec = idlAccountCodec<Book.ClassBid>('book', 'ClassBid');

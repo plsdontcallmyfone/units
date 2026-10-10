@@ -144,6 +144,11 @@ export function handler(deps: Deps) {
       if ((m = /^\/v1\/agents\/(\w{32,44})$/.exec(p))) { const a = await xreads.agent(deps.conn, m[1]!); return json(res, 200, a); }
       if (p === '/v1/market/listings') return json(res, 200, await cached('listings', 10_000, () => xreads.listings(deps.conn, db)));
       if ((m = /^\/v1\/market\/items\/(\w{32,44})$/.exec(p))) { const it = await xreads.marketItem(deps.conn, db, m[1]!); return json(res, 200, it); }
+      // The hook economy (app pass v3): craft, the order books and item wear.
+      if (p === '/v1/craft') return json(res, 200, await cached('craft', 15_000, () => xreads.craftOverview(deps.conn)));
+      if (p === '/v1/book') return json(res, 200, await cached('books', 10_000, () => xreads.books(deps.conn, null)));
+      if ((m = /^\/v1\/book\/(\d{1,5})$/.exec(p))) return json(res, 200, await xreads.books(deps.conn, Number(m[1])));
+      if ((m = /^\/v1\/items\/(\w{32,44})\/wear$/.exec(p))) return json(res, 200, await xreads.itemWear(deps.conn, m[1]!));
       if (p === '/v1/market/leases') return json(res, 200, await cached('leases', 10_000, () => xreads.leases(deps.conn)));
       if (p === '/v1/market/collections') return json(res, 200, await cached('collections', 30_000, () => xreads.collections(deps.conn)));
       if (p === '/v1/commissions') return json(res, 200, await cached('commissions', 10_000, () => xreads.commissions(deps.conn)));

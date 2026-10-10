@@ -18,6 +18,8 @@ export const WAR_ID = new PublicKey(PROGRAM_IDS.war);
 export const AGENTS_ID = new PublicKey(PROGRAM_IDS.agents);
 export const MARKET_ID = new PublicKey(PROGRAM_IDS.market);
 export const SOCIAL_ID = new PublicKey(PROGRAM_IDS.social);
+export const CRAFT_ID = new PublicKey(PROGRAM_IDS.craft);
+export const BOOK_ID = new PublicKey(PROGRAM_IDS.book);
 
 export const ARMORY_EVENT_AUTHORITY = new PublicKey(FIXED_ADDRESSES.armoryEventAuthority);
 export const ARMORY_SIGNER = new PublicKey(FIXED_ADDRESSES.armorySigner);
@@ -118,3 +120,35 @@ export const badgeMinterAddress = () => pda([s('badge-minter')], SOCIAL_ID);
 export const guildAddress = (id: number) => pda([s('guild'), u32(id)], SOCIAL_ID);
 export const guildTreasuryAddress = (id: number) => pda([s('guild-treasury'), u32(id)], SOCIAL_ID);
 export const guildActionAddress = (id: number, nonce: bigint | number) => pda([s('guild-action'), u32(id), u64(nonce)], SOCIAL_ID);
+// agents economy (11 section 4: programs/hookwars_agents/src/constants.rs)
+export const memoConfigAddress = () => pda([s('memo-config')], AGENTS_ID);
+export const directiveAddress = (passport: PublicKey, seq: number) => pda([s('directive'), passport.toBuffer(), u32(seq)], AGENTS_ID);
+export const commitmentAddress = (passport: PublicKey, reference: Uint8Array) => pda([s('commit'), passport.toBuffer(), Buffer.from(reference)], AGENTS_ID);
+// social economy (11 section 3.3)
+export const skillsAddress = () => pda([s('skills')], SOCIAL_ID);
+export const profileAddress = (wallet: PublicKey) => pda([s('profile'), wallet.toBuffer()], SOCIAL_ID);
+// armory counters and presets (12 section 3 I-5, 13 section 4)
+export const authorCounterAddress = (wallet: PublicKey) => pda([s('authored'), wallet.toBuffer()], ARMORY_ID);
+export const claimCounterAddress = (wallet: PublicKey) => pda([s('claimed'), wallet.toBuffer()], ARMORY_ID);
+export const presetAddress = (id: number) => pda([s('preset'), u16(id)], ARMORY_ID);
+// craft (11 section 5: programs/hookwars_craft/src/state.rs `seeds`)
+export const craftConfigAddress = () => pda([s('craft-config')], CRAFT_ID);
+export const materialAddress = (id: number) => pda([s('material'), u16(id)], CRAFT_ID);
+export const materialMintAddress = (id: number) => pda([s('material-mint'), u16(id)], CRAFT_ID);
+export const recipeAddress = (id: number) => pda([s('recipe'), u16(id)], CRAFT_ID);
+export const wearAddress = (item: PublicKey) => pda([s('wear'), item.toBuffer()], CRAFT_ID);
+export const dropRuleAddress = (source: number) => pda([s('drop'), u8(source)], CRAFT_ID);
+export const craftMinterAddress = () => pda([s('craft-minter')], CRAFT_ID);
+export const craftSignerAddress = () => pda([s('craft-signer')], CRAFT_ID);
+// book (11 section 6: programs/hookwars_book/src/state.rs `seeds`)
+export const bookConfigAddress = () => pda([s('book-config')], BOOK_ID);
+export const bookMarketAddress = (baseMint: PublicKey) => pda([s('book'), baseMint.toBuffer()], BOOK_ID);
+export const bookEscrowAddress = (market: PublicKey) => pda([s('book-escrow'), market.toBuffer()], BOOK_ID);
+export const classBidAddress = (bidder: PublicKey, nonce: bigint | number) => pda([s('class-bid'), bidder.toBuffer(), u64(nonce)], BOOK_ID);
+// the callers' PDAs the economy suffixes name (crates/hookwars-common `agents_record`, `economy`, `market`)
+export const agentsCallerAddress = (program: PublicKey) => pda([s('agents-caller')], program);
+export const socialCallerAddress = (program: PublicKey) => pda([s('social-caller')], program);
+export const craftCallerAddress = (program: PublicKey) => pda([s('craft-caller')], program);
+export const marketCallerAddress = () => pda([s('market-caller')], MARKET_ID);
+/** An Anchor program's `["__event_authority"]`. */
+export const eventAuthorityOf = (program: PublicKey) => pda([s('__event_authority')], program);
