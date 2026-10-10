@@ -221,7 +221,9 @@ impl<'a, 'info> Pairs<'a, 'info> {
     }
 }
 
-/// Everything a book instruction needs to move base and lamports.
+/// Everything a book instruction needs to move base and lamports. Lamports leaving the escrow are
+/// owed during the instruction and moved by `flush` after its last CPI: a direct lamport move
+/// followed by a CPI that does not pass both accounts unbalances the caller's instruction.
 struct Settle<'a, 'info> {
     t: TokenAccs<'a, 'info>,
     escrow: &'a AccountInfo<'info>,
@@ -230,9 +232,25 @@ struct Settle<'a, 'info> {
     payer: &'a AccountInfo<'info>,
     market: Pubkey,
     escrow_bump: u8,
+    owed: std::cell::RefCell<Vec<(AccountInfo<'info>, u64)>>,
 }
 
 impl<'info> Settle<'_, 'info> {
+    /// Records `amount` lamports the escrow owes `to`.
+    fn owe(&self, to: &AccountInfo<'info>, amount: u64) {
+        if amount > 0 {
+            self.owed.borrow_mut().push((to.clone(), amount));
+        }
+    }
+
+    /// Pays everything owed; call after the instruction's last CPI.
+    fn flush(&self) -> Result<()> {
+        for (to, amount) in self.owed.borrow_mut().drain(..) {
+            take_lamports(self.escrow, &to, amount)?;
+        }
+        Ok(())
+    }
+
     /// Returns a removed order's escrow to its owner (`bounty_to` gets the bounty: the owner, or
     /// the cranker on expiry).
     fn refund(
@@ -244,14 +262,15 @@ impl<'info> Settle<'_, 'info> {
         bounty_to: &AccountInfo<'info>,
     ) -> Result<()> {
         if side_ == side::BID {
-            take_lamports(self.escrow, wallet, o.quote_locked)?;
+            self.owe(wallet, o.quote_locked);
         } else if o.size > 0 {
             create_holding(&self.t, self.payer, self.base_mint, wallet, holding)?;
             let bump = [self.escrow_bump];
             let s: &[&[u8]] = &[seeds::ESCROW, self.market.as_ref(), &bump];
             transfer(&self.t, self.escrow, self.escrow_holding, holding, self.base_mint, o.size, &[s])?;
         }
-        take_lamports(self.escrow, bounty_to, o.bounty)
+        self.owe(bounty_to, o.bounty);
+        Ok(())
     }
 }
 
@@ -404,18 +423,21 @@ pub mod hookwars_book {
         let owner = a.owner.to_account_info();
         let escrow = a.escrow.to_account_info();
         let treasury = a.treasury.to_account_info();
+        let (tp, tea) = (a.token_program.to_account_info(), a.token_event_authority.to_account_info());
+        let (escrow_holding, base_mint) = (a.escrow_holding.to_account_info(), a.base_mint.to_account_info());
         let st = Settle {
             t: TokenAccs {
-                token_program: &a.token_program,
-                event_authority: &a.token_event_authority,
+                token_program: &tp,
+                event_authority: &tea,
                 system_program: &sys,
             },
             escrow: &escrow,
-            escrow_holding: &a.escrow_holding,
-            base_mint: &a.base_mint,
+            escrow_holding: &escrow_holding,
+            base_mint: &base_mint,
             payer: &owner,
             market,
             escrow_bump: m.escrow_bump,
+            owed: std::cell::RefCell::new(Vec::new()),
         };
         st.t.check()?;
         let mut pairs = Pairs {
@@ -464,8 +486,8 @@ pub mod hookwars_book {
                 // Taker sells: gives base to the maker, receives the escrowed quote less its fee.
                 create_holding(&st.t, &owner, st.base_mint, wallet, holding)?;
                 transfer(&st.t, &owner, &a.owner_holding, holding, st.base_mint, q, &[])?;
-                take_lamports(&escrow, &owner, quote - taker_fee)?;
-                take_lamports(&escrow, &treasury, taker_fee + maker_fee)?;
+                st.owe(&owner, quote - taker_fee);
+                st.owe(&treasury, taker_fee + maker_fee);
                 left.quote_locked = left
                     .quote_locked
                     .checked_sub(quote + maker_fee)
@@ -582,7 +604,7 @@ pub mod hookwars_book {
             reference,
             ts
         });
-        Ok(())
+        st.flush()
     }
 
     /// The owner cancels a resting order and gets its escrow back.
@@ -603,18 +625,21 @@ pub mod hookwars_book {
         let sys = a.system_program.to_account_info();
         let owner = a.owner.to_account_info();
         let escrow = a.escrow.to_account_info();
+        let (tp, tea) = (a.token_program.to_account_info(), a.token_event_authority.to_account_info());
+        let (escrow_holding, base_mint) = (a.escrow_holding.to_account_info(), a.base_mint.to_account_info());
         let st = Settle {
             t: TokenAccs {
-                token_program: &a.token_program,
-                event_authority: &a.token_event_authority,
+                token_program: &tp,
+                event_authority: &tea,
                 system_program: &sys,
             },
             escrow: &escrow,
-            escrow_holding: &a.escrow_holding,
-            base_mint: &a.base_mint,
+            escrow_holding: &escrow_holding,
+            base_mint: &base_mint,
             payer: &owner,
             market,
             escrow_bump: m.escrow_bump,
+            owed: std::cell::RefCell::new(Vec::new()),
         };
         st.t.check()?;
         st.refund(side_, &o, &owner, &a.owner_holding, &owner)?;
@@ -624,7 +649,7 @@ pub mod hookwars_book {
             owner: o.owner,
             ts
         });
-        Ok(())
+        st.flush()
     }
 
     /// Anyone removes up to `max` expired orders (bids first, then asks, in book order), returning
@@ -639,18 +664,21 @@ pub mod hookwars_book {
         let sys = a.system_program.to_account_info();
         let cranker = a.cranker.to_account_info();
         let escrow = a.escrow.to_account_info();
+        let (tp, tea) = (a.token_program.to_account_info(), a.token_event_authority.to_account_info());
+        let (escrow_holding, base_mint) = (a.escrow_holding.to_account_info(), a.base_mint.to_account_info());
         let st = Settle {
             t: TokenAccs {
-                token_program: &a.token_program,
-                event_authority: &a.token_event_authority,
+                token_program: &tp,
+                event_authority: &tea,
                 system_program: &sys,
             },
             escrow: &escrow,
-            escrow_holding: &a.escrow_holding,
-            base_mint: &a.base_mint,
+            escrow_holding: &escrow_holding,
+            base_mint: &base_mint,
             payer: &cranker,
             market,
             escrow_bump: m.escrow_bump,
+            owed: std::cell::RefCell::new(Vec::new()),
         };
         st.t.check()?;
         let mut pairs = Pairs {
@@ -683,7 +711,7 @@ pub mod hookwars_book {
                 });
             }
         }
-        Ok(())
+        st.flush()
     }
 
     // ---- class bids
@@ -789,8 +817,7 @@ pub mod hookwars_book {
         let taker_fee = eco::bps(b.price, p.taker_bps);
         let maker_fee = b.maker_fee;
         let bid_info = a.bid.to_account_info();
-        take_lamports(&bid_info, &seller, b.price - taker_fee)?;
-        take_lamports(&bid_info, &a.treasury, taker_fee + maker_fee)?;
+        let treasury = a.treasury.to_account_info();
         let (price, bidder) = (b.price, b.bidder);
         let bid_key = a.bid.key();
         let item_key = a.item.key();
@@ -816,7 +843,9 @@ pub mod hookwars_book {
             reference,
             ts
         });
-        Ok(())
+        // Direct lamport moves last, after every CPI (see `Settle`).
+        take_lamports(&bid_info, &seller, price - taker_fee)?;
+        take_lamports(&bid_info, &treasury, taker_fee + maker_fee)
     }
 }
 

@@ -42,6 +42,11 @@ hookwars-social = { path = "../hookwars_social", features = ["no-entrypoint"] }
 # units agents (09): the agents program and its test-only recorder.
 hookwars-agents = { path = "../hookwars_agents", features = ["no-entrypoint"] }
 agents-caller-stub = { path = "../agents_caller_stub", features = ["no-entrypoint"] }
+# units hook economy (11): craft, book, the memo format and the test-only caller.
+hookwars-craft = { path = "../hookwars_craft", features = ["no-entrypoint"] }
+hookwars-book = { path = "../hookwars_book", features = ["no-entrypoint"] }
+econ-caller-stub = { path = "../econ_caller_stub", features = ["no-entrypoint"] }
+units-memo = { path = "../../crates/units-memo" }
 solana-account = "=4.7.0"
 solana-hash.workspace = true
 solana-keypair.workspace = true
