@@ -60,6 +60,10 @@ export function marketOpenCommission(creator: PublicKey, tokenMint: PublicKey, n
 export function marketSubmit(submitter: PublicKey, commission: PublicKey, tokenMint: PublicKey, item: PublicKey, itemMint: PublicKey): TransactionInstruction {
   return idlIx('market', 'submit', { submitter, commission, tokenMint, item, itemMint, submitterHolding: holdingAddr(itemMint, submitter), submission: submissionAddress(commission, item) });
 }
+/** Pass 5 (review 3 I-2): `take_submission`: the item's current holder takes over its submission. */
+export function marketTakeSubmission(holder: PublicKey, commission: PublicKey, item: PublicKey, itemMint: PublicKey): TransactionInstruction {
+  return idlIx('market', 'take_submission', { holder, commission, submission: submissionAddress(commission, item), item, itemMint, holderHolding: holdingAddr(itemMint, holder) });
+}
 /** `pay_commission`: anyone pays the winner once its item holds the slot. */
 export function marketPayCommission(commission: PublicKey, tokenMint: PublicKey, submissionItem: PublicKey, submitter: PublicKey): TransactionInstruction {
   return idlIx('market', 'pay_commission', { commission, submission: submissionAddress(commission, submissionItem), tokenMint, submitter, vault: commissionVaultAddress(commission) });

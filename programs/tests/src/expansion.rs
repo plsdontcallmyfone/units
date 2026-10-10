@@ -344,6 +344,23 @@ pub fn submit_ix(submitter: &Pubkey, commission: &Pubkey, token_mint: &Pubkey, i
     )
 }
 
+/// Pass 5 (I-2): `take_submission` by the item's current holder.
+pub fn take_submission_ix(holder: &Pubkey, commission: &Pubkey, item: &Pubkey, item_mint: &Pubkey) -> Instruction {
+    market_ix(
+        hookwars_market::accounts::TakeSubmission {
+            holder: *holder,
+            commission: *commission,
+            submission: ms::submission_address(commission, item).0,
+            item: *item,
+            item_mint: *item_mint,
+            holder_holding: token::holding_address(item_mint, holder),
+            event_authority: events(&hookwars_market::ID),
+            program: hookwars_market::ID,
+        },
+        hookwars_market::instruction::TakeSubmission {},
+    )
+}
+
 /// `pay_commission`.
 pub fn pay_commission_ix(commission: &Pubkey, token_mint: &Pubkey, item: &Pubkey, submitter: &Pubkey) -> Instruction {
     market_ix(
