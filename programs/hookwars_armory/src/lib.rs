@@ -67,6 +67,14 @@ pub struct RegisterTemplateArgs {
 }
 
 /// One slot at launch (02 section 7.1; M2: one slot per call).
+/// One fused component's targets: the slice `start..start + count` of the target list (the same
+/// bytes as a `(u8, u8)` pair, named so the IDL can describe it).
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FuseTarget {
+    pub start: u8,
+    pub count: u8,
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
 pub struct LaunchEquip {
     pub slot: u8,
@@ -373,7 +381,7 @@ pub mod hookwars_armory {
     /// `create_composite` takes. One-way: there is no unfuse.
     pub fn fuse<'info>(
         ctx: Context<'info, CreateComposite<'info>>,
-        targets: Vec<(u8, u8)>,
+        targets: Vec<FuseTarget>,
         royalty_bps: u16,
     ) -> Result<()> {
         process_create_composite(ctx, Vec::new(), royalty_bps, Mode::Fuse(targets))
@@ -1530,7 +1538,7 @@ fn process_init_counters(ctx: Context<InitCounters>, wallet: Pubkey) -> Result<(
 enum Mode {
     Plain,
     /// `fuse`: the components' targets.
-    Fuse(Vec<(u8, u8)>),
+    Fuse(Vec<FuseTarget>),
     /// `mint_composite`: the preset's id.
     Preset(u16),
 }
@@ -1581,7 +1589,7 @@ fn process_create_composite<'info>(
             let (templates, groups) = rem.split_at(k);
             let mut built = Vec::with_capacity(k);
             let mut provenance = Vec::with_capacity(k);
-            for (i, &(start, count)) in tg.iter().enumerate() {
+            for (i, &FuseTarget { start, count }) in tg.iter().enumerate() {
                 let (item_info, mint_info, holding) = (&groups[3 * i], &groups[3 * i + 1], &groups[3 * i + 2]);
                 require_keys_eq!(*item_info.owner, crate::ID, ArmoryError::WrongAccount);
                 let it = Item::try_deserialize(&mut &item_info.try_borrow_data()?[..])?;

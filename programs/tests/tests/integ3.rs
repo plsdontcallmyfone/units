@@ -337,7 +337,11 @@ fn fuse_ix(hw: &Hw, author: &Pubkey, parts: &[(Pubkey, Pubkey, u16)], targets: V
     let ix = Instruction {
         program_id: ids::ARMORY_ID,
         accounts,
-        data: hookwars_armory::instruction::Fuse { targets, royalty_bps: 500 }.data(),
+        data: hookwars_armory::instruction::Fuse {
+            targets: targets.iter().map(|&(start, count)| hookwars_armory::FuseTarget { start, count }).collect(),
+            royalty_bps: 500,
+        }
+        .data(),
     };
     (ix, item)
 }

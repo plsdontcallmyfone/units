@@ -1897,6 +1897,107 @@
       "args": []
     },
     {
+      "name": "revoke_vault",
+      "docs": [
+        "The operator clears a delegate on one of the vault's holdings (review 3 H-1)."
+      ],
+      "discriminator": [
+        199,
+        172,
+        226,
+        172,
+        196,
+        244,
+        179,
+        103
+      ],
+      "accounts": [
+        {
+          "name": "operator",
+          "signer": true,
+          "relations": [
+            "passport"
+          ]
+        },
+        {
+          "name": "passport"
+        },
+        {
+          "name": "policy",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "passport"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  103,
+                  101,
+                  110,
+                  116,
+                  45,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "passport"
+              }
+            ]
+          }
+        },
+        {
+          "name": "holding",
+          "writable": true
+        },
+        {
+          "name": "token",
+          "accounts": [
+            {
+              "name": "token_program",
+              "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+            },
+            {
+              "name": "token_event_authority",
+              "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
+            }
+          ]
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "rotate_agent_key",
       "docs": [
         "The operator and a new key move the passport to that key; a new badge generation."
@@ -3686,9 +3787,76 @@
       "code": 6046,
       "name": "NotAgent",
       "msg": "the signer is not the passport's agent key"
+    },
+    {
+      "code": 6047,
+      "name": "InstructionNotAllowed",
+      "msg": "the token program instruction is not one spend may call"
+    },
+    {
+      "code": 6048,
+      "name": "VaultHoldingChanged",
+      "msg": "the call changed a vault holding's delegate, owner or freeze state"
     }
   ],
   "types": [
+    {
+      "name": "AccessParams",
+      "docs": [
+        "Protocol pass 4a: the access and lab numbers (00 section 6 names; every value to set)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "licence_tier_1_lamports",
+            "docs": [
+              "`LICENCE_TIER_1_LAMPORTS`: a licence priced above this needs `Builder >= licence_tier_1_level`."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "licence_tier_1_level",
+            "docs": [
+              "`LICENCE_TIER_1_LEVEL`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "lab_bond_lamports",
+            "docs": [
+              "`LAB_BOND_LAMPORTS`: the bond of a template submission."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "lab_bond_discount_level",
+            "docs": [
+              "`LAB_BOND_DISCOUNT_LEVEL`: the Builder level that earns the bond discount (0 = none)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "lab_bond_discount_bps",
+            "docs": [
+              "The discount, in basis points of the bond."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "licence_min_secs",
+            "docs": [
+              "`LICENCE_MIN_SECS` and `LICENCE_MAX_SECS`: bounds of a licence term."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "licence_max_secs",
+            "type": "u32"
+          }
+        ]
+      }
+    },
     {
       "name": "AgentCredited",
       "type": {
@@ -4030,11 +4198,23 @@
             "type": "u16"
           },
           {
+            "name": "access",
+            "docs": [
+              "Protocol pass 4a (E-1, E-8, 10 section 11.5): the access and lab numbers, set through the",
+              "admin queue with `set_access_params` (all 0 until set: licences then cannot be offered)."
+            ],
+            "type": {
+              "defined": {
+                "name": "AccessParams"
+              }
+            }
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                60
+                32
               ]
             }
           }
@@ -5091,11 +5271,24 @@
             "type": "bool"
           },
           {
+            "name": "access_mode",
+            "docs": [
+              "Protocol pass 4a (E-1, 11 section 1): the access mode future equips check (`Open` 0 for",
+              "every item made before) and the exclusive flag. Mirrors `AccessPolicy`, so an equip path",
+              "that sees `Open` needs no further account."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "exclusive",
+            "type": "bool"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                31
+                29
               ]
             }
           }
@@ -5596,11 +5789,19 @@
             }
           },
           {
+            "name": "link_nonce",
+            "docs": [
+              "Links made so far (never decreases); the next link statement names it, so an old",
+              "statement cannot be replayed after `unlink` (review 3 L-5). Was `reserved[0..4]`."
+            ],
+            "type": "u32"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                32
+                28
               ]
             }
           }

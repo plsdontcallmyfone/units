@@ -859,6 +859,61 @@
       ]
     },
     {
+      "name": "record_pool_cut",
+      "docs": [
+        "Protocol pass 4a (Hook Lab gap 4): the launchpad records the pool cut an external template's",
+        "program answered into the shared `PoolCuts` holding, so `settle_equip` can pay it out.",
+        "Signed by the launchpad's `[\"hook-authority\", items]`; only for an external template's",
+        "equip."
+      ],
+      "discriminator": [
+        119,
+        109,
+        14,
+        167,
+        96,
+        253,
+        125,
+        130
+      ],
+      "accounts": [
+        {
+          "name": "launch_signer",
+          "docs": [
+            "The launchpad's `[\"hook-authority\", items]`."
+          ],
+          "signer": true,
+          "address": "7WNwXG1tgUs2Srx4wPxBiRfhtMvMkZUZCDuyvrGAYLnX"
+        },
+        {
+          "name": "equip_state",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "slot",
+          "type": "u8"
+        },
+        {
+          "name": "item",
+          "type": "pubkey"
+        },
+        {
+          "name": "cut",
+          "type": "u64"
+        },
+        {
+          "name": "side",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "reslot_loyalty",
       "docs": [
         "Loyalty Pot: moves the pot to `slot` when its slot no longer holds the pot and `slot` does",

@@ -134,6 +134,98 @@
       "args": []
     },
     {
+      "name": "approve",
+      "docs": [
+        "Protocol pass 4a (E-1): the holder approves a token for a Gated item."
+      ],
+      "discriminator": [
+        69,
+        74,
+        217,
+        36,
+        115,
+        117,
+        97,
+        76
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "item",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  116,
+                  101,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item.item_mint",
+                "account": "Item"
+              }
+            ]
+          }
+        },
+        {
+          "name": "item_holding"
+        },
+        {
+          "name": "approval",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  112,
+                  112,
+                  114,
+                  111,
+                  118,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item"
+              },
+              {
+                "kind": "arg",
+                "path": "token_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "token_mint",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "cancel",
       "docs": [
         "The proposer cancels an open proposal with no votes (02 section 6.5)."
@@ -163,6 +255,81 @@
         {
           "name": "slot_state",
           "writable": true
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel_admin",
+      "docs": [
+        "Protocol pass 4a (L-1): the admin drops a queued action before it applies."
+      ],
+      "discriminator": [
+        169,
+        143,
+        43,
+        87,
+        189,
+        134,
+        146,
+        216
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "queued",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "queued.action_hash",
+                "account": "QueuedAction"
+              }
+            ]
+          }
         },
         {
           "name": "event_authority"
@@ -881,6 +1048,171 @@
         {
           "name": "royalty_bps",
           "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "enforce_access",
+      "docs": [
+        "Protocol pass 4a (E-1): anyone removes an item whose access lapsed, after the notice."
+      ],
+      "discriminator": [
+        194,
+        105,
+        74,
+        72,
+        160,
+        199,
+        224,
+        176
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "slot_state",
+          "writable": true
+        },
+        {
+          "name": "proof",
+          "docs": [
+            "the handler)."
+          ]
+        },
+        {
+          "name": "equip",
+          "accounts": [
+            {
+              "name": "payer",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "token_mint",
+              "writable": true
+            },
+            {
+              "name": "slot_authority"
+            },
+            {
+              "name": "equip_state",
+              "writable": true
+            },
+            {
+              "name": "old_item",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "old_equip_vault",
+              "optional": true
+            },
+            {
+              "name": "new_item",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "new_template",
+              "optional": true
+            },
+            {
+              "name": "template_program",
+              "optional": true
+            },
+            {
+              "name": "template_programdata",
+              "optional": true
+            },
+            {
+              "name": "registry",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "new_equip_vault",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "royalty_owner",
+              "optional": true
+            },
+            {
+              "name": "royalty_holding_token",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "quote_mint",
+              "optional": true
+            },
+            {
+              "name": "royalty_holding_quote",
+              "writable": true,
+              "optional": true
+            },
+            {
+              "name": "new_composite",
+              "docs": [
+                "composite; read by the items program's `init_equip`."
+              ],
+              "optional": true
+            },
+            {
+              "name": "armory_signer",
+              "address": "2NSNJ4W51G5ZZSc4wVqkjyR8yr5yzuEjquKv7iprzSHP"
+            },
+            {
+              "name": "items_program",
+              "address": "8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv"
+            },
+            {
+              "name": "token",
+              "accounts": [
+                {
+                  "name": "token_program",
+                  "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+                },
+                {
+                  "name": "token_event_authority",
+                  "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
+                },
+                {
+                  "name": "system_program",
+                  "address": "11111111111111111111111111111111"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "slot",
+          "type": "u8"
         }
       ]
     },
@@ -2778,10 +3110,212 @@
       ]
     },
     {
+      "name": "queue_admin",
+      "docs": [
+        "Protocol pass 4a (L-1): the admin queues a gated action; it may apply after",
+        "`admin_timelock_secs`."
+      ],
+      "discriminator": [
+        79,
+        42,
+        68,
+        164,
+        107,
+        203,
+        24,
+        177
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "queued",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "action_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "action_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "register_external_template",
+      "docs": [
+        "Protocol pass 4a (Hook Lab gaps 1 to 3): registers a template whose program is its own",
+        "(not the items program), with the manifest ceiling its registrant declared and the lab",
+        "checked. Queued like `register_template` (bound to the template program)."
+      ],
+      "discriminator": [
+        211,
+        190,
+        231,
+        207,
+        135,
+        158,
+        93,
+        187
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "template",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  101,
+                  109,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "args.id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "template_program"
+        },
+        {
+          "name": "programdata"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "queued",
+          "docs": [
+            "Protocol pass 4a (L-1): the queue entry of this registration (closed here)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "RegisterTemplateArgs"
+            }
+          }
+        },
+        {
+          "name": "manifest",
+          "type": {
+            "defined": {
+              "name": "Manifest"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "register_preset",
       "docs": [
         "Integration pass 3 (08 section 4.8): the admin registers a composite preset (the module",
-        "templates in order). Admin-direct like `register_template` (see L-1 in 13-integration-3)."
+        "templates in order). Protocol pass 4a (L-1): queued."
       ],
       "discriminator": [
         138,
@@ -2848,6 +3382,13 @@
           "address": "11111111111111111111111111111111"
         },
         {
+          "name": "queued",
+          "docs": [
+            "Protocol pass 4a (L-1): the queue entry (closed here)."
+          ],
+          "writable": true
+        },
+        {
           "name": "event_authority"
         },
         {
@@ -2874,7 +3415,8 @@
     {
       "name": "register_template",
       "docs": [
-        "Registers a template (02 section 3.1)."
+        "Registers a template (02 section 3.1). Protocol pass 4a (L-1): queued first with",
+        "`queue_admin(sha256(data || template program))`."
       ],
       "discriminator": [
         174,
@@ -2950,6 +3492,13 @@
           "address": "11111111111111111111111111111111"
         },
         {
+          "name": "queued",
+          "docs": [
+            "Protocol pass 4a (L-1): the queue entry of this registration (closed here)."
+          ],
+          "writable": true
+        },
+        {
           "name": "event_authority"
         },
         {
@@ -2970,7 +3519,7 @@
     {
       "name": "retire_template",
       "docs": [
-        "Retires a template (02 section 3.2)."
+        "Retires a template (02 section 3.2). Protocol pass 4a (L-1): queued."
       ],
       "discriminator": [
         17,
@@ -2985,6 +3534,7 @@
       "accounts": [
         {
           "name": "admin",
+          "writable": true,
           "signer": true,
           "relations": [
             "config"
@@ -3033,6 +3583,13 @@
               }
             ]
           }
+        },
+        {
+          "name": "queued",
+          "docs": [
+            "Protocol pass 4a (L-1): the queue entry (closed here)."
+          ],
+          "writable": true
         },
         {
           "name": "event_authority"
@@ -3221,24 +3778,257 @@
       ]
     },
     {
-      "name": "set_item_protocol_bps",
+      "name": "revoke_approval",
       "docs": [
-        "Integration pass 3 (E-2, R37): the admin sets `ITEM_PROTOCOL_BPS`, the protocol's share of",
-        "each token-side cut `settle_equip` settles. Admin-direct (see L-1 in 13-integration-3)."
+        "Protocol pass 4a (E-1): the holder revokes an approval; it ends after the slot's notice."
       ],
       "discriminator": [
-        217,
-        215,
-        200,
+        44,
+        51,
+        184,
+        108,
+        182,
+        202,
+        20,
+        53
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "signer": true
+        },
+        {
+          "name": "item",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  116,
+                  101,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item.item_mint",
+                "account": "Item"
+              }
+            ]
+          }
+        },
+        {
+          "name": "item_holding"
+        },
+        {
+          "name": "approval",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  112,
+                  112,
+                  114,
+                  111,
+                  118,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item"
+              },
+              {
+                "kind": "account",
+                "path": "approval.token_mint",
+                "account": "Approval"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_mint"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "set_access",
+      "docs": [
+        "Protocol pass 4a (E-1, 11 section 1.3): the item holder sets the access mode."
+      ],
+      "discriminator": [
+        184,
+        66,
+        183,
+        126,
+        28,
+        4,
+        110,
+        14
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "item",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  116,
+                  101,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item.item_mint",
+                "account": "Item"
+              }
+            ]
+          }
+        },
+        {
+          "name": "template",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  101,
+                  109,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item.template_id",
+                "account": "Item"
+              }
+            ]
+          }
+        },
+        {
+          "name": "item_holding"
+        },
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  99,
+                  99,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lease"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "mode",
+          "type": "u8"
+        },
+        {
+          "name": "exclusive",
+          "type": "bool"
+        },
+        {
+          "name": "licence_terms",
+          "type": {
+            "option": {
+              "defined": {
+                "name": "LicenceTerms"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_access_params",
+      "docs": [
+        "Protocol pass 4a (E-1, E-8): sets the access and lab numbers (queued)."
+      ],
+      "discriminator": [
+        225,
+        21,
+        221,
+        188,
         89,
-        15,
-        147,
-        18,
-        249
+        244,
+        199,
+        208
       ],
       "accounts": [
         {
           "name": "admin",
+          "writable": true,
           "signer": true,
           "relations": [
             "config"
@@ -3264,6 +4054,76 @@
           }
         },
         {
+          "name": "queued",
+          "writable": true
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "AccessParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_item_protocol_bps",
+      "docs": [
+        "Integration pass 3 (E-2, R37): the admin sets `ITEM_PROTOCOL_BPS`, the protocol's share of",
+        "each token-side cut `settle_equip` settles. Protocol pass 4a (L-1): queued."
+      ],
+      "discriminator": [
+        217,
+        215,
+        200,
+        89,
+        15,
+        147,
+        18,
+        249
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "queued",
+          "writable": true
+        },
+        {
           "name": "event_authority"
         },
         {
@@ -3281,8 +4141,7 @@
       "name": "set_template_economy",
       "docs": [
         "Integration pass 3 (E-7, 11 sections 1.2, 2.2, 5.4): the admin sets a template's economy",
-        "fields. Admin-direct like `register_template` and `retire_template` (review 1 L-1 puts all",
-        "three behind the timelock; see 13-integration-3)."
+        "fields. Protocol pass 4a (L-1): queued."
       ],
       "discriminator": [
         231,
@@ -3297,6 +4156,7 @@
       "accounts": [
         {
           "name": "admin",
+          "writable": true,
           "signer": true,
           "relations": [
             "config"
@@ -3347,6 +4207,13 @@
           }
         },
         {
+          "name": "queued",
+          "docs": [
+            "Protocol pass 4a (L-1): the queue entry (closed here)."
+          ],
+          "writable": true
+        },
+        {
           "name": "event_authority"
         },
         {
@@ -3373,6 +4240,215 @@
         {
           "name": "charges_on_create",
           "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "settle_submission",
+      "docs": [
+        "Protocol pass 4a: the admin closes a submission (approved, rejected or forfeited)."
+      ],
+      "discriminator": [
+        40,
+        127,
+        169,
+        83,
+        16,
+        188,
+        107,
+        219
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "submission",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  117,
+                  98,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110,
+                  45,
+                  116,
+                  112,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "submission.program",
+                "account": "TemplateSubmission"
+              }
+            ]
+          }
+        },
+        {
+          "name": "submitter",
+          "writable": true
+        },
+        {
+          "name": "template",
+          "docs": [
+            "The registered template, when approving (its program and code hash must match)."
+          ],
+          "optional": true
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "approved",
+          "type": "bool"
+        },
+        {
+          "name": "forfeit",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "submit_template",
+      "docs": [
+        "Protocol pass 4a (10 section 11.5, E-8): anyone submits a template program with a bond."
+      ],
+      "discriminator": [
+        108,
+        27,
+        135,
+        121,
+        223,
+        207,
+        181,
+        121
+      ],
+      "accounts": [
+        {
+          "name": "submitter",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "submission",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  117,
+                  98,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110,
+                  45,
+                  116,
+                  112,
+                  108
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "template_program"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "template_program",
+          "type": "pubkey"
+        },
+        {
+          "name": "code_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "uri_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         }
       ]
     },
@@ -3496,6 +4572,32 @@
   ],
   "accounts": [
     {
+      "name": "AccessPolicy",
+      "discriminator": [
+        60,
+        199,
+        120,
+        184,
+        61,
+        155,
+        236,
+        142
+      ]
+    },
+    {
+      "name": "Approval",
+      "discriminator": [
+        233,
+        9,
+        153,
+        49,
+        11,
+        222,
+        59,
+        130
+      ]
+    },
+    {
       "name": "ArmoryConfig",
       "discriminator": [
         159,
@@ -3613,6 +4715,19 @@
       ]
     },
     {
+      "name": "QueuedAction",
+      "discriminator": [
+        117,
+        70,
+        183,
+        69,
+        156,
+        140,
+        186,
+        32
+      ]
+    },
+    {
       "name": "SlotState",
       "discriminator": [
         209,
@@ -3639,6 +4754,19 @@
       ]
     },
     {
+      "name": "TemplateSubmission",
+      "discriminator": [
+        203,
+        250,
+        55,
+        164,
+        242,
+        212,
+        121,
+        131
+      ]
+    },
+    {
       "name": "VoteLock",
       "discriminator": [
         83,
@@ -3654,6 +4782,45 @@
   ],
   "events": [
     {
+      "name": "AccessEnforced",
+      "discriminator": [
+        100,
+        121,
+        228,
+        131,
+        153,
+        24,
+        28,
+        187
+      ]
+    },
+    {
+      "name": "AccessParamsSet",
+      "discriminator": [
+        13,
+        65,
+        95,
+        41,
+        198,
+        121,
+        35,
+        240
+      ]
+    },
+    {
+      "name": "AccessSet",
+      "discriminator": [
+        121,
+        29,
+        175,
+        66,
+        103,
+        110,
+        235,
+        178
+      ]
+    },
+    {
       "name": "AdminAccepted",
       "discriminator": [
         174,
@@ -3667,6 +4834,45 @@
       ]
     },
     {
+      "name": "AdminActionApplied",
+      "discriminator": [
+        132,
+        81,
+        159,
+        197,
+        127,
+        199,
+        6,
+        24
+      ]
+    },
+    {
+      "name": "AdminActionCancelled",
+      "discriminator": [
+        111,
+        10,
+        164,
+        149,
+        101,
+        77,
+        101,
+        139
+      ]
+    },
+    {
+      "name": "AdminActionQueued",
+      "discriminator": [
+        184,
+        105,
+        157,
+        199,
+        4,
+        69,
+        28,
+        130
+      ]
+    },
+    {
       "name": "AdminProposed",
       "discriminator": [
         129,
@@ -3677,6 +4883,32 @@
         82,
         110,
         243
+      ]
+    },
+    {
+      "name": "ApprovalRevoked",
+      "discriminator": [
+        0,
+        143,
+        189,
+        167,
+        179,
+        12,
+        235,
+        123
+      ]
+    },
+    {
+      "name": "Approved",
+      "discriminator": [
+        17,
+        224,
+        150,
+        137,
+        174,
+        104,
+        7,
+        91
       ]
     },
     {
@@ -3862,6 +5094,19 @@
       ]
     },
     {
+      "name": "SubmissionSettled",
+      "discriminator": [
+        246,
+        159,
+        161,
+        176,
+        82,
+        109,
+        203,
+        29
+      ]
+    },
+    {
       "name": "TemplateEconomySet",
       "discriminator": [
         131,
@@ -3898,6 +5143,19 @@
         27,
         23,
         35
+      ]
+    },
+    {
+      "name": "TemplateSubmitted",
+      "discriminator": [
+        201,
+        79,
+        142,
+        211,
+        123,
+        32,
+        44,
+        47
       ]
     },
     {
@@ -4192,9 +5450,268 @@
       "code": 6052,
       "name": "NotItemHolder",
       "msg": "the signer does not hold this item"
+    },
+    {
+      "code": 6053,
+      "name": "AccessDenied",
+      "msg": "this token may not equip the item under its access mode"
+    },
+    {
+      "code": 6054,
+      "name": "ExclusiveInUse",
+      "msg": "the item is exclusive and already equipped on another token"
+    },
+    {
+      "code": 6055,
+      "name": "AccessNotAllowed",
+      "msg": "the template does not allow this access mode"
+    },
+    {
+      "code": 6056,
+      "name": "BadLicenceTerms",
+      "msg": "licence terms out of bounds, or given for a mode that takes none"
+    },
+    {
+      "code": 6057,
+      "name": "WrongAccessMode",
+      "msg": "the item's access mode does not take this instruction"
+    },
+    {
+      "code": 6058,
+      "name": "AccessStillValid",
+      "msg": "the item's access to this token is still valid"
+    },
+    {
+      "code": 6059,
+      "name": "DirectiveForbids",
+      "msg": "the agent's live directive forbids this"
+    },
+    {
+      "code": 6060,
+      "name": "LevelTooLow",
+      "msg": "the wallet's level is too low for this"
+    },
+    {
+      "code": 6061,
+      "name": "NotQueued",
+      "msg": "this admin action was not queued, or the queue entry is for another action"
+    },
+    {
+      "code": 6062,
+      "name": "ApprovalNotLive",
+      "msg": "the approval is not live"
+    },
+    {
+      "code": 6063,
+      "name": "SubmissionClosed",
+      "msg": "the submission is closed or does not match"
+    },
+    {
+      "code": 6064,
+      "name": "ModulesMismatch",
+      "msg": "composites forge only with the same module sequence"
     }
   ],
   "types": [
+    {
+      "name": "AccessEnforced",
+      "docs": [
+        "Protocol pass 4a: `enforce_access` removed an item whose access lapsed."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "to_item",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "by",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AccessParams",
+      "docs": [
+        "Protocol pass 4a: the access and lab numbers (00 section 6 names; every value to set)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "licence_tier_1_lamports",
+            "docs": [
+              "`LICENCE_TIER_1_LAMPORTS`: a licence priced above this needs `Builder >= licence_tier_1_level`."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "licence_tier_1_level",
+            "docs": [
+              "`LICENCE_TIER_1_LEVEL`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "lab_bond_lamports",
+            "docs": [
+              "`LAB_BOND_LAMPORTS`: the bond of a template submission."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "lab_bond_discount_level",
+            "docs": [
+              "`LAB_BOND_DISCOUNT_LEVEL`: the Builder level that earns the bond discount (0 = none)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "lab_bond_discount_bps",
+            "docs": [
+              "The discount, in basis points of the bond."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "licence_min_secs",
+            "docs": [
+              "`LICENCE_MIN_SECS` and `LICENCE_MAX_SECS`: bounds of a licence term."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "licence_max_secs",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AccessParamsSet",
+      "docs": [
+        "Protocol pass 4a (E-8, 11 section 3.3): the access and lab numbers set."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "AccessParams"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "AccessPolicy",
+      "docs": [
+        "Protocol pass 4a: `AccessPolicy` at `[\"access\", item]` (11 section 1.2)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "mode",
+            "type": "u8"
+          },
+          {
+            "name": "exclusive",
+            "type": "bool"
+          },
+          {
+            "name": "licence_terms",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "LicenceTerms"
+                }
+              }
+            }
+          },
+          {
+            "name": "holder_at_set",
+            "type": "pubkey"
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AccessSet",
+      "docs": [
+        "Protocol pass 4a (11 section 1.3): an item's access mode set."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "holder",
+            "type": "pubkey"
+          },
+          {
+            "name": "mode",
+            "type": "u8"
+          },
+          {
+            "name": "exclusive",
+            "type": "bool"
+          },
+          {
+            "name": "licence_terms",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "LicenceTerms"
+                }
+              }
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
     {
       "name": "AdminAccepted",
       "type": {
@@ -4212,6 +5729,74 @@
       }
     },
     {
+      "name": "AdminActionApplied",
+      "docs": [
+        "Protocol pass 4a: a queued admin action applied."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "action_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AdminActionCancelled",
+      "docs": [
+        "Protocol pass 4a: a queued admin action cancelled before it applied."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "action_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "AdminActionQueued",
+      "docs": [
+        "Protocol pass 4a (review 1 L-1): an admin action queued behind the timelock."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "action_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "ready_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "AdminProposed",
       "type": {
         "kind": "struct",
@@ -4222,6 +5807,98 @@
           },
           {
             "name": "ready_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Approval",
+      "docs": [
+        "Protocol pass 4a: `Approval` at `[\"approval\", item, token_mint]` (11 section 1.2)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "approved_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "approved_at",
+            "type": "i64"
+          },
+          {
+            "name": "revoke_after",
+            "docs": [
+              "0 = live; otherwise removal is possible from this time."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ApprovalRevoked",
+      "docs": [
+        "Protocol pass 4a: an approval revoked; removal is possible from `revoke_after` (R39)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "revoke_after",
+            "type": "i64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Approved",
+      "docs": [
+        "Protocol pass 4a: a Gated item approved for a token."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "by",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
             "type": "i64"
           }
         ]
@@ -4298,11 +5975,23 @@
             "type": "u16"
           },
           {
+            "name": "access",
+            "docs": [
+              "Protocol pass 4a (E-1, E-8, 10 section 11.5): the access and lab numbers, set through the",
+              "admin queue with `set_access_params` (all 0 until set: licences then cannot be offered)."
+            ],
+            "type": {
+              "defined": {
+                "name": "AccessParams"
+              }
+            }
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                60
+                32
               ]
             }
           }
@@ -4636,7 +6325,9 @@
     {
       "name": "FuseTarget",
       "docs": [
-        "IDL-only stand-in for the (u8, u8) tuple: identical Borsh layout."
+        "One slot at launch (02 section 7.1; M2: one slot per call).",
+        "One fused component's targets: the slice `start..start + count` of the target list (the same",
+        "bytes as a `(u8, u8)` pair, named so the IDL can describe it)."
       ],
       "type": {
         "kind": "struct",
@@ -4734,11 +6425,24 @@
             "type": "bool"
           },
           {
+            "name": "access_mode",
+            "docs": [
+              "Protocol pass 4a (E-1, 11 section 1): the access mode future equips check (`Open` 0 for",
+              "every item made before) and the exclusive flag. Mirrors `AccessPolicy`, so an equip path",
+              "that sees `Open` needs no further account."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "exclusive",
+            "type": "bool"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                31
+                29
               ]
             }
           }
@@ -4859,9 +6563,6 @@
     },
     {
       "name": "LaunchEquip",
-      "docs": [
-        "One slot at launch (02 section 7.1; M2: one slot per call)."
-      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -4896,6 +6597,42 @@
                 }
               }
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "LicenceTerms",
+      "docs": [
+        "Protocol pass 4a (11 section 1.2): licence terms."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "price_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "term_secs",
+            "docs": [
+              "Within `[licence_min_secs, licence_max_secs]`."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "per",
+            "docs": [
+              "`PerToken` 0, `PerPeriod` 1."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "max_live",
+            "docs": [
+              "Tokens that may hold a live licence at once (1 with `exclusive`)."
+            ],
+            "type": "u16"
           }
         ]
       }
@@ -5707,6 +7444,39 @@
       }
     },
     {
+      "name": "QueuedAction",
+      "docs": [
+        "Protocol pass 4a (review 1 L-1): an admin action waiting out the timelock at",
+        "`[\"queued\", action_hash]`; the action's instruction closes it when it applies."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "action_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "ready_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "RegisterTemplateArgs",
       "docs": [
         "Arguments of `register_template` (02 section 3.1)."
@@ -5913,6 +7683,42 @@
       }
     },
     {
+      "name": "SubmissionSettled",
+      "docs": [
+        "Protocol pass 4a: a submission closed: approved (bond back), rejected (bond back) or",
+        "forfeited (bond to the admin)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "submission",
+            "type": "pubkey"
+          },
+          {
+            "name": "program",
+            "type": "pubkey"
+          },
+          {
+            "name": "approved",
+            "type": "bool"
+          },
+          {
+            "name": "forfeited",
+            "type": "bool"
+          },
+          {
+            "name": "bond",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "Template",
       "docs": [
         "`Template` at `[\"template\", id]` (02 section 2.3)."
@@ -6045,11 +7851,28 @@
             "type": "u32"
           },
           {
+            "name": "external",
+            "docs": [
+              "Protocol pass 4a (Hook Lab gaps 1 to 3): a template whose program is not the items program.",
+              "Its items' manifest is `ext_manifest`, the ceiling its registrant declared and the lab",
+              "checked; the token program and the launchpad call its program directly."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "ext_manifest",
+            "type": {
+              "defined": {
+                "name": "Manifest"
+              }
+            }
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                24
+                7
               ]
             }
           }
@@ -6160,6 +7983,110 @@
           {
             "name": "template_id",
             "type": "u16"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TemplateSubmission",
+      "docs": [
+        "Protocol pass 4a (10 section 11.5): `TemplateSubmission` at `[\"submission-tpl\", program]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "program",
+            "type": "pubkey"
+          },
+          {
+            "name": "code_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "uri_hash",
+            "docs": [
+              "sha256 of the submission document (manifest, schema, tests) the lab reads."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "submitter",
+            "type": "pubkey"
+          },
+          {
+            "name": "bond",
+            "docs": [
+              "Lamports held above rent."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "submitted_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TemplateSubmitted",
+      "docs": [
+        "Protocol pass 4a (10 section 11.5): a template submitted with its bond."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "submission",
+            "type": "pubkey"
+          },
+          {
+            "name": "program",
+            "type": "pubkey"
+          },
+          {
+            "name": "code_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "uri_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "submitter",
+            "type": "pubkey"
+          },
+          {
+            "name": "bond",
+            "type": "u64"
           },
           {
             "name": "ts",
