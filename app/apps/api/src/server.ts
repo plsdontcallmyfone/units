@@ -158,6 +158,11 @@ export function handler(deps: Deps) {
       if (p === '/v1/guilds') return json(res, 200, await cached('guilds', 15_000, () => xreads.guilds(deps.conn)));
       if ((m = /^\/v1\/guilds\/(\d+)$/.exec(p))) { const g = await xreads.guild(deps.conn, intParam(m[1], 'guild', 0, 4_294_967_295)); return json(res, 200, g); }
       if (p === '/v1/badges') return json(res, 200, await cached('badges', 15_000, () => xreads.badges(deps.conn, db)));
+      // App pass 5: item access, what waits on a timelock, Hook Lab submissions, coalitions and boss pools.
+      if ((m = /^\/v1\/access\/(\w{32,44})$/.exec(p))) return json(res, 200, await xreads.access(deps.conn, m[1]!));
+      if (p === '/v1/governance/queue') return json(res, 200, await cached('governance-queue', 10_000, () => xreads.governanceQueue(deps.conn)));
+      if (p === '/v1/templates/submissions') return json(res, 200, await cached('template-submissions', 15_000, () => xreads.templateSubmissions(deps.conn)));
+      if (p === '/v1/war/coalitions') return json(res, 200, await cached('coalitions', 10_000, () => xreads.coalitions(deps.conn)));
       // Changed by Hookwars (explorer v2): chain reads, the indexer optional.
       if (p === '/v1/launch/config') return json(res, 200, await launchPlan.launchConfig(deps.conn));
       if (p === '/v1/launch/buy-quote') return json(res, 200, await launchPlan.buyQuote(deps.conn, q));

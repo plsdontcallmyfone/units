@@ -178,3 +178,70 @@ export async function itemWear(conn: Connection, itemKey: string): Promise<unkno
   const info = await conn.getAccountInfo(hookwars.wearAddress(new PublicKey(itemKey)), 'confirmed');
   return info ? json(hookwars.wearCodec.decode(info.data)) : null;
 }
+
+// ---------------------------------------------------------------- app pass 5: access, governance, coalitions --
+
+const codec = <T>(program: string, name: string) => hookwars.idlAccountCodec<T>(program, name);
+
+/**
+ * An item's access (pass 4a E-1): the mode and exclusive flag the item carries, its `AccessPolicy`
+ * (licence terms when Licensed), every `Approval` naming it, and the market's licence offer when
+ * there is one. A missing account reads as null.
+ */
+export async function access(conn: Connection, itemMintKey: string): Promise<unknown> {
+  const itemMint = new PublicKey(itemMintKey);
+  const itemKey = hookwars.itemAddress(itemMint);
+  const [itemInfo, policyInfo, offerInfo] = await conn.getMultipleAccountsInfo([itemKey, hookwars.accessPolicyAddress(itemKey), hookwars.licenceOfferAddress(itemKey)], 'confirmed');
+  if (!itemInfo) return null;
+  const it = hookwars.itemCodec().decode(itemInfo.data) as { accessMode?: number; exclusive?: boolean; templateId: number; author: PublicKey };
+  // Approval: discriminator (8), then `item` at offset 8.
+  const approvals = await accountsOf(conn, hookwars.ARMORY_ID, codec<Record<string, unknown>>('armory', 'Approval'), [at(8, itemKey)]);
+  return json({
+    item: itemKey, itemMint, templateId: it.templateId, author: it.author,
+    mode: it.accessMode ?? 0, exclusive: it.exclusive ?? false,
+    policy: policyInfo ? codec<Record<string, unknown>>('armory', 'AccessPolicy').decode(policyInfo.data) : null,
+    approvals: approvals.map((r) => ({ address: r.address, ...r.data })),
+    licenceOffer: offerInfo ? hookwars.coderOf('market').decodeAccount<Record<string, unknown>>('LicenceOffer', offerInfo.data) : null,
+  });
+}
+
+/**
+ * What is waiting on a timelock (L-1, secfix3 M-8): the armory's queued admin actions and the
+ * order books' proposed market terms, each with its ready time. Nothing here is estimated.
+ */
+export async function governanceQueue(conn: Connection): Promise<unknown> {
+  const [cfgInfo, queued, terms, pendingBook] = await Promise.all([
+    conn.getAccountInfo(hookwars.armoryConfigAddress(), 'confirmed'),
+    accountsOf(conn, hookwars.ARMORY_ID, codec<Record<string, unknown>>('armory', 'QueuedAction')),
+    accountsOf(conn, hookwars.BOOK_ID, codec<Record<string, unknown>>('book', 'PendingMarketTerms')),
+    accountsOf(conn, hookwars.BOOK_ID, codec<Record<string, unknown>>('book', 'PendingBook')),
+  ]);
+  const cfg = cfgInfo ? hookwars.armoryConfigCodec.decode(cfgInfo.data) as { admin: PublicKey } : null;
+  return json({
+    armoryAdmin: cfg?.admin ?? null,
+    queued: queued.map((r) => ({ address: r.address, ...r.data })),
+    marketTerms: terms.filter((r) => r.data.active).map((r) => ({ address: r.address, ...r.data })),
+    bookParams: pendingBook.filter((r) => r.data.active).map((r) => ({ address: r.address, ...r.data })),
+  });
+}
+
+/** Hook Lab submissions on chain (E-8): every `TemplateSubmission` with its bond. */
+export async function templateSubmissions(conn: Connection): Promise<unknown> {
+  const rows = await accountsOf(conn, hookwars.ARMORY_ID, codec<Record<string, unknown>>('armory', 'TemplateSubmission'));
+  return json(rows.map((r) => ({ address: r.address, ...r.data })));
+}
+
+/** Coalitions and boss pools (pass 4b, secfix3 M-6, L-3): chain state only. */
+export async function coalitions(conn: Connection): Promise<unknown> {
+  const [cs, bosses] = await Promise.all([
+    accountsOf(conn, hookwars.WAR_ID, codec<Record<string, unknown>>('war', 'Coalition')),
+    accountsOf(conn, hookwars.WAR_ID, codec<Record<string, unknown>>('war', 'BossPool')),
+  ]);
+  return json({
+    coalitions: cs.map((r) => {
+      const n = Number(r.data.count ?? 0);
+      return { address: r.address, ...r.data, members: (r.data.members as unknown[]).slice(0, n), contributed: (r.data.contributed as unknown[]).slice(0, n), lastContributionAt: (r.data.lastContributionAt as unknown[]).slice(0, n) };
+    }),
+    bossPools: bosses.map((r) => ({ address: r.address, ...r.data })),
+  });
+}
