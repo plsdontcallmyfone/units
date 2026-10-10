@@ -65,9 +65,13 @@ fn the_boss_pool_takes_its_share_and_pays_source_chests_by_volume() {
     let a = ww.war_token("SRCA", OrdersSpec::default());
     let b = ww.war_token("SRCB", OrdersSpec::default());
     let c = ww.war_token("NONE", OrdersSpec::default());
+    // Pass 5 (review 3 M-7): a source whose chest received nothing this season.
+    let u = ww.war_token("UNFD", OrdersSpec::default());
     let boss = Pubkey::new_unique();
     let admin = ww.w.env.deployer.insecure_clone();
     let s = ww.open_season(by_raid_volume());
+    ww.fund_chest(&a.mint, SOL);
+    ww.fund_chest(&b.mint, SOL);
     // Only the admin names the boss.
     let stranger = ww.w.env.funded(SOL);
     ww.w.env
@@ -93,17 +97,17 @@ fn the_boss_pool_takes_its_share_and_pays_source_chests_by_volume() {
     assert_eq!(pool.funded, funded.amount);
     println!("split with boss: cu {}", tx.cu());
 
-    // The boss ledger: A raided 100, B 150 + 50 over two windows; season 0 (the Boss item names
-    // no war config).
+    // The boss ledger: A raided 100, B 150 + 50 over two windows, the unfunded U 300; season 0
+    // (the Boss item names no war config).
     let now = ww.now();
-    ww.put_ledger(&boss, 0, 300, &[(a.mint, now, 100, 0), (b.mint, now, 150, 50)]);
+    ww.put_ledger(&boss, 0, 600, &[(a.mint, now, 100, 0), (b.mint, now, 150, 50), (u.mint, now, 300, 0)]);
     ww.w.env
         .send(&[war::seal_boss_pool(s.number, boss)], &[])
         .expect_code(war_code(WarError::SeasonNotEnded));
     ww.w.env.warp(s.ends_at - ww.now() + 1);
     let tx = ww.w.env.send(&[war::seal_boss_pool(s.number, boss)], &[]);
     let sealed = tx.event::<BossPoolSealed>();
-    assert_eq!((sealed.total_volume, sealed.sources, sealed.to_share), (300, 2, funded.amount));
+    assert_eq!((sealed.total_volume, sealed.sources, sealed.to_share), (600, 3, funded.amount));
     ww.w.env
         .send(&[war::seal_boss_pool(s.number, boss)], &[])
         .expect_code(war_code(WarError::BossPoolState));
@@ -117,7 +121,7 @@ fn the_boss_pool_takes_its_share_and_pays_source_chests_by_volume() {
     let funded_before = ww.state(&a.mint).funded_total;
     let tx = ww.w.env.send(&[war::claim_boss_share(s.number, a.mint, &[wrap(&WarWorld::chest(&a.mint))])], &[]);
     let claim = tx.event::<BossShareClaimed>();
-    assert_eq!(claim.amount, funded.amount * 100 / 300);
+    assert_eq!(claim.amount, funded.amount * 100 / 600);
     assert_eq!(ww.chest_balance(&a.mint), before + claim.amount);
     let st = ww.state(&a.mint);
     assert_eq!(st.received_other, claim.amount);
@@ -135,10 +139,14 @@ fn the_boss_pool_takes_its_share_and_pays_source_chests_by_volume() {
         .send(&[war::claim_boss_share(s.number, c.mint, &[wrap(&WarWorld::chest(&c.mint))])], &[])
         .expect_code(war_code(WarError::NoBossShare));
     let tx = ww.w.env.send(&[war::claim_boss_share(s.number, b.mint, &[wrap(&WarWorld::chest(&b.mint))])], &[]);
-    assert_eq!(tx.event::<BossShareClaimed>().amount, funded.amount * 200 / 300);
+    assert_eq!(tx.event::<BossShareClaimed>().amount, funded.amount * 200 / 600);
     ww.assert_solvent(&b.mint);
+    // Pass 5 (M-7): U's volume counts for nothing without season funding; its third stays in the pool.
+    let tx = ww.w.env.send(&[war::claim_boss_share(s.number, u.mint, &[wrap(&WarWorld::chest(&u.mint))])], &[]);
+    let uc = tx.event::<BossShareClaimed>();
+    assert_eq!((uc.volume, uc.amount), (0, 0));
     let pool: BossPool = ww.w.env.read(&BossPool::address(s.number).0);
-    assert!(pool.paid <= pool.funded && pool.funded - pool.paid <= 1);
+    assert!(pool.paid <= pool.funded && pool.funded - pool.paid >= funded.amount * 300 / 600);
 }
 
 // ---- coalitions -------------------------------------------------------------------------------------
