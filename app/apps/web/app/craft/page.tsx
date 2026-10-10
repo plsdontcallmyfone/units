@@ -41,10 +41,10 @@ export default async function CraftPage() {
       ) : (
         <>
           <div className="grid cols-main">
-            <Panel title="Recipes that make items" meta={`${recipes(0).length} recipes`} flush>
+            <Panel title="Recipes that make items" meta={`${recipes(0).length} ${recipes(0).length === 1 ? "recipe" : "recipes"}`} flush>
               {recipes(0).length === 0 ? <Empty title="No crafting recipes yet" what="The admin adds recipes behind the timelock." /> : table(0)}
             </Panel>
-            <Panel title="Materials" meta={`${d!.materials.length} materials`} flush>
+            <Panel title="Materials" meta={`${d!.materials.length} ${d!.materials.length === 1 ? "material" : "materials"}`} flush>
               {d!.materials.length === 0 ? <Empty title="No materials yet" what="Materials are created by the admin, each with its season cap." /> : (
                 <table><thead><tr><th>Material</th><th className="r">This season</th><th className="r">Burned</th></tr></thead>
                   <tbody>{d!.materials.map((m) => (
@@ -55,7 +55,7 @@ export default async function CraftPage() {
           </div>
           <div style={{ height: 16 }} />
           <div className="grid cols-main">
-            <Panel title="Repair recipes" meta={`${recipes(1).length} recipes`} flush>
+            <Panel title="Repair recipes" meta={`${recipes(1).length} ${recipes(1).length === 1 ? "recipe" : "recipes"}`} flush>
               {recipes(1).length === 0 ? <Empty title="No repair recipes yet" what="Without one, a worn item stays dormant." /> : table(1)}
             </Panel>
             <Panel title="Presets" meta="composites in a fixed module order" flush>

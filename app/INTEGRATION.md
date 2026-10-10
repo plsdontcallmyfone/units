@@ -270,7 +270,8 @@ and fuse on the item page, the companion option on the launch form.
 ### Explorer fixtures
 `programs/tests/tests/explorer_fixtures_2.rs` (new) records `war_siege`, `market_list`, `market_buy`,
 `craft_item`, `book_place_ask`, `book_fill`, `memo_directive`; the JSON is in
-`packages/sdk/src/hookwars/fixtures/explorer/` and `explore.fixtures.test.ts` checks them.
+`packages/sdk/src/hookwars/fixtures/explorer2/` and `explore.fixtures2.test.ts` checks them (every
+instruction decoded, the events in order).
 
 ### Requests and gaps
 - hookwars_armory: take `fuse(targets: Vec<FuseTarget>)` with `struct FuseTarget { start: u8, count: u8 }`
@@ -281,5 +282,7 @@ and fuse on the item page, the companion option on the launch form.
   a pool item needs `refresh_pool_registry` after it.
 - War drops and counters (13 E-4, E-6 war parts) are deferred in the programs; the war cranks pass no
   craft or social suffix.
+- Screenshots: `app/screenshots/appv3/` (`demo_*` with MOCK_DATA=1, `api_*` against the API with no
+  craft or book config on the cluster), checked by `shots.mjs` there: 12 of 12 pass.
 - Not simulated against deployed programs: nothing is on devnet yet. Every prepare is tested for its
   IDL account list and suffix order on a mocked chain.
