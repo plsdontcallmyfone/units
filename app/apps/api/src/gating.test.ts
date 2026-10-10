@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { PublicKey, type AccountInfo } from '@solana/web3.js';
 import { hookwars } from '@hookwars/sdk';
 import { PREPARES } from './prepares.ts';
-import { gateOf, templateSupply, transferHookProgram } from './gating.ts';
+import { gateOf, templateSupply, transferHookProgram } from './gating-reads.ts';
 
 const K = (n: number) => new PublicKey(Buffer.alloc(32, n));
 const S = (k: PublicKey) => k.toBase58();

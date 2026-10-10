@@ -12,7 +12,7 @@ import { hookwars } from '@hookwars/sdk';
 import { findBannedWords, PARAMS, type PrizeVaultInfo, type SeasonInfo } from '@hookwars/shared';
 import * as reads from './reads.ts';
 import * as xreads from './reads-expansion.ts';
-import * as gating from './gating.ts';
+import * as gating from './gating-reads.ts';
 import { prepare, PrepareError } from './prepares.ts';
 import { submit } from './submit.ts';
 import { socialRoute } from './social.ts';
