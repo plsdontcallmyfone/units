@@ -1,15 +1,10 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { Nav, NavSheet } from '@/components/nav';
 import { read } from '@/lib/api';
 import type { HookwarsStatus } from '@hookwars/shared';
 import { MOCK } from '@/lib/mock';
-
-const sans = Geist({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
-// Monospace is for code blocks only (owner rule: no monospace in UI text).
-const mono = Geist_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' });
 
 export const metadata: Metadata = {
   title: 'units',
@@ -34,7 +29,7 @@ async function ClusterBadge() {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
+    <html lang="en">
       <body>
         <header className="nav">
           <div className="wrap nav-row">

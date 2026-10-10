@@ -7,8 +7,8 @@ import type { Candle } from '@/lib/mock';
  * at the bottom. Chest: an area. Raids: a histogram. Figures come from the market read as they are. */
 type Tab = 'price' | 'chest' | 'raids';
 const TABS: [Tab, string][] = [['price', 'Price'], ['chest', 'Chest'], ['raids', 'Raids']];
-const INK = '#ece9df', INK2 = '#bdb9ac', MUTED = '#7b786f', GOOD = '#c9f5a3', BAD = '#ff6b6b', BG = '#050505';
-const GRID = 'rgba(236,233,223,0.07)', BORDER = 'rgba(236,233,223,0.14)';
+const INK = '#1a1a19', INK2 = '#55554f', MUTED = '#6c6962', GOOD = '#79a636', BAD = '#d0463b', BG = '#f8f8f8';
+const GRID = 'rgba(26,26,25,0.07)', BORDER = 'rgba(26,26,25,0.14)';
 const hhmm = (t: number) => { const d = new Date(t * 1000); return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`; };
 
 export function TokenChart({ series, symbol }: { series: Candle[]; symbol: string }) {
@@ -25,7 +25,7 @@ export function TokenChart({ series, symbol }: { series: Candle[]; symbol: strin
     if (!el) return;
     const c = createChart(el, {
       autoSize: true,
-      layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: INK2, fontFamily: '"Geist", ui-sans-serif, system-ui, sans-serif', fontSize: 11, attributionLogo: false },
+      layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: INK2, fontFamily: '"Suisse Intl", system-ui, sans-serif', fontSize: 11, attributionLogo: false },
       grid: { vertLines: { color: GRID, style: LineStyle.Solid }, horzLines: { color: GRID, style: LineStyle.Solid } },
       rightPriceScale: { borderColor: BORDER, scaleMargins: { top: 0.06, bottom: tab === 'price' ? 0.24 : tab === 'raids' ? 0 : 0.06 }, entireTextOnly: true },
       timeScale: { borderColor: BORDER, timeVisible: true, secondsVisible: false, fixLeftEdge: true, fixRightEdge: true, rightOffset: 2, barSpacing: 8, tickMarkFormatter: (t: number) => hhmm(t) },
@@ -40,9 +40,9 @@ export function TokenChart({ series, symbol }: { series: Candle[]; symbol: strin
         .setData(series.map((p) => ({ time: time(p), open: p.open, high: p.high, low: p.low, close: p.close })));
       const vol = c.addSeries(HistogramSeries, { priceScaleId: 'volume', priceFormat: { type: 'volume' }, priceLineVisible: false, lastValueVisible: false });
       vol.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
-      vol.setData(series.map((p) => ({ time: time(p), value: p.volume, color: p.close >= p.open ? 'rgba(201,245,163,0.35)' : 'rgba(255,107,107,0.35)' })));
+      vol.setData(series.map((p) => ({ time: time(p), value: p.volume, color: p.close >= p.open ? 'rgba(121,166,54,0.45)' : 'rgba(208,70,59,0.45)' })));
     } else if (tab === 'chest') {
-      c.addSeries(AreaSeries, { lineColor: INK, lineWidth: 2, topColor: 'rgba(236,233,223,0.14)', bottomColor: 'rgba(236,233,223,0)', priceLineColor: MUTED, priceLineStyle: LineStyle.Dotted, crosshairMarkerRadius: 4, crosshairMarkerBackgroundColor: BG, crosshairMarkerBorderColor: INK, crosshairMarkerBorderWidth: 2, priceFormat: { type: 'custom', formatter: (v: number) => `${v.toFixed(2)} SOL` } })
+      c.addSeries(AreaSeries, { lineColor: INK, lineWidth: 2, topColor: 'rgba(26,26,25,0.10)', bottomColor: 'rgba(26,26,25,0)', priceLineColor: MUTED, priceLineStyle: LineStyle.Dotted, crosshairMarkerRadius: 4, crosshairMarkerBackgroundColor: BG, crosshairMarkerBorderColor: INK, crosshairMarkerBorderWidth: 2, priceFormat: { type: 'custom', formatter: (v: number) => `${v.toFixed(2)} SOL` } })
         .setData(series.map((p) => ({ time: time(p), value: p.chest })));
     } else {
       c.addSeries(HistogramSeries, { color: GOOD, priceLineVisible: false, lastValueVisible: false, priceFormat: { type: 'custom', formatter: (v: number) => `${v.toFixed(2)} SOL` } })
