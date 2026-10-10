@@ -1,0 +1,105 @@
+/* Changed by Hookwars: new file (economy panel). Scoped to .econ; uses the site's tokens only. */
+.econ { display: grid; gap: var(--s7); }
+.econ .page-head { margin-bottom: 0; }
+
+.econ-periods { display: inline-flex; gap: 2px; padding: 3px; background: var(--bg-2); border-radius: var(--r-pill); corner-shape: var(--corner); align-self: flex-end; }
+.econ-periods a { height: 30px; display: inline-flex; align-items: center; padding: 0 12px; border-radius: 13px; corner-shape: var(--corner); font: 500 12.5px/1 var(--display); color: var(--ink-2); white-space: nowrap; transition: background var(--fast) var(--ease), color var(--fast) var(--ease); }
+.econ-periods a:hover { background: var(--bg-3); color: var(--ink); }
+.econ-periods a.on { background: var(--ink); color: var(--bg); }
+
+/* The headline strip: one divided surface, not floating tiles */
+.econ-strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); background: var(--bg-2); border-radius: var(--r-card); corner-shape: var(--corner); box-shadow: inset 0 0 16px 0 var(--bg); }
+.econ-strip > div { padding: var(--s4) var(--s5); min-width: 0; border-left: 1px solid var(--line-2); }
+.econ-strip > div:first-child { border-left: 0; }
+.econ-strip .econ-fig-v { font-size: 30px; }
+
+.econ-fig { min-width: 0; }
+.econ-fig .label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.econ-fig-v { margin-top: var(--s2); font: 500 24px/1.05 var(--display); letter-spacing: -0.035em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.econ-fig-s { margin-top: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.econ-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0; margin-bottom: var(--s4); border-top: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); }
+.econ-figs > .econ-fig { padding: var(--s4) var(--s4) var(--s4) 0; }
+.econ-figs > .econ-fig + .econ-fig { padding-left: var(--s4); border-left: 1px solid var(--line); }
+
+/* Sections */
+.econ-sec { scroll-margin-top: calc(var(--nav-h) + var(--s4)); }
+.econ-sec-head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--s4); margin-bottom: var(--s4); }
+.econ-sec-head h2 { font: 500 clamp(22px, 2.2vw, 30px)/1.1 var(--display); letter-spacing: -0.03em; }
+.econ-sec-head p { margin: var(--s2) 0 0; color: var(--muted); font-size: 14px; max-width: 72ch; }
+.econ-guide { color: var(--ink); white-space: nowrap; text-decoration: underline; text-decoration-color: var(--line-3); text-underline-offset: 0.2em; }
+.econ-guide:hover { text-decoration-color: var(--ink); }
+.econ-three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s4); align-items: start; }
+.econ-pad { padding-top: var(--s4); }
+.econ-gap { margin-bottom: var(--s4); }
+
+/* Tables */
+.econ-table td { font-size: 13.5px; }
+.econ-table td.num, .econ-table th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.econ-table tr.dim td { color: var(--faint); }
+.econ-table tr.dim .faint { color: var(--faint); }
+.econ-table td .faint { margin-top: 2px; font-size: 12px; line-height: 1.35; }
+.econ-table td.ind { padding-left: var(--s6); color: var(--ink-2); }
+.econ-table a { color: var(--ink); }
+.econ-table a:hover { text-decoration: underline; text-underline-offset: 0.2em; }
+.sw, .econ-legend i, .econ-legend-row i, .econ-tip-row i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 8px; vertical-align: -1px; flex: none; }
+.econ-foot { display: grid; gap: 4px; padding: var(--s3) var(--s3) var(--s2); font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
+.econ-foot a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 0.2em; }
+.econ-note { margin: var(--s4) 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+
+/* Column chart: bars in a stretched SVG, axis text in HTML so it never scales */
+.econ-chart { margin: 0; }
+.econ-chart-plot { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--s3); row-gap: 6px; }
+.econ-chart-y { display: flex; flex-direction: column; justify-content: space-between; height: 220px; font-size: 11px; color: var(--muted); text-align: right; margin: -6px 0; }
+.econ-chart-area { position: relative; height: 220px; background: var(--bg); border-radius: 12px; corner-shape: var(--corner); padding: 8px 6px 0; }
+.econ-chart-area svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.econ-chart-area line.grid { stroke: var(--line-2); stroke-width: 1; }
+.econ-chart-area line.base { stroke: var(--line-3); stroke-width: 1; }
+.econ-chart-area rect[tabindex]:focus { outline: none; }
+.econ-chart-area rect[tabindex]:focus-visible { stroke: var(--ink); stroke-width: 1; }
+.econ-chart-x { grid-column: 2; position: relative; height: 18px; margin: 0 6px; font-size: 11px; color: var(--muted); }
+.econ-chart-x span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.econ-tip { position: absolute; top: 8px; z-index: 3; min-width: 190px; padding: 10px 12px; background: var(--ink); color: var(--bg); border-radius: 12px; corner-shape: var(--corner); box-shadow: 0 12px 28px rgba(26, 26, 25, 0.18); pointer-events: none; font-size: 12px; }
+.econ-tip-t { font: 500 12px/1.2 var(--display); margin-bottom: 6px; color: var(--bg-4); }
+.econ-tip-row { display: flex; align-items: center; gap: 0; line-height: 1.7; }
+.econ-tip-row span { flex: 1; padding-right: 12px; }
+.econ-tip-row b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.econ-tip-row.total { border-top: 1px solid rgba(248, 248, 248, 0.18); margin-top: 4px; padding-top: 4px; }
+.econ-legend-row { display: flex; flex-wrap: wrap; gap: var(--s4); margin-top: var(--s3); font-size: 12px; color: var(--ink-2); }
+
+/* Split bar */
+.econ-split { margin: 0; }
+.econ-split-bar { display: flex; gap: 2px; height: 18px; border-radius: 6px; overflow: hidden; background: var(--bg); }
+.econ-split-bar span { min-width: 3px; }
+.econ-split-bar span.none { flex: 1; background: var(--bg-3); }
+.econ-legend { margin-top: var(--s3); }
+.econ-legend td { padding: 8px 0; font-size: 13.5px; }
+.econ-legend td + td { padding-left: var(--s3); }
+.econ-legend td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.econ-legend .faint { margin: 2px 0 0 18px; font-size: 12px; }
+
+/* Material meter */
+.econ-meter { height: 6px; min-width: 90px; border-radius: 3px; background: var(--bg-4); overflow: hidden; margin-top: 6px; }
+.econ-meter span { display: block; height: 100%; background: var(--ink-2); border-radius: 3px; }
+
+@media (max-width: 1100px) {
+  .econ-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .econ-strip > div:nth-child(4) { border-left: 0; }
+  .econ-strip > div:nth-child(n + 4) { border-top: 1px solid var(--line-2); }
+  .econ-three { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 720px) {
+  .econ { gap: var(--s6); }
+  .econ-strip { grid-template-columns: 1fr 1fr; }
+  .econ-strip > div { border-left: 0; border-top: 1px solid var(--line-2); padding: var(--s3) var(--s4); }
+  .econ-strip > div:nth-child(-n + 2) { border-top: 0; }
+  .econ-strip > div:nth-child(even) { border-left: 1px solid var(--line-2); }
+  .econ-strip .econ-fig-v { font-size: 22px; }
+  .econ-three { grid-template-columns: 1fr; }
+  .econ-sec-head { flex-direction: column; align-items: flex-start; }
+  .econ-periods { width: 100%; overflow-x: auto; }
+  .econ-figs > .econ-fig + .econ-fig { border-left: 0; padding-left: 0; }
+  .econ-figs { grid-template-columns: 1fr 1fr; }
+  .econ-figs > .econ-fig:nth-child(even) { padding-left: var(--s3); border-left: 1px solid var(--line); }
+  .econ-chart-y, .econ-chart-area { height: 180px; }
+}

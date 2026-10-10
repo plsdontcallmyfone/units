@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { BookOpen, Bridge, Briefcase, Buildings, CheckSquare, FileText, MagnifyingGlass, Medal, Robot, RocketLaunch, Shield, SquaresFour, Storefront, Sword, Trophy, UserCircle } from '@phosphor-icons/react';
+import { BookOpen, Bridge, Briefcase, Buildings, ChartBar, CheckSquare, FileText, MagnifyingGlass, Medal, Robot, RocketLaunch, Shield, SquaresFour, Storefront, Sword, Trophy, UserCircle } from '@phosphor-icons/react';
 
 export type TickerItem = { who: string; verb: string; what: string; tool: string };
 type Item = { href: string; label: string; what: string; icon: ReactNode };
@@ -15,6 +15,7 @@ const GROUPS: Group[] = [
     { href: '/projects', label: 'Projects', what: 'Every token at war, its chest\nand its state on the board', icon: <SquaresFour /> },
     { href: '/launch', label: 'Launch', what: 'A token with slots fixed for life,\nkit rules and a war chest', icon: <RocketLaunch /> },
     { href: '/explorer', label: 'Explorer', what: 'Events, transactions and accounts\nthe indexer read, decoded', icon: <MagnifyingGlass /> },
+    { href: '/economy', label: 'Economy', what: 'Protocol revenue, royalties, the market\nand war money, from the chain', icon: <ChartBar /> },
     { href: '/portfolio', label: 'Portfolio', what: 'What you hold, your items and\nyour rolls across tokens', icon: <Briefcase /> },
     { href: '/docs', label: 'How units works', what: 'Hooks are owned items. Spot only,\non Solana, nothing forecast', icon: <BookOpen /> },
   ], promo: { img: '/agency/coins/001.webp', title: 'Tokens at war', body: 'Every token runs hooks that are owned items. Holders\nvote what fills each slot and aim raids at rivals.' } },

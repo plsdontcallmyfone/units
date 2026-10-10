@@ -3,6 +3,7 @@
  * cluster. Every figure here is made up for display and is labelled so in the nav. Never on in
  * production. */
 import explorerDemo from './explorer-demo.json';
+import { emptyEconomy, PERIODS, type Period } from './economy';
 import type { BattleEvent, General, ItemManifest, ItemSummary, Page, PrizeVaultInfo, ProposalInfo, SeasonInfo, SlotInfo, TreatyInfo, WarInfo, WarMap } from '@hookwars/shared';
 
 export const MOCK = process.env.MOCK_DATA === '1';
@@ -147,6 +148,8 @@ export function mock(path: string): unknown {
   if ((m = /^\/v1\/items\/(\w+)$/.exec(p!))) { const it = ITEMS.find((x) => x.item === m![1]); return it ? { ...it, history: FEED.filter((e) => e.actor === it.owner) } : undefined; }
   if (p === '/v1/seasons/current') return SEASON;
   // Changed by Hookwars (app pass v3): invented craft, book and wear rows for the demo.
+  // Changed by Hookwars (economy panel): empty answers, so the demo shows the panel's empty states.
+  if ((m = /^\/v1\/economy\/(\w+)$/.exec(p!))) return emptyEconomy(m[1]!, (PERIODS as readonly string[]).includes(q.get('period') ?? '') ? q.get('period') as Period : '7d');
   if (p === '/v1/craft') return CRAFT;
   if (p === '/v1/book') return BOOK;
   if ((m = /^\/v1\/items\/(\w+)\/wear$/.exec(p!))) return ITEMS.findIndex((x) => x.item === m![1]) === 0 ? { maxCharges: 40, used: 40, dormant: true, repairs: 1 } : null;
