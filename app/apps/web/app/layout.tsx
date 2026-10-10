@@ -50,7 +50,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </div>
           <NavSheet />
         </header>
-        <main className="wrap shell">{MOCK ? <p className="demo-banner" role="note">Demo data: tokens, items and events on this site are invented for display, not read from the chain.</p> : null}{children}</main>
+        <main className="wrap shell">{children}</main>
         <footer className="foot">
           <div className="wrap foot-grid">
             <div className="foot-brand">
