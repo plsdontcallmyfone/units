@@ -218,10 +218,10 @@ pub struct InitSupply<'info> {
     #[account(init, payer = admin, space = 8 + Supply::INIT_SPACE,
         seeds = [SUPPLY_SEED, &template_id.to_le_bytes()], bump)]
     pub supply: Box<Account<'info, Supply>>,
-    /// The queue entry (closed here).
+    pub system_program: Program<'info, System>,
+    /// The queue entry (closed here; last, as in the other gated instructions).
     #[account(mut, close = admin)]
     pub queued: Box<Account<'info, QueuedAction>>,
-    pub system_program: Program<'info, System>,
 }
 
 pub fn process_init_supply(

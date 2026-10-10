@@ -42,8 +42,8 @@ fn init_supply(hw: &mut Hw, template_id: u16, max_supply: u32, loot_reserve: u32
             config: pda::config().0,
             template: pda::template(template_id).0,
             supply: supply_address(template_id).0,
-            queued: Pubkey::default(),
             system_program: anchor_lang::system_program::ID,
+            queued: Pubkey::default(),
             event_authority: armory_events(),
             program: ids::ARMORY_ID,
         },
@@ -318,4 +318,62 @@ fn a_premium_templates_items_start_licensed_and_need_a_live_licence() {
         .expect_code(armory_code(E::AccessDenied));
     hw.equip_launch_with(&owner, &mint, Hw::entry(0, Some(item), EquipConfig::default()), Some(acc::license_address(&item, &mint)))
         .expect_code(armory_code(E::AccessDenied));
+}
+
+#[test]
+fn a_craft_drop_counts_against_the_whole_cap_and_reverts_when_spent() {
+    use bordrless_program_tests::economy::{recipe, Ew, TEST_CRAFT};
+    use hookwars_common::eco_cpi;
+    use hookwars_craft::state::{self as cs, recipe_kind};
+    const MAT: u16 = 1;
+    let mut ew = Ew::wired();
+    ew.create_material(MAT, 1_000_000);
+    ew.drop_rule(eco_cpi::drop_source::SETTLE_CRANK, MAT, 1, 1_000);
+    let c = ew.funded(10 * SOL);
+    ew.stub_drop(eco_cpi::drop_source::SETTLE_CRANK, MAT, 50_000, &c.pubkey()).ok();
+    let inputs = [(MAT, 10)];
+    let mut r = recipe(recipe_kind::CRAFT, &inputs, 1_000, FEE);
+    r.param_min = params(&[100, 500]);
+    r.param_max = params(&[300, 1_500]);
+    ew.create_recipe(1, r).ok();
+    ew.warp(i64::from(TEST_CRAFT.admin_timelock_secs));
+    // One copy, all of it kept for drops: authors may issue none, craft one.
+    init_supply(&mut ew.hw, FEE, 1, 1, minter_rule::AUTHOR_ONLY, c.pubkey()).ok();
+    create(&mut ew.hw, &c, FEE, fee_params(), true).0.expect_code(armory_code(E::SupplyExhausted));
+    let craft = |ew: &mut Ew, with: bool| {
+        let n = ew.hw.config().items_minted;
+        let item_mint = pda::item_mint(n).0;
+        let accounts = hookwars_armory::accounts::MintCrafted {
+            craft_signer: cs::signer_address().0,
+            payer: c.pubkey(),
+            owner: c.pubkey(),
+            config: pda::config().0,
+            template: pda::template(FEE).0,
+            minter: MINTER,
+            item_mint,
+            item: pda::item(&item_mint).0,
+            recipient_holding: token::holding_address(&item_mint, &c.pubkey()),
+            armory_signer: ARMORY_SIGNER,
+            items_program: ids::ITEMS_ID,
+            token: token_accounts(),
+            system_program: anchor_lang::system_program::ID,
+            event_authority: armory_events(),
+            program: ids::ARMORY_ID,
+        }
+        .to_account_metas(None);
+        let mut ix = ew.craft_item_ix(&c.pubkey(), 1, &inputs);
+        ix.accounts.extend(accounts.into_iter().skip(1));
+        if with {
+            ix.accounts.push(AccountMeta::new(supply_address(FEE).0, false));
+        }
+        let payer = c.insecure_clone();
+        ew.send(&payer, &[ix])
+    };
+    craft(&mut ew, false).expect_code(armory_code(E::SupplyMissing));
+    craft(&mut ew, true).ok();
+    // Spent: the craft reverts and the crafter keeps the materials.
+    let before = ew.holding(&cs::material_mint_address(MAT).0, &c.pubkey());
+    craft(&mut ew, true).expect_code(armory_code(E::SupplyExhausted));
+    assert_eq!(ew.holding(&cs::material_mint_address(MAT).0, &c.pubkey()), before);
+    assert_eq!(supply(&ew.hw, FEE).drops, 1);
 }
