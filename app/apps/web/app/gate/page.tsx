@@ -30,7 +30,7 @@ export default async function GatePage({ searchParams }: { searchParams: Promise
   return (
     <>
       <Head eyebrow="External tokens" title="Use units hooks on your token"
-        lede={<>Any Token-2022 token, from any protocol, can run units items as its transfer hook. Set the gate (<code>{GATE_ID}</code>) as your mint&apos;s transfer hook program, register here, then bind items you licensed or own. A binding stays live only while its licence does.</>} />
+        lede={<>Any Token-2022 token, from any protocol, can run units items as its transfer hook. Set the gate (<code style={{ overflowWrap: 'anywhere' }}>{GATE_ID}</code>) as your mint&apos;s transfer hook program, register here, then bind items you licensed or own. A binding stays live only while its licence does.</>} />
       <Panel title="Look up a mint">
         <form className="action-fields" action="/gate" method="get">
           <label className="field">Token-2022 mint<input name="mint" defaultValue={valid ?? ''} placeholder="address" /></label>
@@ -70,7 +70,7 @@ function Status({ g }: { g: GateRead }) {
     return (
       <Panel title="Status">
         <Empty title="Its transfer hook is not the gate"
-          what={g.hookProgram ? <>This mint&apos;s transfer hook program is <code>{g.hookProgram}</code>. Its transfer-hook authority can point it at the gate.</> : 'This mint has no transfer hook program set. Its transfer-hook authority can set it to the gate.'} />
+          what={g.hookProgram ? <>This mint&apos;s transfer hook program is <code style={{ overflowWrap: 'anywhere' }}>{g.hookProgram}</code>. Its transfer-hook authority can point it at the gate.</> : 'This mint has no transfer hook program set. Its transfer-hook authority can set it to the gate.'} />
       </Panel>
     );
   }

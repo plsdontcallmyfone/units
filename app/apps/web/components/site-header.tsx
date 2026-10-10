@@ -31,6 +31,7 @@ const GROUPS: Group[] = [
     { href: '/commissions', label: 'Commissions', what: 'Bounties for a new hook\nin one slot', icon: <FileText /> },
     { href: '/craft', label: 'Craft', what: 'Materials, recipes, repairs\nand presets', icon: <Shield /> },
     { href: '/book', label: 'Order book', what: 'Material orders and bids for\nclasses of items', icon: <Storefront /> },
+    { href: '/gate', label: 'External tokens', what: 'Run units hooks on any\nToken-2022 token, licensed', icon: <Shield /> },
     { href: '/bridge', label: 'Bridge', what: 'Bridged SOL in and out', icon: <Bridge /> },
   ], promo: { img: '/agency/coins/004.webp', title: 'Hooks are items', body: 'Each item is a registered template with its own\nparameters. Its owner earns every time it runs.' } },
   { label: 'Community', w: 98, items: [

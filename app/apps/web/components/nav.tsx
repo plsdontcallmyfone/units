@@ -46,7 +46,6 @@ export const GROUPS: Group[] = [
       { href: '/craft', label: 'Craft', what: 'Materials, recipes, repairs and presets.', icon: I.armory },
       { href: '/book', label: 'Order book', what: 'Material orders and bids for classes of items.', icon: I.market },
       { href: '/governance', label: 'Governance', what: 'Admin changes waiting out their timelock.', icon: I.docs },
-      { href: '/gate', label: 'External tokens', what: 'Run units hooks on any Token-2022 token, licensed.', icon: I.armory },
     ] },
     { title: 'Funds', items: [{ href: '/bridge', label: 'Bridge', what: 'Bridged SOL in and out.', icon: I.bridge }] },
   ] },
