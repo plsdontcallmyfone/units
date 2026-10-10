@@ -182,7 +182,15 @@ export const PREPARES: Record<string, PrepareDef> = {
   },
   'proposals/finalize/prepare': {
     programs: ['armory'], label: 'Count the vote', payer: (b) => pk(b, 'owner'),
-    build: async (b) => [hookwars.finalize(pk(b, 'mint'), int(b, 'slot', 0, 255), big(b, 'nonce'))],
+    // The launch address is always passed (security review 1, M-1) with the pool's and the launch's
+    // holdings of the token, which the count leaves out of the eligible supply; without them the
+    // armory refuses with WrongAccount (found on the devnet drill).
+    build: async (b) => {
+      const mint = pk(b, 'mint');
+      const launch = hookwars.launchAddr(mint);
+      const pool = launchPoolAddress(mint, QUOTE, LP_FEE_BPS);
+      return [hookwars.finalize(mint, int(b, 'slot', 0, 255), big(b, 'nonce'), { launch, poolBaseVault: holding(mint, pool), launchHolding: holding(mint, launch) })];
+    },
   },
   'proposals/cancel/prepare': {
     programs: ['armory'], label: 'Cancel the proposal', payer: (b) => pk(b, 'owner'),
