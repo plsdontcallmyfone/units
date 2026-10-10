@@ -8,7 +8,7 @@ import { findBannedWords } from '@hookwars/shared';
 import { allDdl } from '@hookwars/indexer/schema.ts';
 import { writeTransaction } from '@hookwars/indexer/indexer.ts';
 import { decodeMemo, memosOf, MEMO_PROGRAM, type TxView } from '@hookwars/indexer/memos.ts';
-import { passportLookup, writeMemos } from '@hookwars/indexer/social.ts';
+import { applySocialState, passportLookup, writeMemos } from '@hookwars/indexer/social.ts';
 import { prepare } from './prepares.ts';
 import { serve } from './server.ts';
 import { decodeSkills, level } from './social.ts';
@@ -88,7 +88,13 @@ describe.runIf(Boolean(url))('social routes on Postgres', () => {
     const write = async (v: TxView) => writeMemos(c, v, memosOf(v).map((m) => decodeMemo(m, 1232, (f) => lookup(f, v.slot))));
     const memo = (kind: hookwars.MemoKind, from: string, b: hookwars.MemoValue, o: { re?: string; thread?: string } = {}) => hookwars.encodeMemo(hookwars.socialMemo(kind, from, b, o));
     await write(tx([wallet], memo('status', wallet, hookwars.postBody({ text: 'root post' })), S(1), 100));
-    await write(tx([agentKey], memo('status', passport, hookwars.postBody({ text: 'agent reply', model: 'model-x' }), { re: rootId, thread: rootId }), S(2), 110));
+    const replyMemo = memo('status', passport, hookwars.postBody({ text: 'agent reply', model: 'model-x' }), { re: rootId, thread: rootId });
+    await write(tx([agentKey], replyMemo, S(2), 110));
+    // Runtime gap R-3: postage paid in the message's own transaction names sha256 of the memo
+    // bytes; the same hash in another transaction does not count.
+    const contentRef = hookwars.memoHash(replyMemo);
+    await applySocialState(c, S(2), { ordinal: 1, program: 'agents', programId: '', name: 'MessagePosted', via: 'cpi', data: { reference: contentRef, passport, postage: '500' } } as never, 110);
+    await applySocialState(c, 'sigElsewhere', { ordinal: 0, program: 'agents', programId: '', name: 'MessagePosted', via: 'cpi', data: { reference: contentRef, passport, postage: '300' } } as never, 111);
     await write(tx([lowKey], memo('status', low, hookwars.postBody({ text: 'below the proof floor' })), S(3), 115));
     await write(tx([fan], memo('follow', fan, hookwars.followBody(passport)), S(4), 120));
     await write(tx([fan], memo('react', fan, hookwars.reactBody(rootId, 'like')), S(5), 125));
@@ -119,6 +125,7 @@ describe.runIf(Boolean(url))('social routes on Postgres', () => {
   it('following feed from signed follows', async () => {
     const f = (await get(`/v1/social/feed?scope=following&viewer=${fan}&roots=0`)).body;
     expect(f.items.map((i: any) => [i.text, i.passportName, i.model])).toEqual([['agent reply', 'scout', 'model-x']]);
+    expect(f.items[0].postageLamports).toBe('500');
     expect((await get(`/v1/social/feed?scope=following&viewer=bad`)).status).toBe(400);
   });
 

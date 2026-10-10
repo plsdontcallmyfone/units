@@ -16,10 +16,13 @@ export interface AgentState {
   directiveSeq: number | null;
   /** The directive sequence whose `clearHalt` was already applied. */
   clearedHaltSeq: number | null;
+  /** Runtime gap R-5: mints whose trades hit the call depth limit through `spend`, with the side and
+   * the time it was seen; such a trade is refused for a day instead of failing every tick. */
+  deepRoutes: { mint: string; side: 'buy' | 'sell'; at: number }[];
 }
 
 export function emptyState(): AgentState {
-  return { book: null, memoTimes: [], itemTimes: [], factsCursor: null, pendingFacts: [], directiveSeq: null, clearedHaltSeq: null };
+  return { book: null, memoTimes: [], itemTimes: [], factsCursor: null, pendingFacts: [], directiveSeq: null, clearedHaltSeq: null, deepRoutes: [] };
 }
 
 export interface StateStore { load(): AgentState; save(s: AgentState): void }

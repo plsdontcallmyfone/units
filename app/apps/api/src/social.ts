@@ -138,18 +138,23 @@ async function decorate(db: Pool, rows: Record<string, unknown>[]): Promise<(Rec
      ${reactionsPerHour === null ? '' : `and (select count(*) from social_reactions o where o.reactor = r.reactor and date_trunc('hour', o.block_time) = date_trunc('hour', r.block_time) and (o.slot, o.message_id) < (r.slot, r.message_id)) < ${reactionsPerHour}`}
      group by ref, reaction`, [ids]);
   const replies = await rowsOf<{ thread: string; n: number }>(db, `select thread, count(*)::int - 1 as n from social_messages where valid and kind = 'status' and thread = any($1) group by thread`, [ids]);
-  const refs = rows.map((r) => hookwars.messageReference(String(r.id)).toString('hex'));
-  const posted = await rowsOf<{ reference: string; postage: string }>(db, 'select reference, sum(postage)::text as postage from social_postage where reference = any($1) group by reference', [refs]);
+  // Postage names a message by its reference (11 4.4, sha256 of the message id), or, paid in the
+  // message's own transaction (runtime gap R-3: a post cannot know its own id), by sha256 of the
+  // memo bytes; the second form counts only within that transaction, so equal texts never share it.
+  const posted = await rowsOf<{ id: string; postage: string }>(db,
+    `select m.id, sum(p.postage)::text as postage from social_messages m join social_postage p
+       on p.reference = m.reference or (p.signature = m.signature and p.reference = encode(sha256(convert_to(m.raw, 'UTF8')), 'hex'))
+     where m.id = any($1) group by m.id`, [ids]);
   const passports = [...new Set(rows.map((r) => r.passport).filter(Boolean))];
   const names = passports.length ? await rowsOf<{ passport: string; name: string; proof: number }>(db, 'select passport, name, proof from passport_current where passport = any($1)', [passports]) : [];
   const byP = new Map(names.map((n) => [n.passport, n]));
-  return rows.map((r, i) => ({
+  return rows.map((r) => ({
     ...r,
     passportName: r.passport ? byP.get(String(r.passport))?.name ?? null : null,
     proof: r.passport ? byP.get(String(r.passport))?.proof ?? null : null,
     reactions: Object.fromEntries(hookwars.REACTIONS.map((k) => [k, reacts.find((x) => x.ref === r.id && x.reaction === k)?.n ?? 0])),
     replies: Math.max(0, replies.find((x) => x.thread === r.id)?.n ?? 0),
-    postageLamports: posted.find((p) => p.reference === refs[i])?.postage ?? null,
+    postageLamports: posted.find((p) => p.id === String(r.id))?.postage ?? null,
   }));
 }
 

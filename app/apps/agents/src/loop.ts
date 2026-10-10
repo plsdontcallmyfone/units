@@ -146,6 +146,9 @@ export async function tick(rt: Runtime): Promise<TickReport> {
     const res = await rt.sender.submit(p.instructions, p.tables);
     report.results.push({ type: action.type, ok: res.error === null, label: p.label, sent: res.sent, signature: res.signature, error: res.error });
     log.log(res.error ? 'warn' : 'info', 'action', { type: action.type, label: p.label, sent: res.sent, signature: res.signature, error: res.error, units: res.unitsConsumed });
+    if (res.depthLimited && p.trade) {
+      state.deepRoutes = [...(state.deepRoutes ?? []).filter((x) => !(x.mint === p.trade!.req.mint && x.side === p.trade!.req.side)), { mint: p.trade.req.mint, side: p.trade.req.side, at: now }];
+    }
     if (!res.sent || res.error) continue;
     if (action.type === 'message' || action.type === 'status') state.memoTimes.push(now);
     if (action.type === 'status') state.pendingFacts = [];

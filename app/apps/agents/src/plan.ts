@@ -100,6 +100,9 @@ function actionMemo(ctx: TickContext, act: string, text: string, pv: Provenance,
 
 function withPv(body: Obj, pv: Provenance): Obj { return obj([...body.obj.filter(([k]) => k !== 'pv'), ['pv', provenanceValue(pv)]]); }
 
+/** How long a route that hit the call depth limit stays refused (R-5). */
+export const DEEP_ROUTE_SECS = 86_400;
+
 /** Remaining spend under the on-chain policy today (the chain enforces it exactly; this avoids sure failures). */
 function spendRoom(p: PolicyView, now: number, lamports: bigint): string | null {
   if (p.frozen) return 'the policy is frozen';
@@ -228,6 +231,8 @@ export async function planAction(action: Action, ctx: TickContext, deps: Deps, p
       const r = checkTrade(book, caps, req, facts, ctx.identity, ctx.now).map((x) => `${x.code}: ${x.detail}`);
       // A buy spends lamports from the vault; a sell spends tokens (the chain's tracked-mint limits apply).
       if (!sell) { const room = spendRoom(ctx.policy, ctx.now, action.amountIn); if (room) r.push(room); } else if (ctx.policy.frozen) r.push('the policy is frozen');
+      const deep = (ctx.state.deepRoutes ?? []).find((x) => x.mint === action.mint && x.side === action.side && ctx.now - x.at < DEEP_ROUTE_SECS);
+      if (deep) r.push(`call depth: a ${action.side} of this token through spend hit the call depth limit (R-5); retried after ${DEEP_ROUTE_SECS - (ctx.now - deep.at)}s`);
       if (r.length) return refuse(...r);
       const route = sell ? 'sell/prepare' : 'buy/prepare';
       let prepared;
