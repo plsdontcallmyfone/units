@@ -25,7 +25,7 @@ export function TokenChart({ series, symbol }: { series: Candle[]; symbol: strin
     if (!el) return;
     const c = createChart(el, {
       autoSize: true,
-      layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: INK2, fontFamily: '"JetBrains Mono", ui-monospace, Menlo, monospace', fontSize: 11, attributionLogo: false },
+      layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: INK2, fontFamily: '"Geist", ui-sans-serif, system-ui, sans-serif', fontSize: 11, attributionLogo: false },
       grid: { vertLines: { color: GRID, style: LineStyle.Solid }, horzLines: { color: GRID, style: LineStyle.Solid } },
       rightPriceScale: { borderColor: BORDER, scaleMargins: { top: 0.06, bottom: tab === 'price' ? 0.24 : tab === 'raids' ? 0 : 0.06 }, entireTextOnly: true },
       timeScale: { borderColor: BORDER, timeVisible: true, secondsVisible: false, fixLeftEdge: true, fixRightEdge: true, rightOffset: 2, barSpacing: 8, tickMarkFormatter: (t: number) => hhmm(t) },
@@ -56,7 +56,7 @@ export function TokenChart({ series, symbol }: { series: Candle[]; symbol: strin
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px' }}>
         <span className="k">{symbol} · 24h · 15m</span>
-        <span style={{ font: '600 13px var(--mono)', color: tab === 'raids' ? 'var(--ink)' : (tab === 'price' ? delta : chestDelta) >= 0 ? 'var(--good)' : 'var(--bad)' }}>
+        <span style={{ font: '600 13px var(--sans)', color: tab === 'raids' ? 'var(--ink)' : (tab === 'price' ? delta : chestDelta) >= 0 ? 'var(--good)' : 'var(--bad)' }}>
           {tab === 'price' ? `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%` : tab === 'chest' ? `${chestDelta >= 0 ? '+' : ''}${chestDelta.toFixed(2)} SOL` : `${raided.toLocaleString('en-US', { maximumFractionDigits: 1 })} SOL raided`}
         </span>
         {last ? <span className="k" style={{ marginLeft: 4 }}>{tab === 'price' ? `O ${last.open.toPrecision(3)} H ${last.high.toPrecision(3)} L ${last.low.toPrecision(3)} C ${last.close.toPrecision(3)}` : ''}</span> : null}
