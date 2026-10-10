@@ -2989,6 +2989,9 @@
         },
         {
           "name": "oracle_account",
+          "docs": [
+            "Switchboard randomness account committed earlier in this transaction (checked in the handler)."
+          ],
           "writable": true
         },
         {
@@ -4489,6 +4492,16 @@
       "code": 6052,
       "name": "RivalryState",
       "msg": "the rivalry is invalid, not live, or already open"
+    },
+    {
+      "code": 6053,
+      "name": "RandomnessStale",
+      "msg": "the randomness is stale: commit it in the same transaction as the roll"
+    },
+    {
+      "code": 6054,
+      "name": "RandomnessAuthority",
+      "msg": "the randomness account's authority is not the roll's owner"
     }
   ],
   "types": [

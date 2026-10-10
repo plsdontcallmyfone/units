@@ -8,6 +8,112 @@
   },
   "instructions": [
     {
+      "name": "apply_market_terms",
+      "docs": [
+        "Anyone applies a market's pending terms once ready (checked against the bounds again).",
+        "Resting orders keep their prices; new orders use the new tick."
+      ],
+      "discriminator": [
+        70,
+        21,
+        167,
+        55,
+        41,
+        31,
+        237,
+        224
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.base_mint",
+                "account": "BookMarket"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107,
+                  45,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  45,
+                  116,
+                  101,
+                  114,
+                  109,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "apply_params",
       "docs": [
         "Anyone applies a pending change once it is ready."
@@ -95,6 +201,32 @@
           "name": "owner",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Pass 5 (I-6): read for `min_rest_secs`."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "market",
@@ -978,6 +1110,132 @@
       ]
     },
     {
+      "name": "propose_market_terms",
+      "docs": [
+        "The admin proposes a market's tick and minimum size (inside the config's bounds); they apply",
+        "after `admin_timelock_secs` (review 3 M-8)."
+      ],
+      "discriminator": [
+        126,
+        230,
+        97,
+        4,
+        158,
+        82,
+        158,
+        249
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.base_mint",
+                "account": "BookMarket"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107,
+                  45,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  45,
+                  116,
+                  101,
+                  114,
+                  109,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "tick_lamports",
+          "type": "u64"
+        },
+        {
+          "name": "min_size",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "propose_params",
       "docs": [
         "The admin proposes new params and treasury; they apply after `admin_timelock_secs`."
@@ -1141,6 +1399,19 @@
         66,
         156
       ]
+    },
+    {
+      "name": "PendingMarketTerms",
+      "discriminator": [
+        223,
+        56,
+        127,
+        39,
+        114,
+        171,
+        92,
+        82
+      ]
     }
   ],
   "events": [
@@ -1262,6 +1533,32 @@
       ]
     },
     {
+      "name": "MarketTermsProposed",
+      "discriminator": [
+        218,
+        49,
+        230,
+        196,
+        195,
+        229,
+        7,
+        58
+      ]
+    },
+    {
+      "name": "MarketTermsSet",
+      "discriminator": [
+        140,
+        249,
+        211,
+        148,
+        59,
+        201,
+        215,
+        132
+      ]
+    },
+    {
       "name": "Placed",
       "discriminator": [
         182,
@@ -1285,6 +1582,19 @@
         92,
         192,
         21
+      ]
+    },
+    {
+      "name": "Unpayable",
+      "discriminator": [
+        212,
+        173,
+        215,
+        2,
+        11,
+        82,
+        95,
+        23
       ]
     }
   ],
@@ -1378,6 +1688,16 @@
       "code": 6017,
       "name": "Overflow",
       "msg": "arithmetic overflow"
+    },
+    {
+      "code": 6018,
+      "name": "BadTerms",
+      "msg": "the tick or minimum size is outside the config's bounds"
+    },
+    {
+      "code": 6019,
+      "name": "RestTooShort",
+      "msg": "the order has not rested the minimum time, or would expire before it"
     }
   ],
   "types": [
@@ -1595,6 +1915,39 @@
             "name": "admin_timelock_secs",
             "docs": [
               "`ADMIN_TIMELOCK_SECS` (00)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "tick_min_lamports",
+            "docs": [
+              "Least and most tick a market may have (review 3 M-8; owner values, 00 section 6)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "tick_max_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "min_size_max",
+            "docs": [
+              "Most `min_size` a market may have (review 3 M-8)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "skill_min_fee_lamports",
+            "docs": [
+              "A fill counts toward the Trader skill only when its fees reach this (review 3 L-1)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "min_rest_secs",
+            "docs": [
+              "Pass 5 (review 3 I-6): `BOOK_MIN_REST_SECS`, the least time an order rests before its",
+              "owner may cancel it, and the least time to its expiry (owner value, 00 section 6)."
             ],
             "type": "u32"
           }
@@ -1976,6 +2329,54 @@
       }
     },
     {
+      "name": "MarketTermsProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "tick_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "min_size",
+            "type": "u64"
+          },
+          {
+            "name": "ready_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketTermsSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "tick_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "min_size",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "Order",
       "docs": [
         "A resting order. Prices are lamports per base unit."
@@ -2019,6 +2420,13 @@
               "0 = never."
             ],
             "type": "i64"
+          },
+          {
+            "name": "placed_at",
+            "docs": [
+              "Pass 5 (I-6): when the order was placed."
+            ],
+            "type": "i64"
           }
         ]
       }
@@ -2046,6 +2454,42 @@
                 "name": "BookParams"
               }
             }
+          },
+          {
+            "name": "ready_at",
+            "type": "i64"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PendingMarketTerms",
+      "docs": [
+        "`PendingMarketTerms` at `[\"book-pending-terms\", market]`: an admin change of one market's tick",
+        "and minimum size, applied after `admin_timelock_secs` (review 3 M-8)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "tick_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "min_size",
+            "type": "u64"
           },
           {
             "name": "ready_at",
@@ -2138,6 +2582,38 @@
                 32
               ]
             }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Unpayable",
+      "docs": [
+        "Review 3 M-1: lamports owed to a wallet that cannot hold them (it does not exist and the sum is",
+        "below the rent minimum) went to the instruction's payer instead."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "paid_to",
+            "type": "pubkey"
           },
           {
             "name": "ts",
