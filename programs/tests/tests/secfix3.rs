@@ -324,6 +324,26 @@ fn sf3_l2_a_higher_maker_rate_does_not_strand_resting_bids() {
     ew.assert_escrow(&base);
 }
 
+/// Pass 5 (review 3 I-6): with `min_rest_secs`, an order cannot be cancelled (nor set to expire)
+/// before it has rested that long, so a side flushed by place and cancel stays fillable meanwhile.
+#[test]
+fn p5_i6_an_order_rests_before_its_owner_can_cancel_it() {
+    let (mut ew, base) = book_world();
+    set_book_params(&mut ew, BookParams { min_rest_secs: 300, ..TEST_BOOK });
+    let a = trader(&mut ew, 100);
+    place(&mut ew, &a, &base, side::ASK, TICK, 1, &[]).ok();
+    let id = ew.book(&base).asks[0].id;
+    let ix = ew.cancel_ix(&a.pubkey(), &base, id);
+    ew.send(&a, std::slice::from_ref(&ix)).expect_code(book_code(B::RestTooShort));
+    // An expiry inside the rest is refused at place.
+    let t = ew.now();
+    let ix2 = ew.place_ix(&a.pubkey(), &base, side::ASK, TICK, 1, false, t + 10, &[]);
+    ew.send(&a, &[ix2]).expect_code(book_code(B::RestTooShort));
+    ew.warp(300);
+    ew.send(&a, &[ix]).ok();
+    assert!(ew.book(&base).asks.is_empty());
+}
+
 // ---- market: licences --------------------------------------------------------------------------------
 
 const TERM: u32 = 86_400;

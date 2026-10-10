@@ -500,6 +500,12 @@ pub mod hookwars_book {
         require!(size >= m.min_size, BookError::BadSize);
         require!(expires_at == 0 || expires_at > ts, BookError::BadParams);
         let p = a.config.params;
+        // Pass 5 (I-6): an order that could rest may not expire (and be cranked by its own owner
+        // for the bounty) before the minimum rest.
+        require!(
+            expires_at == 0 || expires_at >= ts.saturating_add(i64::from(p.min_rest_secs)),
+            BookError::RestTooShort
+        );
         let market = m.key();
         let base_mint_key = m.base_mint;
         let sys = a.system_program.to_account_info();
@@ -649,6 +655,7 @@ pub mod hookwars_book {
                 quote_locked: 0,
                 bounty: p.order_bounty_lamports,
                 expires_at,
+                placed_at: ts,
             };
             if side_ == side::BID {
                 o.quote_locked = quote
@@ -717,6 +724,10 @@ pub mod hookwars_book {
         };
         let o = if side_ == side::BID { m.bids.remove(idx) } else { m.asks.remove(idx) };
         require_keys_eq!(o.owner, a.owner.key(), BookError::NotOwner);
+        // Pass 5 (review 3 I-6): an order rests at least `min_rest_secs` before its owner may
+        // cancel it, so flushing a side by place and cancel leaves the orders fillable meanwhile.
+        let rest = i64::from(a.config.params.min_rest_secs);
+        require!(ts >= o.placed_at.saturating_add(rest), BookError::RestTooShort);
         let market = m.key();
         let sys = a.system_program.to_account_info();
         let owner = a.owner.to_account_info();
@@ -1078,6 +1089,9 @@ pub struct Place<'info> {
 pub struct Cancel<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
+    /// Pass 5 (I-6): read for `min_rest_secs`.
+    #[account(seeds = [seeds::CONFIG], bump = config.bump)]
+    pub config: Box<Account<'info, BookConfig>>,
     #[account(mut, seeds = [seeds::BOOK, market.base_mint.as_ref()], bump = market.bump)]
     pub market: Box<Account<'info, BookMarket>>,
     #[account(mut, seeds = [seeds::ESCROW, market.key().as_ref()], bump = market.escrow_bump)]

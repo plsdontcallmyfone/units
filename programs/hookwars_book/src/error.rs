@@ -41,4 +41,6 @@ pub enum BookError {
     Overflow,
     #[msg("the tick or minimum size is outside the config's bounds")]
     BadTerms,
+    #[msg("the order has not rested the minimum time, or would expire before it")]
+    RestTooShort,
 }
