@@ -1,0 +1,8 @@
+{
+  "name": "bigint-buffer",
+  "version": "1.1.5-units.0",
+  "description": "Pure JavaScript stand-in for bigint-buffer (no native addon; GHSA-3gc7-fjrx-p6mg has no patched release). Same four functions.",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "license": "Apache-2.0"
+}
