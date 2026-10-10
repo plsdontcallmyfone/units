@@ -3,7 +3,7 @@
 @keyframes cxPulse { 0%, to { opacity: 1 } 50% { opacity: .35 } }
 .cv3 { --g: 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--g); font-size: 13px; }
 /* The reference's token page runs wider and tighter than the directory: 1760px, 12px gutters. */
-body:has(.cv3) > .shell { max-width: 1760px; padding: var(--g, 12px) clamp(10px, 1.6vw, 24px) var(--s8); }
+body:has(.cv3) > .shell { padding: var(--g, 12px) clamp(10px, 1.6vw, 24px) var(--s8); }
 .cv3 > * { min-width: 0; }
 .cv3 .scroll { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line-3) transparent; }
 .cv3 .k { display: inline-block; margin-right: 8px; font: 500 10px var(--display); letter-spacing: -.01em; color: var(--muted); }
