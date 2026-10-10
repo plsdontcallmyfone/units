@@ -124,7 +124,8 @@ fn an_honest_roll_commits_then_reveals_in_the_reveal_slot() {
         .expect_code(war_code(WarError::RandomnessNotReady));
 
     // Revealed in an earlier slot: Switchboard's freshness rule refuses it.
-    put_sb(&mut ww, rng, SbRandomness { reveal_slot: ww.w.env.slot, ..sb }, SWITCHBOARD_DEVNET);
+    let sb_value = SbRandomness { reveal_slot: ww.w.env.slot, ..sb };
+    put_sb(&mut ww, rng, sb_value, SWITCHBOARD_DEVNET);
     ww.w.env.warp(1);
     let ix = reveal_ix(&ww, &t, &holder.pubkey(), &revealer.pubkey(), 1, rng);
     ww.w.env
@@ -132,7 +133,8 @@ fn an_honest_roll_commits_then_reveals_in_the_reveal_slot() {
         .expect_code(war_code(WarError::RandomnessNotReady));
 
     // Revealed in this slot (Switchboard's reveal first in the same transaction): minted.
-    put_sb(&mut ww, rng, SbRandomness { reveal_slot: ww.w.env.slot, ..sb }, SWITCHBOARD_DEVNET);
+    let sb_value = SbRandomness { reveal_slot: ww.w.env.slot, ..sb };
+    put_sb(&mut ww, rng, sb_value, SWITCHBOARD_DEVNET);
     let owner_sol = ww.w.env.lamports(&holder.pubkey());
     let e = ww.w.env.send_paid_by(&[ix], &revealer, &[]).event::<RollRevealed>();
     assert_eq!(e.template_id, RAID_TEMPLATE);
@@ -148,7 +150,8 @@ fn a_roll_refuses_a_randomness_account_of_another_owner_or_authority() {
     let (mut ww, t, holder) = world(1);
     // The Switchboard layout, owned by another program.
     let rng = Pubkey::new_unique();
-    put_sb(&mut ww, rng, committed(&ww, holder.pubkey()), randomness_stub::ID);
+    let sb_value = committed(&ww, holder.pubkey());
+    put_sb(&mut ww, rng, sb_value, randomness_stub::ID);
     ww.w.env
         .send(&[roll_ix(&t, &holder.pubkey(), 1, rng)], &[&holder])
         .expect_code(war_code(WarError::WrongRandomness));
@@ -157,7 +160,8 @@ fn a_roll_refuses_a_randomness_account_of_another_owner_or_authority() {
     ww.w.env.send(&[ix], &[&holder]).expect_code(war_code(WarError::WrongRandomness));
     // Someone else's randomness account (they could re-commit it and strand the roll).
     let other = Pubkey::new_unique();
-    put_sb(&mut ww, rng, committed(&ww, other), SWITCHBOARD_DEVNET);
+    let sb_value = committed(&ww, other);
+    put_sb(&mut ww, rng, sb_value, SWITCHBOARD_DEVNET);
     ww.w.env
         .send(&[roll_ix(&t, &holder.pubkey(), 1, rng)], &[&holder])
         .expect_code(war_code(WarError::RandomnessAuthority));
@@ -170,22 +174,20 @@ fn a_roll_refuses_a_stale_or_already_revealed_commit() {
     let rng = Pubkey::new_unique();
     let slot = ww.w.env.slot;
     // Committed two slots ago: not this transaction's commit.
-    put_sb(&mut ww, rng, SbRandomness { seed_slot: slot - 2, ..committed(&ww, holder.pubkey()) }, SWITCHBOARD_DEVNET);
+    let sb_value = SbRandomness { seed_slot: slot - 2, ..committed(&ww, holder.pubkey()) };
+    put_sb(&mut ww, rng, sb_value, SWITCHBOARD_DEVNET);
     ww.w.env
         .send(&[roll_ix(&t, &holder.pubkey(), 1, rng)], &[&holder])
         .expect_code(war_code(WarError::RandomnessStale));
     // Reused: the account still holds an earlier commit that was revealed (its value is public).
-    put_sb(
-        &mut ww,
-        rng,
-        SbRandomness { seed_slot: slot - 1, reveal_slot: slot - 1, value: [9; 32], ..committed(&ww, holder.pubkey()) },
-        SWITCHBOARD_DEVNET,
-    );
+    let sb_value = SbRandomness { seed_slot: slot - 1, reveal_slot: slot - 1, value: [9; 32], ..committed(&ww, holder.pubkey()) };
+    put_sb(&mut ww, rng, sb_value, SWITCHBOARD_DEVNET);
     ww.w.env
         .send(&[roll_ix(&t, &holder.pubkey(), 1, rng)], &[&holder])
         .expect_code(war_code(WarError::RandomnessStale));
     // A commit in the future slot cannot exist; a seed slot equal to this slot is refused too.
-    put_sb(&mut ww, rng, SbRandomness { seed_slot: slot, ..committed(&ww, holder.pubkey()) }, SWITCHBOARD_DEVNET);
+    let sb_value = SbRandomness { seed_slot: slot, ..committed(&ww, holder.pubkey()) };
+    put_sb(&mut ww, rng, sb_value, SWITCHBOARD_DEVNET);
     ww.w.env
         .send(&[roll_ix(&t, &holder.pubkey(), 1, rng)], &[&holder])
         .expect_code(war_code(WarError::RandomnessStale));
@@ -221,7 +223,8 @@ fn a_reveal_refuses_a_recommitted_account() {
 fn an_unrevealed_switchboard_roll_expires_without_returning_the_ticket() {
     let (mut ww, t, holder) = world(1);
     let rng = Pubkey::new_unique();
-    put_sb(&mut ww, rng, committed(&ww, holder.pubkey()), SWITCHBOARD_DEVNET);
+    let sb_value = committed(&ww, holder.pubkey());
+    put_sb(&mut ww, rng, sb_value, SWITCHBOARD_DEVNET);
     ww.w.env.send(&[roll_ix(&t, &holder.pubkey(), 1, rng)], &[&holder]).ok();
     let holding = token::holding_address(&t.mint, &holder.pubkey());
     let cancel = war::cancel_roll(holder.pubkey(), holding, 1);

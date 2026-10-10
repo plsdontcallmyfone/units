@@ -25,6 +25,10 @@ export const ROUTE_PROGRAMS: Readonly<Record<string, readonly PublicKey[]>> = {
   'war/raze/prepare': [hookwars.WAR_ID, hookwars.TOKEN_ID],
   'book/crank/prepare': [hookwars.BOOK_ID, hookwars.TOKEN_ID],
   'loyalty/reslot/prepare': [hookwars.ITEMS_ID],
+  // D-4 (17-randomness): Switchboard's create, commit and reveal sit in front of the war steps.
+  'rolls/randomness/prepare': [hookwars.SWITCHBOARD_DEVNET, hookwars.SWITCHBOARD_MAINNET],
+  'rolls/prepare': [hookwars.SWITCHBOARD_DEVNET, hookwars.SWITCHBOARD_MAINNET, hookwars.WAR_ID],
+  'rolls/reveal/prepare': [hookwars.SWITCHBOARD_DEVNET, hookwars.SWITCHBOARD_MAINNET, hookwars.WAR_ID],
 };
 
 /** Programs where a signature of the agent key itself could move the agent key's own money. */

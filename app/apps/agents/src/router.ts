@@ -21,6 +21,8 @@ export const CRANK_ROUTES = [
   'settle/prepare', 'seasons/open/prepare', 'seasons/finalize/prepare', 'prize/split/prepare', 'proposals/finalize/prepare', 'votes/close/prepare', 'agents/bonds/resolve/prepare',
   // R-2: the war steps (05 sections 7 to 9) and the economy's permissionless cranks.
   'war/siege/prepare', 'war/counter-strike/prepare', 'war/raze/prepare', 'book/crank/prepare', 'proposals/close/prepare', 'loyalty/reslot/prepare',
+  // D-4 (17-randomness): revealing a loot roll is permissionless (the revealer pays the item's rent).
+  'rolls/reveal/prepare',
 ] as const;
 
 export class ApiRouter implements Router {
