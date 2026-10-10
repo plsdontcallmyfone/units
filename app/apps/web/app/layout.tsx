@@ -34,7 +34,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     <html lang="en">
       <body>
         <Cursor />
-        <SiteHeader ticker={h.ticker} cluster={h.cluster} mock={MOCK} />
+        <SiteHeader ticker={h.ticker} />
         <main className="wrap shell">{children}</main>
         <footer className="foot">
           <div className="wrap foot-grid">

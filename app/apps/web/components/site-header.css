@@ -73,6 +73,7 @@ body { padding-top: var(--hp-top-height); }
 .hp-header .pill-cta:hover { background: var(--hp-cta-purple-hover); }
 .hp-header .pill-dark { gap: calc(7.25 * var(--hp-u)); padding-inline: calc(11.25 * var(--hp-u)) calc(13 * var(--hp-u)); background: var(--hp-ink); color: var(--hp-surface); }
 .hp-header .pill-dark:hover { background: var(--hp-ink-hover); }
+.hp-header .user { width: calc(10.5 * var(--hp-u)); height: calc(13 * var(--hp-u)); flex: none; }
 .hp-header .pill-dark .dot { width: calc(6 * var(--hp-u)); height: calc(6 * var(--hp-u)); border-radius: 50%; background: var(--hp-pill); }
 .hp-header .pill-dark.cl-ok .dot { background: #79a636; } .hp-header .pill-dark.cl-warn .dot { background: #e3b210; } .hp-header .pill-dark.cl-bad .dot { background: #d0463b; }
 .hp-header .pill-demo { background: rgba(227, 178, 16, .22); color: #6b5200; }

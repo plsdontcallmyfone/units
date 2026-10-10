@@ -49,10 +49,16 @@ const on = (href: string, path: string) => href === '/' ? path === '/' : path.st
 
 const Chev = () => <svg viewBox="0 0 16 16" focusable="false" aria-hidden><path d="M4.563 6.2246C4.271 6.5175 4.27 6.9923 4.563 7.2851L6.762 9.4833C7.445 10.1665 8.553 10.1665 9.236 9.4833L11.435 7.2851C11.728 6.9923 11.728 6.5174 11.435 6.2246C11.143 5.9317 10.668 5.9319 10.375 6.2246L8.176 8.4228C8.078 8.5201 7.92 8.5201 7.822 8.4228L5.624 6.2246C5.331 5.9317 4.856 5.9317 4.563 6.2246Z" /></svg>;
 
-export function SiteHeader({ ticker, cluster, mock }: { ticker: TickerItem[]; cluster: { name: string; cls: string; title: string }; mock: boolean }) {
+export function SiteHeader({ ticker }: { ticker: TickerItem[] }) {
   const path = usePathname();
   const [open, setOpen] = useState<string | null>(null);
   const [mobile, setMobile] = useState(false);
+  const [wallet, setWallet] = useState<string | null>(null);
+  async function connect() {
+    const w = (window as Window & { solana?: { connect(): Promise<{ publicKey: { toBase58(): string } }> } }).solana;
+    if (!w) { window.open('https://phantom.app/', '_blank', 'noopener'); return; }
+    try { const r = await w.connect(); setWallet(r.publicKey.toBase58()); } catch { /* the user closed the wallet prompt */ }
+  }
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const show = (l: string) => { if (timer.current) clearTimeout(timer.current); setOpen(l); };
   const hide = () => { if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => setOpen(null), 220); };
@@ -99,9 +105,8 @@ export function SiteHeader({ ticker, cluster, mock }: { ticker: TickerItem[]; cl
           })}
         </ul>
         <div className="actions">
-          {mock ? <span className="pill pill-demo hp-squircle" title="MOCK_DATA=1: the site shows invented tokens and events, not the chain">Demo data</span> : null}
           <Link className="pill pill-cta hp-squircle" style={{ ['--hp-pill-w' as string]: 80 }} href="/launch">Launch</Link>
-          <span className={`pill pill-dark hp-squircle cl-${cluster.cls}`} style={{ ['--hp-pill-w' as string]: 75 }} title={cluster.title}><i className="dot" /><span>{cluster.name}</span></span>
+          <button type="button" className="pill pill-dark hp-squircle" style={{ ['--hp-pill-w' as string]: 110 }} onClick={connect} title={wallet ? `Connected: ${wallet}` : 'Connect a Solana wallet'}><svg className="user" viewBox="2.75 1.5 10.5 13" aria-hidden><path d="M12.5 13.75V12.4167C12.5 11.7094 12.23 11.0311 11.75 10.531C11.26 10.031 10.61 9.75 9.93 9.75H6.07C5.39 9.75 4.74 10.031 4.25 10.531C3.77 11.0311 3.5 11.7094 3.5 12.4167V13.75M10.57 4.6667C10.57 6.0014 9.42 7.0833 8 7.0833C6.58 7.0833 5.43 6.0014 5.43 4.6667C5.43 3.332 6.58 2.25 8 2.25C9.42 2.25 10.57 3.332 10.57 4.6667Z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg><span>{wallet ? `${wallet.slice(0, 4)}…${wallet.slice(-4)}` : 'Connect wallet'}</span></button>
           <button type="button" className="burger" aria-expanded={mobile} aria-controls="hp-mobile-menu" aria-label="Menu" onClick={() => setMobile(!mobile)}><span className="burger-bars" aria-hidden><span /><span /><span /></span></button>
         </div>
       </nav>

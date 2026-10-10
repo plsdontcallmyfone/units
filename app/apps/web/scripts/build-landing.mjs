@@ -96,15 +96,12 @@ ms('title:`Prompt Refiner`,subtitle:`${t.length} language models`,kind:`hub`,des
 writeFileSync(join(dir, '_astro', 'EcosystemMap.units.js'), map);
 all('/plnty/_astro/EcosystemMap.CYGJ9AP0.js', '/plnty/_astro/EcosystemMap.units.js');
 
+// The footer's card tunnel goes entirely.
+re(/<div class="cards" aria-hidden="true"[^>]*>.*?<\/div><\/div>/s, '');
 // The scene note (a quote from their canvas) goes; the drawn collaborator cursor gets a plain label;
 // the footer tunnel shows our token art with tickers for credits.
 re(/<div class="note note-dog"[^>]*>.*?<\/div><\/div>/s, '');
-all('@dor', '@holder');
-const coins = Array.from({ length: 34 }, (_, i) => `/agency/coins/${String((i % 50) + 1).padStart(3, '0')}.webp`);
-const tickers = ['ASH', 'BRINE', 'CNDR', 'DUSK', 'EMBR', 'FLNT'];
-re(/data-sources="[^"]*"/, `data-sources="${coins.join(',')}"`);
-re(/data-credits="[^"]*"/, `data-credits="${coins.map((_, i) => '$' + tickers[i % tickers.length]).join(',')}"`);
-re(/data-fallback="[^"]*"/, `data-fallback="${coins.slice(0, 4).join(',')}"`);
+h = h.split('@dor').join('@holder');
 
 writeFileSync(join(dir, 'units.html'), h);
 console.log(misses ? `units.html written with ${misses} misses` : 'units.html written');
