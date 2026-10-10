@@ -1,4 +1,5 @@
 // Changed by Hookwars: new program (expansion, docs/spec/10-expansion.md sections 0, 1, 4, 5).
+// Integration pass 2: end_lease reverts the leased slot through the armory (10 section 17 I-3).
 //! `hookwars_market`: items are assets. Listings and sales of item tokens (price in SOL, paid by
 //! the buyer straight to the seller, the item's author and the protocol treasury), collections
 //! (discovery only), item rental (the item token sits in a lease escrow for the term; the lessor's

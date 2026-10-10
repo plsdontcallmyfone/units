@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (expansion, 10).
+// Changed by Hookwars: new file (expansion, 10). Integration pass 2: revert_leased_slot (I-3).
 //! Calls into the token program and the system program. Item mints are plain units mints (no
 //! hook, supply 1: 02 section 2.5), so moving an item token out of a market escrow is an ordinary
 //! `transfer` signed by the escrow PDA. A protocol transfer (R16) would be needed only for slot
@@ -172,14 +172,11 @@ pub fn revert_leased_slot<'info>(rem: &[AccountInfo<'info>], slot: u8, item: Pub
     let accounts = rem
         .iter()
         .enumerate()
-        .map(|(i, a)| {
-            if i == 0 {
-                AccountMeta::new_readonly(a.key(), true)
-            } else if a.is_writable {
-                AccountMeta::new(a.key(), false)
-            } else {
-                AccountMeta::new_readonly(a.key(), false)
-            }
+        .map(|(i, a)| AccountMeta {
+            pubkey: a.key(),
+            // The market signs as the caller; the payer of the armory's equip signed the transaction.
+            is_signer: i == 0 || a.is_signer,
+            is_writable: a.is_writable,
         })
         .collect();
     let ix = Instruction {
