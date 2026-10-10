@@ -14,7 +14,7 @@ export const SOURCE_LABEL: Record<FeeSource, string> = {
 export const SOURCE_WHAT: Record<FeeSource, string> = {
   dex: 'The protocol share of swap fees on pools quoted in bridged SOL',
   launchLp: 'Recorded by no program yet',
-  itemRun: 'The item protocol share taken first at each settle',
+  itemRun: 'Taken at settle in each token\'s own units: listed per token below, never added to SOL',
   sale: 'The market fee on every item sale',
   licence: 'The protocol share of each licence price',
   lease: 'Lease fees pay the lessor in full; no protocol share is taken',

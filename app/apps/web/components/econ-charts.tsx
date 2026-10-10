@@ -46,7 +46,7 @@ export function Columns({ series, buckets, from, to, bucketSecs, mode = 'stack',
   return (
     <figure className="econ-chart" aria-label={label}>
       <div className="econ-chart-plot">
-        <div className="econ-chart-y" aria-hidden>{ticks.slice().reverse().map((t) => <span key={t}>{lamportsToSol(t)}</span>)}</div>
+        <div className="econ-chart-y" aria-hidden>{ticks.map((t) => <span key={t} style={{ top: `${(1 - t / max) * 100}%` }}>{lamportsToSol(t)}</span>)}</div>
         <div className="econ-chart-area" onMouseLeave={() => setHover(null)}>
           <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={label}>
             {ticks.map((t) => <line key={t} x1={0} x2={W} y1={r(H - (t / max) * H)} y2={r(H - (t / max) * H)} className={t === 0 ? 'base' : 'grid'} vectorEffect="non-scaling-stroke" />)}

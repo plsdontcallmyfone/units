@@ -17,6 +17,7 @@ const schema = `econtest_${process.pid}`;
 let db: pg.Pool;
 
 const BSOL = FIXED_ADDRESSES.bridgedSolMint;
+const NATIVE = '11111111111111111111111111111111';
 const NOW = 2_000_000_000;
 const DAY = 86_400;
 let seq = 0;
@@ -64,34 +65,33 @@ withDb('economy reads', () => {
     expect(season.seasonNumber).toBeNull();
   });
 
-  it('revenue: bridged SOL by source, the DEX share on SOL-quoted pools only, the window respected', async () => {
+  it('revenue: SOL by source (bridged or native lamports), the DEX share on SOL-quoted pools only, item runs per token, the window respected', async () => {
     await ins('ev_swap_pool_created', { pool: 'PoolSol', quote_mint: BSOL, base_mint: 'TokA' }, NOW - 30 * DAY);
     await ins('ev_swap_pool_created', { pool: 'PoolUsd', quote_mint: 'UsdMint', base_mint: 'TokB' }, NOW - 30 * DAY);
     await ins('ev_swap_swapped', { pool: 'PoolSol', protocol_fee: 100 });
     await ins('ev_swap_swapped', { pool: 'PoolSol', protocol_fee: 50 }, NOW - 2 * DAY);
     await ins('ev_swap_swapped', { pool: 'PoolUsd', protocol_fee: 999 });
     await ins('ev_swap_swapped', { pool: 'PoolSol', protocol_fee: 7 }, NOW - 9 * DAY);
-    await ins('ev_items_protocol_fee', { source: 2, mint: BSOL, amount: 30 });
     await ins('ev_items_protocol_fee', { source: 2, mint: 'TokA', amount: 5000 });
-    await ins('ev_market_protocol_fee', { source: 4, mint: BSOL, amount: 11 });
-    await ins('ev_book_protocol_fee', { source: 6, mint: BSOL, amount: 4 });
-    await ins('ev_craft_protocol_fee', { source: 7, mint: BSOL, amount: 3 });
+    await ins('ev_market_protocol_fee', { source: 4, mint: NATIVE, amount: 11 });
+    await ins('ev_book_protocol_fee', { source: 6, mint: NATIVE, amount: 4 });
+    await ins('ev_craft_protocol_fee', { source: 7, mint: NATIVE, amount: 3 });
     await ins('ev_market_sold', { item: 'ItemS', item_mint: 'ImS', seller: 'S', buyer: 'B', price: 1000, fee: 20, resale: 50 });
     const r = await revenue(db, null, W(NOW - 7 * DAY));
     const by = Object.fromEntries(r.sources.map((s) => [s.source, s.lamports]));
-    expect(by).toMatchObject({ dex: '150', itemRun: '30', licence: '11', bookFill: '4', recipe: '3', sale: '20', lease: null, launchLp: null });
-    expect(r.totalLamports).toBe('218');
+    expect(by).toMatchObject({ dex: '150', itemRun: null, licence: '11', bookFill: '4', recipe: '3', sale: '20', lease: null, launchLp: null });
+    expect(r.totalLamports).toBe('188');
     expect(r.otherMints).toEqual([{ mint: 'TokA', source: 'itemRun', amount: '5000', events: 1 }]);
     const t = r.series.reduce((a, b) => a + Object.values(b.bySource).reduce((x, y) => x + Number(y), 0), 0);
-    expect(t).toBe(218);
+    expect(t).toBe(188);
     expect(r.series.length).toBe(2);
   });
 
   it('settlement: the quote waterfall sums author, rent, holder, bounty and destinations; token sides stay per token', async () => {
-    await ins('ev_items_equip_settled', { mint: 'TokA', slot: 1, item: 'Item1', royalty_token: 10, royalty_quote: 60, amount_token: 80, amount_quote: 300, burned: 5, bounty_token: 2, bounty_quote: 9 });
-    await ins('ev_items_equip_settled', { mint: 'TokB', slot: 0, item: 'Item2', royalty_token: 1, royalty_quote: 40, amount_token: 0, amount_quote: 100, burned: 0, bounty_token: 0, bounty_quote: 1 });
-    await ins('ev_items_author_share_paid', { mint: 'TokA', slot: 1, item: 'Item1', template_id: 3, author_token: 1, author_quote: 6 });
-    await ins('ev_items_lease_rent_paid', { mint: 'TokA', slot: 1, item: 'Item1', lessor: 'Lessor', rent_token: 3, rent_quote: 12 });
+    await ins('ev_items_equip_settled', { mint: 'TokA', slot_index: 1, item: 'Item1', royalty_token: 10, royalty_quote: 60, amount_token: 80, amount_quote: 300, burned: 5, bounty_token: 2, bounty_quote: 9 });
+    await ins('ev_items_equip_settled', { mint: 'TokB', slot_index: 0, item: 'Item2', royalty_token: 1, royalty_quote: 40, amount_token: 0, amount_quote: 100, burned: 0, bounty_token: 0, bounty_quote: 1 });
+    await ins('ev_items_author_share_paid', { mint: 'TokA', slot_index: 1, item: 'Item1', template_id: 3, author_token: 1, author_quote: 6 });
+    await ins('ev_items_lease_rent_paid', { mint: 'TokA', slot_index: 1, item: 'Item1', lessor: 'Lessor', rent_token: 3, rent_quote: 12 });
     const s = await settlement(db, W(NOW - 7 * DAY));
     expect(s.quote).toEqual({ holderRoyalty: '100', author: '6', rent: '12', bounty: '10', destinations: '400', settles: 2 });
     expect(s.dexShare).toBe('150');
@@ -133,8 +133,8 @@ withDb('economy reads', () => {
   it('craft: drops by source, recipe uses and fees, fills and volume; the chain figures stay empty without a connection', async () => {
     await ins('ev_craft_dropped', { source: 0, material_id: 1, caller_program: 'Items', recipient: 'R', measured: 1000, amount: 40, season: 1 });
     await ins('ev_craft_dropped', { source: 1, material_id: 1, caller_program: 'War', recipient: 'R', measured: 10, amount: 2, season: 1 });
-    await ins('ev_craft_crafted', { recipe: 'Rec1', crafter: 'C', template_id: 3, fee: 15, reference: 'r' });
-    await ins('ev_craft_repaired', { recipe: 'Rec2', item: 'Item1', holder: 'H', restored: 5, used: 0, fee: 5, reference: 'r' });
+    await ins('ev_craft_crafted', { recipe: 1, crafter: 'C', template_id: 3, fee: 15, reference: 'r' });
+    await ins('ev_craft_repaired', { recipe: 2, item: 'Item1', holder: 'H', restored: 5, used: 0, fee: 5, reference: 'r' });
     await ins('ev_book_filled', { market: 'Mkt1', maker_order: 1, maker: 'M', taker: 'T', side: 0, price: 7, size: 3, taker_fee: 1, maker_fee: 0, reference: 'r' });
     await ins('ev_book_class_filled', { bid: 'Bid1', item: 'Item1', seller: 'S', bidder: 'B', price: 444, taker_fee: 4, maker_fee: 0, reference: 'r' });
     await db.query(`insert into wear (item, max_charges, used, dormant, repairs) values ('Item1', 10, 10, true, 2), ('Item2', 10, 1, false, 0)`);

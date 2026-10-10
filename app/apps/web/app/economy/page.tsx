@@ -6,7 +6,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { read, type Read } from '@/lib/api';
-import { ago, int, short, sol as solFmt, DASH } from '@/lib/format';
+import { ago, compact, int, short, sol as solFmt, DASH } from '@/lib/format';
 import { Empty, Head, ReadFailed } from '@/components/ui';
 import { Columns, SplitBar, type Series } from '@/components/econ-charts';
 import {
@@ -110,7 +110,7 @@ export default async function EconomyPage({ searchParams }: { searchParams: Prom
                 </table>
                 <div className="econ-foot">
                   <span>Lifetime, from program configs: book {sol(d.configTotals.book)}, craft {sol(d.configTotals.craft)}</span>
-                  {d.otherMints.length ? <span>{d.otherMints.length} {d.otherMints.length === 1 ? 'token' : 'tokens'} also paid item-run fees in their own units, not counted above: {d.otherMints.slice(0, 3).map((o) => <Link key={o.mint + o.source} href={`/t/${o.mint}`}>{short(o.mint)}</Link>).reduce<ReactNode[]>((a, x, i) => (i ? [...a, ', ', x] : [x]), [])}</span> : null}
+                  {d.otherMints.length ? <span>Item-run fees in each token&apos;s own units: {d.otherMints.slice(0, 4).map((o) => <span key={o.mint + o.source}><Link href={`/t/${o.mint}`}>{short(o.mint)}</Link> {compact(o.amount)}</span>).reduce<ReactNode[]>((a, x, i) => (i ? [...a, ', ', x] : [x]), [])}{d.otherMints.length > 4 ? `, and ${d.otherMints.length - 4} more` : ''}</span> : <span>No item-run fees in this period; they are paid in each token&apos;s own units.</span>}
                 </div>
               </Card>
             </div>
@@ -177,10 +177,10 @@ export default async function EconomyPage({ searchParams }: { searchParams: Prom
           <>
             <div className="econ-figs">
               <Fig label="Sales" value={int(d.sales.count)} sub={sol(d.sales.volumeLamports)} />
-              <Fig label="Market fees" value={sol(d.sales.feeLamports)} sub={`author resale ${sol(d.sales.resaleLamports)}`} />
-              <Fig label="Licences live" value={int(d.licences.live)} sub={`${int(d.licences.bought)} bought, ${sol(d.licences.incomeLamports)}`} />
-              <Fig label="Leases active" value={int(d.leases.active)} sub={`fees ${sol(d.leases.feesLamports)}, rent ${sol(d.leases.rentLamports)}`} />
-              <Fig label="Commissions open" value={int(d.commissions.open)} sub={`${sol(d.commissions.openBountyLamports)} in bounties`} />
+              <Fig label="Market fees" value={sol(d.sales.feeLamports)} sub={d.sales.resaleLamports ? `authors got ${sol(d.sales.resaleLamports)} on resale` : 'no resale shares'} />
+              <Fig label="Licences live" value={int(d.licences.live)} sub={d.licences.bought ? `${int(d.licences.bought)} bought for ${sol(d.licences.incomeLamports)}` : 'none bought this period'} />
+              <Fig label="Leases active" value={int(d.leases.active)} sub={d.leases.feesLamports || d.leases.rentLamports ? `fees ${sol(d.leases.feesLamports)}, rent ${sol(d.leases.rentLamports)}` : 'no fees or rent this period'} />
+              <Fig label="Commissions open" value={int(d.commissions.open)} sub={d.commissions.openBountyLamports ? `${sol(d.commissions.openBountyLamports)} in bounties` : 'no open bounties'} />
             </div>
             <div className="grid cols-main">
               <Card title="By template" meta={`${int(d.activeListings)} active listings`} flush>
@@ -194,7 +194,7 @@ export default async function EconomyPage({ searchParams }: { searchParams: Prom
               <Card title="Licences and commissions" flush>
                 <table className="econ-table">
                   <tbody>
-                    <tr><td>Licence income<div className="faint">{int(d.licences.bought)} bought this period</div></td><td className="num">{sol(d.licences.incomeLamports)}</td></tr>
+                    <tr><td>Licence income<div className="faint">{d.licences.bought ? `${int(d.licences.bought)} bought this period` : 'none bought this period'}</div></td><td className="num">{sol(d.licences.incomeLamports)}</td></tr>
                     <tr><td className="ind">to the protocol</td><td className="num">{sol(d.licences.protocolLamports)}</td></tr>
                     <tr><td className="ind">to template authors</td><td className="num">{sol(d.licences.authorLamports)}</td></tr>
                     <tr><td className="ind">to item holders</td><td className="num">{sol(d.licences.holderLamports)}</td></tr>
@@ -212,11 +212,11 @@ export default async function EconomyPage({ searchParams }: { searchParams: Prom
           <>
             <div className="econ-figs">
               <Fig label="Crafts" value={int(d.recipes.crafts)} sub={`${int(d.recipes.repairs)} repairs`} />
-              <Fig label="Recipe fees" value={sol(d.recipes.feesLamports)} />
-              <Fig label="Class fills" value={int(d.classFills.count)} sub={sol(d.classFills.volumeLamports)} />
+              <Fig label="Recipe fees" value={sol(d.recipes.feesLamports)} sub="protocol and season pool" />
+              <Fig label="Class fills" value={int(d.classFills.count)} sub={d.classFills.volumeLamports ? sol(d.classFills.volumeLamports) : 'no class bids filled'} />
               <Fig label="Items dormant" value={int(d.wear.dormant)} sub={`of ${int(d.wear.tracked)} that wear`} />
             </div>
-            {!d.chain ? <div className="panel econ-gap"><div className="panel-body econ-pad"><Empty title="Material supply and books are not available" what="Supply, caps and resting orders are read from the chain, and the backend could not read the craft or book programs here." /></div></div> : null}
+            {!d.chain ? <div className="panel"><div className="panel-body econ-pad"><Empty title="Material supply and the books could not be read" what="Supply, season caps and resting orders live on the chain, and the backend could not read the craft and book programs just now." next={<>Drops and fills above are from indexed events. <Link href="/craft">Craft</Link> and the <Link href="/book">order book</Link> read the chain directly.</>} /></div></div> : (
             <div className="grid cols-2">
               <Card title="Materials" meta="supply against the season cap" flush>
                 {d.materials.length === 0 ? <Empty title="No materials" what="The admin creates materials behind the timelock, each with a season cap." next={<Link href="/craft">Craft</Link>} /> : (
@@ -252,6 +252,7 @@ export default async function EconomyPage({ searchParams }: { searchParams: Prom
                 )}
               </Card>
             </div>
+            )}
           </>
         )}</Failed>
       </Section>
@@ -284,17 +285,23 @@ export default async function EconomyPage({ searchParams }: { searchParams: Prom
           <>
             <div className="econ-figs">
               <Fig label="Chests funded" value={sol(d.inflows.funded)} sub={`${int(d.inflows.fundings)} fundings`} />
-              <Fig label="Siege spend" value={sol(d.outflows.siegeSpent)} sub={`counter-strikes ${sol(d.outflows.counterStrikeSpent)}`} />
+              <Fig label="Siege spend" value={sol(d.outflows.siegeSpent)} sub={d.outflows.counterStrikeSpent ? `counter-strikes ${sol(d.outflows.counterStrikeSpent)}` : `${int(d.outflows.sieges)} sieges, no counter-strikes`} />
               <Fig label="Raze proceeds" value={sol(d.outflows.razeProceeds)} sub={`${int(d.outflows.razes)} razes`} />
-              <Fig label="Boss pool" value={sol(d.boss.funded)} sub={`claimed ${sol(d.boss.claimed)}`} />
-              <Fig label="Season prize" value={sol(d.prize.toWinner)} sub={`treasury ${sol(d.prize.toTreasury)}`} />
+              <Fig label="Boss pool" value={sol(d.boss.funded)} sub={d.boss.claimed ? `claimed ${sol(d.boss.claimed)}` : 'nothing claimed'} />
+              <Fig label="Season prize" value={sol(d.prize.toWinner)} sub={d.prize.paid ? `treasury ${sol(d.prize.toTreasury)}` : 'no prize paid'} />
             </div>
             <div className="grid cols-main">
               <Card title="Funded against siege spend">
                 {d.series.length === 0 ? <Empty title="No war money moved in this period" what="Chests fill from fees routed by a token's companion and from treaty shares; sieges spend from them." next={<Link href="/war">War room</Link>} />
                   : <Columns label="War chests funded and siege spend over time" mode="group" series={[{ key: 'funded', label: 'Funded', color: C[0]! }, { key: 'spent', label: 'Siege spend', color: C[1]! }]} buckets={d.series.map((s) => ({ t: s.t, values: { funded: Number(s.funded), spent: Number(s.spent) } }))} from={d.window.from} to={d.window.to} bucketSecs={d.window.bucketSecs} />}
                 <div className="econ-legend-row" aria-hidden><span><i style={{ background: C[0] }} />Funded</span><span><i style={{ background: C[1] }} />Siege spend</span></div>
-                <p className="econ-note">Also in: {sol(d.inflows.fromCompanions)} routed by companions, {sol(d.inflows.treatyShared)} treaty shares, {sol(d.inflows.coalitionContributed)} to coalitions. Out: {sol(d.outflows.coalitionSiegeSpent)} on coalition sieges, {sol(d.outflows.bountiesPaid)} in raid bounties.</p>
+                <dl className="econ-kv">
+                  <div><dt>Routed by companions</dt><dd>{sol(d.inflows.fromCompanions)}</dd></div>
+                  <div><dt>Treaty shares</dt><dd>{sol(d.inflows.treatyShared)}</dd></div>
+                  <div><dt>Put into coalitions</dt><dd>{sol(d.inflows.coalitionContributed)}</dd></div>
+                  <div><dt>Coalition siege spend</dt><dd>{sol(d.outflows.coalitionSiegeSpent)}</dd></div>
+                  <div><dt>Raid bounties paid</dt><dd>{sol(d.outflows.bountiesPaid)}</dd></div>
+                </dl>
               </Card>
               <Card title="Chests" flush>
                 {d.chests.length === 0 ? <Empty title="No chest moved" what="A token's chest shows once it is funded or spends." /> : (

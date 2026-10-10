@@ -19,6 +19,8 @@ export const FEE_SOURCES = ['dex', 'launchLp', 'itemRun', 'sale', 'licence', 'le
 const SOURCE_OF: Record<number, (typeof FEE_SOURCES)[number]> = Object.fromEntries(FEE_SOURCES.map((s, i) => [i, s]));
 
 const BSOL = FIXED_ADDRESSES.bridgedSolMint;
+/** `Pubkey::default()`: the mint the book, licences and recipes name for fees paid in native lamports. */
+const NATIVE = '11111111111111111111111111111111';
 
 export interface Window { period: Period; from: number; to: number; bucketSecs: number; seasonNumber: number | null }
 
@@ -75,23 +77,25 @@ export interface Revenue {
 
 /**
  * Protocol revenue by source. The DEX share is `Swapped.protocol_fee` (always in the pool's quote
- * token) on pools quoted in bridged SOL; item runs, licences, book fills and recipes are their
- * programs' `ProtocolFee` events in bridged SOL; sales are `Sold.fee`, paid in SOL. Lease fees and
- * the launch LP source record no protocol fee in the current programs and read as null.
+ * token) on pools quoted in bridged SOL; licences, book fills and recipes are their programs'
+ * `ProtocolFee` events in native lamports (the default mint); sales are `Sold.fee`, in lamports.
+ * Item-run fees are taken on the token side in the token's own units, so they are listed per token
+ * in `otherMints`, never summed into SOL. Lease fees and the launch LP source record no protocol
+ * fee in the current programs and read as null.
  */
 export async function revenue(db: Pool, conn: Connection | null, w: Window): Promise<Revenue> {
   const b = w.bucketSecs;
   const series = await rows(db, `
     with fees as (
       select s.ts, 0 as source, s.protocol_fee as amount from ev_swap_swapped s join ev_swap_pool_created p on p.pool = s.pool where p.quote_mint = $3 and s.protocol_fee > 0
-      union all select ts, source::int, amount from ev_items_protocol_fee where mint = $3
-      union all select ts, source::int, amount from ev_craft_protocol_fee where mint = $3
-      union all select ts, source::int, amount from ev_book_protocol_fee where mint = $3
-      union all select ts, source::int, amount from ev_market_protocol_fee where mint = $3
+      union all select ts, source::int, amount from ev_items_protocol_fee where mint in ($3, $5)
+      union all select ts, source::int, amount from ev_craft_protocol_fee where mint in ($3, $5)
+      union all select ts, source::int, amount from ev_book_protocol_fee where mint in ($3, $5)
+      union all select ts, source::int, amount from ev_market_protocol_fee where mint in ($3, $5)
       union all select ts, 3, fee from ev_market_sold where fee > 0
     )
     select (ts / $4)::bigint * $4 as t, source, sum(amount) as lamports, count(*) as events
-    from fees where ts >= $1 and ts <= $2 group by 1, 2 order by 1`, [w.from, w.to, BSOL, b]);
+    from fees where ts >= $1 and ts <= $2 group by 1, 2 order by 1`, [w.from, w.to, BSOL, b, NATIVE]);
   const totals = new Map<string, { lamports: bigint; events: number }>();
   const buckets = new Map<number, Partial<Record<(typeof FEE_SOURCES)[number], string>>>();
   for (const r of series) {
@@ -111,7 +115,7 @@ export async function revenue(db: Pool, conn: Connection | null, w: Window): Pro
     select mint, source::int as source, sum(amount) as amount, count(*) as events from (
       select ts, mint, source, amount from ev_items_protocol_fee union all select ts, mint, source, amount from ev_craft_protocol_fee
       union all select ts, mint, source, amount from ev_book_protocol_fee union all select ts, mint, source, amount from ev_market_protocol_fee
-    ) f where mint <> $3 and ts >= $1 and ts <= $2 group by 1, 2 order by 4 desc limit 20`, [w.from, w.to, BSOL]);
+    ) f where mint not in ($3, $4) and ts >= $1 and ts <= $2 group by 1, 2 order by 4 desc limit 20`, [w.from, w.to, BSOL, NATIVE]);
   let configTotals: Revenue['configTotals'] = { book: null, craft: null };
   if (conn) {
     try {
