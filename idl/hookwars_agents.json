@@ -59,6 +59,49 @@
       "args": []
     },
     {
+      "name": "apply_memo_config",
+      "docs": [
+        "Applies proposed memo parameters after the timelock (anyone)."
+      ],
+      "discriminator": [
+        31,
+        2,
+        26,
+        76,
+        12,
+        67,
+        121,
+        90
+      ],
+      "accounts": [
+        {
+          "name": "memo_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  111,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "cancel_config",
       "docs": [
         "The admin cancels the pending change."
@@ -115,6 +158,89 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "commit",
+      "docs": [
+        "The agent binds an accepted offer by hash."
+      ],
+      "discriminator": [
+        223,
+        140,
+        142,
+        165,
+        229,
+        208,
+        156,
+        74
+      ],
+      "accounts": [
+        {
+          "name": "agent",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "passport"
+        },
+        {
+          "name": "commitment",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  109,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "passport"
+              },
+              {
+                "kind": "arg",
+                "path": "reference"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "reference",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "endorse_attestation",
@@ -475,6 +601,95 @@
       ]
     },
     {
+      "name": "init_memo_config",
+      "docs": [
+        "Creates the memo parameters, once, by the config admin."
+      ],
+      "discriminator": [
+        169,
+        129,
+        22,
+        35,
+        158,
+        71,
+        83,
+        2
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  103,
+                  101,
+                  110,
+                  116,
+                  115,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "memo_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  111,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "MemoParams"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "init_policy",
       "docs": [
         "The operator creates the policy."
@@ -820,6 +1035,105 @@
       "args": []
     },
     {
+      "name": "post",
+      "docs": [
+        "The agent pays postage on a message."
+      ],
+      "discriminator": [
+        223,
+        96,
+        234,
+        236,
+        158,
+        106,
+        145,
+        94
+      ],
+      "accounts": [
+        {
+          "name": "agent",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "passport"
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  103,
+                  101,
+                  110,
+                  116,
+                  115,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "memo_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  111,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "fee_collector",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "reference",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "post_bond",
       "docs": [
         "The agent posts a bond tying two treaty proposals."
@@ -1030,6 +1344,96 @@
           "type": {
             "defined": {
               "name": "ConfigArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "propose_memo_config",
+      "docs": [
+        "Proposes new memo parameters (applied after the admin timelock)."
+      ],
+      "discriminator": [
+        217,
+        70,
+        223,
+        62,
+        156,
+        17,
+        109,
+        203
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  103,
+                  101,
+                  110,
+                  116,
+                  115,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "memo_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  111,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "MemoParams"
             }
           }
         }
@@ -1646,6 +2050,199 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "set_directive",
+      "docs": [
+        "The operator programs its agent: a `Directive` bound by hash to a memo in this transaction,",
+        "its constraints written into the policy wallet."
+      ],
+      "discriminator": [
+        219,
+        48,
+        123,
+        67,
+        237,
+        3,
+        226,
+        44
+      ],
+      "accounts": [
+        {
+          "name": "operator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "passport"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  103,
+                  101,
+                  110,
+                  116,
+                  115,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "memo_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  111,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "passport"
+        },
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "passport"
+              }
+            ]
+          }
+        },
+        {
+          "name": "directive",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  114,
+                  101,
+                  99,
+                  116,
+                  105,
+                  118,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "passport"
+              },
+              {
+                "kind": "arg",
+                "path": "seq"
+              }
+            ]
+          }
+        },
+        {
+          "name": "previous",
+          "docs": [
+            "The directive this one replaces (absent for sequence 0)."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  114,
+                  101,
+                  99,
+                  116,
+                  105,
+                  118,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "passport"
+              },
+              {
+                "kind": "arg",
+                "path": "seq.wrapping_sub(1)"
+              }
+            ]
+          }
+        },
+        {
+          "name": "instructions",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "seq",
+          "type": "u32"
+        },
+        {
+          "name": "constraints",
+          "type": {
+            "defined": {
+              "name": "DirectiveConstraints"
+            }
+          }
+        }
+      ]
     },
     {
       "name": "set_limits",
@@ -2384,6 +2981,32 @@
       ]
     },
     {
+      "name": "Commitment",
+      "discriminator": [
+        61,
+        112,
+        129,
+        128,
+        24,
+        147,
+        77,
+        87
+      ]
+    },
+    {
+      "name": "Directive",
+      "discriminator": [
+        205,
+        3,
+        193,
+        96,
+        125,
+        1,
+        207,
+        31
+      ]
+    },
+    {
       "name": "Endorsement",
       "discriminator": [
         167,
@@ -2407,6 +3030,19 @@
         91,
         161,
         190
+      ]
+    },
+    {
+      "name": "MemoConfig",
+      "discriminator": [
+        211,
+        217,
+        207,
+        201,
+        221,
+        219,
+        157,
+        50
       ]
     },
     {
@@ -2555,6 +3191,19 @@
       ]
     },
     {
+      "name": "Committed",
+      "discriminator": [
+        70,
+        158,
+        162,
+        86,
+        29,
+        111,
+        143,
+        226
+      ]
+    },
+    {
       "name": "ConfigInitialized",
       "discriminator": [
         181,
@@ -2565,6 +3214,19 @@
         167,
         178,
         91
+      ]
+    },
+    {
+      "name": "DirectiveSet",
+      "discriminator": [
+        48,
+        168,
+        194,
+        20,
+        217,
+        141,
+        46,
+        141
       ]
     },
     {
@@ -2604,6 +3266,32 @@
         108,
         22,
         41
+      ]
+    },
+    {
+      "name": "MemoParamsProposed",
+      "discriminator": [
+        60,
+        118,
+        211,
+        113,
+        232,
+        205,
+        253,
+        4
+      ]
+    },
+    {
+      "name": "MessagePosted",
+      "discriminator": [
+        11,
+        28,
+        144,
+        13,
+        232,
+        160,
+        251,
+        5
       ]
     },
     {
@@ -2968,6 +3656,36 @@
       "code": 6040,
       "name": "MathOverflow",
       "msg": "arithmetic overflow"
+    },
+    {
+      "code": 6041,
+      "name": "DirectiveMemoMissing",
+      "msg": "no memo instruction with this directive in the transaction"
+    },
+    {
+      "code": 6042,
+      "name": "MemoMismatch",
+      "msg": "the memo is not the directive this instruction names"
+    },
+    {
+      "code": 6043,
+      "name": "BadSeq",
+      "msg": "the sequence is not the next one"
+    },
+    {
+      "code": 6044,
+      "name": "MemoNotSigned",
+      "msg": "the operator did not sign the memo"
+    },
+    {
+      "code": 6045,
+      "name": "BadMemoParams",
+      "msg": "memo parameters out of range"
+    },
+    {
+      "code": 6046,
+      "name": "NotAgent",
+      "msg": "the signer is not the passport's agent key"
     }
   ],
   "types": [
@@ -3404,6 +4122,14 @@
             "docs": [
               "Hookwars M3b: the bounty `settle_equip` pays its sender, of what it settles",
               "(`MAX_CRANK_BOUNTY_BPS` at most; 04 section 2.5)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "proposal_min_bps",
+            "docs": [
+              "Security review 1, M-2: the least a proposer must hold, in basis points of the mint's",
+              "supply, locked in place for the vote period (0 turns the requirement off). To set."
             ],
             "type": "u16"
           }
@@ -3847,6 +4573,81 @@
       }
     },
     {
+      "name": "Commitment",
+      "docs": [
+        "`Commitment` at `[\"commit\", passport, ref]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "passport",
+            "type": "pubkey"
+          },
+          {
+            "name": "reference",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "committed_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Committed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "passport",
+            "type": "pubkey"
+          },
+          {
+            "name": "reference",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "ConfigArgs",
       "docs": [
         "Arguments of `init_config` and `propose_config`."
@@ -3955,6 +4756,147 @@
               "defined": {
                 "name": "AgentsParams"
               }
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Directive",
+      "docs": [
+        "`Directive` at `[\"directive\", passport, seq]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "passport",
+            "type": "pubkey"
+          },
+          {
+            "name": "seq",
+            "type": "u32"
+          },
+          {
+            "name": "memo_hash",
+            "docs": [
+              "sha256 of the memo bytes (R41)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "constraints",
+            "type": {
+              "defined": {
+                "name": "DirectiveConstraints"
+              }
+            }
+          },
+          {
+            "name": "posted_at",
+            "type": "i64"
+          },
+          {
+            "name": "superseded_by",
+            "docs": [
+              "The next directive's sequence, once one replaces this."
+            ],
+            "type": {
+              "option": "u32"
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DirectiveConstraints",
+      "docs": [
+        "What a directive makes the chain enforce (11 section 4.3)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "max_spend_per_action",
+            "docs": [
+              "Written into `Policy.per_action_lamports`."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_spend_per_day",
+            "docs": [
+              "Written into `Policy.per_day_lamports`."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "allowed_targets",
+            "docs": [
+              "Written into `Policy.targets` (each must be allowed by the config)."
+            ],
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "allowed_access_modes",
+            "docs": [
+              "Access modes (bit per mode, 11 section 1.1) the agent may set on items it holds; read by",
+              "the armory's `set_access` (integration request)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "max_licence_price",
+            "docs": [
+              "Highest licence price the agent may set; read by the armory's `set_access`."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "frozen",
+            "docs": [
+              "Written into `Policy.frozen`."
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DirectiveSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "passport",
+            "type": "pubkey"
+          },
+          {
+            "name": "seq",
+            "type": "u32"
+          },
+          {
+            "name": "memo_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
             }
           },
           {
@@ -4332,6 +5274,116 @@
       }
     },
     {
+      "name": "MemoConfig",
+      "docs": [
+        "`MemoConfig` at `[\"memo-config\"]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "MemoParams"
+              }
+            }
+          },
+          {
+            "name": "pending",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "MemoParams"
+                }
+              }
+            }
+          },
+          {
+            "name": "pending_eta",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MemoParams",
+      "docs": [
+        "Memo parameters (11 section 11; all to set, TEST values in the suites)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "memo_max_bytes",
+            "docs": [
+              "`MEMO_MAX_BYTES`: the longest memo `set_directive` reads."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "postage_lamports",
+            "docs": [
+              "`POSTAGE_LAMPORTS`: paid by `post`."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "min_proof",
+            "docs": [
+              "`MEMO_MIN_PROOF`: the proof level the site shows by default (read off chain)."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MemoParamsProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "eta",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MessagePosted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "passport",
+            "type": "pubkey"
+          },
+          {
+            "name": "reference",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "postage",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "OperatorIndex",
       "docs": [
         "`OperatorIndex` at `[\"operator\", operator]` (09 2.4)."
@@ -4670,9 +5722,6 @@
           },
           {
             "name": "tracked",
-            "docs": [
-              "`(mint, per_action, per_day)`."
-            ],
             "type": {
               "vec": {
                 "defined": {
@@ -5023,7 +6072,8 @@
     {
       "name": "TrackedLimit",
       "docs": [
-        "One tracked mint (same bytes as the tuple `(mint, per_action, per_day)`)."
+        "One tracked mint's limits in `PolicyLimits` (a struct, not a tuple, so the IDL builds; same",
+        "bytes as the former `(mint, per_action, per_day)`)."
       ],
       "type": {
         "kind": "struct",

@@ -1,0 +1,2598 @@
+{
+  "address": "39LXQBGqZtg591jkGnZi9BELQ9hp1ZngbAxu6K1cC29Y",
+  "metadata": {
+    "name": "hookwars_craft",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Hookwars (units): materials, capped drops from verified activity, recipes, repairs and item wear (docs/spec/11-hook-economy.md section 5)."
+  },
+  "instructions": [
+    {
+      "name": "apply_config",
+      "docs": [
+        "Anyone applies a pending config change once it is ready."
+      ],
+      "discriminator": [
+        121,
+        42,
+        53,
+        8,
+        51,
+        150,
+        105,
+        249
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  102,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  102,
+                  116,
+                  45,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "apply_material_cap",
+      "docs": [
+        "Anyone applies a pending cap once ready."
+      ],
+      "discriminator": [
+        16,
+        102,
+        199,
+        7,
+        248,
+        120,
+        20,
+        1
+      ],
+      "accounts": [
+        {
+          "name": "material",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  116,
+                  101,
+                  114,
+                  105,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "material.id",
+                "account": "Material"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "craft",
+      "docs": [
+        "Crafts: burns the inputs, pays the fee and asks the output program to make the item.",
+        "Remaining accounts: `(material, material_mint, crafter holding)` per input, then the output",
+        "program's `mint_crafted` accounts after its first (the craft signer)."
+      ],
+      "discriminator": [
+        161,
+        233,
+        177,
+        214,
+        243,
+        109,
+        161,
+        224
+      ],
+      "accounts": [
+        {
+          "name": "crafter",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  102,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipe",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  99,
+                  105,
+                  112,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "recipe_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "season_pool",
+          "writable": true
+        },
+        {
+          "name": "craft_signer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  102,
+                  116,
+                  45,
+                  115,
+                  105,
+                  103,
+                  110,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "output_program"
+        },
+        {
+          "name": "skills"
+        },
+        {
+          "name": "profile",
+          "writable": true
+        },
+        {
+          "name": "social_caller"
+        },
+        {
+          "name": "social_event_authority"
+        },
+        {
+          "name": "social_program"
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "recipe_id",
+          "type": "u16"
+        },
+        {
+          "name": "reference",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "create_material",
+      "docs": [
+        "The admin creates a material and its mint (no hook, decimals 0, mint authority",
+        "`[\"craft-minter\"]`). Nothing drops until a drop rule names it."
+      ],
+      "discriminator": [
+        30,
+        207,
+        42,
+        139,
+        77,
+        243,
+        36,
+        184
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  102,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "material",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  116,
+                  101,
+                  114,
+                  105,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "material_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  116,
+                  101,
+                  114,
+                  105,
+                  97,
+                  108,
+                  45,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "u16"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        },
+        {
+          "name": "emission_cap_per_season",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "create_recipe",
+      "docs": [
+        "The admin creates a recipe; it is usable after the delay."
+      ],
+      "discriminator": [
+        64,
+        139,
+        143,
+        169,
+        196,
+        212,
+        15,
+        56
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  102,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipe",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  99,
+                  105,
+                  112,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "u16"
+        },
+        {
+          "name": "terms",
+          "type": {
+            "defined": {
+              "name": "RecipeTerms"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop",
+      "docs": [
+        "Drops material for `measured` units of verified activity of `source` to `recipient`. Only a",
+        "registered caller's `[\"craft-caller\"]` PDA signs. Never fails for a spent cap or a rule",
+        "not yet in effect (it drops nothing), so the caller's own path is never blocked."
+      ],
+      "discriminator": [
+        91,
+        71,
+        28,
+        206,
+        130,
+        176,
+        162,
+        145
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "docs": [
+            "A registered caller's `[\"craft-caller\"]` PDA."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Pays the recipient's holding when it does not exist yet."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  102,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "drop_rule",
+          "writable": true
+        },
+        {
+          "name": "material",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  116,
+                  101,
+                  114,
+                  105,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "material.id",
+                "account": "Material"
+              }
+            ]
+          }
+        },
+        {
+          "name": "material_mint",
+          "writable": true
+        },
+        {
+          "name": "minter",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  102,
+                  116,
+                  45,
+                  109,
+                  105,
+                  110,
+                  116,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient"
+        },
+        {
+          "name": "recipient_holding",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "caller_program",
+          "type": "pubkey"
+        },
+        {
+          "name": "source",
+          "type": "u8"
+        },
+        {
+          "name": "measured",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "init",
+      "docs": [
+        "Creates the config; the program's upgrade authority signs. Season 0 starts now."
+      ],
+      "discriminator": [
+        220,
+        59,
+        207,
+        236,
+        108,
+        250,
+        47,
+        100
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  102,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program_data"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "admin",
+          "type": "pubkey"
+        },
+        {
+          "name": "treasury",
+          "type": "pubkey"
+        },
+        {
+          "name": "season_pool",
+          "type": "pubkey"
+        },
+        {
+          "name": "output_program",
+          "type": "pubkey"
+        },
+        {
+          "name": "callers",
+          "type": {
+            "vec": "pubkey"
+          }
+        },
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "CraftParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "init_wear",
+      "docs": [
+        "Opens an item's wear with `max_charges` (0 = never wears). Only a registered caller's",
+        "`[\"craft-caller\"]` PDA signs (the items engine at item creation, integration request)."
+      ],
+      "discriminator": [
+        100,
+        183,
+        143,
+        44,
+        11,
+        50,
+        116,
+        42
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "docs": [
+            "A registered caller's `[\"craft-caller\"]` PDA."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  102,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "wear",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  101,
+                  97,
+                  114
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "item"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "caller_program",
+          "type": "pubkey"
+        },
+        {
+          "name": "item",
+          "type": "pubkey"
+        },
+        {
+          "name": "max_charges",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "propose_config",
+      "docs": [
+        "The admin proposes a new treasury, season pool, output program, callers and params; they",
+        "apply after `admin_timelock_secs`."
+      ],
+      "discriminator": [
+        163,
+        247,
+        238,
+        160,
+        236,
+        129,
+        153,
+        160
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  102,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  102,
+                  116,
+                  45,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "treasury",
+          "type": "pubkey"
+        },
+        {
+          "name": "season_pool",
+          "type": "pubkey"
+        },
+        {
+          "name": "output_program",
+          "type": "pubkey"
+        },
+        {
+          "name": "callers",
+          "type": {
+            "vec": "pubkey"
+          }
+        },
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "CraftParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "propose_material_cap",
+      "docs": [
+        "The admin proposes a new season cap for a material; anyone applies it after the delay",
+        "(`apply_material_cap`)."
+      ],
+      "discriminator": [
+        136,
+        63,
+        20,
+        144,
+        53,
+        172,
+        37,
+        238
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  102,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "material",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  116,
+                  101,
+                  114,
+                  105,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "material.id",
+                "account": "Material"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "cap",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "repair",
+      "docs": [
+        "Repairs an item the signer holds: burns the inputs, pays the fee, restores charges and",
+        "wakes a dormant item. Remaining accounts: `(material, material_mint, holder holding)` per",
+        "input."
+      ],
+      "discriminator": [
+        97,
+        230,
+        48,
+        23,
+        128,
+        133,
+        201,
+        192
+      ],
+      "accounts": [
+        {
+          "name": "holder",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  102,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipe",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  99,
+                  105,
+                  112,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "recipe_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "item"
+        },
+        {
+          "name": "item_mint"
+        },
+        {
+          "name": "holder_item_holding"
+        },
+        {
+          "name": "wear",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  101,
+                  97,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "season_pool",
+          "writable": true
+        },
+        {
+          "name": "skills"
+        },
+        {
+          "name": "profile",
+          "writable": true
+        },
+        {
+          "name": "social_caller"
+        },
+        {
+          "name": "social_event_authority"
+        },
+        {
+          "name": "social_program"
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "recipe_id",
+          "type": "u16"
+        },
+        {
+          "name": "reference",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_drop_rule",
+      "docs": [
+        "The admin sets a drop rule. A new rule drops nothing until the delay has passed; a change",
+        "to an existing rule applies after the delay (lazily, at the next `drop`)."
+      ],
+      "discriminator": [
+        187,
+        116,
+        145,
+        228,
+        225,
+        239,
+        166,
+        58
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  102,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "drop_rule",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "source",
+          "type": "u8"
+        },
+        {
+          "name": "terms",
+          "type": {
+            "defined": {
+              "name": "DropTerms"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_recipe",
+      "docs": [
+        "The admin proposes new terms for a recipe (including `active`); they apply after the delay."
+      ],
+      "discriminator": [
+        96,
+        20,
+        161,
+        246,
+        236,
+        30,
+        170,
+        219
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  102,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipe",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  99,
+                  105,
+                  112,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "recipe.id",
+                "account": "Recipe"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "terms",
+          "type": {
+            "defined": {
+              "name": "RecipeTerms"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "wear",
+      "docs": [
+        "Adds `runs` applied effects to an item's wear. Only a registered caller's PDA signs (the",
+        "items engine at settlement, integration request). Never fails because the item is worn:",
+        "at `max_charges` it turns dormant and `ItemWorn` is emitted once."
+      ],
+      "discriminator": [
+        65,
+        0,
+        227,
+        59,
+        243,
+        27,
+        116,
+        120
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "docs": [
+            "A registered caller's `[\"craft-caller\"]` PDA."
+          ],
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  102,
+                  116,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "wear",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  101,
+                  97,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wear.item",
+                "account": "Wear"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "caller_program",
+          "type": "pubkey"
+        },
+        {
+          "name": "runs",
+          "type": "u32"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "CraftConfig",
+      "discriminator": [
+        70,
+        153,
+        234,
+        57,
+        102,
+        235,
+        107,
+        86
+      ]
+    },
+    {
+      "name": "DropRule",
+      "discriminator": [
+        139,
+        177,
+        245,
+        57,
+        223,
+        253,
+        253,
+        123
+      ]
+    },
+    {
+      "name": "Material",
+      "discriminator": [
+        160,
+        177,
+        196,
+        114,
+        114,
+        46,
+        54,
+        201
+      ]
+    },
+    {
+      "name": "PendingCraft",
+      "discriminator": [
+        210,
+        141,
+        39,
+        229,
+        167,
+        137,
+        239,
+        99
+      ]
+    },
+    {
+      "name": "Recipe",
+      "discriminator": [
+        10,
+        162,
+        156,
+        100,
+        56,
+        193,
+        205,
+        77
+      ]
+    },
+    {
+      "name": "Wear",
+      "discriminator": [
+        157,
+        223,
+        129,
+        9,
+        145,
+        138,
+        61,
+        117
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "CraftParamsProposed",
+      "discriminator": [
+        104,
+        247,
+        7,
+        154,
+        65,
+        19,
+        80,
+        159
+      ]
+    },
+    {
+      "name": "Crafted",
+      "discriminator": [
+        169,
+        195,
+        232,
+        146,
+        229,
+        14,
+        57,
+        149
+      ]
+    },
+    {
+      "name": "DropRuleProposed",
+      "discriminator": [
+        235,
+        193,
+        81,
+        170,
+        177,
+        68,
+        106,
+        91
+      ]
+    },
+    {
+      "name": "Dropped",
+      "discriminator": [
+        146,
+        61,
+        48,
+        224,
+        114,
+        94,
+        49,
+        12
+      ]
+    },
+    {
+      "name": "ItemWorn",
+      "discriminator": [
+        126,
+        80,
+        113,
+        35,
+        49,
+        66,
+        231,
+        69
+      ]
+    },
+    {
+      "name": "MaterialCapProposed",
+      "discriminator": [
+        237,
+        161,
+        141,
+        186,
+        126,
+        93,
+        65,
+        37
+      ]
+    },
+    {
+      "name": "MaterialCreated",
+      "discriminator": [
+        172,
+        64,
+        238,
+        192,
+        249,
+        100,
+        183,
+        76
+      ]
+    },
+    {
+      "name": "ProtocolFee",
+      "discriminator": [
+        152,
+        79,
+        46,
+        229,
+        127,
+        92,
+        192,
+        21
+      ]
+    },
+    {
+      "name": "RecipeProposed",
+      "discriminator": [
+        161,
+        144,
+        244,
+        25,
+        240,
+        190,
+        86,
+        19
+      ]
+    },
+    {
+      "name": "Repaired",
+      "discriminator": [
+        127,
+        162,
+        209,
+        109,
+        151,
+        128,
+        232,
+        199
+      ]
+    },
+    {
+      "name": "WearOpened",
+      "discriminator": [
+        33,
+        48,
+        197,
+        31,
+        246,
+        60,
+        197,
+        22
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "NotUpgradeAuthority",
+      "msg": "the signer is not this program's upgrade authority"
+    },
+    {
+      "code": 6001,
+      "name": "NotAdmin",
+      "msg": "only the craft admin may do this"
+    },
+    {
+      "code": 6002,
+      "name": "BadParams",
+      "msg": "a craft parameter is out of bounds"
+    },
+    {
+      "code": 6003,
+      "name": "NotReady",
+      "msg": "no change is pending, or it is not ready yet"
+    },
+    {
+      "code": 6004,
+      "name": "WrongAccount",
+      "msg": "an account is not the one expected"
+    },
+    {
+      "code": 6005,
+      "name": "NotCaller",
+      "msg": "the signer is not a registered caller's PDA"
+    },
+    {
+      "code": 6006,
+      "name": "BadName",
+      "msg": "a material name or symbol is too long or empty"
+    },
+    {
+      "code": 6007,
+      "name": "BadDropRule",
+      "msg": "a drop rule is malformed"
+    },
+    {
+      "code": 6008,
+      "name": "BadRecipe",
+      "msg": "a recipe is malformed"
+    },
+    {
+      "code": 6009,
+      "name": "RecipeClosed",
+      "msg": "the recipe is closed or not yet in effect"
+    },
+    {
+      "code": 6010,
+      "name": "WrongRecipe",
+      "msg": "the recipe is not of this kind, or not for this item's template"
+    },
+    {
+      "code": 6011,
+      "name": "LevelTooLow",
+      "msg": "the crafter's level is too low for this recipe"
+    },
+    {
+      "code": 6012,
+      "name": "NotItemHolder",
+      "msg": "the signer does not hold the item"
+    },
+    {
+      "code": 6013,
+      "name": "NotAnItem",
+      "msg": "not an item of the armory"
+    },
+    {
+      "code": 6014,
+      "name": "NeverWears",
+      "msg": "the item never wears"
+    },
+    {
+      "code": 6015,
+      "name": "Overflow",
+      "msg": "arithmetic overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "CraftConfig",
+      "docs": [
+        "`CraftConfig` at `[\"craft-config\"]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "Receives `RECIPE_PROTOCOL_BPS` of every recipe fee (11 section 2.4)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "season_pool",
+            "docs": [
+              "Receives the rest of every recipe fee (the season prize pool, 05 section 14)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "output_program",
+            "docs": [
+              "The program whose `mint_crafted` makes a crafted item (the armory; integration request)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "callers",
+            "docs": [
+              "Programs whose `[\"craft-caller\"]` PDA may call `drop`, `init_wear` and `wear` (R42)."
+            ],
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "CraftParams"
+              }
+            }
+          },
+          {
+            "name": "season_origin",
+            "docs": [
+              "Start of season 0."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "protocol_fees_total",
+            "docs": [
+              "Every lamport of recipe fees the protocol has received (11 section 2.4)."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "CraftParams",
+      "docs": [
+        "The craft parameters (11 section 11; every one \"to set\")."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "recipe_protocol_bps",
+            "docs": [
+              "`RECIPE_PROTOCOL_BPS`: the protocol's share of a recipe fee; the rest goes to the season pool."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "max_inputs",
+            "docs": [
+              "`RECIPE_MAX_INPUTS` (at most `INPUTS_CAP`)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "season_secs",
+            "docs": [
+              "Length of an emission season (caps reset each season)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "admin_timelock_secs",
+            "docs": [
+              "`ADMIN_TIMELOCK_SECS` (00): delay on every params, drop rule, cap and recipe change."
+            ],
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CraftParamsProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ready_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Crafted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "recipe",
+            "type": "u16"
+          },
+          {
+            "name": "crafter",
+            "type": "pubkey"
+          },
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "fee",
+            "type": "u64"
+          },
+          {
+            "name": "reference",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DropRule",
+      "docs": [
+        "`DropRule` at `[\"drop\", source]` (11 section 5.2). The amount dropped is",
+        "`measured * per_unit_num / per_unit_den`, capped by the material's season cap."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "source",
+            "type": "u8"
+          },
+          {
+            "name": "material_id",
+            "type": "u16"
+          },
+          {
+            "name": "per_unit_num",
+            "type": "u64"
+          },
+          {
+            "name": "per_unit_den",
+            "type": "u64"
+          },
+          {
+            "name": "effective_at",
+            "docs": [
+              "The rule drops nothing before this time."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "pending",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "DropTerms"
+                }
+              }
+            }
+          },
+          {
+            "name": "pending_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DropRuleProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "source",
+            "type": "u8"
+          },
+          {
+            "name": "material_id",
+            "type": "u16"
+          },
+          {
+            "name": "per_unit_num",
+            "type": "u64"
+          },
+          {
+            "name": "per_unit_den",
+            "type": "u64"
+          },
+          {
+            "name": "ready_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DropTerms",
+      "docs": [
+        "The settable part of a drop rule."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "material_id",
+            "type": "u16"
+          },
+          {
+            "name": "per_unit_num",
+            "type": "u64"
+          },
+          {
+            "name": "per_unit_den",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Dropped",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "source",
+            "type": "u8"
+          },
+          {
+            "name": "material_id",
+            "type": "u16"
+          },
+          {
+            "name": "caller_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "measured",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "season",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ItemWorn",
+      "docs": [
+        "Emitted once, when an item turns dormant (11 section 5.4)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Material",
+      "docs": [
+        "`Material` at `[\"material\", id]` (11 section 5.2). Its mint is `[\"material-mint\", id]`, a plain",
+        "units mint with no hook whose mint authority is `[\"craft-minter\"]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "id",
+            "type": "u16"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "emission_cap_per_season",
+            "type": "u64"
+          },
+          {
+            "name": "emitted_this_season",
+            "type": "u64"
+          },
+          {
+            "name": "season",
+            "type": "u64"
+          },
+          {
+            "name": "emitted_total",
+            "type": "u64"
+          },
+          {
+            "name": "burned_total",
+            "type": "u64"
+          },
+          {
+            "name": "pending_cap",
+            "docs": [
+              "A cap change waiting for its delay (0 = none)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "pending_cap_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MaterialCapProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u16"
+          },
+          {
+            "name": "cap",
+            "type": "u64"
+          },
+          {
+            "name": "ready_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MaterialCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u16"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "emission_cap_per_season",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PendingCraft",
+      "docs": [
+        "`PendingCraft` at `[\"craft-pending\"]`: a config change waiting for its delay."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "season_pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "output_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "callers",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "CraftParams"
+              }
+            }
+          },
+          {
+            "name": "ready_at",
+            "type": "i64"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProtocolFee",
+      "docs": [
+        "Every protocol collection (11 section 2.4); `mint` is the default key for native lamports."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "source",
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "reference",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Recipe",
+      "docs": [
+        "`Recipe` at `[\"recipe\", id]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "id",
+            "type": "u16"
+          },
+          {
+            "name": "terms",
+            "type": {
+              "defined": {
+                "name": "RecipeTerms"
+              }
+            }
+          },
+          {
+            "name": "effective_at",
+            "docs": [
+              "Usable from this time (a new recipe waits for the timelock too)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "pending",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "RecipeTerms"
+                }
+              }
+            }
+          },
+          {
+            "name": "pending_at",
+            "type": "i64"
+          },
+          {
+            "name": "uses",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RecipeInput",
+      "docs": [
+        "One recipe input."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "material_id",
+            "type": "u16"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RecipeProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u16"
+          },
+          {
+            "name": "ready_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RecipeTerms",
+      "docs": [
+        "The settable part of a recipe (11 section 5.3)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "inputs",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "RecipeInput"
+                }
+              }
+            }
+          },
+          {
+            "name": "fee_lamports",
+            "docs": [
+              "`RECIPE_FEE_LAMPORTS` of this recipe."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "template_id",
+            "docs": [
+              "`Craft`: the template made. `Repair`: the template repaired."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "param_min",
+            "docs": [
+              "`Craft`: parameter ranges the output program draws from (equal bounds fix a field)."
+            ],
+            "type": {
+              "array": [
+                "u32",
+                11
+              ]
+            }
+          },
+          {
+            "name": "param_max",
+            "type": {
+              "array": [
+                "u32",
+                11
+              ]
+            }
+          },
+          {
+            "name": "charges_restored",
+            "docs": [
+              "`Repair`: charges restored."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "min_level",
+            "docs": [
+              "The `Crafter` level required (0 = none)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Repaired",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "recipe",
+            "type": "u16"
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "holder",
+            "type": "pubkey"
+          },
+          {
+            "name": "restored",
+            "type": "u32"
+          },
+          {
+            "name": "used",
+            "type": "u32"
+          },
+          {
+            "name": "fee",
+            "type": "u64"
+          },
+          {
+            "name": "reference",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Wear",
+      "docs": [
+        "`Wear` at `[\"wear\", item]` (11 section 5.4): the item's charges, kept here rather than in the",
+        "armory `Item` (the items engine reads it, integration request)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "max_charges",
+            "docs": [
+              "0 = never wears."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "used",
+            "type": "u32"
+          },
+          {
+            "name": "dormant",
+            "type": "bool"
+          },
+          {
+            "name": "repairs",
+            "type": "u32"
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WearOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "max_charges",
+            "type": "u32"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}

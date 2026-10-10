@@ -54,7 +54,7 @@ const MAX_TARGETS = 255;
 const MAX_PAIRS = 32;
 
 /** One staged transaction before compiling: its instructions, the keys the browser signs with, and whether it can be simulated now. */
-interface Stage { label: string; ixs: TransactionInstruction[]; extraSigners: ('mint' | 'config')[]; simulate: boolean; tables: AddressLookupTableAccount[] }
+export interface Stage { label: string; ixs: TransactionInstruction[]; extraSigners: ('mint' | 'config')[]; simulate: boolean; tables: AddressLookupTableAccount[] }
 
 export interface PrepareDef {
   programs: (keyof typeof PROGRAM_IDS)[];
@@ -330,7 +330,7 @@ const BURN = new Set([32, 33]);
 
 /** A launch's staged transactions (03 section 4.3, M3b): prepare, one equip per launch item, the
  * mint's lookup table, the launch, then the registry, the war state and the raid ledger. */
-async function launchStages(b: Body, conn: Connection): Promise<Stage[]> {
+export async function launchStages(b: Body, conn: Connection): Promise<Stage[]> {
   const owner = pk(b, 'owner'); const mint = pk(b, 'mint');
   const name = String(b.name ?? ''); const symbol = String(b.symbol ?? '');
   if (!name || name.length > 32 || !/^[^\s]{1,10}$/.test(symbol)) throw new PrepareError(400, 'BadRequest', 'A name of 1 to 32 characters and a ticker of 1 to 10 without spaces are required.');
@@ -380,7 +380,7 @@ async function launchStages(b: Body, conn: Connection): Promise<Stage[]> {
 }
 
 /** The forwarded pool slots' item registries of a prepared mint, in slot order. */
-function poolItemRegistries(m: hookwars.SlotMintData, mint: PublicKey): PublicKey[] {
+export function poolItemRegistries(m: hookwars.SlotMintData, mint: PublicKey): PublicKey[] {
   return hookwars.activeSlots(m)
     .filter((s) => (s.kind === 4 || s.kind === 3) && (s.poolFlags & 3) !== 0 && !s.item.equals(PublicKey.default))
     .map((s) => hookwars.slotRegistryAddress(s, mint));
@@ -388,7 +388,7 @@ function poolItemRegistries(m: hookwars.SlotMintData, mint: PublicKey): PublicKe
 
 /** The second phase: the mint's lookup table, the launch (deposit slices and pool registries read
  * from the chain), then war state and raid ledger. */
-async function launchPhase(conn: Connection, owner: PublicKey, mint: PublicKey, args: { name: string; symbol: string; uri: string; creatorFeeBps: number; virtualQuote: bigint; rules: ReturnType<typeof launchRulesFromInput> }, req: SlotRequest[]): Promise<Stage[]> {
+export async function launchPhase(conn: Connection, owner: PublicKey, mint: PublicKey, args: { name: string; symbol: string; uri: string; creatorFeeBps: number; virtualQuote: bigint; rules: ReturnType<typeof launchRulesFromInput> }, req: SlotRequest[]): Promise<Stage[]> {
   const mintInfo = await conn.getAccountInfo(mint, 'confirmed');
   if (!mintInfo) throw new PrepareError(409, 'NotPrepared', 'Prepare the launch first: this mint does not exist yet.');
   const m = hookwars.decodeSlotMint(mintInfo.data);
@@ -440,7 +440,7 @@ export async function protocolTable(conn: Connection): Promise<AddressLookupTabl
 }
 
 const SWAP_PROGRAM_ID = new PublicKey(PROGRAM_IDS.swap);
-const PACKET = 1_232;
+export const PACKET = 1_232;
 
 /** Compiles `ixs` as v0 with `tables`, simulating first when `simulate` (units used plus 15%, upstream
  * hooks-v2 section 6), else with the full compute limit; refuses what would not fit a packet. */

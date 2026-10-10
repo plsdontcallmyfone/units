@@ -150,11 +150,12 @@ export function recordFunding(mint: PublicKey): TransactionInstruction {
 }
 
 /** `siege`: `slice` is the rival mint's delivery slice; `inner` the instructions the step invokes. */
-export function siege(cranker: PublicKey, mint: PublicKey, orders: Orders, rivalMint: PublicKey, rivalPool: PublicKey, rivalHasWar: boolean, rivalKitConfig: PublicKey | null, slice: AccountMeta[], inner: TransactionInstruction[]): TransactionInstruction {
+export function siege(cranker: PublicKey, mint: PublicKey, orders: Orders, rivalMint: PublicKey, rivalPool: PublicKey, _rivalHasWar: boolean, rivalKitConfig: PublicKey | null, slice: AccountMeta[], inner: TransactionInstruction[]): TransactionInstruction {
   return idlIx('war', 'siege', {
     cranker, mint, warState: warStateAddress(mint), warChest: warChestAddress(mint), ordersItem: orders.item, ordersTemplate: orders.template, raidLedger: raidLedgerAddress(mint), rivalMint,
     rivalLaunch: launchAddr(rivalMint), rivalPool,
-    rivalWarState: rivalHasWar ? warStateAddress(rivalMint) : null, rivalKitConfig,
+    // Changed by Hookwars (explorer v2, IDL regenerated at 7b48360): the rival's war state is required now (client.rs passes it always).
+    rivalWarState: warStateAddress(rivalMint), rivalKitConfig,
   }, { args: { first: slice.length, second: 0 } }, [...slice, ...accountsOf(inner)]);
 }
 

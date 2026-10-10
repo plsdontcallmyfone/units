@@ -1505,6 +1505,31 @@
       ],
       "accounts": [
         {
+          "name": "config",
+          "docs": [
+            "Security review 2, M-B: the season the funding counts for."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  114,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "war_state",
           "writable": true,
           "pda": {
@@ -2162,10 +2187,9 @@
         {
           "name": "rival_war_state",
           "docs": [
-            "The rival's war state, when it has one: marked besieged."
+            "a war state it is marked besieged; empty only while the rival has no war state."
           ],
-          "writable": true,
-          "optional": true
+          "writable": true
         },
         {
           "name": "rival_kit_config",
@@ -2621,6 +2645,19 @@
         182,
         38,
         197
+      ]
+    },
+    {
+      "name": "RazeWaited",
+      "discriminator": [
+        17,
+        220,
+        96,
+        120,
+        180,
+        221,
+        71,
+        144
       ]
     },
     {
@@ -4158,6 +4195,33 @@
       }
     },
     {
+      "name": "RazeWaited",
+      "docs": [
+        "Security review 1, M-3: a raze waited (the rival trades too far below its TWAP)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "rival_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "rival_price",
+            "type": "u128"
+          },
+          {
+            "name": "rival_twap",
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
       "name": "Razed",
       "type": {
         "kind": "struct",
@@ -4533,6 +4597,14 @@
           },
           {
             "name": "treaty_secs",
+            "type": "u64"
+          },
+          {
+            "name": "funded",
+            "docs": [
+              "Security review 2, M-B: what the chest received in this season (bridged SOL, from",
+              "`note_funding`). The score counts raid volume only up to `raid_volume_per_funded` times this."
+            ],
             "type": "u64"
           }
         ]
@@ -5203,6 +5275,31 @@
             "name": "loot_min_raid_lamports",
             "docs": [
               "`LOOT_MIN_RAID_LAMPORTS` (M3b): the smallest raid buy that earns a loot ticket."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "raze_max_discount_bps",
+            "docs": [
+              "Security review 1, M-3: a raze waits while the rival trades below its TWAP by more than",
+              "this (basis points). To set."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "bounty_max_point_bps",
+            "docs": [
+              "Security review 1, M-6: one raid point never pays more than this share of the quote volume",
+              "it stands for (`point_unit_lamports`), in basis points, whatever the War orders' rate. To set."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "raid_volume_per_funded",
+            "docs": [
+              "Security review 2, M-B: raid volume a season score counts per lamport the chest received in",
+              "the season. Washed raid volume costs nothing but fees; real chest funding is real money, so",
+              "the score can only be bought at this price. 0 leaves raid volume out of the score. To set."
             ],
             "type": "u64"
           }

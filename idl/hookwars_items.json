@@ -855,6 +855,76 @@
       ]
     },
     {
+      "name": "reslot_loyalty",
+      "docs": [
+        "Loyalty Pot: moves the pot to `slot` when its slot no longer holds the pot and `slot` does",
+        "(integration pass 2, 08 arsenal 2 request 7; permissionless)."
+      ],
+      "discriminator": [
+        189,
+        73,
+        198,
+        218,
+        146,
+        116,
+        64,
+        171
+      ],
+      "accounts": [
+        {
+          "name": "mint"
+        },
+        {
+          "name": "pot",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  121,
+                  97,
+                  108,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "old_equip_state"
+        },
+        {
+          "name": "old_item"
+        },
+        {
+          "name": "old_composite"
+        },
+        {
+          "name": "new_equip_state"
+        },
+        {
+          "name": "new_item"
+        },
+        {
+          "name": "new_composite"
+        }
+      ],
+      "args": [
+        {
+          "name": "slot",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "set_referrer",
       "docs": [
         "Referral: the buyer names its referrer, once (08 4.7)."
@@ -1296,6 +1366,19 @@
       ]
     },
     {
+      "name": "LeaseRentPaid",
+      "discriminator": [
+        234,
+        30,
+        233,
+        147,
+        16,
+        33,
+        249,
+        105
+      ]
+    },
+    {
       "name": "LoyaltyClaimed",
       "discriminator": [
         188,
@@ -1483,6 +1566,11 @@
       "msg": "only the holding's owner may set this"
     },
     {
+      "code": 7000,
+      "name": "SoulboundTransfer",
+      "msg": "this badge cannot be sent or sold"
+    },
+    {
       "code": 7100,
       "name": "GuestListClosed",
       "msg": "the opening is for holders of the target mint only"
@@ -1506,11 +1594,6 @@
       "code": 7104,
       "name": "SelfReferral",
       "msg": "a buyer cannot refer itself"
-    },
-    {
-      "code": 7000,
-      "name": "SoulboundTransfer",
-      "msg": "this badge cannot be sent or sold"
     }
   ],
   "types": [
@@ -1911,6 +1994,42 @@
       }
     },
     {
+      "name": "LeaseRentPaid",
+      "docs": [
+        "Integration pass 2 (10 section 17 I-7, R32): the lessor's share of a leased item's royalty,",
+        "paid by `settle_equip` out of the royalty (never on top of it)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "lessor",
+            "type": "pubkey"
+          },
+          {
+            "name": "rent_token",
+            "type": "u64"
+          },
+          {
+            "name": "rent_quote",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "LoyaltyClaimed",
       "docs": [
         "A loyalty claim."
@@ -2210,7 +2329,7 @@
           {
             "name": "direction",
             "docs": [
-              "Swap direction: 0 base \u2192 quote (a sell), 1 quote \u2192 base (a buy)."
+              "Swap direction: 0 base → quote (a sell), 1 quote → base (a buy)."
             ],
             "type": "u8"
           },

@@ -230,7 +230,7 @@ describe('errors are explained by the program that failed (codes overlap)', () =
     expect(explainProgramError('launch', 2006)).toMatchObject({ name: 'ConstraintSeeds' });
     expect(explainProgramError('kit', 6999).name).toBeNull();
     expect(explainProgramError('swap', 6037)).toMatchObject({ name: 'NotBridgedSol', message: "the pool's quote is not bridged SOL" });
-    expect([PROGRAM_ERRORS.kit.size, PROGRAM_ERRORS.launch.size, PROGRAM_ERRORS.swap.size, PROGRAM_ERRORS.token.size, PROGRAM_ERRORS.bridge.size, PROGRAM_ERRORS.taxHook.size]).toEqual([29, 58, 45, 45, 14, 6]); // Changed by Hookwars: the token program has the slot errors (M1); the launchpad's slot launch and the DEX's route errors (M3a, M3b, from the regenerated IDLs)
+    expect([PROGRAM_ERRORS.kit.size, PROGRAM_ERRORS.launch.size, PROGRAM_ERRORS.swap.size, PROGRAM_ERRORS.token.size, PROGRAM_ERRORS.bridge.size, PROGRAM_ERRORS.taxHook.size]).toEqual([30, 58, 45, 45, 14, 6]); // Changed by Hookwars: the kit's SourceNotAllowed (IDL regenerated at 7b48360, explorer v2); the token program has the slot errors (M1); the launchpad's slot launch and the DEX's route errors (M3a, M3b, from the regenerated IDLs)
   });
 
   it('finds the innermost failure in the logs of a swap that the kit refused', () => {

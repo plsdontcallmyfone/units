@@ -22,6 +22,9 @@ const PROGRAMS = [
   ['Agents', 'hookwars_agents'],
   ['Market', 'hookwars_market'],
   ['Social', 'hookwars_social'],
+  // Changed by Hookwars (explorer v2): the economy programs (11).
+  ['Craft', 'hookwars_craft'],
+  ['Book', 'hookwars_book'],
 ];
 
 const camel = (s) => s.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());

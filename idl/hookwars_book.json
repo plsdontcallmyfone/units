@@ -1,0 +1,2150 @@
+{
+  "address": "C4k2QquxzDdgHf74tnvyyWQyGUR8xvhPo1i1gFYb639g",
+  "metadata": {
+    "name": "hookwars_book",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Hookwars (units): a fully escrowed spot order book for materials and standing bids for item classes (docs/spec/11-hook-economy.md section 6)."
+  },
+  "instructions": [
+    {
+      "name": "apply_params",
+      "docs": [
+        "Anyone applies a pending change once it is ready."
+      ],
+      "discriminator": [
+        188,
+        203,
+        86,
+        124,
+        178,
+        34,
+        133,
+        116
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107,
+                  45,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel",
+      "docs": [
+        "The owner cancels a resting order and gets its escrow back."
+      ],
+      "discriminator": [
+        232,
+        219,
+        223,
+        41,
+        219,
+        236,
+        220,
+        190
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.base_mint",
+                "account": "BookMarket"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107,
+                  45,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "base_mint"
+        },
+        {
+          "name": "escrow_holding",
+          "writable": true
+        },
+        {
+          "name": "owner_holding",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "cancel_class_bid",
+      "docs": [
+        "The bidder closes a class bid; every lamport goes back."
+      ],
+      "discriminator": [
+        240,
+        141,
+        96,
+        161,
+        36,
+        134,
+        151,
+        58
+      ],
+      "accounts": [
+        {
+          "name": "bidder",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "bid"
+          ]
+        },
+        {
+          "name": "bid",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  115,
+                  115,
+                  45,
+                  98,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bidder"
+              },
+              {
+                "kind": "account",
+                "path": "bid.nonce",
+                "account": "ClassBid"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "crank",
+      "docs": [
+        "Anyone removes up to `max` expired orders (bids first, then asks, in book order), returning",
+        "their escrow to the owners and taking their bounties. Remaining accounts: a `(wallet, base",
+        "holding)` pair per order removed."
+      ],
+      "discriminator": [
+        0,
+        232,
+        3,
+        195,
+        124,
+        117,
+        105,
+        53
+      ],
+      "accounts": [
+        {
+          "name": "cranker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.base_mint",
+                "account": "BookMarket"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107,
+                  45,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "base_mint"
+        },
+        {
+          "name": "escrow_holding",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "max",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "create_market",
+      "docs": [
+        "Opens the book of a craft material (one per material). Requires `Trader >=",
+        "BOOK_CREATE_LEVEL` (3.3)."
+      ],
+      "discriminator": [
+        103,
+        226,
+        97,
+        235,
+        200,
+        188,
+        251,
+        254
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "material"
+        },
+        {
+          "name": "base_mint"
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107,
+                  45,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_holding",
+          "writable": true
+        },
+        {
+          "name": "skills"
+        },
+        {
+          "name": "profile"
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "tick_lamports",
+          "type": "u64"
+        },
+        {
+          "name": "min_size",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "init",
+      "docs": [
+        "Creates the config; the program's upgrade authority signs."
+      ],
+      "discriminator": [
+        220,
+        59,
+        207,
+        236,
+        108,
+        250,
+        47,
+        100
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program_data"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "admin",
+          "type": "pubkey"
+        },
+        {
+          "name": "treasury",
+          "type": "pubkey"
+        },
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "BookParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "match_class",
+      "docs": [
+        "The holder of a fitting item sells it into a class bid: the item moves to the bidder, the",
+        "price less the taker fee to the seller, both fees to the treasury, the bid account closes",
+        "to the bidder. Refused for an item that is listed, leased or equipped."
+      ],
+      "discriminator": [
+        210,
+        41,
+        83,
+        149,
+        245,
+        47,
+        49,
+        155
+      ],
+      "accounts": [
+        {
+          "name": "seller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bid",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  115,
+                  115,
+                  45,
+                  98,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bid.bidder",
+                "account": "ClassBid"
+              },
+              {
+                "kind": "account",
+                "path": "bid.nonce",
+                "account": "ClassBid"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bidder",
+          "writable": true
+        },
+        {
+          "name": "item"
+        },
+        {
+          "name": "item_mint"
+        },
+        {
+          "name": "seller_holding",
+          "writable": true
+        },
+        {
+          "name": "bidder_holding",
+          "writable": true
+        },
+        {
+          "name": "listing"
+        },
+        {
+          "name": "lease"
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "reference",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "place",
+      "docs": [
+        "Places a limit order: crosses the best opposite orders (price, then time; expired orders",
+        "are skipped), up to `BOOK_MATCH_MAX` fills, then rests what is left if it is at least",
+        "`min_size`. Remaining accounts: a `(wallet, base holding)` pair for each maker filled, in",
+        "book order, then one for the evicted owner when the side is full."
+      ],
+      "discriminator": [
+        143,
+        53,
+        56,
+        40,
+        41,
+        16,
+        5,
+        75
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.base_mint",
+                "account": "BookMarket"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107,
+                  45,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "base_mint"
+        },
+        {
+          "name": "escrow_holding",
+          "writable": true
+        },
+        {
+          "name": "owner_holding",
+          "writable": true
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "skills"
+        },
+        {
+          "name": "profile",
+          "writable": true
+        },
+        {
+          "name": "social_caller"
+        },
+        {
+          "name": "social_event_authority"
+        },
+        {
+          "name": "social_program"
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "token_event_authority"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "side_",
+          "type": "u8"
+        },
+        {
+          "name": "price",
+          "type": "u64"
+        },
+        {
+          "name": "size",
+          "type": "u64"
+        },
+        {
+          "name": "post_only",
+          "type": "bool"
+        },
+        {
+          "name": "expires_at",
+          "type": "i64"
+        },
+        {
+          "name": "reference",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "place_class_bid",
+      "docs": [
+        "Opens a standing bid for any item of `class` at `price`; the bid account holds the price",
+        "and the maker fee."
+      ],
+      "discriminator": [
+        34,
+        96,
+        133,
+        18,
+        26,
+        145,
+        121,
+        188
+      ],
+      "accounts": [
+        {
+          "name": "bidder",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bid",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  115,
+                  115,
+                  45,
+                  98,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bidder"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "class",
+          "type": {
+            "defined": {
+              "name": "ClassKey"
+            }
+          }
+        },
+        {
+          "name": "price",
+          "type": "u64"
+        },
+        {
+          "name": "expires_at",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "propose_params",
+      "docs": [
+        "The admin proposes new params and treasury; they apply after `admin_timelock_secs`."
+      ],
+      "discriminator": [
+        94,
+        141,
+        220,
+        182,
+        171,
+        53,
+        52,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107,
+                  45,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "BookParams"
+            }
+          }
+        },
+        {
+          "name": "treasury",
+          "type": "pubkey"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "BookConfig",
+      "discriminator": [
+        21,
+        198,
+        151,
+        146,
+        205,
+        78,
+        22,
+        233
+      ]
+    },
+    {
+      "name": "BookEscrow",
+      "discriminator": [
+        187,
+        64,
+        254,
+        34,
+        223,
+        8,
+        124,
+        95
+      ]
+    },
+    {
+      "name": "BookMarket",
+      "discriminator": [
+        12,
+        209,
+        92,
+        175,
+        112,
+        59,
+        20,
+        54
+      ]
+    },
+    {
+      "name": "ClassBid",
+      "discriminator": [
+        180,
+        122,
+        215,
+        151,
+        2,
+        168,
+        216,
+        84
+      ]
+    },
+    {
+      "name": "PendingBook",
+      "discriminator": [
+        104,
+        120,
+        238,
+        43,
+        203,
+        21,
+        66,
+        156
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "BookParamsProposed",
+      "discriminator": [
+        15,
+        224,
+        228,
+        90,
+        236,
+        46,
+        158,
+        55
+      ]
+    },
+    {
+      "name": "Cancelled",
+      "discriminator": [
+        136,
+        23,
+        42,
+        65,
+        143,
+        233,
+        234,
+        46
+      ]
+    },
+    {
+      "name": "ClassBidCancelled",
+      "discriminator": [
+        166,
+        215,
+        106,
+        154,
+        161,
+        198,
+        133,
+        100
+      ]
+    },
+    {
+      "name": "ClassBidPlaced",
+      "discriminator": [
+        169,
+        6,
+        127,
+        106,
+        235,
+        172,
+        35,
+        0
+      ]
+    },
+    {
+      "name": "ClassFilled",
+      "discriminator": [
+        145,
+        76,
+        86,
+        32,
+        169,
+        62,
+        200,
+        168
+      ]
+    },
+    {
+      "name": "Evicted",
+      "discriminator": [
+        200,
+        155,
+        28,
+        28,
+        191,
+        178,
+        201,
+        27
+      ]
+    },
+    {
+      "name": "Expired",
+      "discriminator": [
+        197,
+        227,
+        104,
+        103,
+        133,
+        50,
+        207,
+        161
+      ]
+    },
+    {
+      "name": "Filled",
+      "discriminator": [
+        134,
+        4,
+        17,
+        63,
+        221,
+        45,
+        177,
+        173
+      ]
+    },
+    {
+      "name": "MarketCreated",
+      "discriminator": [
+        88,
+        184,
+        130,
+        231,
+        226,
+        84,
+        6,
+        58
+      ]
+    },
+    {
+      "name": "Placed",
+      "discriminator": [
+        182,
+        12,
+        15,
+        19,
+        155,
+        29,
+        175,
+        156
+      ]
+    },
+    {
+      "name": "ProtocolFee",
+      "discriminator": [
+        152,
+        79,
+        46,
+        229,
+        127,
+        92,
+        192,
+        21
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "NotUpgradeAuthority",
+      "msg": "the signer is not this program's upgrade authority"
+    },
+    {
+      "code": 6001,
+      "name": "NotAdmin",
+      "msg": "only the book admin may do this"
+    },
+    {
+      "code": 6002,
+      "name": "BadParams",
+      "msg": "a book parameter is out of bounds"
+    },
+    {
+      "code": 6003,
+      "name": "NotReady",
+      "msg": "no change is pending, or it is not ready yet"
+    },
+    {
+      "code": 6004,
+      "name": "WrongAccount",
+      "msg": "an account is not the one expected"
+    },
+    {
+      "code": 6005,
+      "name": "BadBase",
+      "msg": "the base is not a material of the craft program"
+    },
+    {
+      "code": 6006,
+      "name": "BadPrice",
+      "msg": "the price is zero or not a multiple of the tick"
+    },
+    {
+      "code": 6007,
+      "name": "BadSize",
+      "msg": "the size is zero or below the minimum"
+    },
+    {
+      "code": 6008,
+      "name": "WouldCross",
+      "msg": "a post-only order would cross"
+    },
+    {
+      "code": 6009,
+      "name": "BookFull",
+      "msg": "the book side is full and the order is not better than its worst"
+    },
+    {
+      "code": 6010,
+      "name": "NoSuchOrder",
+      "msg": "no such order"
+    },
+    {
+      "code": 6011,
+      "name": "NotOwner",
+      "msg": "only the order's owner may do this"
+    },
+    {
+      "code": 6012,
+      "name": "LevelTooLow",
+      "msg": "the creator's Trader level is too low"
+    },
+    {
+      "code": 6013,
+      "name": "ClassMismatch",
+      "msg": "the item does not fit the class, or is listed, leased or equipped"
+    },
+    {
+      "code": 6014,
+      "name": "BidExpired",
+      "msg": "the class bid has expired"
+    },
+    {
+      "code": 6015,
+      "name": "NotAnItem",
+      "msg": "not an item of the armory"
+    },
+    {
+      "code": 6016,
+      "name": "NotItemHolder",
+      "msg": "the signer does not hold the item"
+    },
+    {
+      "code": 6017,
+      "name": "Overflow",
+      "msg": "arithmetic overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "BookConfig",
+      "docs": [
+        "`BookConfig` at `[\"book-config\"]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "Receives every book fee (11 section 2.4)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "BookParams"
+              }
+            }
+          },
+          {
+            "name": "protocol_fees_total",
+            "docs": [
+              "Every lamport of fees the protocol has received."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "markets",
+            "type": "u32"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "BookEscrow",
+      "docs": [
+        "`BookEscrow` at `[\"book-escrow\", market]`: holds the bids' lamports (above its rent) and owns",
+        "the holding of the asks' base."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "market",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BookMarket",
+      "docs": [
+        "`BookMarket` at `[\"book\", base_mint]`: a material book (11 section 6.2). Quote is native SOL",
+        "(lamports), held by `[\"book-escrow\", market]` with the base of the asks."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "escrow_bump",
+            "type": "u8"
+          },
+          {
+            "name": "base_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "material_id",
+            "type": "u16"
+          },
+          {
+            "name": "tick_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "min_size",
+            "docs": [
+              "`min_size`: the least base units an order may rest with."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "seq",
+            "type": "u64"
+          },
+          {
+            "name": "bids",
+            "docs": [
+              "Best first: highest price, then oldest."
+            ],
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "Order"
+                }
+              }
+            }
+          },
+          {
+            "name": "asks",
+            "docs": [
+              "Best first: lowest price, then oldest."
+            ],
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "Order"
+                }
+              }
+            }
+          },
+          {
+            "name": "created_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "fills",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BookParams",
+      "docs": [
+        "The book's parameters (11 section 11; every one \"to set\")."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "taker_bps",
+            "docs": [
+              "`BOOK_TAKER_BPS`: paid by the taker on every fill."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "maker_bps",
+            "docs": [
+              "`BOOK_MAKER_BPS`: paid by the maker on every fill (may be 0)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "slots",
+            "docs": [
+              "`BOOK_SLOTS`: resting orders per side (at most `SLOTS_CAP`)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "match_max",
+            "docs": [
+              "`BOOK_MATCH_MAX`: fills per `place`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "create_level",
+            "docs": [
+              "`BOOK_CREATE_LEVEL`: the `Trader` level `create_market` requires (0 = none)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "order_bounty_lamports",
+            "docs": [
+              "Deposit each order leaves in escrow; back to the owner on fill, cancel or eviction, to the",
+              "cranker when the order expires (the crank bounty, rule 5)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "admin_timelock_secs",
+            "docs": [
+              "`ADMIN_TIMELOCK_SECS` (00)."
+            ],
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BookParamsProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ready_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Cancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClassBid",
+      "docs": [
+        "`ClassBid` at `[\"class-bid\", bidder, nonce]`: a standing bid for any item of a class (R44). The",
+        "account itself holds the price and the maker fee above its rent."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "bidder",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "class",
+            "type": {
+              "defined": {
+                "name": "ClassKey"
+              }
+            }
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "maker_fee",
+            "type": "u64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClassBidCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bid",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClassBidPlaced",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bid",
+            "type": "pubkey"
+          },
+          {
+            "name": "bidder",
+            "type": "pubkey"
+          },
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "min_level",
+            "type": "u8"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClassFilled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bid",
+            "type": "pubkey"
+          },
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "bidder",
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "taker_fee",
+            "type": "u64"
+          },
+          {
+            "name": "maker_fee",
+            "type": "u64"
+          },
+          {
+            "name": "reference",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClassKey",
+      "docs": [
+        "What a class bid asks for (11 section 6.3 `ClassKey`)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "min_level",
+            "type": "u8"
+          },
+          {
+            "name": "param_min",
+            "type": {
+              "array": [
+                "u32",
+                11
+              ]
+            }
+          },
+          {
+            "name": "param_max",
+            "type": {
+              "array": [
+                "u32",
+                11
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Evicted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Expired",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "cranker",
+            "type": "pubkey"
+          },
+          {
+            "name": "bounty",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Filled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "maker_order",
+            "type": "u64"
+          },
+          {
+            "name": "maker",
+            "type": "pubkey"
+          },
+          {
+            "name": "taker",
+            "type": "pubkey"
+          },
+          {
+            "name": "side",
+            "docs": [
+              "Side of the taker."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "size",
+            "type": "u64"
+          },
+          {
+            "name": "taker_fee",
+            "type": "u64"
+          },
+          {
+            "name": "maker_fee",
+            "type": "u64"
+          },
+          {
+            "name": "reference",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "base_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "tick_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "min_size",
+            "type": "u64"
+          },
+          {
+            "name": "created_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Order",
+      "docs": [
+        "A resting order. Prices are lamports per base unit."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "size",
+            "docs": [
+              "Base units left."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "quote_locked",
+            "docs": [
+              "Bids: lamports still escrowed for this order (quote plus the maker fee reserve)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bounty",
+            "type": "u64"
+          },
+          {
+            "name": "expires_at",
+            "docs": [
+              "0 = never."
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PendingBook",
+      "docs": [
+        "`PendingBook` at `[\"book-pending\"]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "BookParams"
+              }
+            }
+          },
+          {
+            "name": "ready_at",
+            "type": "i64"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Placed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "side",
+            "type": "u8"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "size",
+            "docs": [
+              "Size asked for, and size left resting after the matches."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "resting",
+            "type": "u64"
+          },
+          {
+            "name": "reference",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProtocolFee",
+      "docs": [
+        "Every protocol collection (11 section 2.4); `mint` is the default key for native lamports."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "source",
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "reference",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}
