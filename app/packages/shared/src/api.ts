@@ -455,9 +455,8 @@ export interface PreparedTx {
   version: 'legacy' | 'v0';
   stage: number;
   label: string;
-  /** Keys the browser holds that must also sign (a launch's fresh mint). */
-  /** Keys the browser holds that sign after the wallet: a launch's fresh mint, a new launch config. */
-  extraSigners: ('mint' | 'config')[];
+  /** Keys the browser holds that sign after the wallet: a launch's fresh mint, a new launch config, a new Switchboard randomness account (D-4). */
+  extraSigners: ('mint' | 'config' | 'randomness')[];
 }
 
 export interface SwapPrepareResponse {

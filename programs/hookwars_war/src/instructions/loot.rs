@@ -13,7 +13,7 @@ use crate::constants::*;
 use crate::error::WarError;
 use crate::events::*;
 use crate::foreign::PARAM_FIELDS;
-use crate::oracle::{request_randomness, Randomness};
+use crate::oracle::{is_switchboard, request_randomness, Randomness, SbRandomness};
 use crate::state::*;
 
 // ---- roll ------------------------------------------------------------------------------------------
@@ -46,7 +46,8 @@ pub struct Roll<'info> {
     /// CHECK: the randomness adapter the config names.
     #[account(address = config.randomness_program @ WarError::WrongRandomness)]
     pub oracle_program: UncheckedAccount<'info>,
-    /// CHECK: the adapter's randomness account for this roll (the adapter checks it).
+    /// CHECK: the adapter's randomness account for this roll (the adapter checks it), or the
+    /// Switchboard randomness account committed earlier in this transaction (checked in the handler).
     #[account(mut)]
     pub oracle_account: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
@@ -80,6 +81,20 @@ pub fn process_roll<'info>(
     require!(after.tickets + 1 == before.tickets, WarError::TouchMismatch);
 
     let clock = Clock::get()?;
+    let oracle_program = ctx.accounts.oracle_program.key();
+    // D-4 (17-randomness): Switchboard is read directly; the commit came earlier in this transaction.
+    let switchboard = is_switchboard(&oracle_program);
+    let requested_slot = if switchboard {
+        let sb = SbRandomness::read(&ctx.accounts.oracle_account, &oracle_program)?;
+        require_keys_eq!(sb.authority, ctx.accounts.owner.key(), WarError::RandomnessAuthority);
+        require!(
+            sb.seed_slot.checked_add(1) == Some(clock.slot) && sb.reveal_slot < sb.seed_slot,
+            WarError::RandomnessStale
+        );
+        sb.seed_slot
+    } else {
+        clock.slot
+    };
     let roll_key = ctx.accounts.roll_request.key();
     let holding_key = ctx.accounts.holding.key();
     let bump = ctx.bumps.roll_request;
@@ -91,32 +106,29 @@ pub fn process_roll<'info>(
     r.holding = holding_key;
     r.nonce = nonce;
     r.season = current;
-    r.requested_slot = clock.slot;
+    r.requested_slot = requested_slot;
     r.requested_at = clock.unix_timestamp;
     r.oracle_program = ctx.accounts.oracle_program.key();
     r.oracle_account = ctx.accounts.oracle_account.key();
 
-    let nonce_le = nonce.to_le_bytes();
-    let bump_seed = [bump];
-    let seeds: [&[u8]; 4] = [ROLL_SEED, holding_key.as_ref(), &nonce_le, &bump_seed];
-    invoke_built(
-        &request_randomness(
-            ctx.accounts.oracle_program.key(),
-            ctx.accounts.owner.key(),
-            roll_key,
-            ctx.accounts.oracle_account.key(),
-        ),
-        &all,
-        &[&seeds],
-    )?;
+    if !switchboard {
+        let nonce_le = nonce.to_le_bytes();
+        let bump_seed = [bump];
+        let seeds: [&[u8]; 4] = [ROLL_SEED, holding_key.as_ref(), &nonce_le, &bump_seed];
+        invoke_built(
+            &request_randomness(oracle_program, ctx.accounts.owner.key(), roll_key, ctx.accounts.oracle_account.key()),
+            &all,
+            &[&seeds],
+        )?;
+    }
     emit_cpi!(RollRequested {
         roll: roll_key,
         mint: ctx.accounts.mint.key(),
         owner: ctx.accounts.owner.key(),
         holding: holding_key,
         season: current,
-        requested_slot: clock.slot,
-        oracle_program: ctx.accounts.oracle_program.key(),
+        requested_slot,
+        oracle_program,
         oracle_account: ctx.accounts.oracle_account.key(),
     });
     Ok(())
@@ -216,19 +228,28 @@ pub fn mint_loot_ix(
 
 /// `reveal`: permissionless; the value must be fulfilled after the request and bound to it.
 pub fn process_reveal<'info>(ctx: Context<'info, Reveal<'info>>) -> Result<()> {
-    let now = Clock::get()?.unix_timestamp;
+    let clock = Clock::get()?;
+    let (now, clock_slot) = (clock.unix_timestamp, clock.slot);
     let r = &ctx.accounts.roll_request;
     let roll_key = r.key();
-    let randomness = Randomness::read(&ctx.accounts.oracle_account, &r.oracle_program)?;
-    require_keys_eq!(randomness.requester, roll_key, WarError::WrongRandomness);
-    require!(
-        randomness.fulfilled && randomness.fulfilled_slot > r.requested_slot,
-        WarError::RandomnessNotReady
-    );
+    let value = if is_switchboard(&r.oracle_program) {
+        // D-4 (17-randomness): Switchboard's reveal came earlier in this transaction.
+        let sb = SbRandomness::read(&ctx.accounts.oracle_account, &r.oracle_program)?;
+        require!(sb.seed_slot == r.requested_slot, WarError::RandomnessStale);
+        require!(sb.reveal_slot == clock_slot && sb.reveal_slot > sb.seed_slot, WarError::RandomnessNotReady);
+        sb.value
+    } else {
+        let randomness = Randomness::read(&ctx.accounts.oracle_account, &r.oracle_program)?;
+        require_keys_eq!(randomness.requester, roll_key, WarError::WrongRandomness);
+        require!(
+            randomness.fulfilled && randomness.fulfilled_slot > r.requested_slot,
+            WarError::RandomnessNotReady
+        );
+        randomness.value
+    };
     let table = &ctx.accounts.loot_table;
     require!(now >= table.eta, WarError::LootTableNotReady);
-    let (template_id, params) =
-        draw(table, &randomness.value).ok_or(WarError::LootTableNotReady)?;
+    let (template_id, params) = draw(table, &value).ok_or(WarError::LootTableNotReady)?;
     let (owner, mint, season) = (r.owner, r.mint, r.season);
     // Pass 4b: the agents record, then the economy suffixes, come off the end; the rest is the
     // armory's.

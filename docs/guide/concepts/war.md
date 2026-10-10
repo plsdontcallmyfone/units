@@ -29,7 +29,7 @@ A siege cannot target a token whose kit pays holder rewards (the kit refuses pro
 
 - **Raid points** live in the buyer's holding. They travel with the tokens and net out when a raider sells back, so a round trip earns nothing.
 - **Bounties** pay SOL from the chest per point, capped per point and per claim.
-- **Loot**: raid tickets roll for loot. The roll requests randomness from an oracle and never uses the slot hash. The reveal mints a real item: a template plus parameters from the season's loot table, inside the template's ceiling. The production randomness oracle is not chosen yet.
+- **Loot**: raid tickets roll for loot. The randomness comes from Switchboard On-Demand, never from the slot hash. Rolling commits a Switchboard randomness account you own and spends the ticket in the same transaction; a few slots later anyone can reveal, which reads the oracle's value in the same transaction and mints a real item: a template plus parameters from the season's loot table, inside the template's ceiling. Because the ticket is spent at the roll, not revealing a value you dislike gains nothing; an unrevealed roll can be cancelled after its expiry, without the ticket coming back.
 
 ## Quests
 

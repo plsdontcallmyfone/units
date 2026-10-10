@@ -44,6 +44,14 @@ stub's id as its randomness program (the suites' TEST value) because no randomne
 the war config's randomness program is changed through the admin timelock. Deploying the stub on
 devnet would make loot rolls predictable and is not planned.
 
+D-4 decided (owner, 2026-10-10): Switchboard On-Demand randomness (docs/spec/17-randomness.md). The
+war program reads Switchboard's randomness account directly when the config's
+`randomness_program` is the On-Demand program (devnet `Aio4gaXjXzJNVLtzwtNVmSqGKpANtXhybbkhtAC94ji2`,
+mainnet `SBondMDrcV3K4kxZR1HNVT7osZxAHVHgYXL5Ze1oMUv`). On a deployment initialized with the stub id,
+loot starts working after the admin queues a config change to the devnet On-Demand id and applies
+it after `admin_timelock_secs`; a new deployment can name it in `init_config`. Nothing else is
+deployed for it.
+
 ## 2. Budget
 
 | Item | Lamports | SOL |

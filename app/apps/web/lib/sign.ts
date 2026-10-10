@@ -11,11 +11,11 @@ export const toB64 = (b: Uint8Array): string => btoa(Array.from(b, (x) => String
 export interface SigningWallet { signAllTransactions<T extends VersionedTransaction>(txs: T[]): Promise<T[]> }
 
 /** Decodes the prepared transactions and adds the extra signatures a stage asks for. */
-export function withExtraSigners(prepared: PreparedTx[], extra: { mint?: Keypair }): VersionedTransaction[] {
+export function withExtraSigners(prepared: PreparedTx[], extra: { mint?: Keypair; config?: Keypair; randomness?: Keypair }): VersionedTransaction[] {
   return prepared.map((p) => {
     const tx = VersionedTransaction.deserialize(fromB64(p.transaction));
     for (const s of p.extraSigners ?? []) {
-      const kp = s === 'mint' ? extra.mint : undefined;
+      const kp = extra[s];
       if (!kp) throw new Error(`"${p.label}" needs the ${s} key, which this page does not hold.`);
       tx.sign([kp]);
     }
@@ -24,7 +24,7 @@ export function withExtraSigners(prepared: PreparedTx[], extra: { mint?: Keypair
 }
 
 /** Signs every transaction with the wallet in one prompt, then sends each and waits for it before the next. */
-export async function signAndSend(wallet: SigningWallet, prepared: PreparedTx[], extra: { mint?: Keypair }, progress: (i: number, sig: string) => void, post: typeof fetch = fetch): Promise<string[]> {
+export async function signAndSend(wallet: SigningWallet, prepared: PreparedTx[], extra: { mint?: Keypair; config?: Keypair; randomness?: Keypair }, progress: (i: number, sig: string) => void, post: typeof fetch = fetch): Promise<string[]> {
   const signed = await wallet.signAllTransactions(withExtraSigners(prepared, extra));
   const out: string[] = [];
   for (let i = 0; i < signed.length; i++) {

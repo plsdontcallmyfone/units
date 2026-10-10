@@ -14,6 +14,7 @@ import type { Pool as Db } from 'pg';
 import { EXPANSION_PREPARES } from './expansion-prepares.ts';
 import { SOCIAL_PREPARES } from './social-prepares.ts';
 import { ECONOMY_PREPARES, settleTail } from './economy-prepares.ts';
+import { LOOT_PREPARES } from './loot-prepares.ts';
 import { FIXED_ADDRESSES, LP_FEE_BPS, remainderBuy, MAX_VIRTUAL_QUOTE, MIN_VIRTUAL_QUOTE, NO_RULES, PROGRAM_IDS, TEMPLATES, type LaunchRulesInput, type PreparedTx } from '@hookwars/shared';
 
 export class PrepareError extends Error {
@@ -55,7 +56,7 @@ const MAX_TARGETS = 255;
 const MAX_PAIRS = 32;
 
 /** One staged transaction before compiling: its instructions, the keys the browser signs with, and whether it can be simulated now. */
-export interface Stage { label: string; ixs: TransactionInstruction[]; extraSigners: ('mint' | 'config')[]; simulate: boolean; tables: AddressLookupTableAccount[] }
+export interface Stage { label: string; ixs: TransactionInstruction[]; extraSigners: ('mint' | 'config' | 'randomness')[]; simulate: boolean; tables: AddressLookupTableAccount[] }
 
 export interface PrepareDef {
   programs: (keyof typeof PROGRAM_IDS)[];
@@ -138,17 +139,6 @@ export const PREPARES: Record<string, PrepareDef> = {
       const owner = pk(b, 'owner'); const mint = pk(b, 'mint');
       const { raid, extras } = await raidContext(conn, mint, owner);
       return [hookwars.claimQuest(owner, mint, int(b, 'season', 0, 4_294_967_295), int(b, 'questId', 1, 2) === 2 ? 2 : 1, int(b, 'period', 0, 4_294_967_295), raid.slot, extras)];
-    },
-  },
-  'rolls/prepare': {
-    programs: ['war', 'token', 'items'], label: 'Roll', payer: (b) => pk(b, 'owner'),
-    build: async (b, conn) => {
-      const owner = pk(b, 'owner'); const mint = pk(b, 'mint');
-      const cfgInfo = await conn.getAccountInfo(hookwars.WAR_CONFIG, 'confirmed');
-      if (!cfgInfo) throw new PrepareError(409, 'NoWarConfig', 'The war program has no config on this cluster yet.');
-      const cfg = hookwars.warConfigCodec.decode(cfgInfo.data);
-      const { raid, extras } = await raidContext(conn, mint, owner);
-      return [hookwars.roll(owner, mint, big(b, 'nonce'), raid.slot, { program: cfg.randomnessProgram, account: pk(b, 'oracleAccount') }, extras)];
     },
   },
   'war/init/prepare': {
@@ -263,8 +253,10 @@ Object.assign(PREPARES, EXPANSION_PREPARES);
 Object.assign(PREPARES, SOCIAL_PREPARES);
 // The hook economy (11 to 13), the sell route and the war cranks (runtime R-1, R-2).
 Object.assign(PREPARES, ECONOMY_PREPARES);
+// D-4 (17-randomness): loot rolls and reveals on Switchboard randomness.
+Object.assign(PREPARES, LOOT_PREPARES);
 
-async function raidContext(conn: Connection, mint: PublicKey, owner: PublicKey) {
+export async function raidContext(conn: Connection, mint: PublicKey, owner: PublicKey) {
   const ctx = await hookwars.fetchWarContext(conn, mint).catch(() => null);
   if (!ctx) throw new PrepareError(404, 'NoSuchToken', 'This is not a token on this cluster.');
   if (!ctx.raid) throw new PrepareError(409, 'NoRaidItem', 'This token has no Raid item equipped, so its holdings keep no raid points.');
@@ -493,7 +485,7 @@ export const PACKET = 1_232;
 
 /** Compiles `ixs` as v0 with `tables`, simulating first when `simulate` (units used plus 15%, upstream
  * hooks-v2 section 6), else with the full compute limit; refuses what would not fit a packet. */
-export async function finish(conn: Connection, payer: PublicKey, ixs: TransactionInstruction[], label: string, opts: { simulate?: boolean; tables?: AddressLookupTableAccount[]; extraSigners?: ('mint' | 'config')[]; stage?: number } = {}): Promise<PreparedTx> {
+export async function finish(conn: Connection, payer: PublicKey, ixs: TransactionInstruction[], label: string, opts: { simulate?: boolean; tables?: AddressLookupTableAccount[]; extraSigners?: ('mint' | 'config' | 'randomness')[]; stage?: number } = {}): Promise<PreparedTx> {
   const tables = opts.tables ?? [];
   const { blockhash } = await conn.getLatestBlockhash('confirmed');
   const compile = (limit: number) => new VersionedTransaction(new TransactionMessage({

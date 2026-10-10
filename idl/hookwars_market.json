@@ -439,6 +439,12 @@
           }
         },
         {
+          "name": "access_policy",
+          "docs": [
+            "win when the item is `Licensed` (11 E-1)."
+          ]
+        },
+        {
           "name": "license",
           "writable": true,
           "pda": {
@@ -2167,6 +2173,12 @@
           }
         },
         {
+          "name": "access_policy",
+          "docs": [
+            "win when the item is `Licensed` (11 E-1)."
+          ]
+        },
+        {
           "name": "license",
           "writable": true,
           "pda": {
@@ -2593,6 +2605,112 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "take_submission",
+      "docs": [
+        "Pass 5 (review 3 I-2): the item's current holder takes over its submission (and so the",
+        "bounty) while the commission is open, so a submitter who sold the item is not paid for it."
+      ],
+      "discriminator": [
+        142,
+        85,
+        204,
+        70,
+        149,
+        152,
+        103,
+        219
+      ],
+      "accounts": [
+        {
+          "name": "holder",
+          "signer": true
+        },
+        {
+          "name": "commission",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "commission.token_mint",
+                "account": "Commission"
+              },
+              {
+                "kind": "account",
+                "path": "commission.nonce",
+                "account": "Commission"
+              }
+            ]
+          },
+          "relations": [
+            "submission"
+          ]
+        },
+        {
+          "name": "submission",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  117,
+                  98,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "commission"
+              },
+              {
+                "kind": "account",
+                "path": "submission.item",
+                "account": "Submission"
+              }
+            ]
+          }
+        },
+        {
+          "name": "item"
+        },
+        {
+          "name": "item_mint"
+        },
+        {
+          "name": "holder_holding"
         },
         {
           "name": "event_authority"
@@ -3312,6 +3430,21 @@
       "code": 6038,
       "name": "BadLicenceParams",
       "msg": "licence parameters out of bounds"
+    },
+    {
+      "code": 6039,
+      "name": "NotLicencePayer",
+      "msg": "only the payer of a live licence may renew it"
+    },
+    {
+      "code": 6040,
+      "name": "HolderIsEscrow",
+      "msg": "the item sits in a market escrow; licence it when it is back with its holder"
+    },
+    {
+      "code": 6041,
+      "name": "RevertAccountsMissing",
+      "msg": "end_lease needs the slot revert accounts, or the token mint when the slot no longer holds the item"
     }
   ],
   "types": [
@@ -4010,6 +4143,14 @@
           {
             "name": "max_secs",
             "type": "u32"
+          },
+          {
+            "name": "skill_min_fee_lamports",
+            "docs": [
+              "A licence counts toward the holder's `LICENCES_SOLD` only when its protocol fee reaches this",
+              "(review 3 L-1; owner value)."
+            ],
+            "type": "u64"
           }
         ]
       }
@@ -4333,6 +4474,14 @@
               "`ADMIN_TIMELOCK_SECS` (00): delay on every params change."
             ],
             "type": "u32"
+          },
+          {
+            "name": "skill_min_fee_lamports",
+            "docs": [
+              "A sale counts toward the seller's `ITEMS_SOLD` only when its protocol fee reaches this",
+              "(review 3 L-1; owner value)."
+            ],
+            "type": "u64"
           }
         ]
       }
