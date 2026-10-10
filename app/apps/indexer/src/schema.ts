@@ -1,4 +1,4 @@
-// Changed by Hookwars: mint lookup tables; views over the market, social and agents events; the social layer's tables; craft wear and economy views.
+// Changed by Hookwars: mint lookup tables; views over the market, social and agents events; the social layer's tables; craft wear and economy views (licence fees in protocol_fees).
 /**
  * The indexer's Postgres schema (docs/spec/06-app.md 2.3). Amounts are `numeric(39,0)`, addresses
  * `text`, times `timestamptz` plus raw unix seconds. Every event row is keyed by
@@ -55,6 +55,11 @@ export function eventTablesDdl(): string[] {
   return out;
 }
 
+/** One index on `ts` per typed event table: the economy panel reads every table by time window. */
+export function eventIndexesDdl(): string[] {
+  return Object.entries(hookwars.EVENT_SPECS).flatMap(([program, specs]) => specs.map(([name]) => `create index if not exists ${eventTable(program, name)}_ts on ${eventTable(program, name)} (ts)`));
+}
+
 export const CORE_DDL: string[] = [
   `create table if not exists cursors (program text primary key, address text not null, last_signature text, last_slot bigint, updated_at timestamptz)`,
   `create table if not exists events (${EVENT_COLS}, program text not null, program_id text, name text not null, via text not null, data jsonb not null, primary key (signature, ordinal))`,
@@ -101,7 +106,8 @@ export const VIEWS_DDL: string[] = [
   `create or replace view author_shares as select * from ev_items_author_share_paid`,
   `create or replace view protocol_fees as select signature, ordinal, slot, ts, 'items' as program, source, mint, amount from ev_items_protocol_fee
      union all select signature, ordinal, slot, ts, 'craft', source, mint, amount from ev_craft_protocol_fee
-     union all select signature, ordinal, slot, ts, 'book', source, mint, amount from ev_book_protocol_fee`,
+     union all select signature, ordinal, slot, ts, 'book', source, mint, amount from ev_book_protocol_fee
+     union all select signature, ordinal, slot, ts, 'market', source, mint, amount from ev_market_protocol_fee`,
   `create or replace view crafts as select * from ev_craft_crafted`,
   `create or replace view repairs as select * from ev_craft_repaired`,
   `create or replace view drops as select * from ev_craft_dropped`,
@@ -110,5 +116,5 @@ export const VIEWS_DDL: string[] = [
 ];
 
 export function allDdl(): string[] {
-  return [...CORE_DDL, ...eventTablesDdl(), ...VIEWS_DDL, ...SOCIAL_DDL, ...SOCIAL_VIEWS_DDL];
+  return [...CORE_DDL, ...eventTablesDdl(), ...eventIndexesDdl(), ...VIEWS_DDL, ...SOCIAL_DDL, ...SOCIAL_VIEWS_DDL];
 }

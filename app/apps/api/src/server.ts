@@ -1,4 +1,4 @@
-// Changed by Hookwars: read routes for agents, market, commissions, guilds and badges; prepares get the database for mint lookup tables; social routes.
+// Changed by Hookwars: read routes for agents, market, commissions, guilds and badges; prepares get the database for mint lookup tables; social routes; economy panel reads.
 /**
  * The Hookwars API (docs/spec/06-app.md 3.3) on node:http. JSON in and out, bigint as decimal
  * strings, `null` for anything not read, errors as upstream's `ApiErrorBody`.
@@ -17,6 +17,7 @@ import { submit } from './submit.ts';
 import { socialRoute } from './social.ts';
 import * as explorer from './explorer.ts';
 import * as launchPlan from './launch-plan.ts';
+import * as econ from './economy.ts';
 import { clientKey, clusterName, HttpError, intParam, RateLimiter, readJsonBody } from './guard.ts';
 
 export interface Deps { db: Pool | null; conn: Connection; rpcUrl: string }
@@ -168,6 +169,11 @@ export function handler(deps: Deps) {
       if (p === '/v1/launch/buy-quote') return json(res, 200, await launchPlan.buyQuote(deps.conn, q));
       if (p.startsWith('/v1/explorer/')) { const r = await explorer.route(deps.conn, db, p, q); if (r) return json(res, r.status, r.body); }
       if (!db) return json(res, 503, { error: 'The database is not reachable.', code: 'NoDatabase' });
+      // The economy panel: sums over indexed events per period, chain state where a figure lives only there.
+      if ((m = /^\/v1\/economy\/(revenue|settlement|builders|market|craft|cranks|war)$/.exec(p))) {
+        const section = m[1] as econ.Section; const period = econ.parsePeriod(q.get('period'));
+        return json(res, 200, await cached(`economy:${section}:${period}`, 15_000, () => econ.economy(db, deps.conn, section, period)));
+      }
       if (p === '/v1/templates') return json(res, 200, await reads.templates(db));
       if (p === '/v1/items') return json(res, 200, await reads.items(db, q));
       if ((m = /^\/v1\/items\/(\w+)$/.exec(p))) {
