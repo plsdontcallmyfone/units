@@ -26,7 +26,7 @@ const item = hookwars.itemAddress(itemMint);
 const itemData = (templateId: number) => hookwars.itemCodec().encode({
   version: 1, bump: 255, itemMint, templateId, params: Array(hookwars.PARAM_FIELDS).fill(0),
   manifest: { kind: 0, tokenFlags: 0, poolFlags: 0, maxCutBuyBps: 0, maxCutSellBps: 0, maxCutTransferBps: 0, maxDiscountBps: 0, mayRefuse: false, mayBurn: false, dataBytes: 0, readsOtherPools: 0 },
-  author, royaltyBps: 0, level: 1, source: 0, equippedCount: 0, royaltyOwnerBump: 255, createdAt: 0n, reserved: Buffer.alloc(32),
+  author, royaltyBps: 0, level: 1, source: 0, equippedCount: 0, royaltyOwnerBump: 255, createdAt: 0n, hasWear: false, reserved: Buffer.alloc(31),
 });
 const launch = Buffer.alloc(400); pool.toBuffer().copy(launch, 74);
 

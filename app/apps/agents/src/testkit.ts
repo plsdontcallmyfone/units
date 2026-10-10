@@ -65,8 +65,11 @@ export function kit(script?: StubScript, cfgOver: Record<string, unknown> = {}, 
 
 /** A sender that reports every plan as sent (to test what the loop records after a send). */
 export class SentSender extends RecordingSender {
+  /** Runs after each send, to stand for what the transaction changed on chain. */
+  onSubmit: (() => void) | null = null;
   override async submit(...a: Parameters<RecordingSender['submit']>) {
     await super.submit(...a);
+    this.onSubmit?.();
     return { sent: true, signature: `sig${this.submitted.length}`, unitsConsumed: 1, logs: [], error: null, bytes: 1 };
   }
 }

@@ -1,4 +1,4 @@
-// Changed by Hookwars: staged slot launch, raid and settle prepares; v0 with lookup tables (the protocol's and the mint's own); input caps (integration, app audit A-4, A-6, A-12); agents, market, social and arsenal payout prepares; social memo prepares.
+// Changed by Hookwars: staged slot launch, raid and settle prepares; v0 with lookup tables (the protocol's and the mint's own); input caps (integration, app audit A-4, A-6, A-12); agents, market, social and arsenal payout prepares; social memo prepares. Economy suffixes on settle, claim, buy and end lease; companion slot launch (app pass v3).
 /**
  * The prepare routes of docs/spec/06-app.md 3.3: build with the SDK, simulate, return unsigned v0
  * transactions for the wallet (the backend holds no user key, 06 section 1 rule 5). Every prepare
@@ -9,10 +9,11 @@ import {
   AddressLookupTableAccount, AddressLookupTableProgram, ComputeBudgetProgram, Connection, PublicKey, TransactionMessage, VersionedTransaction,
   type AccountMeta, type TransactionInstruction,
 } from '@solana/web3.js';
-import { hookwars, decodeLaunch, decodeKitConfig, decodePool, decodeLaunchConfig, launchHookExtras, launchPoolAddress, launchRulesFromInput, checkProtocolLookupTable, token, LAUNCH_CONFIG } from '@hookwars/sdk';
+import { hookwars, decodeLaunch, decodeKitConfig, decodePool, decodeLaunchConfig, launchHookExtras, launchPoolAddress, launchRulesFromInput, checkProtocolLookupTable, token, LAUNCH_CONFIG, companion, companionCreatorAddress, COMPANION_DEFAULTS, type CompanionArgs } from '@hookwars/sdk';
 import type { Pool as Db } from 'pg';
 import { EXPANSION_PREPARES } from './expansion-prepares.ts';
 import { SOCIAL_PREPARES } from './social-prepares.ts';
+import { ECONOMY_PREPARES, settleTail } from './economy-prepares.ts';
 import { FIXED_ADDRESSES, LP_FEE_BPS, remainderBuy, MAX_VIRTUAL_QUOTE, MIN_VIRTUAL_QUOTE, NO_RULES, PROGRAM_IDS, TEMPLATES, type LaunchRulesInput, type PreparedTx } from '@hookwars/shared';
 
 export class PrepareError extends Error {
@@ -89,10 +90,10 @@ export const PREPARES: Record<string, PrepareDef> = {
       const owner = pk(b, 'owner'); const mint = pk(b, 'mint'); const slot = int(b, 'slot', 0, 7);
       const st = await conn.getAccountInfo(hookwars.equipStateAddress(mint, slot), 'confirmed');
       if (!st) throw new PrepareError(409, 'NotEquipped', 'Nothing is equipped in this slot.');
-      const state = hookwars.equipStateCodec.decode(st.data) as { item: PublicKey; config: { targets: PublicKey[] } };
+      const state = hookwars.equipStateCodec.decode(st.data);
       const itemInfo = await conn.getAccountInfo(state.item, 'confirmed');
       if (!itemInfo) throw new PrepareError(409, 'NoItem', 'The equipped item no longer exists.');
-      const item = hookwars.itemCodec().decode(itemInfo.data) as { templateId: number; manifest: { tokenFlags: number } };
+      const item = hookwars.itemCodec().decode(itemInfo.data);
       const composite = item.templateId === 41;
       const modules: { templateId: number; targets: PublicKey[] }[] = composite
         ? (await compositeModules(conn, state.item)).map((m) => ({ templateId: m.templateId, targets: state.config.targets.slice(m.targetStart, m.targetStart + m.targetCount) }))
@@ -100,12 +101,19 @@ export const PREPARES: Record<string, PrepareDef> = {
       const quote = new PublicKey(FIXED_ADDRESSES.bridgedSolMint);
       const dests = modules.map((m) => hookwars.settleDestination(m.templateId, mint, quote, m.targets));
       const tokenCuts = (item.manifest.tokenFlags & 64) !== 0;
-      return [hookwars.settleEquip(owner, mint, slot, { key: state.item, tokenCuts, composite }, quote, dests)];
+      // The economy suffixes (12 I-7, 13 E-2 to E-4): lease rent, craft wear and drop, protocol fee and author share.
+      const tail = await settleTail(conn, mint, slot, state, item);
+      return [hookwars.settleEquip(owner, mint, slot, { key: state.item, tokenCuts, composite }, quote, dests, tail)];
     },
   },
   'royalties/prepare': {
     programs: ['armory', 'token'], label: 'Claim royalty', payer: (b) => pk(b, 'owner'),
-    build: async (b) => [hookwars.claimRoyalty(pk(b, 'owner'), pk(b, 'item'), pk(b, 'itemMint'), pk(b, 'cutMint'), big(b, 'amount'))],
+    // The claimant's ClaimCounter (12 I-5) when it exists: it feeds the RoyaltiesClaimed badges.
+    build: async (b, conn) => {
+      const owner = pk(b, 'owner');
+      const counter = (await conn.getAccountInfo(hookwars.claimCounterAddress(owner), 'confirmed')) !== null;
+      return [hookwars.claimRoyaltyEco(owner, pk(b, 'item'), pk(b, 'itemMint'), pk(b, 'cutMint'), big(b, 'amount'), { counter })];
+    },
   },
   'bounties/prepare': {
     programs: ['war', 'token', 'items'], label: 'Claim bounty', payer: (b) => pk(b, 'owner'),
@@ -232,13 +240,21 @@ export const PREPARES: Record<string, PrepareDef> = {
     build: async () => { throw new PrepareError(400, 'UseStagedRoute', 'A launch is several transactions; it is prepared by the staged launch route.'); },
     staged: async (b, conn) => launchStages(b, conn),
   },
+  // A companion slot launch (explorer gap): the same stages, the companion program the creator.
+  'launch/companion/prepare': {
+    programs: ['companion', 'launch', 'armory', 'items', 'token', 'swap', 'war'], label: 'Companion launch', payer: (b) => pk(b, 'owner'),
+    build: async () => { throw new PrepareError(400, 'UseStagedRoute', 'A launch is several transactions; it is prepared by the staged launch route.'); },
+    staged: async (b, conn) => launchStages(b, conn, true),
+  },
 };
 
 /** The War orders, the Raid slot and its touch extras for `owner` (a war step that spends raid points). */
 // Agents, market, social and the arsenal payouts (09, 10, 08): one transaction each.
 Object.assign(PREPARES, EXPANSION_PREPARES);
-// Social memos (posts, follows, reactions, hides) and opening a profile.
+// Social memos (posts, follows, reactions, hides), opening a profile and postage.
 Object.assign(PREPARES, SOCIAL_PREPARES);
+// The hook economy (11 to 13), the sell route and the war cranks (runtime R-1, R-2).
+Object.assign(PREPARES, ECONOMY_PREPARES);
 
 async function raidContext(conn: Connection, mint: PublicKey, owner: PublicKey) {
   const ctx = await hookwars.fetchWarContext(conn, mint).catch(() => null);
@@ -320,6 +336,22 @@ async function raidRoute(conn: Connection, owner: PublicKey, rival: PublicKey, t
   return [token.createHolding(owner, target, owner), hookwars.swapRoute(owner, amount, minOut, hops)];
 }
 
+/** A companion's `create` arguments from a launch request: the split (basis points summing to
+ * 10,000) and `fund` are the caller's; the rest default to Studio's `COMPANION_DEFAULTS`. */
+function companionArgs(b: Body): CompanionArgs {
+  const sp = b.split as Body | undefined;
+  if (!sp || typeof sp !== 'object') throw new PrepareError(400, 'BadRequest', '"split" is required: { buybackBps, holdersBps, beneficiaryBps } summing to 10000.');
+  const split = { buybackBps: int(sp, 'buybackBps', 0, 10_000), holdersBps: int(sp, 'holdersBps', 0, 10_000), beneficiaryBps: int(sp, 'beneficiaryBps', 0, 10_000) };
+  if (split.buybackBps + split.holdersBps + split.beneficiaryBps !== 10_000) throw new PrepareError(400, 'BadRequest', 'The split must sum to 10000 basis points.');
+  return {
+    split, bountyBps: b.bountyBps === undefined ? COMPANION_DEFAULTS.bountyBps : int(b, 'bountyBps', 0, 100),
+    maxBuyback: b.maxBuyback === undefined ? COMPANION_DEFAULTS.maxBuyback : big(b, 'maxBuyback'),
+    buybackInterval: b.buybackInterval === undefined ? COMPANION_DEFAULTS.buybackInterval : int(b, 'buybackInterval', 60, 4_294_967_295),
+    vestSecs: b.vestSecs === undefined ? COMPANION_DEFAULTS.vestSecs : int(b, 'vestSecs', 0, 31_536_000),
+    fund: big(b, 'fund'),
+  };
+}
+
 /** The slot table of a launch request, as the web form sends it. */
 interface SlotRequest { kind: string; rule: string; maxCutBps: number; noticeSecs: number; templateId: number | null; launchItem: string; targets?: string[] }
 const KIND: Record<string, number> = { fee: 0, reward: 1, defense: 2, relation: 3, pool: 4, war: 6 };
@@ -330,8 +362,12 @@ const BURN = new Set([32, 33]);
 
 /** A launch's staged transactions (03 section 4.3, M3b): prepare, one equip per launch item, the
  * mint's lookup table, the launch, then the registry, the war state and the raid ledger. */
-export async function launchStages(b: Body, conn: Connection): Promise<Stage[]> {
+export async function launchStages(b: Body, conn: Connection, companionLaunch = false): Promise<Stage[]> {
   const owner = pk(b, 'owner'); const mint = pk(b, 'mint');
+  // A companion slot launch: the companion's creator address is the launch's creator and every
+  // launch step goes through the companion's `launch_slots` (bordrless_companion); `owner` pays fees.
+  const creator = companionLaunch ? companionCreatorAddress(mint) : owner;
+  const step = (ix: TransactionInstruction): TransactionInstruction => (companionLaunch ? hookwars.companionLaunchSlots(owner, mint, ix) : ix);
   const name = String(b.name ?? ''); const symbol = String(b.symbol ?? '');
   if (!name || name.length > 32 || !/^[^\s]{1,10}$/.test(symbol)) throw new PrepareError(400, 'BadRequest', 'A name of 1 to 32 characters and a ticker of 1 to 10 without spaces are required.');
   const virtualQuote = big(b, 'virtualQuote');
@@ -357,10 +393,12 @@ export async function launchStages(b: Body, conn: Connection): Promise<Stage[]> 
   // Changed by Hookwars: two phases. The launch's deposit slices and the pool items' registries
   // exist only once the equips have landed, so `phase: "launch"` is a second call made after the
   // first phase's transactions confirm (the site does this; security review 2 L-D).
-  if (b.phase === 'launch') return launchPhase(conn, owner, mint, { name, symbol, uri, creatorFeeBps, virtualQuote, rules }, req);
+  if (b.phase === 'launch') return launchPhase(conn, owner, mint, { name, symbol, uri, creatorFeeBps, virtualQuote, rules }, req, companionLaunch);
   if (b.phase !== undefined && b.phase !== 'prepare') throw new PrepareError(400, 'BadRequest', '"phase" is "prepare" or "launch".');
   const stages: Stage[] = [];
-  stages.push({ label: 'Prepare the launch', ixs: [hookwars.prepareLaunch(owner, mint, { name, symbol, uri, creatorFeeBps, rules, slots })], extraSigners: ['mint'], simulate: true, tables: [] });
+  const first: TransactionInstruction[] = companionLaunch ? [companion.create(owner, b.beneficiary === undefined ? owner : pk(b, 'beneficiary'), mint, companionArgs(b))] : [];
+  first.push(step(hookwars.prepareLaunch(creator, mint, { name, symbol, uri, creatorFeeBps, rules, slots })));
+  stages.push({ label: companionLaunch ? 'Create the companion and prepare the launch' : 'Prepare the launch', ixs: first, extraSigners: ['mint'], simulate: !companionLaunch, tables: [] });
   const armory = new PublicKey(PROGRAM_IDS.armory);
   for (let i = 0; i < req.length; i++) {
     const r = req[i]!;
@@ -373,8 +411,8 @@ export async function launchStages(b: Body, conn: Connection): Promise<Stage[]> 
     const targets = (r.targets ?? []).slice(0, MAX_TARGETS).map((x) => new PublicKey(x));
     const entry = { slot: i, item, config: { targets, role: 0 }, noticeSecs: Number.isInteger(r.noticeSecs) && r.noticeSecs >= 0 ? r.noticeSecs : 0, rule: null };
     const tokenCuts = (it.manifest.tokenFlags & 64) !== 0; const poolCuts = it.manifest.poolFlags !== 0;
-    const eq = hookwars.equipLaunch(owner, mint, QUOTE, entry, { item, templateId: it.templateId, tokenCuts, poolCuts, composite: it.templateId === 41 });
-    stages.push({ label: `Equip slot ${i}`, ixs: [hookwars.equipPrepared(owner, mint, eq)], extraSigners: [], simulate: false, tables: [] });
+    const eq = hookwars.equipLaunch(creator, mint, QUOTE, entry, { item, templateId: it.templateId, tokenCuts, poolCuts, composite: it.templateId === 41 });
+    stages.push({ label: `Equip slot ${i}`, ixs: [step(hookwars.equipPrepared(creator, mint, eq))], extraSigners: [], simulate: false, tables: [] });
   }
   return stages;
 }
@@ -388,7 +426,8 @@ export function poolItemRegistries(m: hookwars.SlotMintData, mint: PublicKey): P
 
 /** The second phase: the mint's lookup table, the launch (deposit slices and pool registries read
  * from the chain), then war state and raid ledger. */
-export async function launchPhase(conn: Connection, owner: PublicKey, mint: PublicKey, args: { name: string; symbol: string; uri: string; creatorFeeBps: number; virtualQuote: bigint; rules: ReturnType<typeof launchRulesFromInput> }, req: SlotRequest[]): Promise<Stage[]> {
+export async function launchPhase(conn: Connection, owner: PublicKey, mint: PublicKey, args: { name: string; symbol: string; uri: string; creatorFeeBps: number; virtualQuote: bigint; rules: ReturnType<typeof launchRulesFromInput> }, req: SlotRequest[], companionLaunch = false): Promise<Stage[]> {
+  const creator = companionLaunch ? companionCreatorAddress(mint) : owner;
   const mintInfo = await conn.getAccountInfo(mint, 'confirmed');
   if (!mintInfo) throw new PrepareError(409, 'NotPrepared', 'Prepare the launch first: this mint does not exist yet.');
   const m = hookwars.decodeSlotMint(mintInfo.data);
@@ -399,7 +438,8 @@ export async function launchPhase(conn: Connection, owner: PublicKey, mint: Publ
   const launch = hookwars.launchAddr(mint);
   const s = await hookwars.fetchTokenHookSlices(conn, { mint, source: holding(mint, launch), destination: holding(mint, pool), authority: launch, sourceOwner: launch, destinationOwner: pool });
   if (!s) throw new PrepareError(409, 'NotPrepared', 'This mint is not a prepared slot launch.');
-  const create = hookwars.createPreparedLaunch(owner, mint, treasury, QUOTE, LP_FEE_BPS, args, poolItemRegistries(m, mint), hookwars.sliceAccounts(s));
+  const created = hookwars.createPreparedLaunch(creator, mint, treasury, QUOTE, LP_FEE_BPS, args, poolItemRegistries(m, mint), hookwars.sliceAccounts(s));
+  const create = companionLaunch ? hookwars.companionLaunchSlots(owner, mint, created) : created;
   const stages: Stage[] = [];
   // The launch: its accounts are too many for one legacy transaction, so it goes through a lookup
   // table of its own, made and extended in the stages before it (audit A-6).

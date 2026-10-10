@@ -31,7 +31,7 @@ const mintData = hookwars.idlAccountCodec<hookwars.SlotMintData>('token', 'Mint'
 const item = (templateId: number, itemMint: PublicKey) => hookwars.itemCodec().encode({
   version: 1, bump: 255, itemMint, templateId, params: Array(hookwars.PARAM_FIELDS).fill(0),
   manifest: { kind: 0, tokenFlags: 0, poolFlags: 0, maxCutBuyBps: 0, maxCutSellBps: 0, maxCutTransferBps: 0, maxDiscountBps: 0, mayRefuse: false, mayBurn: false, dataBytes: 0, readsOtherPools: 0 },
-  author: K(9), royaltyBps: 0, level: 1, source: 0, equippedCount: 0, royaltyOwnerBump: 255, createdAt: 0n, reserved: Buffer.alloc(32),
+  author: K(9), royaltyBps: 0, level: 1, source: 0, equippedCount: 0, royaltyOwnerBump: 255, createdAt: 0n, hasWear: false, reserved: Buffer.alloc(31),
 });
 const zeroOf = (program: string, name: string) => hookwars.coderOf(program).decodeAccount<Record<string, unknown>>(name, Buffer.concat([hookwars.coderOf(program).accountDisc(name), Buffer.alloc(4000)]));
 const armoryConfig = hookwars.armoryConfigCodec.encode({ ...(zeroOf('armory', 'ArmoryConfig') as unknown as hookwars.ArmoryConfigData), itemsMinted: 12n });

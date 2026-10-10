@@ -12,6 +12,7 @@ export type * from './idl-types.gen.ts';
 export * from './war-context.ts';
 export * from './slot-launch.ts';
 export * from './expansion.ts';
+export * from './economy.ts';
 export * from './memo.ts';
 // Changed by Hookwars (explorer v2): the explorer's decoder.
 export * as explore from './explore.ts';

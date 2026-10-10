@@ -110,9 +110,9 @@ describe('IDL accounts', () => {
     const item = {
       version: 1, bump: 254, itemMint: k(), templateId: 1, params: Array.from({ length: PARAM_FIELDS }, (_, i) => i),
       manifest: { kind: 4, tokenFlags: 257, poolFlags: 7, maxCutBuyBps: 100, maxCutSellBps: 0, maxCutTransferBps: 0, maxDiscountBps: 500, mayRefuse: false, mayBurn: false, dataBytes: 11, readsOtherPools: 1 },
-      author: k(), royaltyBps: 250, level: 1, source: 0, equippedCount: 0, royaltyOwnerBump: 253, createdAt: 5n, reserved: Buffer.alloc(32),
+      author: k(), royaltyBps: 250, level: 1, source: 0, equippedCount: 0, royaltyOwnerBump: 253, createdAt: 5n, hasWear: true, reserved: Buffer.alloc(31),
     };
-    expect(c.decode(c.encode(item))).toMatchObject({ templateId: 1, royaltyBps: 250, level: 1 });
+    expect(c.decode(c.encode(item))).toMatchObject({ templateId: 1, royaltyBps: 250, level: 1, hasWear: true });
   });
   it('every account of the IDL programs has a codec that round-trips zeros', () => {
     for (const [program, idl] of Object.entries(IDLS)) {

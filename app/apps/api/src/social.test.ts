@@ -35,8 +35,7 @@ describe('levels and the skill table', () => {
     expect(level([1n, 3n, 10n, 0n, 0n, 0n, 0n, 0n], 0n)).toBe(0);
     expect(level([1n, 3n, 10n, 0n, 0n, 0n, 0n, 0n], 3n)).toBe(2);
     expect(level([1n, 3n, 10n, 0n, 0n, 0n, 0n, 0n], 99n)).toBe(3);
-    const d = Buffer.alloc(8 + 2 + 4 + 66);
-    d.writeUInt32LE(1, 10); d[14] = 1; d[15] = 5; d.writeBigUInt64LE(1n, 16); d.writeBigUInt64LE(3n, 24);
+    const d = hookwars.skillTableCodec.encode({ version: 1, bump: 255, skills: [{ id: 1, counter: 5, thresholds: [1n, 3n, 0n, 0n, 0n, 0n, 0n, 0n] }], callers: [], pending: null });
     expect(decodeSkills(d)).toEqual([{ id: 1, counter: 5, thresholds: [1n, 3n, 0n, 0n, 0n, 0n, 0n, 0n] }]);
   });
 });

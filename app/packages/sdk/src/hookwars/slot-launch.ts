@@ -171,8 +171,9 @@ export function swapRoute(trader: PublicKey, amountIn: bigint, minAmountOut: big
 }
 
 /** `settle_equip(slot)` (IDL): pays an item's royalty, the sender's bounty and each module's
- * destination; `dests` are `(token destination, pool destination)` per module. */
-export function settleEquip(cranker: PublicKey, mint: PublicKey, slot: number, item: { key: PublicKey; tokenCuts: boolean; composite: boolean }, quoteMint: PublicKey, dests: [PublicKey, PublicKey][]): TransactionInstruction {
+ * destination; `dests` are `(token destination, pool destination)` per module. `tail` is the
+ * economy suffixes after them (`suffixes({ rent, craft, fee, agents })` in `economy.ts`). */
+export function settleEquip(cranker: PublicKey, mint: PublicKey, slot: number, item: { key: PublicKey; tokenCuts: boolean; composite: boolean }, quoteMint: PublicKey, dests: [PublicKey, PublicKey][], tail: AccountMeta[] = []): TransactionInstruction {
   const state = equipStateAddress(mint, slot);
   const owner = royaltyOwner(item.key);
   const cuts = poolCutsAddress(mint);
@@ -184,7 +185,7 @@ export function settleEquip(cranker: PublicKey, mint: PublicKey, slot: number, i
     royaltyOwner: owner, royaltyToken: holdingAddr(mint, owner), royaltyQuote: holdingAddr(quoteMint, owner),
     crankerToken: holdingAddr(mint, cranker), crankerQuote: holdingAddr(quoteMint, cranker),
     armoryConfig: armoryConfigAddress(), tokenProgram: TOKEN_ID, tokenEventAuthority: up.TOKEN_EVENT_AUTHORITY,
-  }, { slot }, dests.flatMap(([a, b]) => [rw(a), rw(b)]));
+  }, { slot }, [...dests.flatMap(([a, b]) => [rw(a), rw(b)]), ...tail]);
 }
 
 // ---------------------------------------------------------------- reading a launch's pool items --

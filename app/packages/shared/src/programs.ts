@@ -29,6 +29,10 @@ export const PROGRAM_IDS = {
   market: 'FikEwNXoXqRWteX4kpCT8dJ34o8hWQ8w49whhZiqS2vv',
   /** hookwars_social (docs/spec/10-expansion.md): achievement badges, guild halls. */
   social: 'CKf4SjuiYxy4C2eSjk6oSQb2AnqC3ADoDTm8d323jWAx',
+  /** hookwars_craft (docs/spec/11-hook-economy.md section 5): materials, recipes, repair, wear, drops. */
+  craft: '39LXQBGqZtg591jkGnZi9BELQ9hp1ZngbAxu6K1cC29Y',
+  /** hookwars_book (docs/spec/11-hook-economy.md section 6): a limit order book per material and class bids for items. */
+  book: 'C4k2QquxzDdgHf74tnvyyWQyGUR8xvhPo1i1gFYb639g',
 } as const;
 
 /** The two authorities the launchpad lets hold a template program's upgrade key (00 rule 3). */

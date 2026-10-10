@@ -1,4 +1,4 @@
-// Changed by Hookwars: registers the launch, swap, agents, market and social IDLs.
+// Changed by Hookwars: registers the launch, swap, agents, market, social, craft and book IDLs.
 /**
  * Turns the generated IDLs into the field schemas `codec.ts` runs (camelCase names), so accounts,
  * events and instruction arguments of the programs on main come from the programs themselves
@@ -20,6 +20,8 @@ import swapIdl from '../../idl/bordrless_swap.json' with { type: 'json' };
 import agentsIdl from '../../idl/hookwars_agents.json' with { type: 'json' };
 import marketIdl from '../../idl/hookwars_market.json' with { type: 'json' };
 import socialIdl from '../../idl/hookwars_social.json' with { type: 'json' };
+import craftIdl from '../../idl/hookwars_craft.json' with { type: 'json' };
+import bookIdl from '../../idl/hookwars_book.json' with { type: 'json' };
 
 /** The IDLs of the programs whose interfaces are final on main, by the program names the app uses. */
 export const IDLS: Record<string, Idl> = {
@@ -34,6 +36,8 @@ export const IDLS: Record<string, Idl> = {
   agents: agentsIdl as unknown as Idl,
   market: marketIdl as unknown as Idl,
   social: socialIdl as unknown as Idl,
+  craft: craftIdl as unknown as Idl,
+  book: bookIdl as unknown as Idl,
 };
 
 const coders = new Map<string, IdlCoder>();

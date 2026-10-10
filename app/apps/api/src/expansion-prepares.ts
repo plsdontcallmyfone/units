@@ -7,6 +7,7 @@ import type { Connection } from '@solana/web3.js';
 import { PublicKey } from '@solana/web3.js';
 import { hookwars } from '@hookwars/sdk';
 import { big, int, keys, pk, PrepareError, type Body, type PrepareDef } from './prepares.ts';
+import { leaseRevert } from './economy-prepares.ts';
 
 const str = (b: Body, k: string, max: number, optional = false): string => {
   const v = b[k];
@@ -50,7 +51,9 @@ export const EXPANSION_PREPARES: Record<string, PrepareDef> = {
     const cfg = await account(conn, hookwars.marketConfigAddress(), (d) => hookwars.marketConfigCodec.decode(d), 'The market has no config on this cluster yet.');
     const { item, author } = await itemOf(conn, itemMint);
     const max = b.maxPrice === undefined ? l.priceLamports : big(b, 'maxPrice');
-    return [hookwars.marketBuy(owner, l.seller, author, cfg.treasury, item, itemMint, max)];
+    // The seller's ITEMS_SOLD counter (13 E-6) when the seller has a profile.
+    const social = (await conn.getAccountInfo(hookwars.profileAddress(l.seller), 'confirmed')) !== null;
+    return [hookwars.marketBuyEco(owner, l.seller, author, cfg.treasury, item, itemMint, max, social)];
   }),
   'market/collections/prepare': one('Create collection', ['market'], async (b, conn) => {
     const cfg = await account(conn, hookwars.marketConfigAddress(), (d) => hookwars.marketConfigCodec.decode(d), 'The market has no config on this cluster yet.');
@@ -69,7 +72,7 @@ export const EXPANSION_PREPARES: Record<string, PrepareDef> = {
     return [hookwars.marketAcceptLease(pk(b, 'owner'), item, lease.lessor)];
   }),
   'market/lease/withdraw/prepare': one('Withdraw a lease offer', ['market', 'token'], async (b, conn) => leaseClose(conn, b, 'withdraw_offer')),
-  'market/lease/end/prepare': one('End a lease', ['market', 'token'], async (b, conn) => leaseClose(conn, b, 'end_lease')),
+  'market/lease/end/prepare': one('End a lease', ['market', 'armory', 'items', 'token'], async (b, conn) => leaseClose(conn, b, 'end_lease')),
   'commissions/open/prepare': one('Open a commission', ['market'], async (b) => [hookwars.marketOpenCommission(
     pk(b, 'owner'), pk(b, 'tokenMint'), big(b, 'nonce'), int(b, 'slot', 0, 7), str(b, 'briefUri', 200), big(b, 'bountyLamports'), int(b, 'windowSecs', 1, 4_294_967_295),
   )]),
@@ -185,6 +188,11 @@ export const EXPANSION_PREPARES: Record<string, PrepareDef> = {
 async function leaseClose(conn: Connection, b: Body, name: 'withdraw_offer' | 'end_lease') {
   const itemMint = pk(b, 'itemMint'); const { item } = await itemOf(conn, itemMint);
   const lease = await account(conn, hookwars.leaseAddress(item), (d) => hookwars.leaseCodec.decode(d), 'There is no lease for this item.');
+  if (name === 'end_lease') {
+    // 12 section 3: the slot reverts to its launch item in the same call when it still holds the leased item.
+    const revert = await leaseRevert(conn, pk(b, 'owner'), lease);
+    return [hookwars.marketEndLease(pk(b, 'owner'), item, itemMint, lease.lessor, revert ?? [])];
+  }
   return [hookwars.marketCloseLease(name, pk(b, 'owner'), item, itemMint, lease.lessor)];
 }
 

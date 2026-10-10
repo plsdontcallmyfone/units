@@ -18,7 +18,7 @@ describe('schema', () => {
       for (const m of v.matchAll(/from (ev_\w+)/g)) expect(tables.has(m[1]!)).toBe(true);
     }
   });
-  it('nine cursors (06 2.1) plus agents, market and social (09, 10)', () => {
-    expect(CURSOR_PROGRAMS.map((c) => c.program)).toEqual(['token', 'swap', 'launch', 'kit', 'bridge', 'companion', 'armory', 'items', 'war', 'agents', 'market', 'social']);
+  it('nine cursors (06 2.1) plus agents, market, social, craft and book (09, 10, 11)', () => {
+    expect(CURSOR_PROGRAMS.map((c) => c.program)).toEqual(['token', 'swap', 'launch', 'kit', 'bridge', 'companion', 'armory', 'items', 'war', 'agents', 'market', 'social', 'craft', 'book']);
   });
 });

@@ -25,6 +25,8 @@ export const CURSOR_PROGRAMS: { program: string; address: string }[] = [
   { program: 'agents', address: PROGRAM_IDS.agents },
   { program: 'market', address: PROGRAM_IDS.market },
   { program: 'social', address: PROGRAM_IDS.social },
+  { program: 'craft', address: PROGRAM_IDS.craft },
+  { program: 'book', address: PROGRAM_IDS.book },
 ];
 
 export interface IndexStats { program: string; signatures: number; transactions: number; events: number; skippedFailed: number }
@@ -149,9 +151,22 @@ export async function applyState(client: PoolClient, ev: hookwars.TxEvent, slot:
     case 'armory:ItemCreated':
       await client.query(
         `insert into items (item, item_mint, template_id, params, manifest, author, royalty_bps, level, source, created_slot) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) on conflict (item) do nothing`,
-        [d.item, d.itemMint, d.templateId, JSON.stringify(d.params), JSON.stringify(d.manifest), d.author, d.royaltyBps, d.level, ['authored', 'loot', 'forged'][Number(d.source)] ?? String(d.source), slot],
+        [d.item, d.itemMint, d.templateId, JSON.stringify(d.params), JSON.stringify(d.manifest), d.author, d.royaltyBps, d.level, ['authored', 'loot', 'forged', 'crafted'][Number(d.source)] ?? String(d.source), slot],
       );
       await client.query(`insert into item_owners (item_mint, owner, updated_slot) values ($1,$2,$3) on conflict (item_mint) do nothing`, [d.itemMint, d.author, slot]);
+      return;
+    case 'armory:ItemCrafted':
+      await client.query(`update item_owners set owner = $2, updated_slot = $3 where item_mint = (select item_mint from items where item = $1)`, [d.item, d.owner, slot]);
+      return;
+    // Craft wear (11 section 5.4, 13 E-3): charges, dormancy and repairs per item.
+    case 'craft:WearOpened':
+      await client.query(`insert into wear (item, max_charges, used, dormant, repairs, updated_slot) values ($1,$2,0,false,0,$3) on conflict (item) do update set max_charges = excluded.max_charges, updated_slot = excluded.updated_slot`, [d.item, d.maxCharges, slot]);
+      return;
+    case 'craft:ItemWorn':
+      await client.query(`update wear set dormant = true, used = max_charges, updated_slot = $2 where item = $1`, [d.item, slot]);
+      return;
+    case 'craft:Repaired':
+      await client.query(`update wear set dormant = false, used = $2, repairs = repairs + 1, updated_slot = $3 where item = $1`, [d.item, d.used, slot]);
       return;
     case 'armory:LootMinted':
       await client.query(`update item_owners set owner = $2 where item_mint = (select item_mint from items where item = $1)`, [d.item, d.owner]);
