@@ -22,7 +22,7 @@
   --r-chip: 8px; --r-pill: 16px; --r-cta: 16px; --r-card: 20px; --r-menu: 24px; --corner: squircle;
   --ease: cubic-bezier(.16, 1, .3, 1); --hop-ease: cubic-bezier(.34, 2.4, .64, 1); --fast: .18s; --hop: .28s;
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px; --s9: 96px;
-  --gutter: clamp(16px, 4vw, 40px); --maxw: 1280px; --nav-h: 60px;
+  --gutter: clamp(16px, 2vw, 32px); --maxw: none; --nav-h: 60px;
   --running: 450;
   color-scheme: light;
 }
@@ -285,7 +285,7 @@ input, textarea { cursor: text; }
 .nav, .shell, .foot { position: relative; z-index: 1; }
 @media (prefers-reduced-motion: reduce) { .scene img { animation: none; } }
 @media (max-width: 800px) { .scene img { display: none; } .doodle { display: none; } }
-.landing { display: block; width: 100vw; height: calc(100vh - var(--nav-h)); border: 0; margin: calc(-1 * var(--s6)) calc(-1 * var(--gutter)) calc(-1 * var(--s9)); width: calc(100% + 2 * var(--gutter)); background: var(--bg); }
+.landing { display: block; height: calc(100vh - var(--nav-h)); border: 0; margin: calc(-1 * var(--s6)) calc(-1 * var(--gutter)) calc(-1 * var(--s9)); width: calc(100% + 2 * var(--gutter)); background: var(--bg); }
 body:has(.landing) > .foot, body:has(.landing) > .scene { display: none; }
 body:has(.landing) > .shell { padding-bottom: 0; }
 body:has(.landing) .demo-banner { display: none; }
