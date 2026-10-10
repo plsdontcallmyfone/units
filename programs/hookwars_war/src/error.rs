@@ -112,4 +112,11 @@ pub enum WarError {
     ContributionLimit,
     #[msg("the rivalry is invalid, not live, or already open")]
     RivalryState,
+    /// D-4 (Switchboard): the randomness account was not committed in the previous slot, is
+    /// already revealed for its commit, or no longer holds the roll's commit.
+    #[msg("the randomness is stale: commit it in the same transaction as the roll")]
+    RandomnessStale,
+    /// D-4 (Switchboard): the randomness account's authority is not the roll's owner.
+    #[msg("the randomness account's authority is not the roll's owner")]
+    RandomnessAuthority,
 }
