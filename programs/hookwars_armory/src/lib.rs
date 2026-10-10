@@ -29,8 +29,10 @@ pub mod error;
 pub mod events;
 pub mod gates;
 pub mod state;
+pub mod supply;
 
 use cpi::*;
+pub use supply::*;
 use error::ArmoryError;
 use events::*;
 pub use gates::*;
@@ -352,6 +354,35 @@ pub mod hookwars_armory {
         ctx.accounts.config.item_protocol_bps = item_protocol_bps;
         emit_cpi!(ItemProtocolBpsSet { item_protocol_bps });
         Ok(())
+    }
+
+    /// Gating (18 section 1.2): the admin creates a template's `Supply` (cap, loot reserve, minter
+    /// rule and minter). Queued (L-1). Once per template.
+    pub fn init_supply(
+        ctx: Context<InitSupply>,
+        template_id: u16,
+        max_supply: u32,
+        loot_reserve: u32,
+        minter_rule: u8,
+        minter: Pubkey,
+    ) -> Result<()> {
+        supply::process_init_supply(ctx, template_id, max_supply, loot_reserve, minter_rule, minter)
+    }
+
+    /// Gating: the admin lowers a template's cap or changes its loot reserve. Queued. A cap only
+    /// goes down, never below what was made.
+    pub fn set_supply_cap(ctx: Context<SetSupply>, template_id: u16, max_supply: u32, loot_reserve: u32) -> Result<()> {
+        supply::process_set_supply_cap(ctx, template_id, max_supply, loot_reserve)
+    }
+
+    /// Gating: the admin switches a template's minter rule. Queued.
+    pub fn set_minter_rule(ctx: Context<SetSupply>, template_id: u16, minter_rule: u8) -> Result<()> {
+        supply::process_set_minter_rule(ctx, template_id, minter_rule)
+    }
+
+    /// Gating: a template's minter hands issuance to another wallet.
+    pub fn hand_over_minter(ctx: Context<HandOverMinter>, new_minter: Pubkey) -> Result<()> {
+        supply::process_hand_over_minter(ctx, new_minter)
     }
 
     /// Anyone authors an item from an open template (02 section 4.2).
@@ -1315,7 +1346,8 @@ fn process_register_template<'info>(
     t.charges_on_create = 0;
     t.external = ext.is_some();
     t.ext_manifest = ext.unwrap_or_default();
-    t.reserved = [0; 7];
+    t.supply_flags = 0;
+    t.reserved = [0; 6];
     emit_cpi!(TemplateRegistered {
         template_id: args.id,
         program: program.key(),
@@ -1381,12 +1413,17 @@ fn process_create_item<'info>(
     royalty_bps: u16,
 ) -> Result<()> {
     let a = &ctx.accounts;
+    // Gating (18 section 1.3): the leading `Supply` accounts.
+    let (supplies, remaining) = supply::take_supplies(ctx.remaining_accounts);
     // Integration pass 2 (09 section 21 item 2): the armory admin may create an item of a closed
-    // template (the one Soulbound item).
+    // template (the one Soulbound item). Gating: so may an `AUTHOR_ONLY` template's minter.
     require!(
-        a.template.open_authoring || a.author.key() == a.config.admin,
+        a.template.open_authoring
+            || a.author.key() == a.config.admin
+            || supply::is_minter(&a.template, supplies, &a.author.key()),
         ArmoryError::TemplateClosed
     );
+    supply::apply(&a.template, supplies, supply::Change::Issue { by: a.author.key() })?;
     require!(
         royalty_bps <= a.config.params.max_royalty_bps,
         ArmoryError::RoyaltyTooHigh
@@ -1445,7 +1482,7 @@ fn process_create_item<'info>(
         ts
     });
     // Integration pass 2 (09 section 21 item 3): optional agent attribution, after the effects.
-    let (rest, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    let (rest, rec) = hookwars_common::agents_record::split(remaining, &crate::ID);
     // Integration pass 3 (E-3, E-6): wear and the social counter.
     let (rest, craft, social) = split_eco(rest);
     let charges = ctx.accounts.template.charges_on_create;
@@ -1559,8 +1596,10 @@ fn process_create_composite<'info>(
         royalty_bps <= a.config.params.max_royalty_bps,
         ArmoryError::RoyaltyTooHigh
     );
+    // Gating (18 section 1.3): the leading `Supply` accounts.
+    let (supplies, remaining) = supply::take_supplies(ctx.remaining_accounts);
     // Integration pass 2: an optional agent attribution suffix comes after the module templates.
-    let (rem, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    let (rem, rec) = hookwars_common::agents_record::split(remaining, &crate::ID);
     // Integration pass 3 (E-3, E-6): optional craft and social suffixes before it.
     let (rem, craft, social) = split_eco(rem);
     // I-5: an optional `AuthorCounter` after the module templates.
@@ -1631,16 +1670,27 @@ fn process_create_composite<'info>(
         }
     };
     require!(rem.len() == modules.len(), ArmoryError::WrongAccount);
+    let fusing = matches!(mode, Mode::Fuse(_));
+    let author_key = a.author.key();
     let mut fields: Vec<(u16, Params, Params)> = Vec::with_capacity(modules.len());
     for (m, info) in modules.iter().zip(rem.iter()) {
         require_keys_eq!(*info.owner, crate::ID, ArmoryError::WrongAccount);
         require_keys_eq!(info.key(), pda::template(m.template_id).0, ArmoryError::WrongAccount);
         let t = Template::try_deserialize(&mut &info.try_borrow_data()?[..])?;
+        // Gating (18 section 1.3): fused components are existing copies (no authoring rule, no new
+        // copy); a new module is a new copy, by the template's minter when it is `AUTHOR_ONLY`.
         require!(
-            t.status == template_status::ACTIVE && t.open_authoring,
+            t.status == template_status::ACTIVE
+                && (fusing || t.open_authoring || supply::is_minter(&t, supplies, &author_key)),
             ArmoryError::TemplateClosed
         );
+        if !fusing {
+            supply::apply(&t, supplies, supply::Change::Issue { by: author_key })?;
+        }
         fields.push((t.id, t.field_min, t.field_max));
+    }
+    if !fusing {
+        supply::apply(&a.template, supplies, supply::Change::Issue { by: author_key })?;
     }
     let lookup = |id: u16| fields.iter().find(|f| f.0 == id).map(|f| (f.1, f.2));
     let manifest = validate_modules(&modules, lookup, a.template.max_targets, 63).map_err(|e| match e {
@@ -1745,6 +1795,9 @@ fn process_mint_crafted<'info>(
         params[i] = lo + (hi - lo) / 2;
     }
     let a = &ctx.accounts;
+    // Gating (18 section 1.4): a craft drop counts against the template's whole cap.
+    let (supplies, _) = supply::take_supplies(ctx.remaining_accounts);
+    supply::apply(&a.template, supplies, supply::Change::Drop)?;
     let signer = a.armory_signer.to_account_info();
     let items = a.items_program.to_account_info();
     let manifest = validate_item(&signer, &items, &a.template, &params)?;
@@ -1816,6 +1869,9 @@ fn process_mint_crafted<'info>(
 fn process_mint_loot<'info>(ctx: Context<'info, MintLoot<'info>>, template_id: u16, params: Params) -> Result<()> {
     let a = &ctx.accounts;
     require!(a.template.loot_enabled, ArmoryError::TemplateClosed);
+    // Gating (18 section 1.4): a loot drop counts against the template's whole cap.
+    let (supplies, _) = supply::take_supplies(ctx.remaining_accounts);
+    supply::apply(&a.template, supplies, supply::Change::Drop)?;
     let signer = a.armory_signer.to_account_info();
     let items = a.items_program.to_account_info();
     let manifest = validate_item(&signer, &items, &a.template, &params)?;
@@ -2887,6 +2943,9 @@ fn process_forge<'info>(ctx: Context<'info, Forge<'info>>) -> Result<()> {
     );
     let level = a.item_a.level.max(a.item_b.level) + 1;
     require!(level <= t.max_level, ArmoryError::MaxLevel);
+    // Gating (18 section 1.3): a forge makes one item from two (not counted against the cap).
+    let (supplies, remaining) = supply::take_supplies(ctx.remaining_accounts);
+    supply::apply(t, supplies, supply::Change::Forge)?;
     let signer = a.armory_signer.to_account_info();
     let items = a.items_program.to_account_info();
     let mut params = combine_params(
@@ -2990,7 +3049,7 @@ fn process_forge<'info>(ctx: Context<'info, Forge<'info>>) -> Result<()> {
         forger,
         ts
     });
-    let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    let (_, rec) = hookwars_common::agents_record::split(remaining, &crate::ID);
     hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.forger.key(), hookwars_common::agents_record::ITEMS_FORGED, 0)?;
     Ok(())
 }
@@ -3115,7 +3174,10 @@ fn forge_composite<'info>(ctx: Context<'info, Forge<'info>>) -> Result<()> {
     require!(a.item_b.template_id == hookwars_common::template_id::COMPOSITE, ArmoryError::TemplateMismatch);
     require!(a.template.status == template_status::ACTIVE, ArmoryError::TemplateClosed);
     require!(a.item_a.equipped_count == 0 && a.item_b.equipped_count == 0, ArmoryError::ItemEquipped);
-    let (rem, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    // Gating (18 section 1.3): the leading `Supply` accounts; a forge is not counted against a cap.
+    let (supplies, remaining) = supply::take_supplies(ctx.remaining_accounts);
+    supply::apply(&a.template, supplies, supply::Change::Forge)?;
+    let (rem, rec) = hookwars_common::agents_record::split(remaining, &crate::ID);
     require!(rem.len() >= 3, ArmoryError::WrongAccount);
     let (lists, templates) = rem.split_at(3);
     let read_list = |info: &AccountInfo, item: &Pubkey| -> Result<hookwars_common::composite::CompositeItem> {

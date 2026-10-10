@@ -13,6 +13,7 @@ pub mod events;
 pub mod expansion;
 pub mod external;
 pub mod fixture;
+pub mod gate;
 pub mod hooks;
 pub mod items;
 pub mod kit;

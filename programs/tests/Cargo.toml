@@ -47,6 +47,7 @@ agents-caller-stub = { path = "../agents_caller_stub", features = ["no-entrypoin
 # units hook economy (11): craft, book, the memo format and the test-only caller.
 hookwars-craft = { path = "../hookwars_craft", features = ["no-entrypoint"] }
 hookwars-book = { path = "../hookwars_book", features = ["no-entrypoint"] }
+hookwars-gate = { path = "../hookwars_gate", features = ["no-entrypoint"] }
 econ-caller-stub = { path = "../econ_caller_stub", features = ["no-entrypoint"] }
 units-memo = { path = "../../crates/units-memo" }
 solana-account = "=4.7.0"

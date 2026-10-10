@@ -145,7 +145,10 @@ pub struct Template {
     /// checked; the token program and the launchpad call its program directly.
     pub external: bool,
     pub ext_manifest: Manifest,
-    pub reserved: [u8; 7],
+    /// Gating (18 section 1.1): bit 0 set once the template's `Supply` exists (from the first
+    /// reserved byte; zero for every template registered before).
+    pub supply_flags: u8,
+    pub reserved: [u8; 6],
 }
 
 /// Template status.

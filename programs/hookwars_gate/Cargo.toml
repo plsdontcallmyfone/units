@@ -1,0 +1,32 @@
+[package]
+name = "hookwars-gate"
+description = "Hookwars (units): the external gate. Any Token-2022 mint whose transfer hook is this program runs units items (refusals, holder stamps, reads; never cuts) while it holds a live licence or owns the item (docs/spec/18-gating.md part C)."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "hookwars_gate"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "bordrless-token/idl-build", "bordrless-hook/idl-build", "hookwars-common/idl-build", "hookwars-armory/idl-build", "hookwars-items/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+anchor-lang.workspace = true
+solana-security-txt = { workspace = true }
+bordrless-token = { path = "../bordrless_token", features = ["no-entrypoint"] }
+bordrless-hook = { path = "../../crates/bordrless-hook" }
+hookwars-common = { path = "../../crates/hookwars-common" }
+hookwars-armory = { path = "../hookwars_armory", features = ["no-entrypoint"] }
+hookwars-items = { path = "../hookwars_items", features = ["no-entrypoint"] }
+
+[lints]
+workspace = true

@@ -136,4 +136,13 @@ pub enum ArmoryError {
     SubmissionClosed,
     #[msg("composites forge only with the same module sequence")]
     ModulesMismatch,
+    // Gating (docs/spec/18-gating.md part A).
+    #[msg("this template's supply account is missing")]
+    SupplyMissing,
+    #[msg("this template's supply is exhausted")]
+    SupplyExhausted,
+    #[msg("only the template's minter may issue its items")]
+    NotMinter,
+    #[msg("a supply cap may only go down, and never below what was made")]
+    CapMayOnlyFall,
 }

@@ -1,4 +1,5 @@
 // Changed by Hookwars: integration pass 2: one items error enum (Soulbound and arsenal codes kept); LeaseRentPaid; integration pass 3: EquipState.runs_at_settle, init_equip wear flag, ProtocolFee.
+// Changed by Hookwars: gating (spec 18): gate_before, the external gate's restricted entry.
 // Changed by Hookwars: protocol pass 4a: record_pool_cut (the launchpad records an external template's pool cut).
 // Changed by Hookwars: new file (M2), the template program's armory-facing entry points; M3b: the
 // token and pool callbacks, every base template and arsenal wave A, composites, the raid ledger
@@ -25,11 +26,13 @@ use hookwars_common::{EquipConfig, ParamsError, MAX_MODULES, PARAM_FIELDS};
 
 pub mod engine;
 pub mod equip;
+pub mod gate;
 pub mod payouts;
 pub mod settle;
 pub mod templates;
 
 pub use payouts::*;
+pub use gate::*;
 
 declare_id!("8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv");
 
@@ -161,6 +164,9 @@ pub enum ItemsError {
     /// A referrer cannot be the buyer.
     #[msg("a buyer cannot refer itself")]
     SelfReferral,
+    /// Gating (18 section 3.5): a module answered a cut on an external token.
+    #[msg("an item on an external token may not take a cut")]
+    GateCut,
 }
 
 /// Maps a shared-rule error.
@@ -460,6 +466,12 @@ pub mod hookwars_items {
         s.runs = s.runs.saturating_add(1);
         emit!(ItemCut { mint: s.mint, slot, item, module: 0, side, amount: cut });
         Ok(())
+    }
+
+    /// Gating (18 section 3.5): the external gate runs an item's token-side modules for a
+    /// Token-2022 transfer. Signed by the gate's `["items-signer"]` only; never records a cut.
+    pub fn gate_before<'info>(ctx: Context<'info, GateCallback<'info>>, args: GateRunArgs) -> Result<()> {
+        gate::run(ctx, args)
     }
 
     /// Referral: the buyer names its referrer, once (08 4.7).
