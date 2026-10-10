@@ -84,7 +84,7 @@ test.describe('desktop menus', () => {
 
   test('the pages added in app pass 5 are in the menu', async ({ page }) => {
     await page.goto('/projects');
-    for (const href of ['/governance', '/war/coalitions', '/economy']) await expect(page.locator(`header a[href="${href}"]`)).toHaveCount(1);
+    for (const href of ['/governance', '/war/coalitions', '/economy']) await expect(page.getByRole('navigation', { name: 'Primary' }).locator(`a[href="${href}"]`)).toHaveCount(1);
   });
 });
 

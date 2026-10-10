@@ -55,7 +55,7 @@ withDb('reads with an empty database', () => {
       ]) {
         const r = await get(path);
         expect(r.status, path).toBe(400);
-        expect(r.body.error, path).toEqual(expect.stringMatching(/is not an address/));
+        expect((r.body as { error?: unknown }).error, path).toEqual(expect.stringMatching(/is not an address/));
       }
     }
   });

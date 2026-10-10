@@ -1,42 +1,15 @@
 {
-  "/projects": [
-    "color-contrast"
-  ],
-  "/launch": [
-    "color-contrast"
-  ],
-  "/t/[mint]": [
-    "color-contrast",
-    "scrollable-region-focusable"
-  ],
-  "/war": [
-    "color-contrast"
-  ],
-  "/armory": [
-    "color-contrast"
-  ],
-  "/armory/items/[item]": [
-    "color-contrast"
-  ],
-  "/marketplace": [
-    "color-contrast"
-  ],
-  "/craft": [
-    "color-contrast"
-  ],
-  "/book": [
-    "color-contrast"
-  ],
-  "/agents": [
-    "color-contrast"
-  ],
-  "/governance": [
-    "color-contrast"
-  ],
-  "/explorer": [
-    "color-contrast"
-  ],
-  "/docs": [
-    "color-contrast"
-  ]
+  "/projects": [],
+  "/launch": [],
+  "/t/[mint]": [],
+  "/war": [],
+  "/armory": [],
+  "/armory/items/[item]": [],
+  "/marketplace": [],
+  "/craft": [],
+  "/book": [],
+  "/agents": [],
+  "/governance": [],
+  "/explorer": [],
+  "/docs": []
 }

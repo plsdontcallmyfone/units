@@ -82,12 +82,7 @@ the route checks, inline for the others); fix the page, remove the entry, and th
 
 ## Accessibility baseline
 
-Recorded 2026-10-10 in `support/a11y-baseline.json` (serious or critical only):
-
-| Page | Rules |
-| --- | --- |
-| every checked page | `color-contrast` (text below 4.5:1 against its background) |
-| `/t/[mint]` | also `scrollable-region-focusable` (a scrolling region keyboard users cannot reach) |
+Recorded 2026-10-10 in `support/a11y-baseline.json` (serious or critical only): empty. Every checked page passes axe's serious and critical rules, color contrast included, so any new violation fails the suite.
 
 ## Also seen while running
 
