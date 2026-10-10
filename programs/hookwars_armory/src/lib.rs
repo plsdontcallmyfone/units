@@ -5,7 +5,7 @@
 // Integration pass 2: badge equip by the agents caller, admin Soulbound item, close_proposal bond
 // guard, agent record calls, lease gate, revert_for_lease_end, listed claim refusal, badge counters.
 // Integration pass 3: set_template_economy, set_item_protocol_bps (E-7, E-2), Template and Item economy fields,
-// mint_crafted (E-5), wear on creation (E-3), social counters (E-6), fuse (08 wave F).
+// mint_crafted (E-5), wear on creation (E-3), social counters (E-6), fuse and presets (08 wave F).
 //! `hookwars_armory` (docs/spec/02-armory.md): templates, items as supply-1 tokens on the token
 //! standard, royalties and their claims, equip rules (holder vote with notice, performance revert,
 //! locked), equipping at launch (signed by the launchpad), loot minting (signed by the war program),
@@ -273,7 +273,7 @@ pub mod hookwars_armory {
         modules: Vec<hookwars_common::composite::Module>,
         royalty_bps: u16,
     ) -> Result<()> {
-        process_create_composite(ctx, modules, royalty_bps, None)
+        process_create_composite(ctx, modules, royalty_bps, Mode::Plain)
     }
 
     /// Integration pass 3 (08 wave F, section 2.9): the holder of every component fuses them into
@@ -286,7 +286,40 @@ pub mod hookwars_armory {
         targets: Vec<(u8, u8)>,
         royalty_bps: u16,
     ) -> Result<()> {
-        process_create_composite(ctx, Vec::new(), royalty_bps, Some(targets))
+        process_create_composite(ctx, Vec::new(), royalty_bps, Mode::Fuse(targets))
+    }
+
+    /// Integration pass 3 (08 section 4.8): the admin registers a composite preset (the module
+    /// templates in order). Admin-direct like `register_template` (see L-1 in 13-integration-3).
+    pub fn register_preset(ctx: Context<RegisterPreset>, id: u16, template_ids: Vec<u16>, name: String) -> Result<()> {
+        require!(
+            template_ids.len() >= 2 && template_ids.len() <= hookwars_common::MAX_MODULES && name.len() <= 32,
+            ArmoryError::InvalidSchema
+        );
+        require!(
+            template_ids.iter().all(|t| *t != hookwars_common::template_id::COMPOSITE),
+            ArmoryError::InvalidSchema
+        );
+        let p = &mut ctx.accounts.preset;
+        p.version = VERSION;
+        p.bump = ctx.bumps.preset;
+        p.id = id;
+        p.name = name;
+        p.template_ids = template_ids.clone();
+        p.registered_at = now()?;
+        emit_cpi!(PresetRegistered { id, template_ids });
+        Ok(())
+    }
+
+    /// Integration pass 3 (08 section 2.9): `create_composite` whose module templates must be the
+    /// preset's, in its order. Remaining accounts: the preset, then what `create_composite` takes.
+    pub fn mint_composite<'info>(
+        ctx: Context<'info, CreateComposite<'info>>,
+        preset_id: u16,
+        modules: Vec<hookwars_common::composite::Module>,
+        royalty_bps: u16,
+    ) -> Result<()> {
+        process_create_composite(ctx, modules, royalty_bps, Mode::Preset(preset_id))
     }
 
     /// The war program mints a loot item (02 section 4.3).
@@ -576,6 +609,20 @@ pub struct CreateItem<'info> {
     #[account(address = ids::ITEMS_ID)]
     pub items_program: UncheckedAccount<'info>,
     pub token: TokenAccounts<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+/// Integration pass 3: accounts of `register_preset`.
+#[event_cpi]
+#[derive(Accounts)]
+#[instruction(id: u16)]
+pub struct RegisterPreset<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [seeds::CONFIG], bump = config.bump, has_one = admin @ ArmoryError::NotAdmin)]
+    pub config: Box<Account<'info, ArmoryConfig>>,
+    #[account(init, payer = admin, space = 8 + Preset::INIT_SPACE, seeds = [b"preset", &id.to_le_bytes()], bump)]
+    pub preset: Box<Account<'info, Preset>>,
     pub system_program: Program<'info, System>,
 }
 
@@ -1325,11 +1372,20 @@ fn process_init_counters(ctx: Context<InitCounters>, wallet: Pubkey) -> Result<(
 }
 
 /// Hookwars M3b: `create_composite` (08 sections 2.9 and 2.10).
+/// Integration pass 3: how `process_create_composite` gets its modules.
+enum Mode {
+    Plain,
+    /// `fuse`: the components' targets.
+    Fuse(Vec<(u8, u8)>),
+    /// `mint_composite`: the preset's id.
+    Preset(u16),
+}
+
 fn process_create_composite<'info>(
     ctx: Context<'info, CreateComposite<'info>>,
     modules: Vec<hookwars_common::composite::Module>,
     royalty_bps: u16,
-    fuse_targets: Option<Vec<(u8, u8)>>,
+    mode: Mode,
 ) -> Result<()> {
     use hookwars_common::composite::{validate_modules, CompositeError};
     let a = &ctx.accounts;
@@ -1348,9 +1404,24 @@ fn process_create_composite<'info>(
     // I-5: an optional `AuthorCounter` after the module templates.
     let (rem, counter) = take_counter(rem, &pda::author_counter(&a.author.key()).0);
     // Integration pass 3 (wave F): `fuse` builds the modules from the components and burns them.
-    let (rem, modules, provenance) = match &fuse_targets {
-        None => (rem, modules, Vec::new()),
-        Some(tg) => {
+    let (rem, modules, provenance) = match &mode {
+        Mode::Plain => (rem, modules, Vec::new()),
+        Mode::Preset(id) => {
+            let (info, rest) = rem.split_first().ok_or(ArmoryError::WrongAccount)?;
+            require_keys_eq!(*info.owner, crate::ID, ArmoryError::WrongAccount);
+            require_keys_eq!(
+                info.key(),
+                Pubkey::find_program_address(&[b"preset", &id.to_le_bytes()], &crate::ID).0,
+                ArmoryError::WrongAccount
+            );
+            let p = Preset::try_deserialize(&mut &info.try_borrow_data()?[..])?;
+            require!(
+                p.template_ids == modules.iter().map(|m| m.template_id).collect::<Vec<_>>(),
+                ArmoryError::InvalidSchema
+            );
+            (rest, modules, Vec::new())
+        }
+        Mode::Fuse(tg) => {
             let k = tg.len();
             require!(k >= 2 && rem.len() == 4 * k, ArmoryError::WrongAccount);
             let (templates, groups) = rem.split_at(k);

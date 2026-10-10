@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M2); integration pass 3: TemplateEconomySet, ItemProtocolBpsSet.
+// Changed by Hookwars: new file (M2); integration pass 3: TemplateEconomySet, ItemProtocolBpsSet, ItemCrafted, PresetRegistered.
 //! Events of the armory (docs/spec/02-armory.md section 13), by self-CPI.
 
 use anchor_lang::prelude::*;
@@ -188,4 +188,11 @@ pub struct ItemCrafted {
     pub recipe_id: u16,
     pub params: [u32; PARAM_FIELDS],
     pub ts: i64,
+}
+
+/// Integration pass 3 (08 section 4.8): a composite preset registered.
+#[event]
+pub struct PresetRegistered {
+    pub id: u16,
+    pub template_ids: Vec<u16>,
 }

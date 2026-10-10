@@ -53,7 +53,7 @@ A unit test pins `disc("mint_crafted")` to the value 11 gives.
 | --- | --- |
 | `fuse(targets: Vec<(u8, u8)>, royalty_bps)` | done: `CreateComposite` accounts; remaining = the components' templates, then `(item, item mint, holder's holding)` per component, then the usual suffixes. Each component must be held by the signer (`NotItemHolder`), not equipped (`ItemEquipped`), not a composite; it is burned and listed in `CompositeItem.provenance`; the modules then pass the same 2.10 validation as `create_composite`. Deviation: unclaimed royalties of a component cannot be proven empty (its royalty holdings are one per token it was ever equipped on); the holder claims first |
 | forge of composites | deferred |
-| presets and `mint_composite(preset_id, params)` | deferred |
+| presets: `register_preset(id, template_ids, name)`, `mint_composite(preset_id, modules, royalty_bps)` | done: `Preset` at `["preset", id]` (the module templates in order, 2 to `MAX_MODULES`, no Composite); `mint_composite` takes `CreateComposite` accounts with the preset first in the remaining accounts, refuses modules out of the preset's order (`InvalidSchema`) and otherwise runs `create_composite` (2.10 at each mint). Deviations: admin-direct (L-1); 2.10 runs at mint, not at registration (it needs params, which each mint chooses); the ten presets of 08 section 4.8 are not registered by the devnet plan (several of their templates need war state); `mint_loot` of a preset not built |
 
 ## 5. Tests
 

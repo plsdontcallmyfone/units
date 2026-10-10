@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M2); M3b: settle_bounty_bps, CompositeItem; security review 1: proposal_min_bps; integration pass 2: AuthorCounter, ClaimCounter; integration pass 3: item_protocol_bps, Template economy fields (E-7), Item.has_wear (E-3), source CRAFTED (E-5).
+// Changed by Hookwars: new file (M2); M3b: settle_bounty_bps, CompositeItem; security review 1: proposal_min_bps; integration pass 2: AuthorCounter, ClaimCounter; integration pass 3: item_protocol_bps, Template economy fields (E-7), Item.has_wear (E-3), source CRAFTED (E-5), Preset (08 wave F).
 //! Accounts of the armory (docs/spec/02-armory.md section 2).
 
 use anchor_lang::prelude::*;
@@ -251,6 +251,21 @@ pub struct ForgeCounter {
     pub wallet: Pubkey,
     pub count: u64,
     pub bump: u8,
+}
+
+/// Integration pass 3 (08 section 4.8): a composite preset at `["preset", id]`: the module
+/// templates in order; each minted composite chooses its own params inside their ceilings.
+#[account]
+#[derive(InitSpace, Debug)]
+pub struct Preset {
+    pub version: u8,
+    pub bump: u8,
+    pub id: u16,
+    #[max_len(32)]
+    pub name: String,
+    #[max_len(8)]
+    pub template_ids: Vec<u16>,
+    pub registered_at: i64,
 }
 
 /// Integration pass 2 (10 section 17 I-5): `AuthorCounter` at `["authored", wallet]`, bumped by

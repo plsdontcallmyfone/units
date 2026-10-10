@@ -381,3 +381,71 @@ fn the_hand_built_cpis_use_the_programs_discriminators() {
     assert_eq!(eco_cpi::MINT_CRAFTED_DISC, hookwars_armory::instruction::MintCrafted::DISCRIMINATOR);
     assert_eq!(eco_cpi::MINT_CRAFTED_DISC, [121, 196, 34, 30, 90, 249, 235, 177]);
 }
+
+fn preset_address(id: u16) -> Pubkey {
+    Pubkey::find_program_address(&[b"preset", &id.to_le_bytes()], &ids::ARMORY_ID).0
+}
+
+#[test]
+fn presets_fix_the_module_order_and_only_the_admin_registers_them() {
+    use bordrless_program_tests::items::module;
+    use hookwars_common::composite::CompositeItem;
+    let mut ew = world();
+    let admin = ew.deployer();
+    let reg = |who: &Pubkey, ids_: Vec<u16>| {
+        armory_ix(
+            hookwars_armory::accounts::RegisterPreset {
+                admin: *who,
+                config: pda::config().0,
+                preset: preset_address(1),
+                system_program: anchor_lang::system_program::ID,
+                event_authority: armory_events(),
+                program: ids::ARMORY_ID,
+            },
+            hookwars_armory::instruction::RegisterPreset { id: 1, template_ids: ids_, name: "TEST preset".into() },
+        )
+    };
+    let stranger = ew.funded(SOL);
+    ew.send(&stranger, &[reg(&stranger.pubkey(), vec![t::SIDE_SKEW, t::HALF_LIFE])]).expect_code(armory_code(AE::NotAdmin));
+    ew.send(&admin, &[reg(&admin.pubkey(), vec![t::SIDE_SKEW])]).expect_code(armory_code(AE::InvalidSchema));
+    ew.send(&admin, &[reg(&admin.pubkey(), vec![t::SIDE_SKEW, t::HALF_LIFE])]).ok();
+    let author = ew.funded(10 * SOL);
+    let mint_ix = |hw: &Hw, modules: Vec<hookwars_common::composite::Module>| {
+        let n = hw.config().items_minted;
+        let item_mint = pda::item_mint(n).0;
+        let item = pda::item(&item_mint).0;
+        let mut accounts = hookwars_armory::accounts::CreateComposite {
+            author: author.pubkey(),
+            config: pda::config().0,
+            template: pda::template(t::COMPOSITE).0,
+            minter: MINTER,
+            item_mint,
+            item,
+            composite: CompositeItem::address(&item).0,
+            recipient_holding: token::holding_address(&item_mint, &author.pubkey()),
+            token: token_accounts(),
+            system_program: anchor_lang::system_program::ID,
+            event_authority: armory_events(),
+            program: ids::ARMORY_ID,
+        }
+        .to_account_metas(None);
+        accounts.push(AccountMeta::new_readonly(preset_address(1), false));
+        for m in &modules {
+            accounts.push(AccountMeta::new_readonly(pda::template(m.template_id).0, false));
+        }
+        let ix = Instruction {
+            program_id: ids::ARMORY_ID,
+            accounts,
+            data: hookwars_armory::instruction::MintComposite { preset_id: 1, modules, royalty_bps: 0 }.data(),
+        };
+        (ix, item)
+    };
+    let skew = module(t::SIDE_SKEW, params(&[100, 0]), 0, 0);
+    let half = module(t::HALF_LIFE, params(&[200_000, 3_600, 4]), 0, 0);
+    // Out of the preset's order: refused.
+    let (ix, _) = mint_ix(&ew.hw, vec![half.clone(), skew.clone()]);
+    ew.send(&author, &[ix]).expect_code(armory_code(AE::InvalidSchema));
+    let (ix, comp) = mint_ix(&ew.hw, vec![skew, half]);
+    ew.send(&author, &[ix]).ok();
+    assert_eq!(ew.hw.read_item(&comp).template_id, t::COMPOSITE);
+}
