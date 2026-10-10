@@ -7,8 +7,9 @@
 import { describe, expect, it } from 'vitest';
 import { PublicKey, type AccountInfo } from '@solana/web3.js';
 import { hookwars } from '@hookwars/sdk';
-import { refreshTailOf } from './economy-prepares.ts';
+// prepares.ts first: it registers the economy routes, and economy-prepares imports it back.
 import { PREPARES } from './prepares.ts';
+import { refreshTailOf } from './economy-prepares.ts';
 
 const K = (n: number) => new PublicKey(Buffer.alloc(32, n));
 const S = (k: PublicKey) => k.toBase58();
