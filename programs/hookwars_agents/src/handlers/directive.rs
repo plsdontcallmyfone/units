@@ -137,7 +137,8 @@ fn check_memo_params(p: &MemoParams) -> Result<()> {
 
 /// Pass 5 (review 3 L-6): lowercase hex of `sha256(borsh(constraints))`, the memo's `c`.
 pub fn constraints_hash_hex(constraints: &DirectiveConstraints) -> Result<String> {
-    let bytes = constraints.try_to_vec()?;
+    let mut bytes = Vec::with_capacity(64);
+    constraints.serialize(&mut bytes)?;
     let h = sha256(&bytes);
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut out = String::with_capacity(64);

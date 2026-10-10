@@ -65,7 +65,7 @@ pub fn process_form_coalition<'info>(
 ) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
     let rem = ctx.remaining_accounts;
-    require!(rem.len() % 4 == 0, WarError::InvalidCoalition);
+    require!(rem.len().is_multiple_of(4), WarError::InvalidCoalition);
     let n = rem.len() / 4;
     require!(
         (COALITION_MIN_MEMBERS..=COALITION_MAX_MEMBERS).contains(&n),
@@ -647,12 +647,13 @@ pub fn process_dissolve_coalition<'info>(ctx: Context<'info, DissolveCoalition<'
     let mut state = Box::new(WarState::try_deserialize(&mut &rem[0].try_borrow_data()?[..])?);
     let mut wrap = bordrless_bridge::client::wrap_sol(*rem[1].key, 0);
     for i in 0..n {
+        // With no contributions weighed, an equal split.
         let share = if i + 1 == n {
             left
-        } else if weight_total == 0 {
-            total_balance / n as u64
         } else {
-            (u128::from(total_balance) * u128::from(contributed[i]) / weight_total) as u64
+            (u128::from(total_balance) * u128::from(contributed[i]))
+                .checked_div(weight_total)
+                .map_or(total_balance / n as u64, |v| v as u64)
         };
         left -= share;
         let q = &rem[3 * i..3 * i + 3];

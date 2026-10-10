@@ -43,7 +43,7 @@ pub fn process_init_boss_pool(ctx: Context<InitBossPool>, season: u32, boss_mint
     p.boss_mint = boss_mint;
     p.effective_at = Clock::get()?
         .unix_timestamp
-        .saturating_add(i64::from(ctx.accounts.config.params.admin_timelock_secs));
+        .saturating_add(ctx.accounts.config.params.admin_timelock_secs);
     emit_cpi!(BossPoolOpened { season, boss_mint });
     Ok(())
 }
