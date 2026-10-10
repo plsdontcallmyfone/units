@@ -128,7 +128,16 @@ Notes:
 1.2 accepts explicit discriminants, so `SoulboundTransfer = 1000` (code 7000) and
 `GuestListClosed = 1100` (7100) onward keep every number. `ArsenalError` and `SoulboundError`
 remain as aliases of `ItemsError`. `tests/integ2.rs::merged_items_error_codes_keep_their_numbers`
-pins the codes.
+pins the codes. `scripts/solana/programs.sh idl` on server A builds `hookwars_items.json` from this
+source with all 30 codes (7000 and 7100 to 7104 unchanged). The same run stops at `hookwars_agents`
+(`state::PolicyLimits` is a type the IDL builder does not support): agents lane.
+
+## 9. Result
+
+Full suite on server A after the last commit: 490 passed, 0 failed, 3 ignored (the two Studio
+fixtures and `devnet_plan`). The regenerated math vectors (`programs/tests/vectors` and the copy in
+`app/packages/shared/vectors`, which the vectors test writes) changed with the new instruction
+accounts.
 
 ## 7. For the app lane
 
