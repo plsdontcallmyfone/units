@@ -2267,7 +2267,7 @@ pub mod eco_cpi {
     /// `craft::wear(caller_program, runs)` when the settle suffix's wear slot holds the item's
     /// `Wear`; a no-op otherwise.
     pub fn wear<'info>(s: &[AccountInfo<'info>], caller_program: &Pubkey, item: &Pubkey, runs: u32) -> Result<()> {
-        require!(s.len() >= CRAFT_HEAD + 1, ErrorCode::AccountNotEnoughKeys);
+        require!(s.len() > CRAFT_HEAD, ErrorCode::AccountNotEnoughKeys);
         if runs == 0 || wear_dormant(&s[4], item).is_none() {
             return Ok(());
         }
@@ -2389,5 +2389,239 @@ pub mod eco_cpi {
             AccountMeta::new_readonly(event_authority(&eco::SOCIAL_ID), false),
             AccountMeta::new_readonly(eco::caller_pda(eco::SOCIAL_CALLER_SEED, caller_program).0, false),
         ]
+    }
+}
+
+/// Protocol pass 4a (docs/spec/11-hook-economy.md section 1, requests E-1 and E-8; recorded in
+/// docs/spec/14-pass-4a.md): access modes, the access proof suffix, and raw readers for the
+/// market's `License`, the agents' `Directive` and social's `Profile` and `SkillTable`. Raw because
+/// the market, agents and social programs depend on the armory, so the armory cannot depend on
+/// them. Each reader checks the owner, the address and the account discriminator (pinned against
+/// the owning crates in `programs/tests/tests/access.rs`). Appended; nothing above changes.
+pub mod access {
+    use super::*;
+
+    /// `Open`: any token whose slot fits.
+    pub const OPEN: u8 = 0;
+    /// `Gated`: a token the item holder approved.
+    pub const GATED: u8 = 1;
+    /// `Licensed`: a token holding a live `License` for the item.
+    pub const LICENSED: u8 = 2;
+    /// `Leased`: the one token an `Active` `Lease` names.
+    pub const LEASED: u8 = 3;
+    /// `Exclusive`: one token at a time (the same as `Open` with the exclusive flag).
+    pub const EXCLUSIVE: u8 = 4;
+    /// Highest mode.
+    pub const MAX_MODE: u8 = 4;
+
+    /// `["access", item]` under the armory.
+    pub const ACCESS_SEED: &[u8] = b"access";
+    /// `["approval", item, token_mint]` under the armory.
+    pub const APPROVAL_SEED: &[u8] = b"approval";
+    /// `["queued", action_hash]` under the armory (review 1 L-1).
+    pub const QUEUED_SEED: &[u8] = b"queued";
+
+    /// `sha256("account:<Name>")[..8]`.
+    pub const LICENSE_DISC: [u8; 8] = [248, 152, 195, 100, 185, 108, 176, 231];
+    pub const DIRECTIVE_DISC: [u8; 8] = [205, 3, 193, 96, 125, 1, 207, 31];
+    pub const PROFILE_DISC: [u8; 8] = [184, 101, 165, 188, 95, 63, 127, 188];
+    pub const SKILL_TABLE_DISC: [u8; 8] = [57, 231, 254, 144, 51, 147, 46, 52];
+
+    /// Whether a template's `allowed_access` bit set allows `mode` (0 allows every mode).
+    pub fn mode_allowed(allowed_access: u8, mode: u8) -> bool {
+        mode <= MAX_MODE && (allowed_access == 0 || allowed_access & (1u8 << mode) != 0)
+    }
+
+    /// `["access", item]`.
+    pub fn policy_address(item: &Pubkey) -> (Pubkey, u8) {
+        Pubkey::find_program_address(&[ACCESS_SEED, item.as_ref()], &ids::ARMORY_ID)
+    }
+    /// `["approval", item, token_mint]`.
+    pub fn approval_address(item: &Pubkey, token_mint: &Pubkey) -> (Pubkey, u8) {
+        Pubkey::find_program_address(&[APPROVAL_SEED, item.as_ref(), token_mint.as_ref()], &ids::ARMORY_ID)
+    }
+    /// `["queued", action_hash]`.
+    pub fn queued_address(action_hash: &[u8; 32]) -> (Pubkey, u8) {
+        Pubkey::find_program_address(&[QUEUED_SEED, action_hash.as_ref()], &ids::ARMORY_ID)
+    }
+
+    /// Length of the access proof suffix `[<ARMORY_ID>, proof]` an equip path takes: the proof is
+    /// the `Approval` (Gated), the market's `License` (Licensed) or the market's `Lease` (Leased).
+    pub const PROOF_SUFFIX: usize = 2;
+
+    /// Splits the access proof suffix off the end of `rem`.
+    pub fn split_proof<'a, 'info>(
+        rem: &'a [AccountInfo<'info>],
+    ) -> (&'a [AccountInfo<'info>], Option<&'a AccountInfo<'info>>) {
+        let n = rem.len();
+        if n >= PROOF_SUFFIX && rem[n - PROOF_SUFFIX].key == &ids::ARMORY_ID {
+            (&rem[..n - PROOF_SUFFIX], Some(&rem[n - 1]))
+        } else {
+            (rem, None)
+        }
+    }
+
+    /// Client side: the proof suffix metas.
+    pub fn proof_metas(proof: &Pubkey) -> Vec<anchor_lang::solana_program::instruction::AccountMeta> {
+        use anchor_lang::solana_program::instruction::AccountMeta;
+        vec![AccountMeta::new_readonly(ids::ARMORY_ID, false), AccountMeta::new_readonly(*proof, false)]
+    }
+
+    /// `["license", item, token_mint]` under the market.
+    pub fn license_address(item: &Pubkey, token_mint: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(&[b"license", item.as_ref(), token_mint.as_ref()], &ids::MARKET_ID).0
+    }
+
+    /// What the armory reads of a `License` (discriminator, bump, item, token_mint, payer,
+    /// price_paid, starts_at, ends_at, revoked_at, per, counted).
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct LicenseView {
+        pub ends_at: i64,
+        pub revoked_at: i64,
+    }
+
+    impl LicenseView {
+        /// Paid through and not revoked (the market's `License::live_at`).
+        pub fn live_at(&self, ts: i64) -> bool {
+            self.revoked_at == 0 && ts < self.ends_at
+        }
+        /// When it stopped being live.
+        pub fn lapsed_at(&self) -> i64 {
+            if self.revoked_at != 0 {
+                self.revoked_at.min(self.ends_at)
+            } else {
+                self.ends_at
+            }
+        }
+    }
+
+    /// The `License` of `item` for `token_mint`; `None` for any other account.
+    pub fn read_license(info: &AccountInfo, item: &Pubkey, token_mint: &Pubkey) -> Option<LicenseView> {
+        if *info.owner != ids::MARKET_ID || *info.key != license_address(item, token_mint) {
+            return None;
+        }
+        let d = info.try_borrow_data().ok()?;
+        if d.len() < 139 || d[..8] != LICENSE_DISC || d[9..41] != item.as_ref()[..] || d[41..73] != token_mint.as_ref()[..] {
+            return None;
+        }
+        Some(LicenseView {
+            ends_at: i64::from_le_bytes(d[121..129].try_into().ok()?),
+            revoked_at: i64::from_le_bytes(d[129..137].try_into().ok()?),
+        })
+    }
+
+    /// `["agent-vault", passport]` under the agents program.
+    pub fn agent_vault(passport: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(&[b"agent-vault", passport.as_ref()], &ids::AGENTS_ID).0
+    }
+
+    /// What `set_access` reads of a live `Directive`.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct DirectiveView {
+        pub allowed_access_modes: u8,
+        pub max_licence_price: u64,
+        pub frozen: bool,
+    }
+
+    /// The constraints of `info` when it is a current (not superseded) `Directive` of `passport`
+    /// (the agents' `live_constraints`); `None` otherwise.
+    pub fn read_directive(info: &AccountInfo, passport: &Pubkey) -> Option<DirectiveView> {
+        if *info.owner != ids::AGENTS_ID {
+            return None;
+        }
+        let d = info.try_borrow_data().ok()?;
+        if d.len() < 96 || d[..8] != DIRECTIVE_DISC || d[8..40] != passport.as_ref()[..] {
+            return None;
+        }
+        let seq = u32::from_le_bytes(d[40..44].try_into().ok()?);
+        let expect = Pubkey::find_program_address(&[b"directive", passport.as_ref(), &seq.to_le_bytes()], &ids::AGENTS_ID).0;
+        if *info.key != expect {
+            return None;
+        }
+        let n = u32::from_le_bytes(d[92..96].try_into().ok()?) as usize;
+        let o = 96usize.checked_add(n.checked_mul(32)?)?;
+        // modes (1), price (8), frozen (1), posted_at (8), superseded_by (1 + 4 when Some).
+        if d.len() < o + 19 {
+            return None;
+        }
+        if d[o + 18] != 0 {
+            return None;
+        }
+        Some(DirectiveView {
+            allowed_access_modes: d[o],
+            max_licence_price: u64::from_le_bytes(d[o + 1..o + 9].try_into().ok()?),
+            frozen: d[o + 9] != 0,
+        })
+    }
+
+    /// The level of `wallet` in `skill` (11 section 3.3, R43) from social's `["skills"]` and the
+    /// wallet's `["profile", wallet]`; 0 without a profile. `None` when `skills` is not the table.
+    pub fn wallet_level(profile: &AccountInfo, skills: &AccountInfo, wallet: &Pubkey, skill: u8) -> Option<u8> {
+        use crate::economy as eco;
+        if *skills.owner != eco::SOCIAL_ID || *skills.key != crate::eco_cpi::skills_address() {
+            return None;
+        }
+        let t = skills.try_borrow_data().ok()?;
+        if t.len() < 14 || t[..8] != SKILL_TABLE_DISC {
+            return None;
+        }
+        let n = u32::from_le_bytes(t[10..14].try_into().ok()?) as usize;
+        const DEF: usize = 2 + 8 * eco::MAX_LEVELS;
+        let mut found: Option<(u8, [u64; eco::MAX_LEVELS])> = None;
+        for i in 0..n {
+            let o = 14 + i * DEF;
+            if t.len() < o + DEF {
+                return None;
+            }
+            if t[o] == skill {
+                let mut th = [0u64; eco::MAX_LEVELS];
+                for (j, x) in th.iter_mut().enumerate() {
+                    *x = u64::from_le_bytes(t[o + 2 + 8 * j..o + 10 + 8 * j].try_into().ok()?);
+                }
+                found = Some((t[o + 1], th));
+                break;
+            }
+        }
+        let Some((counter, thresholds)) = found else { return Some(0) };
+        if *profile.key != crate::eco_cpi::profile_address(wallet) || *profile.owner != eco::SOCIAL_ID {
+            return Some(0);
+        }
+        let p = profile.try_borrow_data().ok()?;
+        let at = 42 + 8 * usize::from(counter);
+        if p.len() < at + 8 || p[..8] != PROFILE_DISC || p[10..42] != wallet.as_ref()[..] {
+            return Some(0);
+        }
+        let value = u64::from_le_bytes(p[at..at + 8].try_into().ok()?);
+        Some(eco::level(&thresholds, value))
+    }
+
+    /// An external template (Hook Lab): an id no built-in template or the Composite uses. Its
+    /// program is its own; the items program only keeps its equip state, vault and settlement.
+    pub fn is_external(template_id: u16) -> bool {
+        template_id != crate::template_id::COMPOSITE && crate::shape(template_id).is_none()
+    }
+
+    /// The external destination: the equip's first target when it names one, else `None` (the
+    /// rest then goes to the item's royalty holding, so the item's holder claims it).
+    pub fn external_destination(targets: &[Pubkey]) -> Option<Pubkey> {
+        targets.first().copied()
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn modes_and_bits() {
+            assert!(mode_allowed(0, OPEN) && mode_allowed(0, EXCLUSIVE));
+            assert!(!mode_allowed(0, 5));
+            assert!(mode_allowed(1 << GATED, GATED) && !mode_allowed(1 << GATED, OPEN));
+            let v = LicenseView { ends_at: 100, revoked_at: 0 };
+            assert!(v.live_at(99) && !v.live_at(100));
+            assert_eq!(v.lapsed_at(), 100);
+            let r = LicenseView { ends_at: 100, revoked_at: 40 };
+            assert!(!r.live_at(50));
+            assert_eq!(r.lapsed_at(), 40);
+        }
     }
 }

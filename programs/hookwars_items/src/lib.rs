@@ -1,4 +1,5 @@
 // Changed by Hookwars: integration pass 2: one items error enum (Soulbound and arsenal codes kept); LeaseRentPaid; integration pass 3: EquipState.runs_at_settle, init_equip wear flag, ProtocolFee.
+// Changed by Hookwars: protocol pass 4a: record_pool_cut (the launchpad records an external template's pool cut).
 // Changed by Hookwars: new file (M2), the template program's armory-facing entry points; M3b: the
 // token and pool callbacks, every base template and arsenal wave A, composites, the raid ledger
 // and settle_equip; arsenal waves D and E (templates, `payouts`).
@@ -356,6 +357,7 @@ pub mod hookwars_items {
     /// Creates or resets the slot's `EquipState`, writes the item's registry, creates the equip
     /// vault for an item that may cut on the token side. Return data: the registry length (`u8`).
     /// For a composite, the module list is the first remaining account.
+    #[allow(clippy::too_many_arguments)]
     pub fn init_equip<'info>(
         ctx: Context<'info, InitEquip<'info>>,
         slot: u8,
@@ -441,6 +443,23 @@ pub mod hookwars_items {
     /// sender's bounty, the rest to each module's destination. Permissionless.
     pub fn settle_equip<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Result<()> {
         settle::process(ctx, slot)
+    }
+
+    /// Protocol pass 4a (Hook Lab gap 4): the launchpad records the pool cut an external template's
+    /// program answered into the shared `PoolCuts` holding, so `settle_equip` can pay it out.
+    /// Signed by the launchpad's `["hook-authority", items]`; only for an external template's
+    /// equip.
+    pub fn record_pool_cut(ctx: Context<RecordPoolCut>, mint: Pubkey, slot: u8, item: Pubkey, cut: u64, side: u8) -> Result<()> {
+        let s = &mut ctx.accounts.equip_state;
+        require_keys_eq!(s.mint, mint, ItemsError::WrongAccount);
+        require_keys_eq!(s.key(), hookwars_common::pda::equip_state(&mint, slot).0, ItemsError::WrongAccount);
+        require!(s.slot == slot && s.item == item && item != Pubkey::default(), ItemsError::WrongItem);
+        require!(hookwars_common::access::is_external(s.template_id), ItemsError::WrongItem);
+        s.pool_unsettled[0] = s.pool_unsettled[0].checked_add(cut).ok_or(ItemsError::Overflow)?;
+        s.pool_owed = s.pool_owed.checked_add(cut).ok_or(ItemsError::Overflow)?;
+        s.runs = s.runs.saturating_add(1);
+        emit!(ItemCut { mint: s.mint, slot, item, module: 0, side, amount: cut });
+        Ok(())
     }
 
     /// Referral: the buyer names its referrer, once (08 4.7).
@@ -569,6 +588,16 @@ pub struct PoolCallback<'info> {
     pub quote_mint: UncheckedAccount<'info>,
     /// CHECK: the trader.
     pub actor: UncheckedAccount<'info>,
+}
+
+/// Protocol pass 4a: accounts of `record_pool_cut`.
+#[derive(Accounts)]
+pub struct RecordPoolCut<'info> {
+    /// The launchpad's `["hook-authority", items]`.
+    #[account(address = LAUNCH_ITEMS_SIGNER @ ItemsError::BadHookSigner)]
+    pub launch_signer: Signer<'info>,
+    #[account(mut)]
+    pub equip_state: Account<'info, EquipState>,
 }
 
 /// Accounts of `settle_equip`. Remaining accounts: per module, its token-side destination and

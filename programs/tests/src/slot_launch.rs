@@ -1,5 +1,7 @@
 // Changed by Hookwars: new file, slot launch helpers (M3b); security review 2 L-D: the stub's item
 // registry is written at equip, and `create_prepared_launch` takes the forwarded slots' registries.
+// Changed by Hookwars: protocol pass 4a: pool items' accounts come from their registries (the items
+// program's for an external template), not a fixed stub layout.
 //! Slot launches in the LiteSVM suites (spec 03 section 4.3): `prepare_launch`, equipping (by
 //! `armory_stub` signing as the mint's slot authority for test pool items, or the real armory
 //! through `equip_prepared`), `create_prepared_launch`, swaps that carry the pool items' accounts,
@@ -105,9 +107,29 @@ pub fn pool_items_of(w: &World, mint: &Pubkey) -> Vec<AccountMeta> {
         }
         v.push(AccountMeta::new_readonly(s.program, false));
         v.push(AccountMeta::new_readonly(sl::item_signer(&s.program), false));
-        v.push(AccountMeta::new(pool_item_stub::script_address(&s.item), false));
+        // Protocol pass 4a: the item's registry, as a client resolves it.
+        let reg = registry_of(w, mint, s);
+        let data = w.env.account(&reg).expect("item registry").data;
+        let list = bordrless_hook::HookAccountList::decode(&data).expect("registry list");
+        for e in list.accounts {
+            if let bordrless_hook::AccountSource::Key(k) = e.source {
+                v.push(if e.writable { AccountMeta::new(k, false) } else { AccountMeta::new_readonly(k, false) });
+            }
+        }
     }
     v
+}
+
+/// Protocol pass 4a: a forwarded slot's item registry: the items program's when it exists (an
+/// external template equipped by the armory), else the slot program's.
+pub fn registry_of(w: &World, mint: &Pubkey, s: &bordrless_token::state::Slot) -> Pubkey {
+    let seeds: &[&[u8]] = &[bordrless_hook::HOOK_ACCOUNTS_SEED, mint.as_ref(), s.item.as_ref()];
+    let items = Pubkey::find_program_address(seeds, &hookwars_common::ids::ITEMS_ID).0;
+    if w.env.account(&items).is_some() {
+        items
+    } else {
+        Pubkey::find_program_address(seeds, &s.program).0
+    }
 }
 
 /// The item registries of a mint's forwarded slots, in slot order (`create_prepared_launch` and
@@ -118,11 +140,7 @@ pub fn item_registries(w: &World, mint: &Pubkey) -> Vec<Pubkey> {
         .iter()
         .filter(|s| bordrless_launch::instructions::forwards(s))
         .map(|s| {
-            Pubkey::find_program_address(
-                &[bordrless_hook::HOOK_ACCOUNTS_SEED, mint.as_ref(), s.item.as_ref()],
-                &s.program,
-            )
-            .0
+            registry_of(w, mint, s)
         })
         .collect()
 }

@@ -315,7 +315,9 @@ impl WarWorld {
             default_access: 0,
             allowed_access: 0,
             charges_on_create: 0,
-            reserved: [0; 24],
+            external: false,
+            ext_manifest: Default::default(),
+            reserved: [0; 7],
         };
         self.put_anchor(template_address(id), war_armory_stub::ID, &t, 0);
     }
@@ -338,7 +340,9 @@ impl WarWorld {
             royalty_owner_bump: 0,
             created_at: 0,
             has_wear: false,
-            reserved: [0; 31],
+            access_mode: 0,
+            exclusive: false,
+            reserved: [0; 29],
         };
         self.put_anchor(key, war_armory_stub::ID, &it, 0);
         key

@@ -44,7 +44,9 @@ console.log(`deployer balance: ${(await conn.getBalance(deployer.publicKey)) / w
 // One batched read (100 accounts per call) instead of one call per step: the public devnet RPC
 // rate-limits bursts of single reads.
 const existing = new Set();
-const keys = plan.steps.filter((st) => st.creates).map((st) => st.creates);
+// Changed by Hookwars (protocol pass 4a): `skip_if` (a queue step is done once its registration
+// applied) and `wait_secs` steps (the armory admin timelock).
+const keys = [...new Set(plan.steps.flatMap((st) => [st.creates, st.skip_if].filter(Boolean)))];
 for (let i = 0; i < keys.length; i += 100) {
   const chunk = keys.slice(i, i + 100);
   const infos = await conn.getMultipleAccountsInfo(chunk.map((k) => new web3.PublicKey(k)));
@@ -53,8 +55,15 @@ for (let i = 0; i < keys.length; i += 100) {
 
 let sent = 0;
 let skipped = 0;
-for (const st of plan.steps) {
-  const done = st.creates ? existing.has(st.creates) : false;
+for (const [n, st] of plan.steps.entries()) {
+  if (st.wait_secs) {
+    const later = plan.steps.slice(n + 1).some((x) => x.creates && !existing.has(x.creates) && !(x.skip_if && existing.has(x.skip_if)));
+    if (!later) { console.log(`  [${st.step}] skip wait: ${st.label}`); continue; }
+    console.log(`  [${st.step}] ${SEND ? 'waiting' : 'would wait'} ${st.wait_secs} s: ${st.label}`);
+    if (SEND) await new Promise((r) => setTimeout(r, (st.wait_secs + 5) * 1000));
+    continue;
+  }
+  const done = (st.creates ? existing.has(st.creates) : false) || (st.skip_if ? existing.has(st.skip_if) : false);
   if (done) {
     console.log(`  [${st.step}] skip (exists ${st.creates}): ${st.label}`);
     skipped += 1;

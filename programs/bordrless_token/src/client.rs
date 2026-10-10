@@ -1,4 +1,4 @@
-// Changed by Hookwars: builders for the slot instructions.
+// Changed by Hookwars: builders for the slot instructions; protocol pass 4a: the test module moved last (clippy).
 //! Instruction builders for calling this program: used by the other Bordrless programs (CPI) and
 //! by the tests. The account order here is the order of each `Accounts` struct, with the event
 //! authority and the program appended as `#[event_cpi]` does.
@@ -387,32 +387,6 @@ pub fn read_mint(info: &AccountInfo) -> Result<crate::state::Mint> {
     crate::state::Mint::try_deserialize(&mut &data[..])
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use bordrless_hook::HOOK_AUTHORITY_SEED;
-
-    #[test]
-    fn hook_signers_are_one_per_hook_program() {
-        let (a, b) = (Pubkey::new_unique(), Pubkey::new_unique());
-        let (expected, bump) =
-            Pubkey::find_program_address(&[HOOK_AUTHORITY_SEED, a.as_ref()], &crate::ID);
-        assert_eq!((hook_signer(&a), Mint::hook_signer(&a).1), (expected, bump));
-        assert_ne!(hook_signer(&a), hook_signer(&b));
-        assert_eq!(Hook::of(a).signer, expected);
-        // A mint without a hook passes this program's id in both hook slots.
-        let ix = transfer(a, b, a, b, None, vec![], 1);
-        assert_eq!(
-            (ix.accounts[4].pubkey, ix.accounts[5].pubkey),
-            (crate::ID, crate::ID)
-        );
-        let ix = transfer(a, b, a, b, Some(a), vec![], 1);
-        assert_eq!(
-            (ix.accounts[4].pubkey, ix.accounts[5].pubkey),
-            (a, expected)
-        );
-    }
-}
 
 
 // ------------------------------------------------------------------------------- Hookwars slots
@@ -548,4 +522,31 @@ pub fn slot_slice(program: Pubkey, extras: Vec<AccountMeta>) -> Vec<AccountMeta>
     ];
     v.extend(extras);
     v
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bordrless_hook::HOOK_AUTHORITY_SEED;
+
+    #[test]
+    fn hook_signers_are_one_per_hook_program() {
+        let (a, b) = (Pubkey::new_unique(), Pubkey::new_unique());
+        let (expected, bump) =
+            Pubkey::find_program_address(&[HOOK_AUTHORITY_SEED, a.as_ref()], &crate::ID);
+        assert_eq!((hook_signer(&a), Mint::hook_signer(&a).1), (expected, bump));
+        assert_ne!(hook_signer(&a), hook_signer(&b));
+        assert_eq!(Hook::of(a).signer, expected);
+        // A mint without a hook passes this program's id in both hook slots.
+        let ix = transfer(a, b, a, b, None, vec![], 1);
+        assert_eq!(
+            (ix.accounts[4].pubkey, ix.accounts[5].pubkey),
+            (crate::ID, crate::ID)
+        );
+        let ix = transfer(a, b, a, b, Some(a), vec![], 1);
+        assert_eq!(
+            (ix.accounts[4].pubkey, ix.accounts[5].pubkey),
+            (a, expected)
+        );
+    }
 }

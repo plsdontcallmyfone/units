@@ -38,6 +38,7 @@ fn set_economy_ix(admin: &Pubkey, template_id: u16, author_bps: u16, charges: u3
             admin: *admin,
             config: pda::config().0,
             template: pda::template(template_id).0,
+            queued: Pubkey::default(),
             event_authority: armory_events(),
             program: ids::ARMORY_ID,
         },
@@ -53,9 +54,10 @@ fn set_economy_ix(admin: &Pubkey, template_id: u16, author_bps: u16, charges: u3
 
 fn set_protocol_ix(admin: &Pubkey, bps: u16) -> Instruction {
     armory_ix(
-        hookwars_armory::accounts::AdminOnly {
+        hookwars_armory::accounts::AdminQueued {
             admin: *admin,
             config: pda::config().0,
+            queued: Pubkey::default(),
             event_authority: armory_events(),
             program: ids::ARMORY_ID,
         },
@@ -100,16 +102,16 @@ fn template_economy_and_protocol_bps_are_admin_only_and_bounded() {
     let mut ew = world();
     let admin = ew.deployer();
     let stranger = ew.funded(SOL);
-    ew.send(&stranger, &[set_economy_ix(&stranger.pubkey(), t::HALF_LIFE, 1_000, 3)]).expect_code(armory_code(AE::NotAdmin));
-    ew.send(&admin, &[set_economy_ix(&admin.pubkey(), t::HALF_LIFE, 10_001, 3)]).expect_code(armory_code(AE::RoyaltyTooHigh));
-    ew.send(&admin, &[set_economy_ix(&admin.pubkey(), t::HALF_LIFE, 1_000, 3)]).ok();
+    ew.hw.send_gated_all(&stranger, vec![set_economy_ix(&stranger.pubkey(), t::HALF_LIFE, 1_000, 3)]).expect_code(armory_code(AE::NotAdmin));
+    ew.hw.send_gated_all(&admin, vec![set_economy_ix(&admin.pubkey(), t::HALF_LIFE, 10_001, 3)]).expect_code(armory_code(AE::RoyaltyTooHigh));
+    ew.hw.send_gated_all(&admin, vec![set_economy_ix(&admin.pubkey(), t::HALF_LIFE, 1_000, 3)]).ok();
     let tp: hookwars_armory::state::Template = ew.hw.w.env.read(&pda::template(t::HALF_LIFE).0);
     assert_eq!((tp.author_bps, tp.charges_on_create), (1_000, 3));
     // The protocol share is bounded by `max_royalty_bps` and set by the admin only.
     let max = ew.hw.config().params.max_royalty_bps;
-    ew.send(&admin, &[set_protocol_ix(&admin.pubkey(), max + 1)]).expect_code(armory_code(AE::RoyaltyTooHigh));
-    ew.send(&stranger, &[set_protocol_ix(&stranger.pubkey(), 100)]).expect_code(armory_code(AE::NotAdmin));
-    ew.send(&admin, &[set_protocol_ix(&admin.pubkey(), 100)]).ok();
+    ew.hw.send_gated_all(&admin, vec![set_protocol_ix(&admin.pubkey(), max + 1)]).expect_code(armory_code(AE::RoyaltyTooHigh));
+    ew.hw.send_gated_all(&stranger, vec![set_protocol_ix(&stranger.pubkey(), 100)]).expect_code(armory_code(AE::NotAdmin));
+    ew.hw.send_gated_all(&admin, vec![set_protocol_ix(&admin.pubkey(), 100)]).ok();
     assert_eq!(ew.hw.config().item_protocol_bps, 100);
 }
 
@@ -117,7 +119,7 @@ fn template_economy_and_protocol_bps_are_admin_only_and_bounded() {
 fn a_wearing_template_needs_the_wear_accounts_and_counters_reach_social() {
     let mut ew = world();
     let admin = ew.deployer();
-    ew.send(&admin, &[set_economy_ix(&admin.pubkey(), t::HALF_LIFE, 0, 4)]).ok();
+    ew.hw.send_gated_all(&admin, vec![set_economy_ix(&admin.pubkey(), t::HALF_LIFE, 0, 4)]).ok();
     let author = ew.funded(10 * SOL);
     ew.open_profile(&author);
     let p = params(&[200_000, 3_600, 4]);
@@ -189,7 +191,7 @@ fn settle_takes_the_protocol_fee_and_author_share_wears_the_item_and_drops_to_it
     let mut ew = world();
     let admin = ew.deployer();
     // TEST values (none is a decision): protocol 5%, author 20% of the royalty, one charge.
-    ew.send(&admin, &[set_protocol_ix(&admin.pubkey(), 500), set_economy_ix(&admin.pubkey(), t::HALF_LIFE, 2_000, 1)]).ok();
+    ew.hw.send_gated_all(&admin, vec![set_protocol_ix(&admin.pubkey(), 500), set_economy_ix(&admin.pubkey(), t::HALF_LIFE, 2_000, 1)]).ok();
     let holder = ew.funded(10 * SOL);
     let (ix, item, item_mint) = create_item_ix(&ew.hw, &holder.pubkey(), t::HALF_LIFE, params(&[200_000, 3_600, 4]), 1_000, true, false);
     ew.send(&holder, &[ix]).ok();
@@ -399,6 +401,7 @@ fn presets_fix_the_module_order_and_only_the_admin_registers_them() {
                 config: pda::config().0,
                 preset: preset_address(1),
                 system_program: anchor_lang::system_program::ID,
+                queued: Pubkey::default(),
                 event_authority: armory_events(),
                 program: ids::ARMORY_ID,
             },
@@ -406,9 +409,9 @@ fn presets_fix_the_module_order_and_only_the_admin_registers_them() {
         )
     };
     let stranger = ew.funded(SOL);
-    ew.send(&stranger, &[reg(&stranger.pubkey(), vec![t::SIDE_SKEW, t::HALF_LIFE])]).expect_code(armory_code(AE::NotAdmin));
-    ew.send(&admin, &[reg(&admin.pubkey(), vec![t::SIDE_SKEW])]).expect_code(armory_code(AE::InvalidSchema));
-    ew.send(&admin, &[reg(&admin.pubkey(), vec![t::SIDE_SKEW, t::HALF_LIFE])]).ok();
+    ew.hw.send_gated_all(&stranger, vec![reg(&stranger.pubkey(), vec![t::SIDE_SKEW, t::HALF_LIFE])]).expect_code(armory_code(AE::NotAdmin));
+    ew.hw.send_gated_all(&admin, vec![reg(&admin.pubkey(), vec![t::SIDE_SKEW])]).expect_code(armory_code(AE::InvalidSchema));
+    ew.hw.send_gated_all(&admin, vec![reg(&admin.pubkey(), vec![t::SIDE_SKEW, t::HALF_LIFE])]).ok();
     let author = ew.funded(10 * SOL);
     let mint_ix = |hw: &Hw, modules: Vec<hookwars_common::composite::Module>| {
         let n = hw.config().items_minted;

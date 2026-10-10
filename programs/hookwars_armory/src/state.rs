@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M2); M3b: settle_bounty_bps, CompositeItem; security review 1: proposal_min_bps; integration pass 2: AuthorCounter, ClaimCounter; integration pass 3: item_protocol_bps, Template economy fields (E-7), Item.has_wear (E-3), source CRAFTED (E-5), Preset (08 wave F).
+// Changed by Hookwars: new file (M2); M3b: settle_bounty_bps, CompositeItem; security review 1: proposal_min_bps; integration pass 2: AuthorCounter, ClaimCounter; integration pass 3: item_protocol_bps, Template economy fields (E-7), Item.has_wear (E-3), source CRAFTED (E-5), Preset (08 wave F); protocol pass 4a: AccessParams in the config, external template manifest, Item access fields, AccessPolicy, Approval, QueuedAction, TemplateSubmission.
 //! Accounts of the armory (docs/spec/02-armory.md section 2).
 
 use anchor_lang::prelude::*;
@@ -61,7 +61,28 @@ pub struct ArmoryConfig {
     /// `settle_equip` settles, taken first (`ITEM_PROTOCOL_BPS`, to set; 0 until the admin sets
     /// it with `set_economy`). Paid to the admin's holding.
     pub item_protocol_bps: u16,
-    pub reserved: [u8; 60],
+    /// Protocol pass 4a (E-1, E-8, 10 section 11.5): the access and lab numbers, set through the
+    /// admin queue with `set_access_params` (all 0 until set: licences then cannot be offered).
+    pub access: AccessParams,
+    pub reserved: [u8; 32],
+}
+
+/// Protocol pass 4a: the access and lab numbers (00 section 6 names; every value to set).
+#[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AccessParams {
+    /// `LICENCE_TIER_1_LAMPORTS`: a licence priced above this needs `Builder >= licence_tier_1_level`.
+    pub licence_tier_1_lamports: u64,
+    /// `LICENCE_TIER_1_LEVEL`.
+    pub licence_tier_1_level: u8,
+    /// `LAB_BOND_LAMPORTS`: the bond of a template submission.
+    pub lab_bond_lamports: u64,
+    /// `LAB_BOND_DISCOUNT_LEVEL`: the Builder level that earns the bond discount (0 = none).
+    pub lab_bond_discount_level: u8,
+    /// The discount, in basis points of the bond.
+    pub lab_bond_discount_bps: u16,
+    /// `LICENCE_MIN_SECS` and `LICENCE_MAX_SECS`: bounds of a licence term.
+    pub licence_min_secs: u32,
+    pub licence_max_secs: u32,
 }
 
 /// Hookwars M3b: a composite's module list at `["composite", item]` (08 section 2.2; the same
@@ -119,7 +140,12 @@ pub struct Template {
     pub default_access: u8,
     pub allowed_access: u8,
     pub charges_on_create: u32,
-    pub reserved: [u8; 24],
+    /// Protocol pass 4a (Hook Lab gaps 1 to 3): a template whose program is not the items program.
+    /// Its items' manifest is `ext_manifest`, the ceiling its registrant declared and the lab
+    /// checked; the token program and the launchpad call its program directly.
+    pub external: bool,
+    pub ext_manifest: Manifest,
+    pub reserved: [u8; 7],
 }
 
 /// Template status.
@@ -150,7 +176,12 @@ pub struct Item {
     /// template's `charges_on_create` is above 0); the items engine then reads it last in the
     /// registry and answers the default while it is dormant (R38).
     pub has_wear: bool,
-    pub reserved: [u8; 31],
+    /// Protocol pass 4a (E-1, 11 section 1): the access mode future equips check (`Open` 0 for
+    /// every item made before) and the exclusive flag. Mirrors `AccessPolicy`, so an equip path
+    /// that sees `Open` needs no further account.
+    pub access_mode: u8,
+    pub exclusive: bool,
+    pub reserved: [u8; 29],
 }
 
 /// Item sources.
@@ -285,6 +316,77 @@ pub struct AuthorCounter {
 pub struct ClaimCounter {
     pub wallet: Pubkey,
     pub lamports: u64,
+    pub bump: u8,
+}
+
+/// Protocol pass 4a (11 section 1.2): licence terms.
+#[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LicenceTerms {
+    pub price_lamports: u64,
+    /// Within `[licence_min_secs, licence_max_secs]`.
+    pub term_secs: u32,
+    /// `PerToken` 0, `PerPeriod` 1.
+    pub per: u8,
+    /// Tokens that may hold a live licence at once (1 with `exclusive`).
+    pub max_live: u16,
+}
+
+/// Protocol pass 4a: `AccessPolicy` at `["access", item]` (11 section 1.2).
+#[account]
+#[derive(InitSpace, Debug)]
+pub struct AccessPolicy {
+    pub item: Pubkey,
+    pub mode: u8,
+    pub exclusive: bool,
+    pub licence_terms: Option<LicenceTerms>,
+    pub holder_at_set: Pubkey,
+    pub updated_at: i64,
+    pub bump: u8,
+}
+
+/// Protocol pass 4a: `Approval` at `["approval", item, token_mint]` (11 section 1.2).
+#[account]
+#[derive(InitSpace, Debug)]
+pub struct Approval {
+    pub item: Pubkey,
+    pub token_mint: Pubkey,
+    pub approved_by: Pubkey,
+    pub approved_at: i64,
+    /// 0 = live; otherwise removal is possible from this time.
+    pub revoke_after: i64,
+    pub bump: u8,
+}
+
+impl Approval {
+    /// Live at `ts` (revocation takes effect only after the notice, R39).
+    pub fn live_at(&self, ts: i64) -> bool {
+        self.revoke_after == 0 || ts < self.revoke_after
+    }
+}
+
+/// Protocol pass 4a (review 1 L-1): an admin action waiting out the timelock at
+/// `["queued", action_hash]`; the action's instruction closes it when it applies.
+#[account]
+#[derive(InitSpace, Debug)]
+pub struct QueuedAction {
+    pub action_hash: [u8; 32],
+    pub admin: Pubkey,
+    pub ready_at: i64,
+    pub bump: u8,
+}
+
+/// Protocol pass 4a (10 section 11.5): `TemplateSubmission` at `["submission-tpl", program]`.
+#[account]
+#[derive(InitSpace, Debug)]
+pub struct TemplateSubmission {
+    pub program: Pubkey,
+    pub code_hash: [u8; 32],
+    /// sha256 of the submission document (manifest, schema, tests) the lab reads.
+    pub uri_hash: [u8; 32],
+    pub submitter: Pubkey,
+    /// Lamports held above rent.
+    pub bond: u64,
+    pub submitted_at: i64,
     pub bump: u8,
 }
 

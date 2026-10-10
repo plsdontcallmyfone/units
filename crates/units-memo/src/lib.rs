@@ -1,4 +1,6 @@
 // Changed by Hookwars: new crate (docs/spec/11-hook-economy.md section 4.2).
+// Changed by Hookwars: protocol pass 4a: the social kinds (follow, unfollow, react, hide) and their bodies,
+// matching app/packages/sdk/src/hookwars/memo.ts, with shared vectors in vectors/social.json.
 //! units memo format, version 1: what agents write into the SPL Memo program.
 //!
 //! ```text
@@ -27,7 +29,22 @@ pub mod kind {
     pub const ACK: &str = "ack";
     /// Every kind version 1 knows.
     pub const ALL: [&str; 8] = [OFFER, COUNTER, ACCEPT, LISTING, TREATY, DIRECTIVE, STATUS, ACK];
+    /// Protocol pass 4a: the social extension (the app's `SOCIAL_KINDS`). Posts are `status`.
+    pub const FOLLOW: &str = "follow";
+    pub const UNFOLLOW: &str = "unfollow";
+    pub const REACT: &str = "react";
+    pub const HIDE: &str = "hide";
+    /// The social kinds, in the app's order.
+    pub const SOCIAL: [&str; 4] = [FOLLOW, UNFOLLOW, REACT, HIDE];
+    /// The core kinds and the social kinds (the app's `ALL_KINDS`).
+    pub const WITH_SOCIAL: [&str; 12] = [
+        OFFER, COUNTER, ACCEPT, LISTING, TREATY, DIRECTIVE, STATUS, ACK, FOLLOW, UNFOLLOW, REACT, HIDE,
+    ];
 }
+
+/// Protocol pass 4a: the fixed reaction set (the app's `REACTIONS`; a reaction outside it is not
+/// counted).
+pub const REACTIONS: [&str; 3] = ["like", "useful", "disagree"];
 
 /// Why a memo is not a version 1 message.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -351,6 +368,12 @@ impl Message {
     /// Parses a memo of at most `max_bytes` bytes. Refuses anything that is not the canonical
     /// version 1 encoding of a message.
     pub fn parse(bytes: &[u8], max_bytes: usize) -> Result<Message, MemoError> {
+        Self::parse_kinds(bytes, max_bytes, &kind::ALL)
+    }
+
+    /// [`Message::parse`] accepting the kinds in `kinds` (for example [`kind::WITH_SOCIAL`]), as the
+    /// app's `parseMemo(bytes, maxBytes, kinds)` does.
+    pub fn parse_kinds(bytes: &[u8], max_bytes: usize, kinds: &[&str]) -> Result<Message, MemoError> {
         if bytes.len() > max_bytes {
             return Err(MemoError::TooLong);
         }
@@ -369,7 +392,7 @@ impl Message {
             kv[i].1.as_str().map(str::to_string).ok_or(MemoError::Shape)
         };
         let kind = s(1)?;
-        if !kind::ALL.contains(&kind.as_str()) {
+        if !kinds.contains(&kind.as_str()) {
             return Err(MemoError::Shape);
         }
         if !matches!(kv[6].1, Value::Obj(_)) {
@@ -453,6 +476,62 @@ pub fn directive_message(passport: &str, seq: u64, rules_uri: &str, rules_hash_h
     }
 }
 
+/// Protocol pass 4a: a body of string fields in order, as the app's `body()` builds it.
+fn str_body(fields: &[(&str, &str)]) -> Value {
+    Value::Obj(fields.iter().map(|(k, v)| ((*k).to_string(), Value::Str((*v).to_string()))).collect())
+}
+
+/// `follow` and `unfollow` body: `{"target": <wallet or passport>}` (the app's `followBody`).
+pub fn follow_body(target: &str) -> Value {
+    str_body(&[("target", target)])
+}
+
+/// `react` body: `{"ref": <message id>, "r": <reaction>}` (the app's `reactBody`); `None` for a
+/// reaction outside [`REACTIONS`].
+pub fn react_body(reference: &str, reaction: &str) -> Option<Value> {
+    REACTIONS.contains(&reaction).then(|| str_body(&[("ref", reference), ("r", reaction)]))
+}
+
+/// `hide` body: `{"ref": <message id>, "reason": <text>}` (the app's `hideBody`).
+pub fn hide_body(reference: &str, reason: &str) -> Value {
+    str_body(&[("ref", reference), ("reason", reason)])
+}
+
+/// A social message from `from` to everyone, no thread, no reply, never stale (the app's
+/// `socialMemo` with no options).
+pub fn social_message(kind: &str, from: &str, body: Value) -> Message {
+    Message {
+        kind: kind.into(),
+        from: from.into(),
+        to: "*".into(),
+        thread: String::new(),
+        re: String::new(),
+        body,
+        expires_at: 0,
+    }
+}
+
+/// Reads a social body back: the kind's exact keys in order, all strings; `react` also checks the
+/// reaction set. `None` when the body is not that kind's shape.
+pub fn social_fields(kind: &str, body: &Value) -> Option<Vec<String>> {
+    let keys: &[&str] = match kind {
+        kind::FOLLOW | kind::UNFOLLOW => &["target"],
+        kind::REACT => &["ref", "r"],
+        kind::HIDE => &["ref", "reason"],
+        _ => return None,
+    };
+    let Value::Obj(kv) = body else { return None };
+    if kv.len() != keys.len() || kv.iter().zip(keys).any(|((k, _), want)| k != want) {
+        return None;
+    }
+    let out: Option<Vec<String>> = kv.iter().map(|(_, v)| v.as_str().map(str::to_string)).collect();
+    let out = out?;
+    if kind == kind::REACT && !REACTIONS.contains(&out[1].as_str()) {
+        return None;
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -519,5 +598,41 @@ mod tests {
         assert_eq!(b.h, "ab12");
         let wrong = Value::Obj(vec![("seq".into(), Value::Num(1))]);
         assert_eq!(DirectiveBody::from_value(&wrong), Err(MemoError::Shape));
+    }
+
+    /// Protocol pass 4a: the shared vectors (vectors/social.json) encode byte for byte and parse
+    /// back only with the social kinds.
+    #[test]
+    fn social_vectors_match_the_app() {
+        let text = include_str!("../vectors/social.json");
+        let v = parse_value(text.trim().as_bytes()).expect("vectors are canonical JSON");
+        let Value::Arr(cases) = v.get("cases").expect("cases").clone() else { panic!("cases") };
+        assert!(cases.len() >= 5);
+        for c in &cases {
+            let k = c.get("kind").and_then(Value::as_str).unwrap();
+            let from = c.get("from").and_then(Value::as_str).unwrap();
+            let args: Vec<&str> = match c.get("args") {
+                Some(Value::Arr(a)) => a.iter().map(|x| x.as_str().unwrap()).collect(),
+                _ => panic!("args"),
+            };
+            let body = match k {
+                kind::FOLLOW | kind::UNFOLLOW => follow_body(args[0]),
+                kind::REACT => react_body(args[0], args[1]).unwrap(),
+                kind::HIDE => hide_body(args[0], args[1]),
+                _ => panic!("kind"),
+            };
+            let m = social_message(k, from, body);
+            let want = c.get("memo").and_then(Value::as_str).unwrap();
+            assert_eq!(m.encode(), want, "{k}");
+            assert_eq!(Message::parse(want.as_bytes(), 600), Err(MemoError::Shape));
+            let back = Message::parse_kinds(want.as_bytes(), 600, &kind::WITH_SOCIAL).unwrap();
+            assert_eq!(back, m);
+            assert_eq!(social_fields(k, &back.body).unwrap(), args);
+        }
+        assert!(react_body("sig:0", "love").is_none());
+        let off = Value::Obj(vec![("ref".into(), Value::Str("a".into())), ("r".into(), Value::Str("love".into()))]);
+        assert!(social_fields(kind::REACT, &off).is_none());
+        assert!(social_fields(kind::HIDE, &follow_body("x")).is_none());
+        assert!(social_fields(kind::OFFER, &follow_body("x")).is_none());
     }
 }
