@@ -128,6 +128,13 @@ two keys Bordrless hard-codes in `HOOK_UPGRADE_AUTHORITIES`.
 | referral record | items | `["referred", mint, holder]` |
 | `QuestMark` | war | `["quest", holding, quest_id: u8, period: u32 le]` (05 is authoritative) |
 | hook signer | token, swap, launch | upstream `["hook-authority", program]`, unchanged |
+| `LicenceConfig`, `LicenceOffer` | market | `["licence-config"]`, `["licence-offer", item]` (11) |
+| `MemoConfig` | agents | `["memo-config"]` (11) |
+| craft config, pending config, material mint, `Wear` | craft | `["craft-config"]`, `["craft-pending"]`, `["material-mint", id: u16 le]`, `["wear", item]` (11) |
+| craft caller (signs `init_wear`, `wear`, `drop`) | each calling program | `["craft-caller"]` under that program (11, 13) |
+| social caller (signs `record_wallet`) | each calling program | `["social-caller"]` under that program (11, 13) |
+| craft output signer | craft | `["craft-signer"]`, the only signer the armory's `mint_crafted` accepts (13) |
+| book config, pending config, class bid | book | `["book-config"]`, `["book-pending"]`, `["class-bid", bidder, nonce: u64 le]` (11) |
 
 ### 4.4 Hook data
 
@@ -203,6 +210,7 @@ Parts refer to them by name only.
 | `ADMIN_TIMELOCK_SECS` | delay on every admin setter of armory and war (D-9) | O |
 | `MAX_MODULES`, `ITEM_DATA_MAX` | modules per composite; composite param storage | M |
 | agents and expansion parameters | every named parameter in 09 and 10 (section 13 of 10 lists 27; 09 lists 17) | O |
+| economy parameters (11, 13) | `ITEM_PROTOCOL_BPS` (armory config `item_protocol_bps`, set with `set_item_protocol_bps`), per template `author_bps` and `charges_on_create` (`set_template_economy`), `order_bounty_lamports` (book), `season_secs` (craft), and every name in 11 section 11; the suites' values in 11 section 13.5 are TEST values, none a decision | O |
 | arsenal parameters | every floor, ceiling and named limit in 08 (e.g. `EMBARGO_MAX_TARGETS`, `LOYALTY_MIN_EPOCH_SECS`, `STREAK_MAX`, `MERC_MAX_POINTS_PER_UNIT`, `COOLDOWN_MAX_SECS`, `DECAY_MIN_SECS`, `DECAY_MAX_SECS`, `CAP_MIN_BPS`) | O |
 
 `PARAM_FIELDS` is at least 11 (the War orders template, 04).

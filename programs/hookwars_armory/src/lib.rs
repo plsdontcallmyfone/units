@@ -4,7 +4,8 @@
 // security review 2, L-D: execute and the performance revert refresh a slot launch's pool registry.
 // Integration pass 2: badge equip by the agents caller, admin Soulbound item, close_proposal bond
 // guard, agent record calls, lease gate, revert_for_lease_end, listed claim refusal, badge counters.
-// Integration pass 3: set_template_economy, set_item_protocol_bps (E-7, E-2), Template and Item economy fields.
+// Integration pass 3: set_template_economy, set_item_protocol_bps (E-7, E-2), Template and Item economy fields,
+// mint_crafted (E-5), wear on creation (E-3), social counters (E-6), fuse (08 wave F).
 //! `hookwars_armory` (docs/spec/02-armory.md): templates, items as supply-1 tokens on the token
 //! standard, royalties and their claims, equip rules (holder vote with notice, performance revert,
 //! locked), equipping at launch (signed by the launchpad), loot minting (signed by the war program),
@@ -272,7 +273,20 @@ pub mod hookwars_armory {
         modules: Vec<hookwars_common::composite::Module>,
         royalty_bps: u16,
     ) -> Result<()> {
-        process_create_composite(ctx, modules, royalty_bps)
+        process_create_composite(ctx, modules, royalty_bps, None)
+    }
+
+    /// Integration pass 3 (08 wave F, section 2.9): the holder of every component fuses them into
+    /// one composite: each component is burned and becomes a module (its template and params, the
+    /// targets given here), in order. Remaining accounts: the components' templates in order, then
+    /// `(item, item mint (mut), holder's holding (mut))` per component, then the optional suffixes
+    /// `create_composite` takes. One-way: there is no unfuse.
+    pub fn fuse<'info>(
+        ctx: Context<'info, CreateComposite<'info>>,
+        targets: Vec<(u8, u8)>,
+        royalty_bps: u16,
+    ) -> Result<()> {
+        process_create_composite(ctx, Vec::new(), royalty_bps, Some(targets))
     }
 
     /// The war program mints a loot item (02 section 4.3).
@@ -1315,6 +1329,7 @@ fn process_create_composite<'info>(
     ctx: Context<'info, CreateComposite<'info>>,
     modules: Vec<hookwars_common::composite::Module>,
     royalty_bps: u16,
+    fuse_targets: Option<Vec<(u8, u8)>>,
 ) -> Result<()> {
     use hookwars_common::composite::{validate_modules, CompositeError};
     let a = &ctx.accounts;
@@ -1332,6 +1347,54 @@ fn process_create_composite<'info>(
     let (rem, craft, social) = split_eco(rem);
     // I-5: an optional `AuthorCounter` after the module templates.
     let (rem, counter) = take_counter(rem, &pda::author_counter(&a.author.key()).0);
+    // Integration pass 3 (wave F): `fuse` builds the modules from the components and burns them.
+    let (rem, modules, provenance) = match &fuse_targets {
+        None => (rem, modules, Vec::new()),
+        Some(tg) => {
+            let k = tg.len();
+            require!(k >= 2 && rem.len() == 4 * k, ArmoryError::WrongAccount);
+            let (templates, groups) = rem.split_at(k);
+            let mut built = Vec::with_capacity(k);
+            let mut provenance = Vec::with_capacity(k);
+            for (i, &(start, count)) in tg.iter().enumerate() {
+                let (item_info, mint_info, holding) = (&groups[3 * i], &groups[3 * i + 1], &groups[3 * i + 2]);
+                require_keys_eq!(*item_info.owner, crate::ID, ArmoryError::WrongAccount);
+                let it = Item::try_deserialize(&mut &item_info.try_borrow_data()?[..])?;
+                require_keys_eq!(mint_info.key(), it.item_mint, ArmoryError::WrongAccount);
+                require_keys_eq!(item_info.key(), pda::item(&it.item_mint).0, ArmoryError::WrongAccount);
+                require!(it.template_id != hookwars_common::template_id::COMPOSITE, ArmoryError::InvalidSchema);
+                require!(it.equipped_count == 0, ArmoryError::ItemEquipped);
+                require_keys_eq!(
+                    holding.key(),
+                    bordrless_token::client::holding_address(&it.item_mint, &a.author.key()),
+                    ArmoryError::NotItemHolder
+                );
+                require!(
+                    bordrless_token::client::read_holding(holding)?.amount == 1,
+                    ArmoryError::NotItemHolder
+                );
+                let data_bytes = hookwars_common::manifest(it.template_id, &it.params, count)
+                    .map_err(|_| error!(ArmoryError::InvalidSchema))?
+                    .data_bytes;
+                built.push(hookwars_common::composite::Module {
+                    template_id: it.template_id,
+                    params: it.params,
+                    target_start: start,
+                    target_count: count,
+                    data_bytes,
+                    reads_module: hookwars_common::composite::NO_READ,
+                });
+                let (tp, ea, _) = a.token.infos();
+                let ix = bordrless_token::client::burn(a.author.key(), holding.key(), it.item_mint, None, Vec::new(), 1);
+                anchor_lang::solana_program::program::invoke(
+                    &ix,
+                    &[a.author.to_account_info(), holding.clone(), mint_info.clone(), tp, ea],
+                )?;
+                provenance.push(item_info.key());
+            }
+            (templates, built, provenance)
+        }
+    };
     require!(rem.len() == modules.len(), ArmoryError::WrongAccount);
     let mut fields: Vec<(u16, Params, Params)> = Vec::with_capacity(modules.len());
     for (m, info) in modules.iter().zip(rem.iter()) {
@@ -1395,7 +1458,7 @@ fn process_create_composite<'info>(
     c.bump = ctx.bumps.composite;
     c.item = item_key;
     c.modules = modules;
-    c.provenance = Vec::new();
+    c.provenance = provenance;
     ctx.accounts.config.items_minted = n + 1;
     emit_cpi!(ItemCreated {
         item: item_key,

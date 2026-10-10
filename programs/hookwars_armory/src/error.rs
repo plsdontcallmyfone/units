@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M2); security review 1 (H-2, M-2).
+// Changed by Hookwars: new file (M2); security review 1 (H-2, M-2); integration pass 3: WearAccountsMissing, NotCraftSigner, NotItemHolder.
 //! Errors of the armory (docs/spec/02-armory.md section 12).
 
 use anchor_lang::prelude::*;
@@ -109,4 +109,6 @@ pub enum ArmoryError {
     WearAccountsMissing,
     #[msg("only craft's [\"craft-signer\"] may mint a crafted item")]
     NotCraftSigner,
+    #[msg("the signer does not hold this item")]
+    NotItemHolder,
 }

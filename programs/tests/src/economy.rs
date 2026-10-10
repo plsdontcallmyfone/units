@@ -1,4 +1,5 @@
-// Changed by Hookwars: new file, helpers for the hook economy (docs/spec/11-hook-economy.md).
+// Changed by Hookwars: new file, helpers for the hook economy (docs/spec/11-hook-economy.md); integration
+// pass 3: Ew::wired (craft output the armory, armory and items as craft and social callers).
 //! `hookwars_craft`, `hookwars_book`, market licences and social profiles in the LiteSVM suites:
 //! loads the programs into an armory world, initializes them with TEST values (none is a
 //! decision: 11 section 11), and builds their instructions. `econ_caller_stub` stands in for the
@@ -162,7 +163,23 @@ impl Default for Ew {
 
 impl Ew {
     pub fn new() -> Self {
-        let mut hw = Hw::new();
+        Self::with(Hw::new(), STUB, vec![STUB], vec![])
+    }
+
+    /// Integration pass 3: the economy world wired to the real programs: the arsenal registered,
+    /// craft's output program the armory, the armory and items craft callers (with the stub), and
+    /// the armory and market social callers.
+    pub fn wired() -> Self {
+        Self::with(
+            crate::items::arsenal(),
+            hookwars_common::ids::ARMORY_ID,
+            vec![STUB, hookwars_common::ids::ARMORY_ID, hookwars_common::ids::ITEMS_ID],
+            vec![hookwars_common::ids::ARMORY_ID],
+        )
+    }
+
+    pub fn with(hw: Hw, output_program: Pubkey, craft_callers: Vec<Pubkey>, more_social: Vec<Pubkey>) -> Self {
+        let mut hw = hw;
         let market_treasury = hw.w.env.funded(SOL).pubkey();
         load(&mut hw.w.env, market_treasury);
         for (name, id) in [
@@ -200,8 +217,8 @@ impl Ew {
                     admin: d.pubkey(),
                     treasury: craft_treasury,
                     season_pool,
-                    output_program: STUB,
-                    callers: vec![STUB],
+                    output_program,
+                    callers: craft_callers,
                     params: TEST_CRAFT,
                 },
             ),
@@ -227,7 +244,7 @@ impl Ew {
                 },
                 hookwars_social::instruction::InitSkills {
                     skills: test_skills(),
-                    callers: vec![hookwars_craft::ID, hookwars_book::ID, hookwars_market::ID, STUB],
+                    callers: [vec![hookwars_craft::ID, hookwars_book::ID, hookwars_market::ID, STUB], more_social].concat(),
                 },
             ),
             market_ix(
