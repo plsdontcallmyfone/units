@@ -94,7 +94,7 @@ export async function pageFacts(page: Page): Promise<{ emDash: string[]; mono: s
       const box = el.getBoundingClientRect();
       const visible = box.width > 0 && box.height > 0 && getComputedStyle(el).visibility !== 'hidden';
       if (!visible) continue;
-      if (text.includes('—')) emDash.push(text.trim().slice(0, 80));
+      if (text.includes(String.fromCharCode(0x2014))) emDash.push(text.trim().slice(0, 80));
       // Code is allowed in a monospace face; UI text is not.
       if (el.closest('pre, code, kbd, samp')) continue;
       if (seen.has(el)) continue;
