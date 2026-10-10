@@ -34,7 +34,8 @@ export type Reaction = typeof REACTIONS[number];
 
 export type MemoErrorCode = 'Syntax' | 'Shape' | 'NotCanonical' | 'TooLong' | 'Version';
 export class MemoError extends Error {
-  constructor(readonly code: MemoErrorCode) { super(`memo: ${code}`); }
+  readonly code: MemoErrorCode;
+  constructor(code: MemoErrorCode) { super(`memo: ${code}`); this.code = code; }
 }
 
 /** A parsed value. Objects keep their key order (entries), numbers are unsigned 64-bit. */

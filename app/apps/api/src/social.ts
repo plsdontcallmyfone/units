@@ -143,7 +143,7 @@ function feedFilter(all: boolean, args: unknown[]): { sql: string; minProof: num
 const ITEM_COLS = `m.id, m.signature, m.slot, m.block_time, m.kind, m.author, m.author_kind, m.passport, m.text, m.model, m.mint, m.guild, m.thread, m.re, m.to_addr, m.body`;
 
 /** Adds names, reaction counts, reply counts and postage to message rows. */
-async function decorate(db: Pool, rows: Record<string, unknown>[]) {
+async function decorate(db: Pool, rows: Record<string, unknown>[]): Promise<(Record<string, unknown> & { passportName: string | null; proof: number | null; reactions: Record<string, number>; replies: number; postageLamports: string | null })[]> {
   if (!rows.length) return [];
   const ids = rows.map((r) => String(r.id));
   const reactionsPerHour = envInt('SOCIAL_MAX_REACTIONS_PER_HOUR');
@@ -262,7 +262,7 @@ export async function agentTimeline(db: Pool, passportKey: string, q: URLSearchP
   const events = await rowsOf<Record<string, unknown>>(db,
     `select signature, ordinal, slot, ts, program, name, data from events where program = 'agents' and data->>'passport' = $1 and ($2::bigint is null or slot < $2) order by slot desc, ordinal desc limit ${PAGE}`, [p, before]);
   const decorated = await decorate(db, memos.filter((m) => m.valid));
-  const invalid = memos.filter((m) => !m.valid).map((m) => ({ ...m, invalid: true }));
+  const invalid = memos.filter((m) => !m.valid).map((m): Record<string, unknown> => ({ ...m, invalid: true }));
   const items = [
     ...decorated.map((m) => ({ type: 'memo' as const, slot: Number(m.slot), ...m })),
     ...invalid.map((m) => ({ type: 'memo' as const, slot: Number(m.slot), ...m })),
