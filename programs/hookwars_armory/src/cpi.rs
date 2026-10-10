@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M2); R21 burns fit only may_burn slots.
+// Changed by Hookwars: new file (M2); R21 burns fit only may_burn slots; integration pass 3: init_equip's wear flag (E-3).
 //! Calls out of the armory: into `hookwars_items` (signed by `["armory"]`, 02 section 2.2) and into
 //! the token program (signed by `["minter"]`, `["slots", mint]` or `["royalty", item]`), plus the
 //! compatibility check (`check_fits`, 02 section 6.1) and the equip steps every path shares
@@ -520,6 +520,8 @@ pub fn apply_equip<'info>(
         m,
         new.config.clone(),
         new.max_targets,
+        // Integration pass 3 (E-3): the item reads its craft `Wear` last when it wears.
+        crate::state::Item::try_deserialize(&mut &new.item.try_borrow_data()?[..])?.has_wear,
     )
         .serialize(&mut data)?;
     let mut metas = vec![

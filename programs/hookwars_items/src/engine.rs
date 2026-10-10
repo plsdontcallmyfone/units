@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M3b).
+// Changed by Hookwars: new file (M3b); integration pass 3 (E-3): a dormant item answers the default.
 //! The callback engine (04 section 2): signer and account checks, the module list (a plain item is
 //! one module; a composite is its `CompositeItem`, 08 section 2.3), running each module on its own
 //! sub-range and extras, merging the answers, and recording cuts in `EquipState` (R1, R2).
@@ -36,6 +36,9 @@ pub struct Loaded<'a, 'info> {
     pub modules: Vec<Module>,
     /// Each module's own extras.
     pub module_extras: Vec<&'a [AccountInfo<'info>]>,
+    /// Integration pass 3 (E-3, R38): the item's craft `Wear` says it is worn out; every callback
+    /// then answers the default (nothing, never a refusal).
+    pub dormant: bool,
 }
 
 /// Reads `Item`, `EquipState` (checked against `mint` and `slot`), the vault slot, the module
@@ -83,6 +86,11 @@ pub fn load<'a, 'info>(
         module_extras.push(&extras[at..end]);
         at = end;
     }
+    let dormant = it.has_wear
+        && extras
+            .get(at)
+            .and_then(|w| hookwars_common::eco_cpi::wear_dormant(w, item))
+            .unwrap_or(false);
     Ok(Loaded {
         item_key: *item,
         item: it,
@@ -90,6 +98,7 @@ pub fn load<'a, 'info>(
         state,
         modules,
         module_extras,
+        dormant,
     })
 }
 
@@ -152,6 +161,9 @@ pub fn token_before<'info>(ctx: Context<'info, TokenCallback<'info>>, args: Toke
         return Ok(());
     }
     let mut l = load(ctx.remaining_accounts, &mint, args.slot, &args.item)?;
+    if l.dormant {
+        return Ok(());
+    }
     let clock = Clock::get()?;
     let total_bytes: usize = l.modules.iter().map(|m| usize::from(m.data_bytes)).sum();
     require!(args.source_data.len() >= total_bytes, ItemsError::RangeTooShort);
@@ -225,6 +237,9 @@ pub fn touch<'info>(ctx: Context<'info, TokenCallback<'info>>, args: TokenSlotAr
     require!(args.op == TokenSlotOp::Touch, ItemsError::BadParams);
     let mint = ctx.accounts.mint.key();
     let l = load(ctx.remaining_accounts, &mint, args.slot, &args.item)?;
+    if l.dormant {
+        return Ok(());
+    }
     let clock = Clock::get()?;
     let mut src = args.source_data.clone();
     for i in 0..l.modules.len() {
@@ -263,6 +278,12 @@ pub fn pool<'info>(
     let mint = ctx.accounts.base_mint.key();
     require_keys_eq!(args.base_mint, mint, ItemsError::WrongAccount);
     let mut l = load(ctx.remaining_accounts, &mint, item_ctx.slot, &item_ctx.item)?;
+    if l.dormant {
+        let mut v = Vec::new();
+        ItemPoolAnswer::default().serialize(&mut v)?;
+        set_return_data(&v);
+        return Ok(());
+    }
     let clock = Clock::get()?;
     let bit = if before { pool_flags::BEFORE_SWAP } else { pool_flags::AFTER_SWAP };
     let mut answer = ItemPoolAnswer::default();

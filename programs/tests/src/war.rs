@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file, the war program's harness; M3b: the armory's and the shared types; security review 1: TEST params, WarWorld::with_params.
+// Changed by Hookwars: new file, the war program's harness; M3b: the armory's and the shared types; security review 1: TEST params, WarWorld::with_params; integration pass 3: new Template and Item fields.
 // the observation ring in the pool account.
 //! The war suites' world: the upstream world plus `hookwars_war` and its test-only stand-ins at the
 //! items and armory ids (`war_items_stub`, `war_armory_stub`) and a randomness adapter
@@ -305,7 +305,11 @@ impl WarWorld {
             name: format!("TEST template {id}"),
             registered_by: Pubkey::default(),
             created_at: 0,
-            reserved: [0; 32],
+            author_bps: 0,
+            default_access: 0,
+            allowed_access: 0,
+            charges_on_create: 0,
+            reserved: [0; 24],
         };
         self.put_anchor(template_address(id), war_armory_stub::ID, &t, 0);
     }
@@ -327,7 +331,8 @@ impl WarWorld {
             equipped_count: 1,
             royalty_owner_bump: 0,
             created_at: 0,
-            reserved: [0; 32],
+            has_wear: false,
+            reserved: [0; 31],
         };
         self.put_anchor(key, war_armory_stub::ID, &it, 0);
         key

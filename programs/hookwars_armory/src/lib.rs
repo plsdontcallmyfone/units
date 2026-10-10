@@ -4,6 +4,8 @@
 // security review 2, L-D: execute and the performance revert refresh a slot launch's pool registry.
 // Integration pass 2: badge equip by the agents caller, admin Soulbound item, close_proposal bond
 // guard, agent record calls, lease gate, revert_for_lease_end, listed claim refusal, badge counters.
+// Integration pass 3: set_template_economy, set_item_protocol_bps (E-7, E-2), Template and Item economy fields,
+// mint_crafted (E-5), wear on creation (E-3), social counters (E-6), fuse and presets (08 wave F).
 //! `hookwars_armory` (docs/spec/02-armory.md): templates, items as supply-1 tokens on the token
 //! standard, royalties and their claims, equip rules (holder vote with notice, performance revert,
 //! locked), equipping at launch (signed by the launchpad), loot minting (signed by the war program),
@@ -135,7 +137,8 @@ pub mod hookwars_armory {
         c.items_minted = 0;
         c.templates = 0;
         c.params = params;
-        c.reserved = [0; 62];
+        c.item_protocol_bps = 0;
+        c.reserved = [0; 60];
         Ok(())
     }
 
@@ -190,8 +193,8 @@ pub mod hookwars_armory {
     }
 
     /// Registers a template (02 section 3.1).
-    pub fn register_template(
-        ctx: Context<RegisterTemplate>,
+    pub fn register_template<'info>(
+        ctx: Context<'info, RegisterTemplate<'info>>,
         args: RegisterTemplateArgs,
     ) -> Result<()> {
         process_register_template(ctx, args)
@@ -209,9 +212,53 @@ pub mod hookwars_armory {
         Ok(())
     }
 
+    /// Integration pass 3 (E-7, 11 sections 1.2, 2.2, 5.4): the admin sets a template's economy
+    /// fields. Admin-direct like `register_template` and `retire_template` (review 1 L-1 puts all
+    /// three behind the timelock; see 13-integration-3).
+    pub fn set_template_economy(
+        ctx: Context<RetireTemplate>,
+        template_id: u16,
+        author_bps: u16,
+        default_access: u8,
+        allowed_access: u8,
+        charges_on_create: u32,
+    ) -> Result<()> {
+        let t = &mut ctx.accounts.template;
+        require!(t.id == template_id, ArmoryError::WrongAccount);
+        require!(author_bps <= 10_000, ArmoryError::RoyaltyTooHigh);
+        require!(
+            allowed_access == 0 || allowed_access & (1u8 << default_access.min(7)) != 0,
+            ArmoryError::InvalidSchema
+        );
+        t.author_bps = author_bps;
+        t.default_access = default_access;
+        t.allowed_access = allowed_access;
+        t.charges_on_create = charges_on_create;
+        emit_cpi!(TemplateEconomySet {
+            template_id,
+            author_bps,
+            default_access,
+            allowed_access,
+            charges_on_create,
+        });
+        Ok(())
+    }
+
+    /// Integration pass 3 (E-2, R37): the admin sets `ITEM_PROTOCOL_BPS`, the protocol's share of
+    /// each token-side cut `settle_equip` settles. Admin-direct (see L-1 in 13-integration-3).
+    pub fn set_item_protocol_bps(ctx: Context<AdminOnly>, item_protocol_bps: u16) -> Result<()> {
+        require!(
+            item_protocol_bps <= ctx.accounts.config.params.max_royalty_bps,
+            ArmoryError::RoyaltyTooHigh
+        );
+        ctx.accounts.config.item_protocol_bps = item_protocol_bps;
+        emit_cpi!(ItemProtocolBpsSet { item_protocol_bps });
+        Ok(())
+    }
+
     /// Anyone authors an item from an open template (02 section 4.2).
-    pub fn create_item(
-        ctx: Context<CreateItem>,
+    pub fn create_item<'info>(
+        ctx: Context<'info, CreateItem<'info>>,
         template_id: u16,
         params: [u32; PARAM_FIELDS],
         royalty_bps: u16,
@@ -226,16 +273,75 @@ pub mod hookwars_armory {
         modules: Vec<hookwars_common::composite::Module>,
         royalty_bps: u16,
     ) -> Result<()> {
-        process_create_composite(ctx, modules, royalty_bps)
+        process_create_composite(ctx, modules, royalty_bps, Mode::Plain)
+    }
+
+    /// Integration pass 3 (08 wave F, section 2.9): the holder of every component fuses them into
+    /// one composite: each component is burned and becomes a module (its template and params, the
+    /// targets given here), in order. Remaining accounts: the components' templates in order, then
+    /// `(item, item mint (mut), holder's holding (mut))` per component, then the optional suffixes
+    /// `create_composite` takes. One-way: there is no unfuse.
+    pub fn fuse<'info>(
+        ctx: Context<'info, CreateComposite<'info>>,
+        targets: Vec<(u8, u8)>,
+        royalty_bps: u16,
+    ) -> Result<()> {
+        process_create_composite(ctx, Vec::new(), royalty_bps, Mode::Fuse(targets))
+    }
+
+    /// Integration pass 3 (08 section 4.8): the admin registers a composite preset (the module
+    /// templates in order). Admin-direct like `register_template` (see L-1 in 13-integration-3).
+    pub fn register_preset(ctx: Context<RegisterPreset>, id: u16, template_ids: Vec<u16>, name: String) -> Result<()> {
+        require!(
+            template_ids.len() >= 2 && template_ids.len() <= hookwars_common::MAX_MODULES && name.len() <= 32,
+            ArmoryError::InvalidSchema
+        );
+        require!(
+            template_ids.iter().all(|t| *t != hookwars_common::template_id::COMPOSITE),
+            ArmoryError::InvalidSchema
+        );
+        let p = &mut ctx.accounts.preset;
+        p.version = VERSION;
+        p.bump = ctx.bumps.preset;
+        p.id = id;
+        p.name = name;
+        p.template_ids = template_ids.clone();
+        p.registered_at = now()?;
+        emit_cpi!(PresetRegistered { id, template_ids });
+        Ok(())
+    }
+
+    /// Integration pass 3 (08 section 2.9): `create_composite` whose module templates must be the
+    /// preset's, in its order. Remaining accounts: the preset, then what `create_composite` takes.
+    pub fn mint_composite<'info>(
+        ctx: Context<'info, CreateComposite<'info>>,
+        preset_id: u16,
+        modules: Vec<hookwars_common::composite::Module>,
+        royalty_bps: u16,
+    ) -> Result<()> {
+        process_create_composite(ctx, modules, royalty_bps, Mode::Preset(preset_id))
     }
 
     /// The war program mints a loot item (02 section 4.3).
-    pub fn mint_loot(
-        ctx: Context<MintLoot>,
+    pub fn mint_loot<'info>(
+        ctx: Context<'info, MintLoot<'info>>,
         template_id: u16,
         params: [u32; PARAM_FIELDS],
     ) -> Result<()> {
         process_mint_loot(ctx, template_id, params)
+    }
+
+    /// Integration pass 3 (E-5, 11 section 5.3): craft's output. Only `["craft-signer"]` under
+    /// craft may call it; the crafter receives the item (`source = CRAFTED`).
+    pub fn mint_crafted<'info>(
+        ctx: Context<'info, MintCrafted<'info>>,
+        crafter: Pubkey,
+        template_id: u16,
+        param_min: Vec<u32>,
+        param_max: Vec<u32>,
+        recipe_id: u16,
+    ) -> Result<()> {
+        process_mint_crafted(ctx, crafter, template_id, param_min, param_max, recipe_id)
     }
 
     /// The item's holder claims royalty from one of its royalty holdings (02 section 5.2).
@@ -506,6 +612,20 @@ pub struct CreateItem<'info> {
     pub system_program: Program<'info, System>,
 }
 
+/// Integration pass 3: accounts of `register_preset`.
+#[event_cpi]
+#[derive(Accounts)]
+#[instruction(id: u16)]
+pub struct RegisterPreset<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [seeds::CONFIG], bump = config.bump, has_one = admin @ ArmoryError::NotAdmin)]
+    pub config: Box<Account<'info, ArmoryConfig>>,
+    #[account(init, payer = admin, space = 8 + Preset::INIT_SPACE, seeds = [b"preset".as_ref(), &id.to_le_bytes()], bump)]
+    pub preset: Box<Account<'info, Preset>>,
+    pub system_program: Program<'info, System>,
+}
+
 /// Accounts of `create_composite` (M3b).
 #[event_cpi]
 #[derive(Accounts)]
@@ -546,6 +666,44 @@ pub struct MintLoot<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     /// CHECK: who receives the item.
+    pub owner: UncheckedAccount<'info>,
+    #[account(mut, seeds = [seeds::CONFIG], bump = config.bump)]
+    pub config: Box<Account<'info, ArmoryConfig>>,
+    #[account(seeds = [seeds::TEMPLATE, &template_id.to_le_bytes()], bump = template.bump)]
+    pub template: Box<Account<'info, Template>>,
+    /// CHECK: `["minter"]`.
+    #[account(address = MINTER)]
+    pub minter: UncheckedAccount<'info>,
+    /// CHECK: `["item-mint", items_minted]`.
+    #[account(mut, seeds = [seeds::ITEM_MINT, &config.items_minted.to_le_bytes()], bump)]
+    pub item_mint: UncheckedAccount<'info>,
+    #[account(init, payer = payer, space = 8 + Item::INIT_SPACE,
+        seeds = [seeds::ITEM, item_mint.key().as_ref()], bump)]
+    pub item: Box<Account<'info, Item>>,
+    /// CHECK: the owner's holding of the item mint.
+    #[account(mut)]
+    pub recipient_holding: UncheckedAccount<'info>,
+    /// CHECK: `["armory"]`.
+    #[account(address = ARMORY_SIGNER)]
+    pub armory_signer: UncheckedAccount<'info>,
+    /// CHECK: the items program.
+    #[account(address = ids::ITEMS_ID)]
+    pub items_program: UncheckedAccount<'info>,
+    pub token: TokenAccounts<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+/// Integration pass 3 (E-5): `MintLoot` with craft's signer in place of the war program's.
+#[event_cpi]
+#[derive(Accounts)]
+#[instruction(crafter: Pubkey, template_id: u16)]
+pub struct MintCrafted<'info> {
+    /// Craft's `["craft-signer"]` (checked in the handler).
+    pub craft_signer: Signer<'info>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    /// CHECK: who receives the item (the crafter).
+    #[account(address = crafter @ ArmoryError::WrongAccount)]
     pub owner: UncheckedAccount<'info>,
     #[account(mut, seeds = [seeds::CONFIG], bump = config.bump)]
     pub config: Box<Account<'info, ArmoryConfig>>,
@@ -903,8 +1061,8 @@ pub struct Forge<'info> {
 
 // ------------------------------------------------------------------------------ handlers
 
-fn process_register_template(
-    ctx: Context<RegisterTemplate>,
+fn process_register_template<'info>(
+    ctx: Context<'info, RegisterTemplate<'info>>,
     args: RegisterTemplateArgs,
 ) -> Result<()> {
     let config = &mut ctx.accounts.config;
@@ -1000,7 +1158,11 @@ fn process_register_template(
     t.name = args.name.clone();
     t.registered_by = ctx.accounts.admin.key();
     t.created_at = ts;
-    t.reserved = [0; 32];
+    t.author_bps = 0;
+    t.default_access = 0;
+    t.allowed_access = 0;
+    t.charges_on_create = 0;
+    t.reserved = [0; 24];
     emit_cpi!(TemplateRegistered {
         template_id: args.id,
         program: program.key(),
@@ -1013,6 +1175,9 @@ fn process_register_template(
         name: args.name,
         ts
     });
+    // Integration pass 3 (E-6): the registrant's TEMPLATES_REGISTERED when the social suffix is given.
+    let (_, _, social) = split_eco(ctx.remaining_accounts);
+    record_social(social, &ctx.accounts.admin.key(), hookwars_common::economy::counter::TEMPLATES_REGISTERED)?;
     Ok(())
 }
 
@@ -1044,11 +1209,12 @@ fn write_item(
     item.equipped_count = 0;
     item.royalty_owner_bump = pda::royalty_owner(&item_key).1;
     item.created_at = ts;
-    item.reserved = [0; 32];
+    item.has_wear = false;
+    item.reserved = [0; 31];
 }
 
-fn process_create_item(
-    ctx: Context<CreateItem>,
+fn process_create_item<'info>(
+    ctx: Context<'info, CreateItem<'info>>,
     template_id: u16,
     params: [u32; PARAM_FIELDS],
     royalty_bps: u16,
@@ -1118,7 +1284,13 @@ fn process_create_item(
     });
     // Integration pass 2 (09 section 21 item 3): optional agent attribution, after the effects.
     let (rest, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    // Integration pass 3 (E-3, E-6): wear and the social counter.
+    let (rest, craft, social) = split_eco(rest);
+    let charges = ctx.accounts.template.charges_on_create;
+    let payer = ctx.accounts.author.to_account_info();
+    open_wear(craft, &payer, &mut ctx.accounts.item, &item_key, charges)?;
     bump_author_counter(rest, &author)?;
+    record_social(social, &author, hookwars_common::economy::counter::ITEMS_AUTHORED)?;
     hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.author.key(), hookwars_common::agents_record::ITEMS_AUTHORED, 0)?;
     Ok(())
 }
@@ -1146,6 +1318,44 @@ fn bump_author_counter<'info>(rest: &[AccountInfo<'info>], author: &Pubkey) -> R
     Ok(())
 }
 
+/// Integration pass 3 (E-3, E-6): the optional economy suffixes, before the agents suffix:
+/// `[..., craft init-wear (6), social (5)]`. Returns the rest, the craft and the social suffix.
+#[allow(clippy::type_complexity)]
+fn split_eco<'a, 'info>(
+    rem: &'a [AccountInfo<'info>],
+) -> (&'a [AccountInfo<'info>], Option<&'a [AccountInfo<'info>]>, Option<&'a [AccountInfo<'info>]>) {
+    use hookwars_common::{economy as eco, eco_cpi};
+    let (rem, social) = eco_cpi::split_tagged(rem, &eco::SOCIAL_ID, eco_cpi::SOCIAL_SUFFIX);
+    let (rem, craft) = eco_cpi::split_tagged(rem, &eco::CRAFT_ID, eco_cpi::INIT_WEAR_SUFFIX);
+    (rem, craft, social)
+}
+
+/// Integration pass 3 (E-3): opens the item's craft `Wear` when its template wears; the init-wear
+/// suffix is then required, so no item of a wearing template is made without one.
+fn open_wear<'info>(
+    craft: Option<&[AccountInfo<'info>]>,
+    payer: &AccountInfo<'info>,
+    item: &mut Item,
+    item_key: &Pubkey,
+    charges: u32,
+) -> Result<()> {
+    if charges == 0 {
+        return Ok(());
+    }
+    let s = craft.ok_or(ArmoryError::WearAccountsMissing)?;
+    hookwars_common::eco_cpi::init_wear(s, &crate::ID, payer, item_key, charges)?;
+    item.has_wear = true;
+    Ok(())
+}
+
+/// Integration pass 3 (E-6): a social counter when the social suffix was given.
+fn record_social<'info>(social: Option<&[AccountInfo<'info>]>, wallet: &Pubkey, counter: u8) -> Result<()> {
+    match social {
+        Some(s) => hookwars_common::eco_cpi::record_wallet(s, &crate::ID, wallet, counter, 1),
+        None => Ok(()),
+    }
+}
+
 /// Integration pass 2 (I-5): creates `wallet`'s `AuthorCounter` and `ClaimCounter` (anyone pays).
 fn process_init_counters(ctx: Context<InitCounters>, wallet: Pubkey) -> Result<()> {
     let a = &mut ctx.accounts.author_counter;
@@ -1162,10 +1372,20 @@ fn process_init_counters(ctx: Context<InitCounters>, wallet: Pubkey) -> Result<(
 }
 
 /// Hookwars M3b: `create_composite` (08 sections 2.9 and 2.10).
+/// Integration pass 3: how `process_create_composite` gets its modules.
+enum Mode {
+    Plain,
+    /// `fuse`: the components' targets.
+    Fuse(Vec<(u8, u8)>),
+    /// `mint_composite`: the preset's id.
+    Preset(u16),
+}
+
 fn process_create_composite<'info>(
     ctx: Context<'info, CreateComposite<'info>>,
     modules: Vec<hookwars_common::composite::Module>,
     royalty_bps: u16,
+    mode: Mode,
 ) -> Result<()> {
     use hookwars_common::composite::{validate_modules, CompositeError};
     let a = &ctx.accounts;
@@ -1179,8 +1399,75 @@ fn process_create_composite<'info>(
     );
     // Integration pass 2: an optional agent attribution suffix comes after the module templates.
     let (rem, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    // Integration pass 3 (E-3, E-6): optional craft and social suffixes before it.
+    let (rem, craft, social) = split_eco(rem);
     // I-5: an optional `AuthorCounter` after the module templates.
     let (rem, counter) = take_counter(rem, &pda::author_counter(&a.author.key()).0);
+    // Integration pass 3 (wave F): `fuse` builds the modules from the components and burns them.
+    let (rem, modules, provenance) = match &mode {
+        Mode::Plain => (rem, modules, Vec::new()),
+        Mode::Preset(id) => {
+            let (info, rest) = rem.split_first().ok_or(ArmoryError::WrongAccount)?;
+            require_keys_eq!(*info.owner, crate::ID, ArmoryError::WrongAccount);
+            require_keys_eq!(
+                info.key(),
+                Pubkey::find_program_address(&[b"preset".as_ref(), &id.to_le_bytes()], &crate::ID).0,
+                ArmoryError::WrongAccount
+            );
+            let p = Preset::try_deserialize(&mut &info.try_borrow_data()?[..])?;
+            require!(
+                p.template_ids == modules.iter().map(|m| m.template_id).collect::<Vec<_>>(),
+                ArmoryError::InvalidSchema
+            );
+            (rest, modules, Vec::new())
+        }
+        Mode::Fuse(tg) => {
+            let k = tg.len();
+            require!(k >= 2 && rem.len() == 4 * k, ArmoryError::WrongAccount);
+            let (templates, groups) = rem.split_at(k);
+            let mut built = Vec::with_capacity(k);
+            let mut provenance = Vec::with_capacity(k);
+            for (i, &(start, count)) in tg.iter().enumerate() {
+                let (item_info, mint_info, holding) = (&groups[3 * i], &groups[3 * i + 1], &groups[3 * i + 2]);
+                require_keys_eq!(*item_info.owner, crate::ID, ArmoryError::WrongAccount);
+                let it = Item::try_deserialize(&mut &item_info.try_borrow_data()?[..])?;
+                require_keys_eq!(mint_info.key(), it.item_mint, ArmoryError::WrongAccount);
+                require_keys_eq!(item_info.key(), pda::item(&it.item_mint).0, ArmoryError::WrongAccount);
+                require!(it.template_id != hookwars_common::template_id::COMPOSITE, ArmoryError::InvalidSchema);
+                require!(it.equipped_count == 0, ArmoryError::ItemEquipped);
+                require_keys_eq!(
+                    holding.key(),
+                    bordrless_token::client::holding_address(&it.item_mint, &a.author.key()),
+                    ArmoryError::NotItemHolder
+                );
+                require!(
+                    *holding.owner == bordrless_token::ID
+                        && holding.data_len() > 0
+                        && bordrless_token::client::read_holding(holding)?.amount == 1,
+                    ArmoryError::NotItemHolder
+                );
+                let data_bytes = hookwars_common::manifest(it.template_id, &it.params, count)
+                    .map_err(|_| error!(ArmoryError::InvalidSchema))?
+                    .data_bytes;
+                built.push(hookwars_common::composite::Module {
+                    template_id: it.template_id,
+                    params: it.params,
+                    target_start: start,
+                    target_count: count,
+                    data_bytes,
+                    reads_module: hookwars_common::composite::NO_READ,
+                });
+                let (tp, ea, _) = a.token.infos();
+                let ix = bordrless_token::client::burn(a.author.key(), holding.key(), it.item_mint, None, Vec::new(), 1);
+                anchor_lang::solana_program::program::invoke(
+                    &ix,
+                    &[a.author.to_account_info(), holding.clone(), mint_info.clone(), tp, ea],
+                )?;
+                provenance.push(item_info.key());
+            }
+            (templates, built, provenance)
+        }
+    };
     require!(rem.len() == modules.len(), ArmoryError::WrongAccount);
     let mut fields: Vec<(u16, Params, Params)> = Vec::with_capacity(modules.len());
     for (m, info) in modules.iter().zip(rem.iter()) {
@@ -1244,7 +1531,7 @@ fn process_create_composite<'info>(
     c.bump = ctx.bumps.composite;
     c.item = item_key;
     c.modules = modules;
-    c.provenance = Vec::new();
+    c.provenance = provenance;
     ctx.accounts.config.items_minted = n + 1;
     emit_cpi!(ItemCreated {
         item: item_key,
@@ -1258,14 +1545,111 @@ fn process_create_composite<'info>(
         source: source::AUTHORED,
         ts
     });
+    let charges = ctx.accounts.template.charges_on_create;
+    let payer = ctx.accounts.author.to_account_info();
+    open_wear(craft, &payer, &mut ctx.accounts.item, &item_key, charges)?;
     if let Some(c) = counter {
         bump_author_counter(core::slice::from_ref(c), &ctx.accounts.author.key())?;
     }
+    record_social(social, &author, hookwars_common::economy::counter::ITEMS_AUTHORED)?;
     hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.author.key(), hookwars_common::agents_record::ITEMS_AUTHORED, 0)?;
     Ok(())
 }
 
-fn process_mint_loot(ctx: Context<MintLoot>, template_id: u16, params: Params) -> Result<()> {
+/// Integration pass 3 (E-5): the crafted item's fields are fixed, not drawn: each is the
+/// midpoint of the recipe's range (so a range with `min == max` gives exactly that value). The
+/// loot randomness adapter is not wired here (deviation, 13-integration-3).
+fn process_mint_crafted<'info>(
+    ctx: Context<'info, MintCrafted<'info>>,
+    crafter: Pubkey,
+    template_id: u16,
+    param_min: Vec<u32>,
+    param_max: Vec<u32>,
+    recipe_id: u16,
+) -> Result<()> {
+    let (craft_signer, _) = Pubkey::find_program_address(
+        &[b"craft-signer"],
+        &hookwars_common::economy::CRAFT_ID,
+    );
+    require_keys_eq!(ctx.accounts.craft_signer.key(), craft_signer, ArmoryError::NotCraftSigner);
+    require!(
+        param_min.len() == param_max.len() && param_min.len() <= PARAM_FIELDS,
+        ArmoryError::InvalidSchema
+    );
+    let mut params = [0u32; PARAM_FIELDS];
+    for (i, (lo, hi)) in param_min.iter().zip(param_max.iter()).enumerate() {
+        require!(lo <= hi, ArmoryError::InvalidSchema);
+        params[i] = lo + (hi - lo) / 2;
+    }
+    let a = &ctx.accounts;
+    let signer = a.armory_signer.to_account_info();
+    let items = a.items_program.to_account_info();
+    let manifest = validate_item(&signer, &items, &a.template, &params)?;
+    let (tp, ea, sp) = a.token.infos();
+    let t = TokenInfos {
+        token_program: &tp,
+        event_authority: &ea,
+        system_program: &sp,
+    };
+    let n = a.config.items_minted;
+    mint_item(
+        &t,
+        &a.payer.to_account_info(),
+        &a.minter.to_account_info(),
+        &a.item_mint.to_account_info(),
+        ctx.bumps.item_mint,
+        n,
+        &a.owner.to_account_info(),
+        &a.recipient_holding.to_account_info(),
+        &a.template.name,
+    )?;
+    let ts = now()?;
+    let royalty_bps = a.template.loot_royalty_bps;
+    let item_key = ctx.accounts.item.key();
+    let item_mint = ctx.accounts.item_mint.key();
+    write_item(
+        &mut ctx.accounts.item,
+        item_key,
+        ctx.bumps.item,
+        item_mint,
+        template_id,
+        params,
+        manifest,
+        craft_signer,
+        royalty_bps,
+        1,
+        source::CRAFTED,
+        ts,
+    );
+    let (_, craft, _) = split_eco(ctx.remaining_accounts);
+    let charges = ctx.accounts.template.charges_on_create;
+    let payer = ctx.accounts.payer.to_account_info();
+    open_wear(craft, &payer, &mut ctx.accounts.item, &item_key, charges)?;
+    ctx.accounts.config.items_minted = n + 1;
+    emit_cpi!(ItemCreated {
+        item: item_key,
+        item_mint,
+        template_id,
+        params,
+        manifest,
+        author: craft_signer,
+        royalty_bps,
+        level: 1,
+        source: source::CRAFTED,
+        ts
+    });
+    emit_cpi!(ItemCrafted {
+        item: item_key,
+        owner: crafter,
+        template_id,
+        recipe_id,
+        params,
+        ts
+    });
+    Ok(())
+}
+
+fn process_mint_loot<'info>(ctx: Context<'info, MintLoot<'info>>, template_id: u16, params: Params) -> Result<()> {
     let a = &ctx.accounts;
     require!(a.template.loot_enabled, ArmoryError::TemplateClosed);
     let signer = a.armory_signer.to_account_info();
@@ -1308,6 +1692,11 @@ fn process_mint_loot(ctx: Context<MintLoot>, template_id: u16, params: Params) -
         source::LOOT,
         ts,
     );
+    // Integration pass 3 (E-3): wear for a wearing template (the war program passes the suffix).
+    let (_, craft, _) = split_eco(ctx.remaining_accounts);
+    let charges = ctx.accounts.template.charges_on_create;
+    let payer = ctx.accounts.payer.to_account_info();
+    open_wear(craft, &payer, &mut ctx.accounts.item, &item_key, charges)?;
     ctx.accounts.config.items_minted = n + 1;
     emit_cpi!(ItemCreated {
         item: item_key,

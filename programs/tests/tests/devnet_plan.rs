@@ -1,6 +1,7 @@
 // Changed by Hookwars: new file. Builds the devnet init plan from the same instruction builders the
 // suites use, runs it in LiteSVM to prove it lands in order, and writes it as JSON for
 // scripts/devnet/send-plan.mjs. Ignored by default: run it explicitly (docs/DEVNET.md).
+// Integration pass 3: craft, book and the social skill table join the plan.
 //
 //   cargo test -p bordrless-program-tests --test devnet_plan -- --ignored --nocapture
 //
@@ -313,6 +314,62 @@ fn plan(deployer: Pubkey, code_hash: [u8; 32]) -> Vec<Step> {
         creates: Some(hookwars_agents::constants::pda::config().0),
         signers: vec![],
     });
+    // Integration pass 3 (13): the economy, wired to the real programs: craft's output is the
+    // armory and its callers the armory and items; social counts calls from craft, book, market and
+    // the armory.
+    use bordrless_program_tests::economy::{book_ix, craft_ix, test_skills, TEST_BOOK, TEST_CRAFT};
+    steps.push(Step {
+        label: "craft init (TEST_CRAFT; output the armory, callers armory and items)".into(),
+        ix: craft_ix(
+            hookwars_craft::accounts::Init {
+                authority: deployer,
+                config: hookwars_craft::state::config_address().0,
+                program_data: hookwars_common::programdata_address(&hookwars_craft::ID),
+                system_program: anchor_lang::system_program::ID,
+            },
+            hookwars_craft::instruction::Init {
+                admin: deployer,
+                treasury: deployer,
+                season_pool: deployer,
+                output_program: ids::ARMORY_ID,
+                callers: vec![ids::ARMORY_ID, ids::ITEMS_ID],
+                params: TEST_CRAFT,
+            },
+        ),
+        creates: Some(hookwars_craft::state::config_address().0),
+        signers: vec![],
+    });
+    steps.push(Step {
+        label: "book init (TEST_BOOK)".into(),
+        ix: book_ix(
+            hookwars_book::accounts::Init {
+                authority: deployer,
+                config: hookwars_book::state::config_address().0,
+                program_data: hookwars_common::programdata_address(&hookwars_book::ID),
+                system_program: anchor_lang::system_program::ID,
+            },
+            hookwars_book::instruction::Init { admin: deployer, treasury: deployer, params: TEST_BOOK },
+        ),
+        creates: Some(hookwars_book::state::config_address().0),
+        signers: vec![],
+    });
+    steps.push(Step {
+        label: "social init_skills (TEST skills; callers craft, book, market, armory)".into(),
+        ix: social_ix(
+            hookwars_social::accounts::InitSkills {
+                admin: deployer,
+                config: social_config(),
+                skills: hookwars_social::skills_address().0,
+                system_program: anchor_lang::system_program::ID,
+            },
+            hookwars_social::instruction::InitSkills {
+                skills: test_skills(),
+                callers: vec![hookwars_craft::ID, hookwars_book::ID, hookwars_market::ID, ids::ARMORY_ID],
+            },
+        ),
+        creates: Some(hookwars_social::skills_address().0),
+        signers: vec![],
+    });
     steps
 }
 
@@ -377,6 +434,8 @@ fn devnet_init_plan() {
         ("hookwars_market", hookwars_market::ID),
         ("hookwars_social", hookwars_social::ID),
         ("hookwars_agents", ids::AGENTS_ID),
+        ("hookwars_craft", hookwars_craft::ID),
+        ("hookwars_book", hookwars_book::ID),
     ] {
         env.svm.add_program(id, &program_bytes(name)).unwrap_or_else(|e| panic!("load {name}: {e:?}"));
     }
@@ -393,6 +452,8 @@ fn devnet_init_plan() {
         hookwars_market::ID,
         hookwars_social::ID,
         ids::AGENTS_ID,
+        hookwars_craft::ID,
+        hookwars_book::ID,
     ] {
         env.set_upgrade_authority(id, Some(deployer));
     }

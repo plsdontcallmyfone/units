@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (hook economy, docs/spec/11-hook-economy.md sections 1.4 and 2.3).
+// Changed by Hookwars: new file (hook economy, docs/spec/11-hook-economy.md sections 1.4 and 2.3); integration pass 3: Template.author_bps (E-7).
 //! Licences: a token pays an item's holder for the right to equip the item for a term (R45).
 //!
 //! - `LicenceOffer` at `["licence-offer", item]`: the item holder's terms (price, term, `per`,
@@ -283,17 +283,20 @@ pub fn process_buy_license(mut ctx: Context<BuyLicense>, max_price: u64, renew_o
     // The template's author (R34).
     require_keys_eq!(*a.template.owner, hookwars_common::ids::ARMORY_ID, MarketError::WrongAccount);
     require_keys_eq!(a.template.key(), hookwars_common::pda::template(item.template_id).0, MarketError::WrongAccount);
-    let registered_by = {
+    let (registered_by, template_author_bps) = {
         let data = a.template.try_borrow_data()?;
-        hookwars_armory::state::Template::try_deserialize(&mut &data[..])
-            .map_err(|_| error!(MarketError::WrongAccount))?
-            .registered_by
+        let t = hookwars_armory::state::Template::try_deserialize(&mut &data[..])
+            .map_err(|_| error!(MarketError::WrongAccount))?;
+        (t.registered_by, t.author_bps)
     };
     require_keys_eq!(a.author.key(), registered_by, MarketError::WrongRecipient);
     require_keys_eq!(*a.token_mint.owner, bordrless_token::ID, MarketError::WrongAccount);
     let lp = a.licence_config.params;
     let price = o.price_lamports;
-    let (protocol, author, to_holder) = eco::licence_split(price, lp.protocol_bps, lp.author_bps);
+    // Integration pass 3 (E-7): the template's own share once the admin has set one; the licence
+    // config's share stays the fallback for templates registered before.
+    let author_bps = if template_author_bps > 0 { template_author_bps } else { lp.author_bps };
+    let (protocol, author, to_holder) = eco::licence_split(price, lp.protocol_bps, author_bps);
     let sys = a.system_program.to_account_info();
     let payer = a.payer.to_account_info();
     pay_sol(&sys, &payer, &a.treasury, protocol, &[])?;
