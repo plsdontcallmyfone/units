@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { gzipSync } from 'node:zlib';
-import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { cleanPath, crateRoot, readTarball, TarError, type TarLimits } from './tar.ts';
-import { Lab, type LabConfig } from './lab.ts';
+import { Lab, treeHash, type LabConfig } from './lab.ts';
 import { createLabServer, RateLimiter } from './server.ts';
 import { base58, publicKeyOf } from './key.ts';
 
@@ -112,7 +113,7 @@ import { dirname } from 'node:path';
 const a = process.argv.slice(2);
 const crate = a[1];
 const at = (f) => a[a.indexOf(f) + 1];
-appendFileSync(${JSON.stringify(join(dir, 'calls.log'))}, JSON.stringify({ argv: a, sandboxed: process.env.HOOKLAB_SANDBOXED === '1' }) + '\\n');
+appendFileSync(${JSON.stringify(join(dir, 'calls.log'))}, JSON.stringify({ argv: a, sandboxed: process.env.HOOKLAB_SANDBOXED === '1', env: process.env }) + '\\n');
 if (a[0] === 'build') {
   if (existsSync(crate + '/HANG')) await new Promise((r) => setTimeout(r, 10000));
   mkdirSync(dirname(at('--so-out')), { recursive: true });
@@ -122,7 +123,8 @@ if (a[0] === 'build') {
 }
 const verdict = existsSync(crate + '/FAIL') || a.includes('--build-error') ? 'fail' : 'pass';
 const problems = a.includes('--build-error') ? ['build: ' + readFileSync(at('--build-error'), 'utf8')] : [];
-writeFileSync(at('--report'), JSON.stringify({ domain: 'units:hooklab:report:v1', body: { verdict, problems, submission: at('--submission'), manifest: JSON.parse(readFileSync(crate + '/hooklab.json', 'utf8')) }, signer: 'S', signature: 'X' }));
+const build = a.includes('--build-meta') ? JSON.parse(readFileSync(at('--build-meta'), 'utf8')) : null;
+writeFileSync(at('--report'), JSON.stringify({ domain: 'units:hooklab:report:v1', body: { verdict, problems, build, submission: at('--submission'), manifest: JSON.parse(readFileSync(crate + '/hooklab.json', 'utf8')) }, signer: 'S', signature: 'X' }));
 process.exit(verdict === 'pass' ? 0 : 1);
 `);
     chmodSync(fake, 0o755);
@@ -195,6 +197,35 @@ process.exit(verdict === 'pass' ? 0 : 1);
     expect(calls[0]!.argv).not.toContain('--key');
     expect(calls[0]!.argv.join(' ')).not.toContain('key.json');
     expect(calls[1]!.argv).toEqual(expect.arrayContaining(['--no-build', '--so', '--key']));
+  });
+
+  it('the build stage gets a fixed environment: none of the service variables, cargo offline on the primed cache (app pass 5)', async () => {
+    process.env.HOOKLAB_TEST_SECRET = 'not-for-builds';
+    try {
+      await start({ cargoHome: join(dir, 'cargo-cache') });
+      const r = (await (await post(tar(crate()), 'application/gzip')).json()) as { id: string };
+      await lab.drained();
+      const calls = readFileSync(join(dir, 'calls.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { argv: string[]; env: Record<string, string> });
+      const env = calls[0]!.env;
+      expect(env.HOOKLAB_TEST_SECRET).toBeUndefined();
+      expect(env).toMatchObject({ CARGO_HOME: join(dir, 'cargo-cache'), CARGO_NET_OFFLINE: 'true', SOURCE_DATE_EPOCH: '0' });
+      expect(env.HOME).toMatch(/hooklab-run-/);
+      // The build facts the check signs are the lab's own, with the source and lock hashes.
+      const rep = JSON.parse(lab.report(r.id)!) as { body: { build: { source_sha256: string; cargo_lock_sha256: string | null; offline: boolean; tools_version: string } } };
+      expect(rep.body.build).toMatchObject({ offline: true, tools_version: 'v1.57' });
+      expect(rep.body.build.source_sha256).toMatch(/^[0-9a-f]{64}$/);
+    } finally { delete process.env.HOOKLAB_TEST_SECRET; }
+  });
+
+  it('the source tree hash is path-ordered file hashes, ignoring target and .git', () => {
+    const root = mkdtempSync(join(tmpdir(), 'hooklab-tree-'));
+    try {
+      mkdirSync(join(root, 'src')); mkdirSync(join(root, 'target')); mkdirSync(join(root, '.git'));
+      writeFileSync(join(root, 'Cargo.toml'), 'a'); writeFileSync(join(root, 'src', 'lib.rs'), 'b');
+      writeFileSync(join(root, 'target', 'x'), 'ignored'); writeFileSync(join(root, '.git', 'HEAD'), 'ignored');
+      const h = (x: string) => createHash('sha256').update(x).digest('hex');
+      expect(treeHash(root)).toBe(createHash('sha256').update(`Cargo.toml\0${h('a')}\nsrc/lib.rs\0${h('b')}\n`).digest('hex'));
+    } finally { rmSync(root, { recursive: true, force: true }); }
   });
 
   it('a build that fails in the sandbox ends in a signed fail report with the reason', async () => {

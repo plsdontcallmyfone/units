@@ -6,7 +6,10 @@
  *   HOOKLAB_SANDBOX (command prefix for every run, split on spaces; required unless
  *   HOOKLAB_UNSANDBOXED=1), HOOKLAB_TIMEOUT_MS, HOOKLAB_WORKERS, HOOKLAB_CHECK_ARGS,
  *   HOOKLAB_MAX_GZ, HOOKLAB_MAX_UNPACKED, HOOKLAB_MAX_FILES, HOOKLAB_MAX_QUEUED,
- *   HOOKLAB_RATE_SUBMIT_CAPACITY, HOOKLAB_RATE_SUBMIT_PER_SEC, HOOKLAB_TRUST_PROXY.
+ *   HOOKLAB_RATE_SUBMIT_CAPACITY, HOOKLAB_RATE_SUBMIT_PER_SEC, HOOKLAB_TRUST_PROXY,
+ *   HOOKLAB_FETCH_SANDBOX (prefix of the git fetch, which needs the network; default HOOKLAB_SANDBOX),
+ *   HOOKLAB_CARGO_HOME (a cargo home primed with sandbox/prime-cache.sh; the build then runs
+ *   offline), HOOKLAB_BUILD_PATH (PATH of the build stage). See sandbox/ for the scripts.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { Lab } from './lab.ts';
@@ -33,6 +36,9 @@ const lab = new Lab({
   keyPath,
   sandbox,
   unsandboxed,
+  fetchSandbox: env('HOOKLAB_FETCH_SANDBOX', '').split(' ').filter(Boolean),
+  cargoHome: process.env.HOOKLAB_CARGO_HOME || null,
+  buildPath: process.env.HOOKLAB_BUILD_PATH || '',
   timeoutMs: num('HOOKLAB_TIMEOUT_MS', 20 * 60 * 1000),
   checkArgs: env('HOOKLAB_CHECK_ARGS', '').split(' ').filter(Boolean),
   workers: num('HOOKLAB_WORKERS', 1),

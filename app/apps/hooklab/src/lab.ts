@@ -7,8 +7,14 @@
  * --no-build` runs the property suite on the built `.so` in LiteSVM and signs the report with the
  * lab key, outside the sandbox. The git fetch also goes through the sandbox and its result is
  * held to the tarball limits (L-8). The signed report is kept and the directory deleted.
+ *
+ * App pass 5: the build stage gets a fixed environment (no variable of the service reaches it),
+ * cargo runs offline against the operator's primed registry cache when one is set, the fetch can
+ * use its own sandbox prefix (it needs the network; the build must not), and the lab records the
+ * build's provenance itself, outside the sandbox: the source tree hash, the `Cargo.lock` hash and
+ * the toolchain versions, so anyone can rebuild the same source and compare `code_hash`.
  */
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -42,6 +48,12 @@ export interface LabConfig {
   sandbox: string[];
   /** Allow runs with no sandbox (local development and tests only). */
   unsandboxed: boolean;
+  /** Command prefix of the git fetch (it needs the network); empty = `sandbox`. */
+  fetchSandbox?: string[];
+  /** A primed cargo home (registry cache) the build reads offline; null = cargo's default, online. */
+  cargoHome?: string | null;
+  /** PATH of the build stage (the toolchain's bin directories); empty = the service's PATH. */
+  buildPath?: string;
   /** Per-run limit, milliseconds. */
   timeoutMs: number;
   /** Extra arguments for `hooklab check` (e.g. `--ops 48`). */
@@ -187,7 +199,8 @@ export class Lab {
       const features = this.cfg.checkArgs.indexOf('--features');
       const buildArgs = [this.cfg.bin, 'build', crate, '--out-dir', join(work, 'out'), '--so-out', so,
         ...(features >= 0 && this.cfg.checkArgs[features + 1] ? ['--features', this.cfg.checkArgs[features + 1]!] : [])];
-      const built = await this.exec([...this.cfg.sandbox, ...buildArgs], work);
+      const provenance = await this.provenance(crate);
+      const built = await this.exec([...this.cfg.sandbox, ...buildArgs], work, this.buildEnv(work), true);
       const buildError = built !== 0 || !existsSync(so)
         ? (existsSync(`${so}.err`) ? readFileSync(`${so}.err`, 'utf8').slice(0, 4000) : `the build ended with exit ${built}`)
         : null;
@@ -195,11 +208,15 @@ export class Lab {
       // What stage 1 left is only read if it is a plain file, and the manifest must be the one sent.
       if (!regularFile(manifestPath) || !readFileSync(manifestPath).equals(manifest)) throw new SubmissionError('the build changed hooklab.json');
       for (const f of [so, `${so}.json`]) if (existsSync(f) && !regularFile(f)) throw new SubmissionError('the build left a link where the lab reads its output');
+      // The build facts the report signs are the lab's own (read outside the sandbox); only the
+      // features come from the run's arguments, never from what the sandbox wrote.
+      const metaPath = join(work, 'build-meta.json');
+      writeFileSync(metaPath, JSON.stringify({ ...provenance, features: features >= 0 && this.cfg.checkArgs[features + 1] ? this.cfg.checkArgs[features + 1]!.split(',') : [] }));
       const errFile = join(work, 'build-error.txt');
       if (buildError !== null) writeFileSync(errFile, buildError);
       const args = [
         this.cfg.bin, 'check', crate, '--no-build',
-        ...(buildError === null ? ['--so', so, ...(existsSync(`${so}.json`) ? ['--build-meta', `${so}.json`] : [])] : ['--build-error', errFile]),
+        ...(buildError === null ? ['--so', so, '--build-meta', metaPath] : ['--build-error', errFile]),
         '--key', this.cfg.keyPath,
         '--report', reportTmp,
         '--submission', id,
@@ -222,7 +239,8 @@ export class Lab {
 
   private async fetchGit(url: string, commit: string, dest: string): Promise<void> {
     // Review 3 L-8: through the sandbox like the build, and held to the tarball limits after.
-    const git = [...this.cfg.sandbox, 'git', '-c', 'core.symlinks=false', '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', '-C', dest];
+    const prefix = this.cfg.fetchSandbox && this.cfg.fetchSandbox.length ? this.cfg.fetchSandbox : this.cfg.sandbox;
+    const git = [...prefix, 'git', '-c', 'core.symlinks=false', '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', '-C', dest];
     for (const step of [['init', '-q'], ['fetch', '-q', '--depth', '1', '--no-tags', url, commit], ['checkout', '-q', 'FETCH_HEAD']]) {
       const code = await this.exec([...git, ...step], dest, { GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1' });
       if (code !== 0) throw new SubmissionError(`git ${step[0]} failed (${code})`);
@@ -237,13 +255,51 @@ export class Lab {
   }
 
   /**
-   * Runs `argv` in its own process group and kills the whole group when it exits or times out, so
-   * nothing a build script started outlives its stage (review 3 M-9).
+   * The build stage's whole environment: nothing of the service's (its key path, its tokens) is
+   * passed; cargo is offline against `cargoHome` when the operator primed one.
    */
-  private exec(argv: string[], cwd: string, env: Record<string, string> = {}): Promise<number> {
+  private buildEnv(work: string): Record<string, string> {
+    const env: Record<string, string> = {
+      PATH: this.cfg.buildPath || process.env.PATH || '/usr/bin:/bin',
+      HOME: work, TMPDIR: work, LANG: 'C.UTF-8', CARGO_TERM_COLOR: 'never', SOURCE_DATE_EPOCH: '0',
+    };
+    for (const k of ['RUSTUP_HOME', 'RUSTUP_TOOLCHAIN']) if (process.env[k]) env[k] = process.env[k]!;
+    if (this.cfg.cargoHome) Object.assign(env, { CARGO_HOME: this.cfg.cargoHome, CARGO_NET_OFFLINE: 'true' });
+    else if (process.env.CARGO_HOME) env.CARGO_HOME = process.env.CARGO_HOME;
+    return env;
+  }
+
+  /** What the report records about the build, read by the lab outside the sandbox. */
+  private async provenance(crate: string): Promise<BuildProvenance> {
+    const lock = join(crate, 'Cargo.lock');
+    const v = async (argv: string[]) => (await this.capture(argv, crate)).split('\n')[0]!.trim();
+    return {
+      toolchain: await v(['cargo', 'build-sbf', '--version']),
+      tools_version: TOOLS_VERSION, arch: SBF_ARCH,
+      rustc: await v(['rustc', '--version']),
+      source_sha256: treeHash(crate),
+      cargo_lock_sha256: existsSync(lock) && regularFile(lock) ? sha256(readFileSync(lock)) : null,
+      offline: Boolean(this.cfg.cargoHome),
+    };
+  }
+
+  /** First output of a short command the lab runs itself (versions); empty when it fails. */
+  private capture(argv: string[], cwd: string): Promise<string> {
+    return new Promise((resolveOut) => {
+      const [cmd, ...rest] = argv;
+      execFile(cmd!, rest, { cwd, timeout: 30_000, env: { PATH: this.cfg.buildPath || process.env.PATH || '/usr/bin:/bin', ...(process.env.RUSTUP_HOME ? { RUSTUP_HOME: process.env.RUSTUP_HOME } : {}), ...(process.env.HOME ? { HOME: process.env.HOME } : {}) } }, (err, stdout) => resolveOut(err ? '' : String(stdout)));
+    });
+  }
+
+  /**
+   * Runs `argv` in its own process group and kills the whole group when it exits or times out, so
+   * nothing a build script started outlives its stage (review 3 M-9). `isolated` passes `env` as
+   * the whole environment instead of adding it to the service's.
+   */
+  private exec(argv: string[], cwd: string, env: Record<string, string> = {}, isolated = false): Promise<number> {
     return new Promise((resolveExit, reject) => {
       const [cmd, ...rest] = argv;
-      const child = spawn(cmd!, rest, { cwd, env: { ...process.env, ...env }, stdio: ['ignore', 'ignore', 'ignore'], detached: true });
+      const child = spawn(cmd!, rest, { cwd, env: isolated ? env : { ...process.env, ...env }, stdio: ['ignore', 'ignore', 'ignore'], detached: true });
       const killGroup = () => { try { if (child.pid) process.kill(-child.pid, 'SIGKILL'); } catch { /* the group is gone */ } };
       const timer = setTimeout(() => {
         killGroup();
@@ -255,6 +311,34 @@ export class Lab {
   }
 }
 
+/** The build facts a report signs (`build` in the report body). */
+export interface BuildProvenance {
+  toolchain: string; tools_version: string; arch: string; rustc: string;
+  source_sha256: string; cargo_lock_sha256: string | null; offline: boolean;
+}
+
+/** Platform tools and SBF architecture the CLI builds with (tools/hooklab/src/build.rs). */
+export const TOOLS_VERSION = 'v1.57';
+export const SBF_ARCH = 'v3';
+
+/**
+ * sha256 over the source tree: for every regular file in path order, `<path>\0<sha256 of its
+ * bytes>\n`. Anyone can recompute it from the same source (no timestamps or modes in it).
+ */
+export function treeHash(root: string): string {
+  const files: string[] = [];
+  const walk = (dir: string, rel: string) => {
+    for (const name of readdirSync(dir).sort()) {
+      const p = join(dir, name); const r = rel ? `${rel}/${name}` : name;
+      const st = lstatSync(p);
+      if (st.isDirectory()) { if (name !== 'target' && name !== '.git') walk(p, r); } else if (st.isFile()) files.push(r);
+    }
+  };
+  walk(root, '');
+  const h = createHash('sha256');
+  for (const f of files.sort()) h.update(`${f}\0${sha256(readFileSync(join(root, f)))}\n`);
+  return h.digest('hex');
+}
 /** A regular file, not a link. */
 function regularFile(p: string): boolean {
   try { return lstatSync(p).isFile(); } catch { return false; }

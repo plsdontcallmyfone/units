@@ -26,6 +26,18 @@ pub struct Built {
     pub arch: String,
     /// Cargo features the build enabled.
     pub features: Vec<String>,
+    /// App pass 5 (verifiable builds): what the Hook Lab service records outside the sandbox, so
+    /// anyone can rebuild the same source and compare `code_hash`: `rustc --version`, sha256 over
+    /// the source tree (`<path>\0<sha256>\n` per regular file in path order), sha256 of
+    /// `Cargo.lock`, and whether cargo ran offline against the lab's registry cache.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rustc: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cargo_lock_sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub offline: Option<bool>,
 }
 
 /// The crate's library name (`[lib] name`, else the package name with `-` as `_`).
@@ -100,6 +112,10 @@ pub fn build(crate_dir: &Path, out_dir: &Path, features: &[String]) -> Result<Bu
         tools_version: TOOLS_VERSION.into(),
         arch: SBF_ARCH.into(),
         features: features.to_vec(),
+        rustc: None,
+        source_sha256: None,
+        cargo_lock_sha256: None,
+        offline: None,
     })
 }
 
@@ -117,6 +133,17 @@ pub fn version() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn build_facts_from_the_service_keep_their_provenance() {
+        let b: Built = serde_json::from_str(
+            r#"{"toolchain":"t","tools_version":"v1.57","arch":"v3","features":[],"rustc":"r","source_sha256":"aa","cargo_lock_sha256":null,"offline":true}"#,
+        )
+        .unwrap();
+        assert_eq!((b.rustc.as_deref(), b.source_sha256.as_deref(), b.cargo_lock_sha256, b.offline), (Some("r"), Some("aa"), None, Some(true)));
+        let old: Built = serde_json::from_str(r#"{"toolchain":"t","tools_version":"v1.57","arch":"v3","features":[]}"#).unwrap();
+        assert!(old.source_sha256.is_none());
+    }
 
     #[test]
     fn the_example_lib_name_is_read() {
