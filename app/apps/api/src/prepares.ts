@@ -1,4 +1,4 @@
-// Changed by Hookwars: staged slot launch, raid and settle prepares; v0 with lookup tables (the protocol's and the mint's own); input caps (integration, app audit A-4, A-6, A-12); agents, market, social and arsenal payout prepares.
+// Changed by Hookwars: staged slot launch, raid and settle prepares; v0 with lookup tables (the protocol's and the mint's own); input caps (integration, app audit A-4, A-6, A-12); agents, market, social and arsenal payout prepares; social memo prepares.
 /**
  * The prepare routes of docs/spec/06-app.md 3.3: build with the SDK, simulate, return unsigned v0
  * transactions for the wallet (the backend holds no user key, 06 section 1 rule 5). Every prepare
@@ -12,6 +12,7 @@ import {
 import { hookwars, decodeLaunch, decodeKitConfig, decodePool, decodeLaunchConfig, launchHookExtras, launchPoolAddress, launchRulesFromInput, checkProtocolLookupTable, token, LAUNCH_CONFIG } from '@hookwars/sdk';
 import type { Pool as Db } from 'pg';
 import { EXPANSION_PREPARES } from './expansion-prepares.ts';
+import { SOCIAL_PREPARES } from './social-prepares.ts';
 import { FIXED_ADDRESSES, LP_FEE_BPS, remainderBuy, MAX_VIRTUAL_QUOTE, MIN_VIRTUAL_QUOTE, NO_RULES, PROGRAM_IDS, TEMPLATES, type LaunchRulesInput, type PreparedTx } from '@hookwars/shared';
 
 export class PrepareError extends Error {
@@ -236,6 +237,8 @@ export const PREPARES: Record<string, PrepareDef> = {
 /** The War orders, the Raid slot and its touch extras for `owner` (a war step that spends raid points). */
 // Agents, market, social and the arsenal payouts (09, 10, 08): one transaction each.
 Object.assign(PREPARES, EXPANSION_PREPARES);
+// Social memos (posts, follows, reactions, hides) and opening a profile.
+Object.assign(PREPARES, SOCIAL_PREPARES);
 
 async function raidContext(conn: Connection, mint: PublicKey, owner: PublicKey) {
   const ctx = await hookwars.fetchWarContext(conn, mint).catch(() => null);

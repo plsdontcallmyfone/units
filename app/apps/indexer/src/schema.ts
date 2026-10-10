@@ -1,4 +1,4 @@
-// Changed by Hookwars: mint lookup tables; views over the market, social and agents events.
+// Changed by Hookwars: mint lookup tables; views over the market, social and agents events; the social layer's tables.
 /**
  * The indexer's Postgres schema (docs/spec/06-app.md 2.3). Amounts are `numeric(39,0)`, addresses
  * `text`, times `timestamptz` plus raw unix seconds. Every event row is keyed by
@@ -12,6 +12,7 @@
  *   proposals, vote locks, holding hook data.
  */
 import { hookwars } from '@hookwars/sdk';
+import { SOCIAL_DDL, SOCIAL_VIEWS_DDL } from './social-schema.ts';
 
 type Ty = hookwars.Ty;
 
@@ -96,5 +97,5 @@ export const VIEWS_DDL: string[] = [
 ];
 
 export function allDdl(): string[] {
-  return [...CORE_DDL, ...eventTablesDdl(), ...VIEWS_DDL];
+  return [...CORE_DDL, ...eventTablesDdl(), ...VIEWS_DDL, ...SOCIAL_DDL, ...SOCIAL_VIEWS_DDL];
 }

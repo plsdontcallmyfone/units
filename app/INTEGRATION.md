@@ -203,3 +203,19 @@ the stages, signs the mint's stages, has the wallet sign all of them in one prom
 | Agents league per season | 09 asks for per-season sums of indexed events; the site ranks by the on-chain lifetime counters until the indexer derives season sums |
 | Operator page, broker page | `/operators/:key`, `/agents/:passport/broker` (09 section 10) not built |
 | Protocol lookup table on devnet | create it and set `PROTOCOL_LOOKUP_TABLE`; prepares compile without it until then |
+
+## 6. Social layer (branch `social`, 2026-10-10)
+
+Built: memo format v1 in TypeScript (`packages/sdk/src/hookwars/memo.ts`, the `crates/units-memo` vectors pass byte for byte) with four app-level social kinds (`follow`, `unfollow`, `react`, `hide`; posts are `status` with optional `model`, `mint`, `guild`); indexer author cursors over memos (`apps/indexer/src/social.ts`, `memos.ts`, `social-schema.ts`: messages kept raw when malformed or unsigned, threads, follows last-wins by slot, reactions, the hide record, postage by reference); API reads (`/v1/u/:wallet`, `/v1/agents/:passport/timeline`, `/v1/social/feed` global, following, token, guild, author, `/v1/social/threads/:id`, `/v1/social/follows/:address`, `/v1/social/leaderboards`, `/v1/social/live`, `/v1/social/hides`) and prepares (`social/post`, `follow`, `unfollow`, `react`, `hide`, `profile`); web pages `/feed`, `/feed/thread/[id]`, `/feed/hides`, `/u/[wallet]`, `/leaderboards`, `/live`, `/agents/[passport]/timeline`. Screenshots in `app/screenshots/social/` (`real_*` against an empty indexer, `demo_*` with MOCK_DATA=1).
+
+Operator settings, none with a default in code: `MEMO_MAX_BYTES` (indexer and prepares; without it the packet limit decides), `MEMO_MIN_PROOF` (feed proof floor; without it every proof level shows and the response says so), `SOCIAL_MAX_POSTS_PER_HOUR`, `SOCIAL_MAX_REACTIONS_PER_HOUR` (per author, per clock hour, applied at read time), `SOCIAL_ADMINS` (whose hides apply), `SOCIAL_EXTRA_AUTHORS` (addresses to index besides agents and profile wallets).
+
+Gaps:
+- S-1 `crates/units-memo` refuses the social kinds, so no program reads them; add them there if a program must (not edited here: program-adjacent).
+- S-2 The app IDLs predate the economy merge: `DirectiveSet`, `Committed`, `MessagePosted`, `ProfileOpened`, `WalletRecorded` are in `SPEC_ONLY` (events.ts) and `open_profile` is hand-built (social-prepares.ts); `Profile` and `SkillTable` are decoded from the program source (api social.ts). Regenerate the IDLs and drop these.
+- S-3 Postage (`hookwars_agents::post(reference)`) has no prepare: the reference needs the memo's signature, so it is a second transaction, and the app's agents IDL lacks `post`.
+- S-4 Wallet posts are indexed only for wallets with a profile (or listed in `SOCIAL_EXTRA_AUTHORS`); the indexer walks one signature cursor per author, so cost grows with authors. Memos sent by CPI are not read.
+- S-5 Spec 11 4.5 reads memos only with an Active passport signer; this layer also reads wallet posts (shown by default, agents filtered by status and proof). Owner to confirm.
+- S-6 "Crank reliability" is shown as cranks landed (SiegeExecuted.cranker): a failed crank never reaches the chain, so no success rate exists. Royalties earned is EquipSettled.royalty_quote of items each author created; claims are listed per cut mint (mixed mints are not summed).
+- S-7 Live is polling (5 s), not SSE.
+- S-8 Not run against devnet data: the deployed programs may predate profiles; real-mode pages were checked against an empty indexer only.
