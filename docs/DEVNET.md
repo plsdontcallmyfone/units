@@ -180,6 +180,16 @@ Environment variables the app reads (app/apps/*, app/packages/*):
 | `SKIP_DB` | unset |
 
 The app's program ids already match section 1 (they come from `PROGRAM_IDS` in
-`app/packages/shared`). IDLs for `hookwars_market`, `hookwars_social` and `hookwars_agents` are not
-yet in `idl/` or the SDK: run `scripts/solana/programs.sh idl` and sync them before the app uses
-those programs.
+`app/packages/shared`), and the SDK's IDLs are the ones main 43b65d3 generated from the deployed
+sources.
+
+`app/devnet.env` (committed, no secrets) holds the devnet values: `CLUSTER=devnet`,
+`RPC_URL=https://api.devnet.solana.com`, `PROTOCOL_LOOKUP_TABLE=7piuvZj2xJM7dj5fnB4sC8JujnyvRBa3J7bmtTAXbHUu`,
+`HOST`, `PORT=9961`, `API_URL`. Load it with `set -a; . app/devnet.env; set +a` and add
+`DATABASE_URL` from the server's own environment before starting the api, indexer, web or agents.
+On 2026-10-10 the api (127.0.0.1:9961) and the indexer ran on server B against devnet with their
+own database `units_devnet` (URL in /root/hw-devnet-db.url): the indexer walked the programs'
+signatures and decoded real events into the `ev_*` tables and `mint_tables` (the drill's raids need
+the launched tokens' lookup tables from there), and the explorer route decoded the drill's raid
+(RaidMarked, ItemCut, PoolItemCuts, RouteSwapped). The public devnet RPC rate-limits the indexer
+heavily (429 replies); a private devnet RPC in `RPC_URL` (server-side only) makes it usable.
