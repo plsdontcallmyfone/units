@@ -159,6 +159,25 @@ export async function refreshTailOf(conn: Connection, mint: PublicKey, slot: num
   return hookwars.refreshTail(mint, pool, registries);
 }
 
+const COALITION_TEMPLATE = 43;
+const coalitionAddress = (id: number): PublicKey => { const b = Buffer.alloc(4); b.writeUInt32LE(id); return PublicKey.findProgramAddressSync([Buffer.from('coalition'), b], hookwars.WAR_ID)[0]; };
+const pendingTermsAddress = (market: PublicKey): PublicKey => PublicKey.findProgramAddressSync([Buffer.from('book-pending-terms'), market.toBuffer()], hookwars.BOOK_ID)[0];
+
+/** A coalition member's accounts: `[mint, its equipped Coalition item, template 43, war state]`. */
+async function coalitionMember(conn: Connection, mint: PublicKey, id: number): Promise<AccountMeta[]> {
+  const mi = await need(conn, mint, (d) => hookwars.decodeSlotMint(d), 'No such token.');
+  const items = hookwars.activeSlots(mi).map((sl) => sl.item).filter((k) => !k.equals(PublicKey.default));
+  const infos = items.length ? await conn.getMultipleAccountsInfo(items, 'confirmed') : [];
+  const found = items.find((k, i) => {
+    const info = infos[i]; if (!info) return false;
+    try { const it = hookwars.itemCodec().decode(info.data); return it.templateId === COALITION_TEMPLATE && it.params[0] === id; } catch { return false; }
+  });
+  if (!found) throw new PrepareError(409, 'NoCoalitionItem', `This token has no Coalition item naming coalition ${id} equipped.`);
+  if (!await exists(conn, hookwars.warStateAddress(mint))) throw new PrepareError(409, 'NotAtWar', 'Only a war token joins a coalition: this token has no war state.');
+  const ro = (pubkey: PublicKey): AccountMeta => ({ pubkey, isSigner: false, isWritable: false });
+  return [ro(mint), ro(found), ro(hookwars.templateAddress(COALITION_TEMPLATE)), ro(hookwars.warStateAddress(mint))];
+}
+
 const UPGRADEABLE_LOADER = new PublicKey('BPFLoaderUpgradeab1e11111111111111111111111');
 const programData = (program: PublicKey): PublicKey => PublicKey.findProgramAddressSync([program.toBuffer()], UPGRADEABLE_LOADER)[0];
 
@@ -472,6 +491,35 @@ export const ECONOMY_PREPARES: Record<string, PrepareDef> = {
     if (mode !== hookwars.ACCESS.GATED && mode !== hookwars.ACCESS.LICENSED) throw new PrepareError(409, 'NotGated', 'The equipped item is neither Gated nor Licensed, so there is nothing to enforce.');
     const change = await revertChange(conn, mint, slot, es.item);
     return [hookwars.enforceAccess(pk(b, 'owner'), mint, slot, es.item, mode, change, await refreshTailOf(conn, mint, slot, change.newItem ?? null))];
+  }),
+  // ---------------------------------------------------------------- app pass 5: coalitions, market terms, vault revoke --
+  'war/coalition/form/prepare': one('Form a coalition', ['war'], async (b, conn) => {
+    // Every member consented by equipping a Coalition item (template 43) naming the id (secfix3 L-3).
+    const id = int(b, 'id', 1, U32_MAX); const termSecs = big(b, 'termSecs');
+    const v = b.members;
+    if (!Array.isArray(v) || v.length < 2 || v.length > 8) throw new PrepareError(400, 'BadRequest', '"members" must list 2 to 8 token mints.');
+    const quads: AccountMeta[] = [];
+    for (const m of v as unknown[]) quads.push(...await coalitionMember(conn, pk({ m } as Body, 'm'), id));
+    return [hookwars.idlIx('war', 'form_coalition', { payer: pk(b, 'owner'), config: hookwars.warConfigAddress(), coalition: coalitionAddress(id) }, { id, termSecs }, quads)];
+  }),
+  'war/coalition/join/prepare': one('Join a coalition', ['war'], async (b, conn) => {
+    const id = int(b, 'id', 1, U32_MAX);
+    if (!await exists(conn, coalitionAddress(id))) throw new PrepareError(409, 'NotFound', `Coalition ${id} has not been formed.`);
+    return [hookwars.idlIx('war', 'join_coalition', { config: hookwars.warConfigAddress(), coalition: coalitionAddress(id) }, {}, await coalitionMember(conn, pk(b, 'mint'), id))];
+  }),
+  'book/market-terms/propose/prepare': one('Propose market terms', ['book'], async (b) => {
+    const market = hookwars.bookMarketAddress(hookwars.materialMintAddress(int(b, 'materialId', 0, 65_535)));
+    return [hookwars.idlIx('book', 'propose_market_terms', { admin: pk(b, 'owner'), config: hookwars.bookConfigAddress(), market, pending: pendingTermsAddress(market) }, { tickLamports: big(b, 'tickLamports'), minSize: big(b, 'minSize') })];
+  }),
+  'book/market-terms/apply/prepare': one('Apply market terms', ['book'], async (b, conn) => {
+    const market = hookwars.bookMarketAddress(hookwars.materialMintAddress(int(b, 'materialId', 0, 65_535)));
+    if (!await exists(conn, pendingTermsAddress(market))) throw new PrepareError(409, 'NotFound', 'No market terms are proposed for this material.');
+    return [hookwars.idlIx('book', 'apply_market_terms', { config: hookwars.bookConfigAddress(), market, pending: pendingTermsAddress(market) })];
+  }),
+  'agents/vault/revoke/prepare': one('Clear a vault delegate', ['agents', 'token'], async (b) => {
+    // Review 3 H-1: the operator clears a delegate set on one of the vault's holdings.
+    const passport = pk(b, 'passport'); const vault = hookwars.agentVaultAddress(passport);
+    return [hookwars.idlIx('agents', 'revoke_vault', { operator: pk(b, 'owner'), passport, policy: hookwars.policyAddress(passport), vault, holding: hookwars.holdingAddr(pk(b, 'mint'), vault), token: hookwars.TOKEN_ID })];
   }),
   'templates/submit/prepare': one('Submit a template', ['armory'], async (b) => [hookwars.submitTemplate(pk(b, 'owner'), pk(b, 'program'), hex32(b, 'codeHash'), hex32(b, 'uriHash'))]),
   'templates/settle/prepare': one('Settle a template submission', ['armory'], async (b, conn) => {
