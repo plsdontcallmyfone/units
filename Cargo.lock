@@ -826,11 +826,14 @@ dependencies = [
  "bordrless-launch",
  "bordrless-swap",
  "bordrless-token",
+ "econ-caller-stub",
  "half-life",
  "hook-tester",
  "hookwars-agents",
  "hookwars-armory",
+ "hookwars-book",
  "hookwars-common",
+ "hookwars-craft",
  "hookwars-items",
  "hookwars-market",
  "hookwars-social",
@@ -850,6 +853,7 @@ dependencies = [
  "solana-signer",
  "solana-transaction",
  "tax-hook",
+ "units-memo",
  "war-armory-stub",
  "war-items-stub",
  "war-stub",
@@ -1332,6 +1336,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "econ-caller-stub"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+]
+
+[[package]]
+name = "econ-sim"
+version = "0.1.0"
+dependencies = [
+ "hookwars-common",
+]
+
+[[package]]
 name = "ed25519"
 version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1746,6 +1764,7 @@ dependencies = [
  "solana-instructions-sysvar 3.0.1",
  "solana-security-txt",
  "solana-sha256-hasher",
+ "units-memo",
 ]
 
 [[package]]
@@ -1762,10 +1781,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "hookwars-book"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "bordrless-hook",
+ "bordrless-token",
+ "hookwars-armory",
+ "hookwars-common",
+ "hookwars-craft",
+ "hookwars-market",
+ "hookwars-social",
+ "solana-security-txt",
+]
+
+[[package]]
 name = "hookwars-common"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
+]
+
+[[package]]
+name = "hookwars-craft"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "bordrless-hook",
+ "bordrless-token",
+ "hookwars-armory",
+ "hookwars-common",
+ "hookwars-social",
+ "solana-security-txt",
 ]
 
 [[package]]
@@ -1792,6 +1839,7 @@ dependencies = [
  "bordrless-token",
  "hookwars-armory",
  "hookwars-common",
+ "hookwars-social",
  "solana-security-txt",
 ]
 
@@ -4656,6 +4704,10 @@ name = "unicode-segmentation"
 version = "1.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6f5d3c3b1bf09027a88a6bc961fc00497d651009560b5463668dc81b0fa87a8"
+
+[[package]]
+name = "units-memo"
+version = "0.1.0"
 
 [[package]]
 name = "universal-hash"
