@@ -13,7 +13,8 @@ import { hookwars, decodeLaunch, decodeKitConfig, decodePool, decodeLaunchConfig
 import type { Pool as Db } from 'pg';
 import { EXPANSION_PREPARES } from './expansion-prepares.ts';
 import { SOCIAL_PREPARES } from './social-prepares.ts';
-import { ECONOMY_PREPARES, settleTail } from './economy-prepares.ts';
+import { ECONOMY_PREPARES, settleTail, supplyAccounts } from './economy-prepares.ts';
+import { GATING_PREPARES } from './gating.ts';
 import { FIXED_ADDRESSES, LP_FEE_BPS, remainderBuy, MAX_VIRTUAL_QUOTE, MIN_VIRTUAL_QUOTE, NO_RULES, PROGRAM_IDS, TEMPLATES, type LaunchRulesInput, type PreparedTx } from '@hookwars/shared';
 
 export class PrepareError extends Error {
@@ -166,7 +167,8 @@ export const PREPARES: Record<string, PrepareDef> = {
       if (a.templateId !== c.templateId) throw new PrepareError(409, 'NotForgeable', 'Only two items of the same template can be forged.');
       if (a.equippedCount > 0 || c.equippedCount > 0) throw new PrepareError(409, 'ItemEquipped', 'Unequip both items before forging them.');
       const itemsMinted = hookwars.armoryConfigCodec.decode(cfg.data).itemsMinted;
-      return [hookwars.forge(owner, { item: pk(b, 'itemA'), itemMint: a.itemMint }, { item: pk(b, 'itemB'), itemMint: c.itemMint }, a.templateId, itemsMinted)];
+      const [supply] = await supplyAccounts(conn, [a.templateId]);
+      return [hookwars.forge(owner, { item: pk(b, 'itemA'), itemMint: a.itemMint }, { item: pk(b, 'itemB'), itemMint: c.itemMint }, a.templateId, itemsMinted, supply)];
     },
   },
   'proposals/finalize/prepare': {
@@ -263,6 +265,7 @@ Object.assign(PREPARES, EXPANSION_PREPARES);
 Object.assign(PREPARES, SOCIAL_PREPARES);
 // The hook economy (11 to 13), the sell route and the war cranks (runtime R-1, R-2).
 Object.assign(PREPARES, ECONOMY_PREPARES);
+Object.assign(PREPARES, GATING_PREPARES);
 
 async function raidContext(conn: Connection, mint: PublicKey, owner: PublicKey) {
   const ctx = await hookwars.fetchWarContext(conn, mint).catch(() => null);

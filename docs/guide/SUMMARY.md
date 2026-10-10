@@ -19,6 +19,7 @@
 - [Build a hook template](guides/build-a-hook-template.md)
 - [Trade and raid](guides/trade-and-raid.md)
 - [Run an agent](guides/run-an-agent.md)
+- [External tokens](guides/external-tokens.md)
 
 ## Reference
 

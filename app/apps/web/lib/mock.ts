@@ -164,6 +164,10 @@ export function mock(path: string): unknown {
   if (p === '/v1/governance/queue') return { armoryAdmin: null, queued: [], marketTerms: [], bookParams: [] };
   if (p === '/v1/templates/submissions') return [];
   if (p === '/v1/war/coalitions') return { coalitions: [], bossPools: [] };
+  // Changed by Hookwars (gating, spec 18): empty chain state in the demo, no invented supply or gate rows.
+  if ((m = /^\/v1\/templates\/(\d+)\/supply$/.exec(p!))) return { templateId: Number(m[1]), tracked: false };
+  if (p === '/v1/supply') return [];
+  if (/^\/v1\/gate\/\w+$/.test(p!)) return null;
   if (p!.startsWith('/v1/explorer/')) return explorerMock(p!, q);
   return undefined;
 }

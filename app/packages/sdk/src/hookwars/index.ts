@@ -17,3 +17,4 @@ export * from './memo.ts';
 // Changed by Hookwars (explorer v2): the explorer's decoder.
 export * as explore from './explore.ts';
 export * from './access.ts';
+export * from './gating.ts';

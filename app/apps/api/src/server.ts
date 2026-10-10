@@ -12,6 +12,7 @@ import { hookwars } from '@hookwars/sdk';
 import { findBannedWords, PARAMS, type PrizeVaultInfo, type SeasonInfo } from '@hookwars/shared';
 import * as reads from './reads.ts';
 import * as xreads from './reads-expansion.ts';
+import * as gating from './gating.ts';
 import { prepare, PrepareError } from './prepares.ts';
 import { submit } from './submit.ts';
 import { socialRoute } from './social.ts';
@@ -163,6 +164,10 @@ export function handler(deps: Deps) {
       if (p === '/v1/governance/queue') return json(res, 200, await cached('governance-queue', 10_000, () => xreads.governanceQueue(deps.conn)));
       if (p === '/v1/templates/submissions') return json(res, 200, await cached('template-submissions', 15_000, () => xreads.templateSubmissions(deps.conn)));
       if (p === '/v1/war/coalitions') return json(res, 200, await cached('coalitions', 10_000, () => xreads.coalitions(deps.conn)));
+      // Gating (spec 18): template supply and the external gate, chain state only.
+      if (p === '/v1/supply') return json(res, 200, await cached('supplies', 15_000, () => gating.supplies(deps.conn)));
+      if ((m = /^\/v1\/templates\/(\d{1,5})\/supply$/.exec(p))) return json(res, 200, await gating.templateSupply(deps.conn, intParam(m[1], 'template', 1, 65_535)));
+      if ((m = /^\/v1\/gate\/(\w{32,44})$/.exec(p))) return json(res, 200, await gating.gateOf(deps.conn, m[1]!));
       // Changed by Hookwars (explorer v2): chain reads, the indexer optional.
       if (p === '/v1/launch/config') return json(res, 200, await launchPlan.launchConfig(deps.conn));
       if (p === '/v1/launch/buy-quote') return json(res, 200, await launchPlan.buyQuote(deps.conn, q));
