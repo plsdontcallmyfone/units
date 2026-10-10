@@ -36,8 +36,12 @@ pub const SWAP_ID: Pubkey = Pubkey::from_str_const("AhmowBwJF7E1uDQ3quQz8xMKevre
 pub const LAUNCH_ID: Pubkey = Pubkey::from_str_const("fBvY7neytvwSuJLF1Sur5tHk7vkWyPzjyfDVDm1m2qD");
 /// The bridge (an item program may never be it).
 pub const BRIDGE_ID: Pubkey = Pubkey::from_str_const("5TzyKXK6tzSrkkRdximMebWoV4rRjuyzEwCnisS6DKwj");
+/// `hookwars_market` (integration pass 2, 10 section 17 I-1).
+pub const MARKET_ID: Pubkey = Pubkey::from_str_const("FikEwNXoXqRWteX4kpCT8dJ34o8hWQ8w49whhZiqS2vv");
+/// `hookwars_social` (integration pass 2, 10 section 17 I-1): guild treasuries pay out.
+pub const SOCIAL_ID: Pubkey = Pubkey::from_str_const("CKf4SjuiYxy4C2eSjk6oSQb2AnqC3ADoDTm8d323jWAx");
 /// Programs whose PDAs may send protocol payouts that skip item slots (R16).
-pub const PROTOCOL_SOURCE_PROGRAMS: [Pubkey; 3] = [ITEMS_ID, ARMORY_ID, WAR_ID];
+pub const PROTOCOL_SOURCE_PROGRAMS: [Pubkey; 5] = [ITEMS_ID, ARMORY_ID, WAR_ID, MARKET_ID, SOCIAL_ID];
 /// Seed of [`PROTOCOL_TRANSFER_MARKER`].
 pub const PROTOCOL_TRANSFER_SEED: &[u8] = b"protocol-transfer";
 /// Hookwars R20: in a `transfer_from_protocol` the Locked slot is told this as `authority`. It is

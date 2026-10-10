@@ -432,6 +432,26 @@ pub fn token_destination(template: u16, targets: &[Pubkey]) -> Destination {
     }
 }
 
+/// Integration pass 2 (security cross-branch, review 1 H-2): whether `mint` runs the kit (its hook,
+/// or a Locked kit slot). The kit treats a program-owned holding that receives a protocol transfer
+/// as an excluded vault, so on such a token a token-side payout goes only to a wallet on the curve
+/// or to a vault derivable from the mint.
+pub fn runs_kit(m: &bordrless_token::state::Mint) -> bool {
+    m.hook_program == Some(ids::KIT_ID)
+        || m.slots[..usize::from(m.slot_count)]
+            .iter()
+            .any(|s| s.kind == hookwars_common::kind::LOCKED && s.program == ids::KIT_ID)
+}
+
+/// Whether `owner` may receive a token-side payout of a kit token `mint` (see [`runs_kit`]).
+pub fn kit_payee_ok(mint: &Pubkey, owner: &Pubkey) -> bool {
+    owner.is_on_curve()
+        || *owner == war_chest(mint)
+        || *owner == a2::pda::loyalty(mint).0
+        || *owner == a2::pda::referral_owner(mint).0
+        || *owner == treaty_inbox(mint)
+}
+
 /// A module's pool-side destination.
 pub fn pool_destination(template: u16, mint: &Pubkey, targets: &[Pubkey]) -> Destination {
     match template {

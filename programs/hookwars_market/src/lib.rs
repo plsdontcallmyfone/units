@@ -1,4 +1,5 @@
 // Changed by Hookwars: new program (expansion, docs/spec/10-expansion.md sections 0, 1, 4, 5).
+// Integration pass 2: end_lease reverts the leased slot through the armory (10 section 17 I-3).
 //! `hookwars_market`: items are assets. Listings and sales of item tokens (price in SOL, paid by
 //! the buyer straight to the seller, the item's author and the protocol treasury), collections
 //! (discovery only), item rental (the item token sits in a lease escrow for the term; the lessor's
@@ -438,10 +439,15 @@ pub mod hookwars_market {
     /// Anyone ends a lease after its term; the item returns to the lessor. Reverting the slot (if
     /// the item is still equipped there) is the armory's `revert_for_lease_end` (integration
     /// request in 10).
-    pub fn end_lease(ctx: Context<CloseLease>) -> Result<()> {
+    pub fn end_lease<'info>(ctx: Context<'info, CloseLease<'info>>) -> Result<()> {
         let l = &ctx.accounts.lease;
         require!(l.state == lease_state::ACTIVE, MarketError::WrongLeaseState);
         require!(now()? >= l.ends_at, MarketError::LeaseNotOver);
+        // Integration pass 2 (10 section 17 I-3): with the armory's accounts given, the slot that
+        // still holds the leased item reverts first, then the item token goes home.
+        if !ctx.remaining_accounts.is_empty() {
+            cpi::revert_leased_slot(ctx.remaining_accounts, l.slot, l.item)?;
+        }
         return_from_lease(&ctx)?;
         emit_cpi!(LeaseEnded {
             item: l.item,

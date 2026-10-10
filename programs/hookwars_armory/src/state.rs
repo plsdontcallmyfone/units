@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M2); M3b: settle_bounty_bps, CompositeItem; security review 1: proposal_min_bps.
+// Changed by Hookwars: new file (M2); M3b: settle_bounty_bps, CompositeItem; security review 1: proposal_min_bps; integration pass 2: AuthorCounter, ClaimCounter.
 //! Accounts of the armory (docs/spec/02-armory.md section 2).
 
 use anchor_lang::prelude::*;
@@ -233,6 +233,26 @@ pub struct VoteLock {
 pub struct ForgeCounter {
     pub wallet: Pubkey,
     pub count: u64,
+    pub bump: u8,
+}
+
+/// Integration pass 2 (10 section 17 I-5): `AuthorCounter` at `["authored", wallet]`, bumped by
+/// `create_item` and `create_composite` when passed; read by social badges.
+#[account]
+#[derive(InitSpace, Debug)]
+pub struct AuthorCounter {
+    pub wallet: Pubkey,
+    pub items: u64,
+    pub bump: u8,
+}
+
+/// Integration pass 2 (10 section 17 I-5): `ClaimCounter` at `["claimed", wallet]`: bridged-SOL
+/// lamports of royalty the wallet claimed, bumped by `claim_royalty` when passed.
+#[account]
+#[derive(InitSpace, Debug)]
+pub struct ClaimCounter {
+    pub wallet: Pubkey,
+    pub lamports: u64,
     pub bump: u8,
 }
 

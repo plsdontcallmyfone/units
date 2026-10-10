@@ -182,7 +182,7 @@ fn pause_retire_and_rotate() {
 }
 
 #[test]
-fn profile_updates_follow_into_the_badge_and_the_armory_refuses_the_agents_caller_today() {
+fn profile_updates_follow_into_the_badge_and_the_armory_accepts_the_agents_caller_for_badges() {
     let mut aw = Aw::new();
     let a = aw.agent("muse", kind::AUTHOR);
     let mut args = profile("muse-2", kind::AUTHOR | kind::RAIDER);
@@ -205,7 +205,7 @@ fn profile_updates_follow_into_the_badge_and_the_armory_refuses_the_agents_calle
     assert_eq!((m.name.as_str(), m.uri.as_str()), ("muse-2", "https://example.invalid/new.png"));
     assert_eq!(aw.passport(&a.passport).kinds, kind::AUTHOR | kind::RAIDER);
 
-    // `equip_badge` reaches the armory, which accepts only the launchpad's caller until R28 lands.
+    // Integration pass 2 (R28): `equip_badge` through the agents program equips the Soulbound item.
     let equip = aw
         .hw
         .equip_accounts(&a.operator.pubkey(), &a.badge, 0, None, Some(aw.soulbound));
@@ -243,9 +243,19 @@ fn profile_updates_follow_into_the_badge_and_the_armory_refuses_the_agents_calle
         accounts,
         data: hookwars_agents::instruction::EquipBadge {}.data(),
     };
-    aw.hw.w.env.send_paid_by(&[ix], &a.operator, &[]).expect_code(
-        bordrless_program_tests::armory::armory_code(hookwars_armory::error::ArmoryError::NotLaunchCaller),
-    );
+    aw.hw.w.env.send_paid_by(&[ix], &a.operator, &[]).ok();
+    let m: Mint = aw.hw.w.env.read(&a.badge);
+    assert_eq!(m.slots[0].item, aw.soulbound);
+    // Soulbound is refused on any mint that is not a badge (09 section 21 item 2).
+    let owner = aw.hw.w.env.funded(10 * SOL);
+    let other = aw
+        .hw
+        .slot_mint(&owner, vec![item_slot(slot_kind::DEFENSE, equip_rule::VOTE, 0, 0, false)]);
+    aw.hw.equip_launch(&owner, &other, Hw::entry(0, None, EquipConfig::default())).ok();
+    aw.hw.mint_to(&owner, &other, &owner.pubkey(), 1_000_000);
+    let soulbound = aw.soulbound;
+    let (tx, _) = aw.hw.propose(&owner, &other, 0, Some(soulbound), EquipConfig::default());
+    tx.expect_code(bordrless_program_tests::armory::armory_code(hookwars_armory::error::ArmoryError::NotBadge));
 }
 
 // ---- A2 proof levels ---------------------------------------------------------------------------
@@ -458,13 +468,17 @@ fn the_policy_wallet_spends_within_its_limits() {
 // ---- A5 bonds ----------------------------------------------------------------------------------
 
 /// Two tokens with one Relation slot (vote), each minted to `holder`.
-fn treaty_world(aw: &mut Aw, holder: &Keypair) -> (Pubkey, Pubkey) {
+fn treaty_world(aw: &mut Aw, holder: &Keypair, proposers: &[Pubkey]) -> (Pubkey, Pubkey) {
     let mut mints = Vec::new();
     for _ in 0..2 {
         let owner = aw.hw.w.env.funded(10 * SOL);
         let m = aw.hw.slot_mint(&owner, vec![item_slot(slot_kind::RELATION, equip_rule::VOTE, 0, 0, false)]);
         aw.hw.equip_launch(&owner, &m, Hw::entry(0, None, EquipConfig::default())).ok();
         aw.hw.mint_to(&owner, &m, &holder.pubkey(), 1_000_000);
+        // Security review 1 M-2: a proposer must hold the proposal threshold of the supply.
+        for p in proposers {
+            aw.hw.mint_to(&owner, &m, p, 100_000);
+        }
         mints.push(m);
     }
     (mints[0], mints[1])
@@ -547,7 +561,7 @@ fn bonded_pair(aw: &mut Aw) -> (Agent, Pubkey, Pubkey, Pubkey, Pubkey, Pubkey) {
     let a = aw.agent("envoy", kind::DIPLOMAT);
     aw.hw.w.env.warp(TEST_AGENTS_PARAMS.bond_min_passport_age_secs);
     let holder = aw.hw.w.env.funded(10 * SOL);
-    let (ma, mb) = treaty_world(aw, &holder);
+    let (ma, mb) = treaty_world(aw, &holder, &[a.key.pubkey()]);
     let (_, item, _) = aw.hw.item(template_id::TREATY, params(&[100, 100, 0]), 0);
     let (tx, pa) = aw.hw.propose(&a.key, &ma, 0, Some(item), EquipConfig { targets: vec![mb], role: 0 });
     tx.ok();
@@ -562,7 +576,7 @@ fn bond_refusals() {
     // Too young, and not a diplomat.
     let young = aw.agent("young", kind::DIPLOMAT);
     let holder = aw.hw.w.env.funded(10 * SOL);
-    let (ma, mb) = treaty_world(&mut aw, &holder);
+    let (ma, mb) = treaty_world(&mut aw, &holder, &[young.key.pubkey()]);
     let (_, item, _) = aw.hw.item(template_id::TREATY, params(&[100, 100, 0]), 0);
     let (_, pa) = aw.hw.propose(&young.key, &ma, 0, Some(item), EquipConfig { targets: vec![mb], role: 0 });
     let (_, pb) = aw.hw.propose(&young.key, &mb, 0, Some(item), EquipConfig { targets: vec![ma], role: 0 });

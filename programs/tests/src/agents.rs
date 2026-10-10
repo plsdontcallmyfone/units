@@ -518,5 +518,5 @@ pub fn agents_code(e: hookwars_agents::error::AgentsError) -> u32 {
 
 /// The Soulbound template's error code.
 pub fn soulbound_code() -> u32 {
-    hookwars_items::templates::soulbound::SoulboundError::SoulboundTransfer as u32 + 7000
+    hookwars_items::ItemsError::SoulboundTransfer as u32 + 6000
 }

@@ -1,5 +1,5 @@
 // Changed by Hookwars: new file (M2), shared by hookwars_armory and hookwars_items; M3b: raid ledger,
-// war touches, launch reads, arsenal wave A templates, composites; expansion templates 43 to 45 (10); agents (09): AGENTS_ID, AGENTS_SIGNER, template 42 Soulbound; arsenal waves D and E.
+// war touches, launch reads, arsenal wave A templates, composites; expansion templates 43 to 45 (10); agents (09): AGENTS_ID, AGENTS_SIGNER, template 42 Soulbound; arsenal waves D and E. Integration pass 2: agents_record.
 //! Types and pure rules shared by the armory (docs/spec/02-armory.md) and the items program
 //! (docs/spec/04-templates.md): params (R7), the manifest (04 section 2.7), the equip config (04
 //! section 2.3), each template's fields and forge rules (04 section 3), seeds (00 section 4.3), the
@@ -60,6 +60,12 @@ pub mod ids {
     /// every agent badge (09 section 4.2).
     pub const AGENTS_SIGNER: Pubkey =
         Pubkey::from_str_const("79bZmFwi3tKQxa6dWnaigz29sVKCpPQ8fPufijxBiKdo");
+    /// `hookwars_market` (10).
+    pub const MARKET_ID: Pubkey =
+        Pubkey::from_str_const("FikEwNXoXqRWteX4kpCT8dJ34o8hWQ8w49whhZiqS2vv");
+    /// `hookwars_social` (10).
+    pub const SOCIAL_ID: Pubkey =
+        Pubkey::from_str_const("CKf4SjuiYxy4C2eSjk6oSQb2AnqC3ADoDTm8d323jWAx");
     /// Who may upgrade a template program (00 rule 3; upstream `HOOK_UPGRADE_AUTHORITIES`).
     pub const HOOK_UPGRADE_AUTHORITIES: [Pubkey; 2] = [MANAGED_HOOK_KEY, PROTOCOL_AUTHORITY];
     /// The upgradeable loader.
@@ -99,6 +105,10 @@ pub mod seeds {
     pub const VOTE: &[u8] = b"vote";
     /// `["forges", wallet]`.
     pub const FORGES: &[u8] = b"forges";
+    /// Integration pass 2 (10 section 17 I-5): items a wallet authored.
+    pub const AUTHORED: &[u8] = b"authored";
+    /// Integration pass 2 (10 section 17 I-5): bridged-SOL royalties a wallet claimed.
+    pub const CLAIMED: &[u8] = b"claimed";
     /// `["pending-params"]`.
     pub const PENDING: &[u8] = b"pending-params";
     /// The launchpad's caller of `equip_launch`: `["armory-caller", mint]` under the launchpad.
@@ -182,6 +192,14 @@ pub mod pda {
     /// `["forges", wallet]`.
     pub fn forge_counter(wallet: &Pubkey) -> (Pubkey, u8) {
         Pubkey::find_program_address(&[seeds::FORGES, wallet.as_ref()], &ARMORY_ID)
+    }
+    /// `["authored", wallet]` (integration pass 2, I-5).
+    pub fn author_counter(wallet: &Pubkey) -> (Pubkey, u8) {
+        Pubkey::find_program_address(&[seeds::AUTHORED, wallet.as_ref()], &ARMORY_ID)
+    }
+    /// `["claimed", wallet]` (integration pass 2, I-5).
+    pub fn claim_counter(wallet: &Pubkey) -> (Pubkey, u8) {
+        Pubkey::find_program_address(&[seeds::CLAIMED, wallet.as_ref()], &ARMORY_ID)
     }
     /// `["armory-caller", mint]` under the launchpad.
     pub fn armory_caller(mint: &Pubkey) -> (Pubkey, u8) {
@@ -1306,6 +1324,18 @@ pub mod composite {
         if modules.iter().any(|m| !composable(m.template_id)) {
             return Err(CompositeError::NotComposable);
         }
+        // Integration pass 2 (08 arsenal 2 request 2): modules sharing one per-mint or per-slot
+        // state may not sit together: Shield and Patience share the slot's `sell_mark` bit,
+        // Mercenary and Raid both keep a Raid range, and Loyalty Pot and First Blood keep one
+        // state per mint.
+        let count = |id: u16| modules.iter().filter(|m| m.template_id == id).count();
+        if (count(template_id::SHIELD) > 0 && count(arsenal2::PATIENCE) > 0)
+            || (count(template_id::RAID) > 0 && count(arsenal2::MERCENARY) > 0)
+            || count(arsenal2::LOYALTY_POT) > 1
+            || count(arsenal2::FIRST_BLOOD) > 1
+        {
+            return Err(CompositeError::ModuleConflict);
+        }
         let mut out = Manifest {
             kind: host_kind(modules).ok_or(CompositeError::KindMismatch)?,
             ..Default::default()
@@ -1745,5 +1775,189 @@ pub mod arsenal2 {
             assert_eq!(target_burn(&t, 1_000_000, 900_000_005, 1_000_000_000), 5);
             assert_eq!(target_burn(&t, 1_000_000, 900_000_000, 1_000_000_000), 0);
         }
+    }
+}
+
+/// Integration pass 2 (09 section 21 items 3 to 5, R26): the optional agent attribution call.
+///
+/// A caller appends five accounts at the very end of its remaining accounts:
+/// `[agents program, ["agents-caller"] under the caller, agents event authority, passport (mut),
+/// actor]`. The calling program splits them off with [`agents_record::split`] before reading its
+/// own remaining accounts, finishes its own effects, then calls [`agents_record::record`], which
+/// invokes `hookwars_agents::record(kind, value)` signed by its `["agents-caller"]` PDA. The call
+/// is built by hand so the armory, war and items need not depend on the agents crate.
+pub mod agents_record {
+    use super::*;
+    use anchor_lang::solana_program::instruction::{AccountMeta, Instruction};
+    use anchor_lang::solana_program::program::invoke_signed;
+
+    /// `sha256("global:record")[..8]`, the agents program's `record` discriminator (checked
+    /// against the agents crate in the integ2 suite).
+    pub const RECORD_DISCRIMINATOR: [u8; 8] = [222, 57, 201, 216, 199, 90, 247, 136];
+    /// Seed of each caller's recorder PDA.
+    pub const CALLER_SEED: &[u8] = b"agents-caller";
+    /// Accounts in the suffix.
+    pub const SUFFIX: usize = 5;
+    /// `hookwars_agents::constants::record_kind`, copied (no crate dependency).
+    pub const ITEMS_AUTHORED: u8 = 0;
+    pub const ITEMS_EQUIPPED: u8 = 1;
+    pub const ITEMS_FORGED: u8 = 2;
+    pub const ROYALTY_CLAIM: u8 = 3;
+    pub const CRANK: u8 = 4;
+    pub const BOUNTY: u8 = 5;
+    pub const LOOT_REVEAL: u8 = 6;
+
+    /// The caller program's recorder PDA.
+    pub fn caller(program: &Pubkey) -> (Pubkey, u8) {
+        Pubkey::find_program_address(&[CALLER_SEED], program)
+    }
+
+    /// The agents program's event authority.
+    pub fn event_authority() -> Pubkey {
+        Pubkey::find_program_address(&[b"__event_authority"], &ids::AGENTS_ID).0
+    }
+
+    /// The five suffix metas a client appends (passport writable).
+    pub fn suffix_metas(program: &Pubkey, passport: &Pubkey, actor: &Pubkey) -> Vec<AccountMeta> {
+        vec![
+            AccountMeta::new_readonly(ids::AGENTS_ID, false),
+            AccountMeta::new_readonly(caller(program).0, false),
+            AccountMeta::new_readonly(event_authority(), false),
+            AccountMeta::new(*passport, false),
+            AccountMeta::new_readonly(*actor, false),
+        ]
+    }
+
+    /// Splits the suffix off when the remaining accounts end with one for `program`.
+    pub fn split<'a, 'info>(
+        rem: &'a [AccountInfo<'info>],
+        program: &Pubkey,
+    ) -> (&'a [AccountInfo<'info>], Option<&'a [AccountInfo<'info>]>) {
+        let n = rem.len();
+        if n >= SUFFIX
+            && rem[n - SUFFIX].key() == ids::AGENTS_ID
+            && rem[n - SUFFIX + 1].key() == caller(program).0
+        {
+            (&rem[..n - SUFFIX], Some(&rem[n - SUFFIX..]))
+        } else {
+            (rem, None)
+        }
+    }
+
+    /// Invokes `record(kind, value)` when a suffix was given and its actor is `expected_actor`.
+    /// Without a suffix this is a no-op, so every caller stays usable without the agents program.
+    pub fn record<'info>(
+        suffix: Option<&[AccountInfo<'info>]>,
+        program: &Pubkey,
+        expected_actor: &Pubkey,
+        kind: u8,
+        value: u64,
+    ) -> Result<()> {
+        let Some(s) = suffix else { return Ok(()) };
+        let (c, bump) = caller(program);
+        if s.len() != SUFFIX
+            || s[1].key() != c
+            || s[2].key() != event_authority()
+            || s[4].key() != *expected_actor
+        {
+            return Err(ProgramError::InvalidArgument.into());
+        }
+        let mut data = RECORD_DISCRIMINATOR.to_vec();
+        data.push(kind);
+        data.extend_from_slice(&value.to_le_bytes());
+        let ix = Instruction {
+            program_id: ids::AGENTS_ID,
+            accounts: vec![
+                AccountMeta::new_readonly(c, true),
+                AccountMeta::new(s[3].key(), false),
+                AccountMeta::new_readonly(s[4].key(), false),
+                AccountMeta::new_readonly(s[2].key(), false),
+                AccountMeta::new_readonly(ids::AGENTS_ID, false),
+            ],
+            data,
+        };
+        invoke_signed(
+            &ix,
+            &[s[1].clone(), s[3].clone(), s[4].clone(), s[2].clone(), s[0].clone()],
+            &[&[CALLER_SEED, &[bump]]],
+        )?;
+        Ok(())
+    }
+}
+
+/// Integration pass 2 (10 section 17 I-3, I-4): the market's addresses and the `Lease` layout,
+/// read by the armory and items without a crate dependency (the market depends on the armory).
+pub mod market {
+    use super::*;
+
+    /// `["escrow", item_mint]`: owner of a listed item's holding.
+    pub fn escrow(item_mint: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(&[b"escrow", item_mint.as_ref()], &ids::MARKET_ID).0
+    }
+    /// `["lease-escrow", item_mint]`: owner of a leased item's holding.
+    pub fn lease_escrow(item_mint: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(&[b"lease-escrow", item_mint.as_ref()], &ids::MARKET_ID).0
+    }
+    /// `["lease", item]`.
+    pub fn lease(item: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(&[b"lease", item.as_ref()], &ids::MARKET_ID).0
+    }
+    /// `["market-caller"]`: the market's signer of `revert_for_lease_end`.
+    pub fn caller() -> (Pubkey, u8) {
+        Pubkey::find_program_address(&[b"market-caller"], &ids::MARKET_ID)
+    }
+    /// `Lease.state` Active.
+    pub const LEASE_ACTIVE: u8 = 1;
+
+    /// Length of the optional lease suffix of `settle_equip`'s remaining accounts:
+    /// `[<MARKET_ID>, ["lease", item], lessor's token holding, lessor's quote holding]`.
+    pub const RENT_SUFFIX: usize = 4;
+
+    /// Splits the lease suffix off `rem` when it ends with one for `item` (10 section 17 I-7).
+    pub fn split_rent<'a, 'info>(
+        rem: &'a [AccountInfo<'info>],
+        item: &Pubkey,
+    ) -> (&'a [AccountInfo<'info>], Option<&'a [AccountInfo<'info>]>) {
+        let n = rem.len();
+        if n >= RENT_SUFFIX
+            && rem[n - RENT_SUFFIX].key() == ids::MARKET_ID
+            && rem[n - RENT_SUFFIX + 1].key() == lease(item)
+        {
+            (&rem[..n - RENT_SUFFIX], Some(&rem[n - RENT_SUFFIX..]))
+        } else {
+            (rem, None)
+        }
+    }
+
+    /// What the armory and items read of a `Lease` (discriminator, version, bump, lessor, item,
+    /// item_mint, token_mint, slot, rent_bps, fee_lamports, term_secs, starts_at, ends_at, state).
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct LeaseView {
+        pub lessor: Pubkey,
+        pub token_mint: Pubkey,
+        pub slot: u8,
+        pub rent_bps: u16,
+        pub ends_at: i64,
+        pub state: u8,
+    }
+
+    /// Reads a `Lease` owned by the market; `None` for an empty or foreign account.
+    pub fn read_lease(info: &AccountInfo) -> Option<LeaseView> {
+        if info.owner != &ids::MARKET_ID {
+            return None;
+        }
+        let d = info.try_borrow_data().ok()?;
+        if d.len() < 170 {
+            return None;
+        }
+        let key = |o: usize| Pubkey::try_from(&d[o..o + 32]).ok();
+        Some(LeaseView {
+            lessor: key(10)?,
+            token_mint: key(106)?,
+            slot: d[138],
+            rent_bps: u16::from_le_bytes([d[139], d[140]]),
+            ends_at: i64::from_le_bytes(d[161..169].try_into().ok()?),
+            state: d[169],
+        })
     }
 }

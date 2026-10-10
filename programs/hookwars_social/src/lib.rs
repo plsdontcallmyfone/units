@@ -1,4 +1,6 @@
 // Changed by Hookwars: new program (expansion, docs/spec/10-expansion.md sections 3, 6, 7).
+// Integration pass 2: SpendToken through transfer_from_protocol (I-1), ItemsAuthored and
+// RoyaltiesClaimed criteria (I-5), RaidPoints reads a Mercenary range too.
 //! `hookwars_social`: achievement badges and guild halls.
 //!
 //! **Badges** are units tokens that do not move. Spec 10 makes them soulbound with template 42
@@ -99,6 +101,12 @@ pub enum Criterion {
     RaidPoints { mint: Pubkey, min: u32 },
     /// The wallet holds an item of at least this level.
     ForgeLevel { min_level: u8 },
+    /// Integration pass 2 (10 section 17 I-5): the wallet authored at least `min` items (its
+    /// armory `AuthorCounter`).
+    ItemsAuthored { min: u64 },
+    /// Integration pass 2 (I-5): the wallet claimed at least `min_lamports` of bridged-SOL royalty
+    /// (its armory `ClaimCounter`).
+    RoyaltiesClaimed { min_lamports: u64 },
 }
 
 /// `BadgeType` at `["badge", id]`.
@@ -368,7 +376,8 @@ fn check_token(token_program: &AccountInfo, event_authority: &AccountInfo) -> Re
 
 /// Whether `recipient` meets `c`. `extra` are the criterion's accounts:
 /// FirstSiege: `[war_state]`; RaidPoints: `[mint, recipient's holding, raid item, war_config]`;
-/// ForgeLevel: `[item, recipient's holding of the item]`.
+/// ForgeLevel: `[item, recipient's holding of the item]`; ItemsAuthored: `[AuthorCounter]`;
+/// RoyaltiesClaimed: `[ClaimCounter]`.
 fn criterion_met(c: &Criterion, recipient: &Pubkey, extra: &[AccountInfo]) -> Result<bool> {
     use hookwars_common::{ids, pda};
     match *c {
@@ -404,7 +413,10 @@ fn criterion_met(c: &Criterion, recipient: &Pubkey, extra: &[AccountInfo]) -> Re
                     .map_err(|_| error!(SocialError::WrongAccount))?
             };
             require_keys_eq!(*item_info.key, pda::item(&item.item_mint).0, SocialError::WrongAccount);
-            if item.template_id != hookwars_common::template_id::RAID {
+            // Integration pass 2 (08 arsenal 2 request 3): a Mercenary keeps the same Raid range.
+            if item.template_id != hookwars_common::template_id::RAID
+                && item.template_id != hookwars_common::arsenal2::MERCENARY
+            {
                 return Ok(false);
             }
             let Some(slot) = m.slots.iter().find(|s| s.item == *item_info.key) else {
@@ -446,6 +458,22 @@ fn criterion_met(c: &Criterion, recipient: &Pubkey, extra: &[AccountInfo]) -> Re
             );
             let h = bordrless_token::client::read_holding(holding_info)?;
             Ok(h.owner == *recipient && h.mint == item.item_mint && h.amount == 1 && item.level >= min_level)
+        }
+        Criterion::ItemsAuthored { min } => {
+            let c = extra.first().ok_or(SocialError::WrongAccount)?;
+            require_keys_eq!(*c.owner, ids::ARMORY_ID, SocialError::WrongAccount);
+            require_keys_eq!(*c.key, pda::author_counter(recipient).0, SocialError::WrongAccount);
+            let v = hookwars_armory::state::AuthorCounter::try_deserialize(&mut &c.try_borrow_data()?[..])
+                .map_err(|_| error!(SocialError::WrongAccount))?;
+            Ok(v.items >= min)
+        }
+        Criterion::RoyaltiesClaimed { min_lamports } => {
+            let c = extra.first().ok_or(SocialError::WrongAccount)?;
+            require_keys_eq!(*c.owner, ids::ARMORY_ID, SocialError::WrongAccount);
+            require_keys_eq!(*c.key, pda::claim_counter(recipient).0, SocialError::WrongAccount);
+            let v = hookwars_armory::state::ClaimCounter::try_deserialize(&mut &c.try_borrow_data()?[..])
+                .map_err(|_| error!(SocialError::WrongAccount))?;
+            Ok(v.lamports >= min_lamports)
         }
     }
 }
@@ -823,7 +851,18 @@ pub mod hookwars_social {
                         }
                     })
                     .collect();
-                let ix = bordrless_token::client::transfer(treasury, *from_h.key, *to_h.key, *mint, None, extras, *amount);
+                // Integration pass 2 (10 section 17 I-1, R16, R24): a guild treasury pays out as a protocol
+                // source, so the token's own items do not cut the guild's spend.
+                let ix = bordrless_token::client::transfer_from_protocol(
+                    treasury,
+                    *from_h.key,
+                    *to_h.key,
+                    *mint,
+                    extras,
+                    *amount,
+                    crate::ID,
+                    treasury_seeds.iter().map(|x| x.to_vec()).collect(),
+                );
                 let mut infos = vec![
                     ctx.accounts.treasury.to_account_info(),
                     from_h.clone(),

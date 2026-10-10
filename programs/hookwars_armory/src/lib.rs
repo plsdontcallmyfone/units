@@ -2,6 +2,8 @@
 // list passed to init_equip), the Performance reader on the pool's ring, settle_bounty_bps;
 // security review 1: H-1 fail_stale, H-2 royalty recipients, M-1 finalize, M-2 proposal threshold, I-3;
 // security review 2, L-D: execute and the performance revert refresh a slot launch's pool registry.
+// Integration pass 2: badge equip by the agents caller, admin Soulbound item, close_proposal bond
+// guard, agent record calls, lease gate, revert_for_lease_end, listed claim refusal, badge counters.
 //! `hookwars_armory` (docs/spec/02-armory.md): templates, items as supply-1 tokens on the token
 //! standard, royalties and their claims, equip rules (holder vote with notice, performance revert,
 //! locked), equipping at launch (signed by the launchpad), loot minting (signed by the war program),
@@ -312,6 +314,13 @@ pub mod hookwars_armory {
             ArmoryError::ProposalNotFinal
         );
         require!(p.voters_open == 0, ArmoryError::VotesOpen);
+        // Integration pass 2 (09 section 21 item 6): a proposal a diplomat bonded stays open until
+        // the bond leaves `Posted`, or the bond's lamports would stay locked.
+        cpi::require_no_posted_bond(
+            &ctx.accounts.proposal.key(),
+            &ctx.accounts.bond_mark.to_account_info(),
+            ctx.accounts.bond.as_ref().map(|b| b.to_account_info()),
+        )?;
         Ok(())
     }
 
@@ -339,9 +348,26 @@ pub mod hookwars_armory {
         process_check_performance(ctx)
     }
 
+    /// Integration pass 2 (10 section 17 I-3): the market ends a lease. When `slot` still holds the
+    /// leased `item`, it is settled out and reverted to its launch item (or emptied), as a
+    /// performance revert does. Signed by `["market-caller"]` under the market.
+    pub fn revert_for_lease_end<'info>(
+        ctx: Context<'info, RevertForLeaseEnd<'info>>,
+        slot: u8,
+        item: Pubkey,
+    ) -> Result<()> {
+        process_revert_for_lease_end(ctx, slot, item)
+    }
+
     /// Forges two items of one template into one (02 section 9).
     pub fn forge(ctx: Context<Forge>) -> Result<()> {
         process_forge(ctx)
+    }
+
+    /// Integration pass 2 (10 section 17 I-5): creates `wallet`'s badge counters
+    /// (`["authored", wallet]`, `["claimed", wallet]`); permissionless, idempotent.
+    pub fn init_counters(ctx: Context<InitCounters>, wallet: Pubkey) -> Result<()> {
+        process_init_counters(ctx, wallet)
     }
 }
 
@@ -762,6 +788,10 @@ pub struct CloseProposal<'info> {
     pub proposer: UncheckedAccount<'info>,
     #[account(mut, close = proposer)]
     pub proposal: Box<Account<'info, Proposal>>,
+    /// CHECK: `["bond-mark", proposal]` under the agents program (checked in the handler).
+    pub bond_mark: UncheckedAccount<'info>,
+    /// CHECK: the bond the mark names, when a mark exists (checked in the handler).
+    pub bond: Option<UncheckedAccount<'info>>,
 }
 
 #[event_cpi]
@@ -791,6 +821,34 @@ pub struct CheckPerformance<'info> {
     #[account(mut)]
     pub open_proposal: Option<Box<Account<'info, Proposal>>>,
     pub equip: EquipCtx<'info>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+#[instruction(slot: u8)]
+pub struct RevertForLeaseEnd<'info> {
+    /// `["market-caller"]` under the market (checked in the handler).
+    pub market_caller: Signer<'info>,
+    #[account(seeds = [seeds::CONFIG], bump = config.bump)]
+    pub config: Box<Account<'info, ArmoryConfig>>,
+    #[account(mut, seeds = [seeds::SLOT_STATE, equip.token_mint.key().as_ref(), &[slot]], bump = slot_state.bump)]
+    pub slot_state: Box<Account<'info, SlotState>>,
+    pub equip: EquipCtx<'info>,
+}
+
+/// Integration pass 2 (I-5).
+#[derive(Accounts)]
+#[instruction(wallet: Pubkey)]
+pub struct InitCounters<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(init_if_needed, payer = payer, space = 8 + AuthorCounter::INIT_SPACE,
+        seeds = [seeds::AUTHORED, wallet.as_ref()], bump)]
+    pub author_counter: Box<Account<'info, AuthorCounter>>,
+    #[account(init_if_needed, payer = payer, space = 8 + ClaimCounter::INIT_SPACE,
+        seeds = [seeds::CLAIMED, wallet.as_ref()], bump)]
+    pub claim_counter: Box<Account<'info, ClaimCounter>>,
+    pub system_program: Program<'info, System>,
 }
 
 #[event_cpi]
@@ -996,7 +1054,12 @@ fn process_create_item(
     royalty_bps: u16,
 ) -> Result<()> {
     let a = &ctx.accounts;
-    require!(a.template.open_authoring, ArmoryError::TemplateClosed);
+    // Integration pass 2 (09 section 21 item 2): the armory admin may create an item of a closed
+    // template (the one Soulbound item).
+    require!(
+        a.template.open_authoring || a.author.key() == a.config.admin,
+        ArmoryError::TemplateClosed
+    );
     require!(
         royalty_bps <= a.config.params.max_royalty_bps,
         ArmoryError::RoyaltyTooHigh
@@ -1053,6 +1116,48 @@ fn process_create_item(
         source: source::AUTHORED,
         ts
     });
+    // Integration pass 2 (09 section 21 item 3): optional agent attribution, after the effects.
+    let (rest, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    bump_author_counter(rest, &author)?;
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.author.key(), hookwars_common::agents_record::ITEMS_AUTHORED, 0)?;
+    Ok(())
+}
+
+/// Integration pass 2 (10 section 17 I-5): the counter last in `rest` when it is `key`'s, owned
+/// here; the rest without it.
+fn take_counter<'a, 'info>(
+    rest: &'a [AccountInfo<'info>],
+    key: &Pubkey,
+) -> (&'a [AccountInfo<'info>], Option<&'a AccountInfo<'info>>) {
+    match rest.last() {
+        Some(a) if a.key == key && *a.owner == crate::ID => (&rest[..rest.len() - 1], Some(a)),
+        _ => (rest, None),
+    }
+}
+
+/// Bumps `author`'s `AuthorCounter` when the remaining accounts end with it.
+fn bump_author_counter<'info>(rest: &[AccountInfo<'info>], author: &Pubkey) -> Result<()> {
+    let (_, c) = take_counter(rest, &pda::author_counter(author).0);
+    let Some(c) = c else { return Ok(()) };
+    require!(c.is_writable, ArmoryError::WrongAccount);
+    let mut v = AuthorCounter::try_deserialize(&mut &c.try_borrow_data()?[..])?;
+    v.items = v.items.saturating_add(1);
+    v.try_serialize(&mut &mut c.try_borrow_mut_data()?[..])?;
+    Ok(())
+}
+
+/// Integration pass 2 (I-5): creates `wallet`'s `AuthorCounter` and `ClaimCounter` (anyone pays).
+fn process_init_counters(ctx: Context<InitCounters>, wallet: Pubkey) -> Result<()> {
+    let a = &mut ctx.accounts.author_counter;
+    if a.wallet == Pubkey::default() {
+        a.wallet = wallet;
+        a.bump = ctx.bumps.author_counter;
+    }
+    let c = &mut ctx.accounts.claim_counter;
+    if c.wallet == Pubkey::default() {
+        c.wallet = wallet;
+        c.bump = ctx.bumps.claim_counter;
+    }
     Ok(())
 }
 
@@ -1072,9 +1177,13 @@ fn process_create_composite<'info>(
         royalty_bps <= a.config.params.max_royalty_bps,
         ArmoryError::RoyaltyTooHigh
     );
-    require!(ctx.remaining_accounts.len() == modules.len(), ArmoryError::WrongAccount);
+    // Integration pass 2: an optional agent attribution suffix comes after the module templates.
+    let (rem, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    // I-5: an optional `AuthorCounter` after the module templates.
+    let (rem, counter) = take_counter(rem, &pda::author_counter(&a.author.key()).0);
+    require!(rem.len() == modules.len(), ArmoryError::WrongAccount);
     let mut fields: Vec<(u16, Params, Params)> = Vec::with_capacity(modules.len());
-    for (m, info) in modules.iter().zip(ctx.remaining_accounts.iter()) {
+    for (m, info) in modules.iter().zip(rem.iter()) {
         require_keys_eq!(*info.owner, crate::ID, ArmoryError::WrongAccount);
         require_keys_eq!(info.key(), pda::template(m.template_id).0, ArmoryError::WrongAccount);
         let t = Template::try_deserialize(&mut &info.try_borrow_data()?[..])?;
@@ -1149,6 +1258,10 @@ fn process_create_composite<'info>(
         source: source::AUTHORED,
         ts
     });
+    if let Some(c) = counter {
+        bump_author_counter(core::slice::from_ref(c), &ctx.accounts.author.key())?;
+    }
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.author.key(), hookwars_common::agents_record::ITEMS_AUTHORED, 0)?;
     Ok(())
 }
 
@@ -1232,6 +1345,9 @@ fn process_claim_royalty<'info>(
         h.mint == a.item.item_mint && h.owner == claimant && h.amount == 1 && !h.frozen,
         ArmoryError::NotItemOwner
     );
+    // Integration pass 2 (10 section 17 I-4, R31): royalties stay with a listed item and go to its
+    // buyer, so nothing may claim from the market's escrow while it is listed.
+    require_keys_neq!(claimant, hookwars_common::market::escrow(&a.item.item_mint), ArmoryError::ItemListed);
     let cut_mint = a.cut_mint.key();
     // Security review 1, H-2: the kit counts a protocol transfer's program-owned destination as an
     // excluded vault, so a royalty of a kit token must go to a wallet (a key on the curve), never to
@@ -1280,8 +1396,10 @@ fn process_claim_royalty<'info>(
         item_key.to_bytes().to_vec(),
         bump.to_vec(),
     ];
-    let extras: Vec<_> = ctx
-        .remaining_accounts
+    // Integration pass 2: the agent suffix and the `ClaimCounter` (I-5) are not token extras.
+    let (rest, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    let (rest, counter) = take_counter(rest, &pda::claim_counter(&claimant).0);
+    let extras: Vec<_> = rest
         .iter()
         .map(|i| {
             if i.is_writable {
@@ -1309,7 +1427,7 @@ fn process_claim_royalty<'info>(
         tp.clone(),
         ea.clone(),
     ];
-    infos.extend(ctx.remaining_accounts.iter().cloned());
+    infos.extend(rest.iter().cloned());
     let signer: &[&[u8]] = &[seeds::ROYALTY, item_key.as_ref(), &bump];
     anchor_lang::solana_program::program::invoke_signed(&ix, &infos, &[signer])?;
     emit_cpi!(RoyaltyClaimed {
@@ -1319,6 +1437,14 @@ fn process_claim_royalty<'info>(
         amount,
         ts: now()?
     });
+    let value = if cut_mint == hookwars_common::ids::BRIDGED_SOL_MINT { amount } else { 0 };
+    if let Some(c) = counter {
+        require!(c.is_writable, ArmoryError::WrongAccount);
+        let mut v = ClaimCounter::try_deserialize(&mut &c.try_borrow_data()?[..])?;
+        v.lamports = v.lamports.saturating_add(value);
+        v.try_serialize(&mut &mut c.try_borrow_mut_data()?[..])?;
+    }
+    hookwars_common::agents_record::record(rec, &crate::ID, &claimant, hookwars_common::agents_record::ROYALTY_CLAIM, value)?;
     Ok(())
 }
 
@@ -1438,12 +1564,19 @@ impl<'info> EquipCtx<'info> {
 
 fn process_equip_launch(ctx: Context<EquipLaunch>, entry: LaunchEquip) -> Result<()> {
     let mint_key = ctx.accounts.equip.token_mint.key();
-    require_keys_eq!(
-        ctx.accounts.launch_caller.key(),
-        pda::armory_caller(&mint_key).0,
-        ArmoryError::NotLaunchCaller
-    );
     let mint = read_mint(&ctx.accounts.equip.token_mint.to_account_info())?;
+    let caller = ctx.accounts.launch_caller.key();
+    if caller != pda::armory_caller(&mint_key).0 {
+        // Integration pass 2 (09 section 21 item 1, R28): the agents program equips a badge, and
+        // only a badge: one Locked Defense slot, the agents signer freezing, a Soulbound item.
+        require_keys_eq!(caller, cpi::agents_armory_caller(&mint_key), ArmoryError::NotLaunchCaller);
+        require!(cpi::is_badge(&mint) && entry.slot == 0, ArmoryError::NotBadge);
+        let item = ctx.accounts.equip.new_item.as_deref().ok_or(ArmoryError::NotBadge)?;
+        require!(
+            entry.item == Some(item.key()) && item.template_id == hookwars_common::template_id::SOULBOUND,
+            ArmoryError::NotBadge
+        );
+    }
     require!(entry.slot < mint.slot_count, ArmoryError::SlotIndexOutOfRange);
     let s = mint.slots[usize::from(entry.slot)];
     require!(
@@ -1508,6 +1641,12 @@ fn process_equip_launch(ctx: Context<EquipLaunch>, entry: LaunchEquip) -> Result
             ts: now()?
         });
     }
+    let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    if let Some(author) = ctx.accounts.equip.new_item.as_ref().map(|i| i.author) {
+        if author != ctx.accounts.equip.payer.key() {
+            hookwars_common::agents_record::record(rec, &crate::ID, &author, hookwars_common::agents_record::ITEMS_EQUIPPED, 0)?;
+        }
+    }
     Ok(())
 }
 
@@ -1541,6 +1680,11 @@ fn check_proposed(
     require_keys_eq!(i.key(), k, ArmoryError::WrongAccount);
     let t = template.ok_or(ArmoryError::WrongAccount)?;
     require_keys_eq!(t.key(), pda::template(i.template_id).0, ArmoryError::WrongAccount);
+    // Integration pass 2 (09 section 21 item 2): Soulbound lives only on agent badges.
+    require!(
+        i.template_id != hookwars_common::template_id::SOULBOUND || cpi::is_badge(mint),
+        ArmoryError::NotBadge
+    );
     require!(
         config.targets.len() <= usize::from(t.max_targets),
         ArmoryError::OverBounds
@@ -1617,6 +1761,21 @@ fn process_propose(
     let a = &ctx.accounts;
     let mint = read_mint(&a.token_mint.to_account_info())?;
     require!(a.slot_state.open_proposal.is_none(), ArmoryError::ProposalOpen);
+    // Integration pass 2 (10 section 17 I-3): a proposed item's `["lease", item]` under the market
+    // comes first in the remaining accounts. A lease that exists must be Active and name this token
+    // and slot; an item offered for lease, or leased elsewhere, is refused.
+    if let Some(k) = item {
+        let lease = ctx.remaining_accounts.first().ok_or(ArmoryError::WrongAccount)?;
+        require_keys_eq!(lease.key(), hookwars_common::market::lease(&k), ArmoryError::WrongAccount);
+        if let Some(l) = hookwars_common::market::read_lease(lease) {
+            require!(
+                l.state == hookwars_common::market::LEASE_ACTIVE
+                    && l.token_mint == a.token_mint.key()
+                    && l.slot == slot,
+                ArmoryError::ItemLeasedElsewhere
+            );
+        }
+    }
     check_proposed(
         &a.config.params,
         &mint,
@@ -1916,7 +2075,8 @@ fn process_execute<'info>(ctx: Context<'info, Execute<'info>>) -> Result<()> {
         .accounts
         .equip
         .equip_to(&params, slot, item, &config, false, false)?;
-    refresh_after_equip(&ctx.accounts.equip, slot, ctx.remaining_accounts)?;
+    let (rem, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    refresh_after_equip(&ctx.accounts.equip, slot, rem)?;
     ctx.accounts.proposal.status = proposal_status::EXECUTED;
     ctx.accounts.slot_state.open_proposal = None;
     emit_cpi!(EquipApplied {
@@ -1927,6 +2087,12 @@ fn process_execute<'info>(ctx: Context<'info, Execute<'info>>) -> Result<()> {
         by: equip_by::VOTE,
         ts
     });
+    // The equipped item's author is credited when someone else proposed it.
+    if let Some(author) = ctx.accounts.equip.new_item.as_ref().map(|i| i.author) {
+        if author != ctx.accounts.proposal.proposer {
+            hookwars_common::agents_record::record(rec, &crate::ID, &author, hookwars_common::agents_record::ITEMS_EQUIPPED, 0)?;
+        }
+    }
     Ok(())
 }
 
@@ -2233,6 +2399,8 @@ fn process_forge(ctx: Context<Forge>) -> Result<()> {
         forger,
         ts
     });
+    let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.forger.key(), hookwars_common::agents_record::ITEMS_FORGED, 0)?;
     Ok(())
 }
 
@@ -2266,3 +2434,43 @@ mod tests {
     }
 }
 
+
+/// Integration pass 2 (10 section 17 I-3): see `revert_for_lease_end`.
+fn process_revert_for_lease_end<'info>(
+    ctx: Context<'info, RevertForLeaseEnd<'info>>,
+    slot: u8,
+    item: Pubkey,
+) -> Result<()> {
+    require_keys_eq!(
+        ctx.accounts.market_caller.key(),
+        hookwars_common::market::caller().0,
+        ArmoryError::NotMarketCaller
+    );
+    let mint = read_mint(&ctx.accounts.equip.token_mint.to_account_info())?;
+    require!(slot < mint.slot_count, ArmoryError::SlotIndexOutOfRange);
+    // A vote may already have replaced the leased item: then there is nothing to revert.
+    if mint.slots[usize::from(slot)].item != item {
+        return Ok(());
+    }
+    let launch_item = ctx.accounts.slot_state.launch_item;
+    if launch_item == Some(item) {
+        return Ok(());
+    }
+    let ts = now()?;
+    let params = ctx.accounts.config.params;
+    let config = ctx.accounts.slot_state.launch_config.clone();
+    let (old, new) = ctx
+        .accounts
+        .equip
+        .equip_to(&params, slot, launch_item, &config, false, true)?;
+    refresh_after_equip(&ctx.accounts.equip, slot, ctx.remaining_accounts)?;
+    emit_cpi!(EquipApplied {
+        mint: ctx.accounts.equip.token_mint.key(),
+        slot,
+        old_item: old,
+        new_item: new,
+        by: equip_by::LEASE_END,
+        ts
+    });
+    Ok(())
+}

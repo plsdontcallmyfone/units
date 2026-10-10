@@ -15,7 +15,7 @@ use crate::instructions::admin::read_own;
 use crate::state::*;
 
 /// Accounts of `share_treaty_inflow`. Remaining: the kit `share`'s accounts and the bridge's
-/// `unwrap_sol`'s.
+/// `unwrap_sol`'s (the same set as `wrap_sol`'s, used to wrap bond forfeits first).
 #[event_cpi]
 #[derive(Accounts)]
 pub struct ShareTreatyInflow<'info> {
@@ -41,12 +41,22 @@ pub fn process_share_treaty_inflow<'info>(
 ) -> Result<()> {
     let mint = ctx.accounts.war_state.mint;
     let inbox = ctx.accounts.treaty_inbox.key();
+    let all = available(ctx.accounts.to_account_infos(), ctx.remaining_accounts);
+    let seeds = KeyedSeeds::new(INBOX_SEED, mint, ctx.accounts.war_state.inbox_bump);
+    // Integration pass 2 (09 section 21 item 4): bond forfeits arrive as lamports on the inbox
+    // address itself; wrap everything above its rent into its bridged-SOL holding first.
+    let loose = ctx
+        .accounts
+        .treaty_inbox
+        .lamports()
+        .saturating_sub(Rent::get()?.minimum_balance(0));
+    if loose > 0 && ctx.accounts.inbox_holding.owner == &TOKEN_ID {
+        invoke_built(&bordrless_bridge::client::wrap_sol(inbox, loose), &all, &[&seeds.seeds()])?;
+    }
     let amount = crate::instructions::setup::chest_balance(&ctx.accounts.inbox_holding)?;
     let bounty = bps_of(amount, u64::from(ctx.accounts.config.params.max_crank_bounty_bps));
     let share = amount.saturating_sub(bounty);
     require!(share >= MIN_SHARE_LAMPORTS, WarError::NothingToDo);
-    let all = available(ctx.accounts.to_account_infos(), ctx.remaining_accounts);
-    let seeds = KeyedSeeds::new(INBOX_SEED, mint, ctx.accounts.war_state.inbox_bump);
     invoke_built(
         &bordrless_kit::client::share(
             inbox,
@@ -74,6 +84,9 @@ pub fn process_share_treaty_inflow<'info>(
         bounty,
         cranker: ctx.accounts.cranker.key(),
     });
+    // Integration pass 2 (09 section 21 item 4): optional agent attribution, after the effects.
+    let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.cranker.key(), hookwars_common::agents_record::CRANK, amount)?;
     Ok(())
 }
 

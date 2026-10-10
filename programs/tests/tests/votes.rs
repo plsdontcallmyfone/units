@@ -93,6 +93,8 @@ fn a_vote_locks_in_place_and_equips_after_its_notice() {
         hookwars_armory::accounts::CloseProposal {
             proposer: voter.pubkey(),
             proposal,
+            bond_mark: Pubkey::find_program_address(&[b"bond-mark", proposal.as_ref()], &hookwars_common::ids::AGENTS_ID).0,
+            bond: None,
         },
         hookwars_armory::instruction::CloseProposal {},
     );

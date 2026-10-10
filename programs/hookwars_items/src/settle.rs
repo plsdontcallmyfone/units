@@ -1,5 +1,8 @@
 // Changed by Hookwars: new file (M3b); security review 2 M-A (stray tokens swept) and L-C (a missing
 // destination holding leaves only that module unsettled).
+// Changed by Hookwars: integration pass 2 (10 section 17 I-7, R32): a leased item's lessor is paid
+// its rent share out of the royalty; optional agent attribution suffix (09 section 21 item 5);
+// kit tokens pay token-side cuts only to on-curve wallets or mint vaults (review 1 H-2).
 //! `settle_equip` (04 section 2.5, 08 section 2.11): pays what a slot's item collected. For each
 //! module, token side and pool side apart: the royalty (`Item.royalty_bps`) to the item's royalty
 //! holding, the sender's bounty (the armory's `settle_bounty_bps`), the rest to the module's
@@ -188,7 +191,10 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
     ] {
         require_keys_eq!(info.key(), pda::holding(m, o), ItemsError::WrongAccount);
     }
-    let rest = ctx.remaining_accounts;
+    // Integration pass 2 (09 section 21 item 5): an optional agent attribution suffix comes last.
+    let (rest, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    // I-7: an optional lease suffix (before the agent suffix) names the item's `Lease`.
+    let (rest, rent_sfx) = hookwars_common::market::split_rent(rest, &item_key);
     require!(rest.len() >= 2 * modules.len(), ItemsError::WrongAccount);
     let (dests, locked) = rest.split_at(2 * modules.len());
 
@@ -219,6 +225,7 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
     let mut token_left: [u64; MAX_MODULES] = [0; MAX_MODULES];
     let mut pool_left: [u64; MAX_MODULES] = [0; MAX_MODULES];
     let (mut r_t, mut b_t, mut r_q, mut b_q, mut paid_t, mut paid_q, mut burned) = (0u64, 0u64, 0u64, 0u64, 0u64, 0u64, 0u64);
+    let kit = templates::runs_kit(&bordrless_token::client::read_mint(&a.mint.to_account_info())?);
     let any_token = token_owed.iter().any(|x| *x > 0);
     let any_quote = pool_owed.iter().any(|x| *x > 0);
     if any_token {
@@ -262,7 +269,12 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
                 Destination::Owner(o) => {
                     let d = &dests[2 * i];
                     require_keys_eq!(d.key(), pda::holding(&mint_key, &o), ItemsError::WrongAccount);
-                    if exists(d) {
+                    // Integration pass 2 (review 1 H-2): an off-curve payee of a kit token that is no
+                    // vault of the mint is never paid; the cut stays owed (init_equip refuses such
+                    // targets, so only an equip made before that check can reach here).
+                    if kit && !templates::kit_payee_ok(&mint_key, &o) {
+                        token_left[i] = x;
+                    } else if exists(d) {
                         cpi.pay(&state_info, &vault, d, &mint_info, left, state_seeds, true)?;
                         paid_t += left;
                         r_t += royalty;
@@ -298,6 +310,29 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
         cpi.burn(&state_info, &vault, &mint_info, stray, state_seeds)?;
         burned += stray;
     }
+    // I-7 (R32): while an `Active` lease names this (token, slot), the lessor's share of the royalty
+    // goes to the lessor's holdings; a holding that does not exist leaves that share with the
+    // royalty holding (the item returns to the lessor at the lease's end, so nothing is lost).
+    let (mut rent_t, mut rent_q, mut lessor) = (0u64, 0u64, Pubkey::default());
+    if let Some(r) = rent_sfx {
+        if let Some(l) = hookwars_common::market::read_lease(&r[1]) {
+            if l.state == hookwars_common::market::LEASE_ACTIVE && l.token_mint == mint_key && l.slot == slot {
+                lessor = l.lessor;
+                require_keys_eq!(r[2].key(), pda::holding(&mint_key, &lessor), ItemsError::WrongAccount);
+                require_keys_eq!(r[3].key(), pda::holding(&quote, &lessor), ItemsError::WrongAccount);
+                let bps = u128::from(l.rent_bps.min(10_000));
+                if exists(&r[2]) {
+                    rent_t = (u128::from(r_t) * bps / 10_000) as u64;
+                    cpi.pay(&state_info, &vault, &r[2], &mint_info, rent_t, state_seeds, true)?;
+                }
+                if exists(&r[3]) {
+                    rent_q = (u128::from(r_q) * bps / 10_000) as u64;
+                    cpi.pay(&pool_cuts_info, &a.pool_cuts_holding.to_account_info(), &r[3], &quote_info, rent_q, cuts_seeds, false)?;
+                }
+            }
+        }
+    }
+    let (r_t, r_q) = (r_t - rent_t, r_q - rent_q);
     cpi.pay(&state_info, &vault, &a.royalty_token.to_account_info(), &mint_info, r_t, state_seeds, true)?;
     cpi.pay(&state_info, &vault, &a.cranker_token.to_account_info(), &mint_info, b_t, state_seeds, true)?;
     let cuts_holding = a.pool_cuts_holding.to_account_info();
@@ -321,5 +356,16 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
         bounty_token: b_t,
         bounty_quote: b_q,
     });
+    if rent_t > 0 || rent_q > 0 {
+        emit!(crate::LeaseRentPaid {
+            mint: mint_key,
+            slot,
+            item: item_key,
+            lessor,
+            rent_token: rent_t,
+            rent_quote: rent_q,
+        });
+    }
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.cranker.key(), hookwars_common::agents_record::CRANK, total_quote)?;
     Ok(())
 }

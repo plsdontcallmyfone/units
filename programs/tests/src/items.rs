@@ -1,5 +1,5 @@
 // Changed by Hookwars: new file (M3b), helpers for the items program's callbacks, templates,
-// composites and settlement.
+// composites and settlement. Integration pass 2: derived registry entries.
 //! The items program in the LiteSVM suites, on top of the armory world ([`Hw`]):
 //! - a fake launch for a slot mint (`Launch` naming a pool key the suite controls, so a transfer
 //!   out of that key's holding is a "buy" and into it a "sell");
@@ -130,7 +130,7 @@ fn zeroed_war_state() -> hookwars_war::state::WarState {
     hookwars_war::state::WarState::try_deserialize(&mut &data[..]).expect("zeroed war state")
 }
 
-/// The registry of `item` on `mint`, resolved (fixed keys only, as `init_equip` writes them).
+/// The registry of `item` on `mint`, resolved (fixed keys; derived entries as `DERIVED`).
 pub fn registry_extras(hw: &Hw, mint: &Pubkey, item: &Pubkey) -> Vec<AccountMeta> {
     let key = Pubkey::find_program_address(&[HOOK_ACCOUNTS_SEED, mint.as_ref(), item.as_ref()], &ids::ITEMS_ID).0;
     let data = hw.w.env.account(&key).expect("registry").data;
@@ -145,7 +145,15 @@ pub fn registry_extras(hw: &Hw, mint: &Pubkey, item: &Pubkey) -> Vec<AccountMeta
                     AccountMeta::new_readonly(*k, false)
                 }
             }
-            AccountSource::Pda { .. } => panic!("derived extras are resolved by clients"),
+            // Integration pass 2 (08 arsenal 2 request 1): a derived entry (resolved per trade by
+            // clients) comes back as the `DERIVED` placeholder the suites substitute.
+            AccountSource::Pda { .. } => {
+                if e.writable {
+                    AccountMeta::new(hookwars_items::templates::DERIVED, false)
+                } else {
+                    AccountMeta::new_readonly(hookwars_items::templates::DERIVED, false)
+                }
+            }
         })
         .collect()
 }

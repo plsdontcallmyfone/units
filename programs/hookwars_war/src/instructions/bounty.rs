@@ -121,5 +121,8 @@ pub fn process_claim_bounty<'info>(
         points: spent,
         paid: pay,
     });
+    // Integration pass 2 (09 section 21 item 4): optional agent attribution, after the effects.
+    let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.owner.key(), hookwars_common::agents_record::BOUNTY, pay)?;
     Ok(())
 }
