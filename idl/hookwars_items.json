@@ -408,6 +408,41 @@
       ]
     },
     {
+      "name": "gate_before",
+      "docs": [
+        "Gating (18 section 3.5): the external gate runs an item's token-side modules for a",
+        "Token-2022 transfer. Signed by the gate's `[\"items-signer\"]` only; never records a cut."
+      ],
+      "discriminator": [
+        70,
+        93,
+        189,
+        40,
+        77,
+        209,
+        85,
+        149
+      ],
+      "accounts": [
+        {
+          "name": "hook_signer"
+        },
+        {
+          "name": "mint"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "GateRunArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "init_equip",
       "docs": [
         "Creates or resets the slot's `EquipState`, writes the item's registry, creates the equip",
@@ -1679,6 +1714,11 @@
       "code": 7104,
       "name": "SelfReferral",
       "msg": "a buyer cannot refer itself"
+    },
+    {
+      "code": 7105,
+      "name": "GateCut",
+      "msg": "an item on an external token may not take a cut"
     }
   ],
   "types": [
@@ -2034,6 +2074,35 @@
               "Whether `last_day`'s prize was given."
             ],
             "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GateRunArgs",
+      "docs": [
+        "What the gate passes besides the transfer: the binding's targets and role."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "token",
+            "type": {
+              "defined": {
+                "name": "TokenSlotArgs"
+              }
+            }
+          },
+          {
+            "name": "targets",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "role",
+            "type": "u8"
           }
         ]
       }

@@ -2095,6 +2095,67 @@
       ]
     },
     {
+      "name": "hand_over_minter",
+      "docs": [
+        "Gating: a template's minter hands issuance to another wallet."
+      ],
+      "discriminator": [
+        8,
+        149,
+        83,
+        88,
+        52,
+        201,
+        25,
+        226
+      ],
+      "accounts": [
+        {
+          "name": "minter",
+          "signer": true,
+          "relations": [
+            "supply"
+          ]
+        },
+        {
+          "name": "supply",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "supply.template_id",
+                "account": "Supply"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "new_minter",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "init",
       "docs": [
         "Creates the config; the program's upgrade authority signs."
@@ -2236,6 +2297,138 @@
       "args": [
         {
           "name": "wallet",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "init_supply",
+      "docs": [
+        "Gating (18 section 1.2): the admin creates a template's `Supply` (cap, loot reserve, minter",
+        "rule and minter). Queued (L-1). Once per template."
+      ],
+      "discriminator": [
+        211,
+        0,
+        180,
+        127,
+        125,
+        56,
+        66,
+        4
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "template",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  101,
+                  109,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "template_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "supply",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "template_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "queued",
+          "docs": [
+            "The queue entry (closed here; last, as in the other gated instructions)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "template_id",
+          "type": "u16"
+        },
+        {
+          "name": "max_supply",
+          "type": "u32"
+        },
+        {
+          "name": "loot_reserve",
+          "type": "u32"
+        },
+        {
+          "name": "minter_rule",
+          "type": "u8"
+        },
+        {
+          "name": "minter",
           "type": "pubkey"
         }
       ]
@@ -4138,6 +4331,193 @@
       ]
     },
     {
+      "name": "set_minter_rule",
+      "docs": [
+        "Gating: the admin switches a template's minter rule. Queued."
+      ],
+      "discriminator": [
+        4,
+        55,
+        195,
+        160,
+        204,
+        177,
+        137,
+        112
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "supply",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "supply.template_id",
+                "account": "Supply"
+              }
+            ]
+          }
+        },
+        {
+          "name": "queued",
+          "docs": [
+            "The queue entry (closed here)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "template_id",
+          "type": "u16"
+        },
+        {
+          "name": "minter_rule",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "set_supply_cap",
+      "docs": [
+        "Gating: the admin lowers a template's cap or changes its loot reserve. Queued. A cap only",
+        "goes down, never below what was made."
+      ],
+      "discriminator": [
+        26,
+        229,
+        174,
+        213,
+        12,
+        59,
+        220,
+        71
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "supply",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "supply.template_id",
+                "account": "Supply"
+              }
+            ]
+          }
+        },
+        {
+          "name": "queued",
+          "docs": [
+            "The queue entry (closed here)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "template_id",
+          "type": "u16"
+        },
+        {
+          "name": "max_supply",
+          "type": "u32"
+        },
+        {
+          "name": "loot_reserve",
+          "type": "u32"
+        }
+      ]
+    },
+    {
       "name": "set_template_economy",
       "docs": [
         "Integration pass 3 (E-7, 11 sections 1.2, 2.2, 5.4): the admin sets a template's economy",
@@ -4741,6 +5121,19 @@
       ]
     },
     {
+      "name": "Supply",
+      "discriminator": [
+        171,
+        89,
+        187,
+        81,
+        56,
+        72,
+        108,
+        218
+      ]
+    },
+    {
       "name": "Template",
       "discriminator": [
         43,
@@ -4990,6 +5383,19 @@
       ]
     },
     {
+      "name": "MinterSet",
+      "discriminator": [
+        177,
+        18,
+        23,
+        97,
+        1,
+        21,
+        149,
+        115
+      ]
+    },
+    {
       "name": "ParamsApplied",
       "discriminator": [
         79,
@@ -5104,6 +5510,32 @@
         109,
         203,
         29
+      ]
+    },
+    {
+      "name": "SupplyChanged",
+      "discriminator": [
+        253,
+        199,
+        35,
+        232,
+        241,
+        126,
+        162,
+        16
+      ]
+    },
+    {
+      "name": "SupplyInitialized",
+      "discriminator": [
+        122,
+        114,
+        248,
+        193,
+        165,
+        77,
+        219,
+        120
       ]
     },
     {
@@ -5510,6 +5942,26 @@
       "code": 6064,
       "name": "ModulesMismatch",
       "msg": "composites forge only with the same module sequence"
+    },
+    {
+      "code": 6065,
+      "name": "SupplyMissing",
+      "msg": "this template's supply account is missing"
+    },
+    {
+      "code": 6066,
+      "name": "SupplyExhausted",
+      "msg": "this template's supply is exhausted"
+    },
+    {
+      "code": 6067,
+      "name": "NotMinter",
+      "msg": "only the template's minter may issue its items"
+    },
+    {
+      "code": 6068,
+      "name": "CapMayOnlyFall",
+      "msg": "a supply cap may only go down, and never below what was made"
     }
   ],
   "types": [
@@ -6759,6 +7211,33 @@
       }
     },
     {
+      "name": "MinterSet",
+      "docs": [
+        "Gating (18 section 1.2): a template's minter rule or minter changed."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "minter_rule",
+            "type": "u8"
+          },
+          {
+            "name": "minter",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "Module",
       "docs": [
         "One module of a composite (08 2.2)."
@@ -7719,6 +8198,167 @@
       }
     },
     {
+      "name": "Supply",
+      "docs": [
+        "A template's supply (18 section 1.1)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "max_supply",
+            "docs": [
+              "Lifetime cap on `issued + drops`; 0 = uncapped (counted only)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "loot_reserve",
+            "docs": [
+              "Part of the cap kept for drops (loot and craft)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "issued",
+            "docs": [
+              "Copies made by authors (`create_item`, composite modules)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "drops",
+            "docs": [
+              "Copies made by `mint_loot` and `mint_crafted`."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "forged",
+            "docs": [
+              "Items made by `forge` (a transformation, not counted against the cap)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "burned",
+            "docs": [
+              "Items burned by `forge`."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "minter_rule",
+            "type": "u8"
+          },
+          {
+            "name": "minter",
+            "type": "pubkey"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "SupplyChanged",
+      "docs": [
+        "Gating (18 section 1.3): a template's supply counters after a create path, or its cap after",
+        "`set_supply_cap`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "max_supply",
+            "type": "u32"
+          },
+          {
+            "name": "loot_reserve",
+            "type": "u32"
+          },
+          {
+            "name": "issued",
+            "type": "u32"
+          },
+          {
+            "name": "drops",
+            "type": "u32"
+          },
+          {
+            "name": "forged",
+            "type": "u32"
+          },
+          {
+            "name": "burned",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SupplyInitialized",
+      "docs": [
+        "Gating (18 section 1.2): a template's `Supply` was created."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "max_supply",
+            "type": "u32"
+          },
+          {
+            "name": "loot_reserve",
+            "type": "u32"
+          },
+          {
+            "name": "minter_rule",
+            "type": "u8"
+          },
+          {
+            "name": "minter",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "Template",
       "docs": [
         "`Template` at `[\"template\", id]` (02 section 2.3)."
@@ -7868,11 +8508,19 @@
             }
           },
           {
+            "name": "supply_flags",
+            "docs": [
+              "Gating (18 section 1.1): bit 0 set once the template's `Supply` exists (from the first",
+              "reserved byte; zero for every template registered before)."
+            ],
+            "type": "u8"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                7
+                6
               ]
             }
           }
