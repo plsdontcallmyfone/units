@@ -27,11 +27,14 @@ test('the route list covers every page file of the site', async ({}, info) => {
 
 for (const [route, url] of ROUTES) {
   test(`${route} renders cleanly`, async ({ page, problems }, info) => {
-    const known = KNOWN[route];
-    if (known?.projects.includes(info.project.name)) test.fixme(true, known.reason);
+    const known = KNOWN[route]?.projects.includes(info.project.name) ? KNOWN[route] : undefined;
+    if (known && !known.checks) test.fixme(true, known.reason);
+    const skip = new Set(known?.checks ?? []);
+    if (known?.checks) info.annotations.push({ type: 'known', description: known.reason });
     const res = await page.goto(url);
     expect(res?.status(), 'the page answers').toBeLessThan(400);
-    await expect(page.locator('main')).toBeVisible();
+    await expect(page.getByRole('main').first()).toBeVisible();
+    if (!skip.has('one-main')) expect.soft(await page.getByRole('main').count(), 'main landmarks').toBe(1);
     await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
     // Let client reads and effects run.
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);

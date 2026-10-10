@@ -52,7 +52,9 @@ export default defineConfig({
   webServer: [
     {
       name: 'api',
-      command: 'node ../api/src/main.ts',
+      // Demo runs migrate their own database first (idempotent) so the API's history reads have
+      // their tables; the devnet project reads the devnet indexer's database as it is.
+      command: DEVNET ? 'node ../api/src/main.ts' : 'node ../indexer/src/main.ts migrate && node ../api/src/main.ts',
       url: `${api}/v1/status`,
       reuseExistingServer: REUSE,
       timeout: 60_000,

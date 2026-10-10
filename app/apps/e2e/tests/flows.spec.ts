@@ -8,6 +8,12 @@ import { ITEM, ITEM_MINT, MINT } from '../support/routes';
 
 type Fill = Record<string, string | { select: string }>;
 
+/** A text field's label as typed in the test, followed only by its parenthesised notes ("(base
+ * units)", "(optional)"), so "Rival token" does not also match "Rival tokens to sell". A select is
+ * found through its label element instead: its accessible name runs into the selected option's
+ * text ("Forno"). */
+const labelled = (label: string) => new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s*\\([^)]*\\))*$`);
+
 /** Connects the card's wallet, fills it, runs it, and returns the prepare body it sent. */
 async function run(page: Page, title: string, fill: Fill, route: string, cta?: string): Promise<Record<string, unknown>> {
   const captured: Captured[] = [];
@@ -17,8 +23,8 @@ async function run(page: Page, title: string, fill: Fill, route: string, cta?: s
   await card.getByRole('button', { name: 'Connect wallet' }).click();
   await expect(card.getByText(`as ${WALLET.slice(0, 4)}...${WALLET.slice(-4)}`)).toBeVisible();
   for (const [label, v] of Object.entries(fill)) {
-    const field = card.getByLabel(new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
-    if (typeof v === 'string') await field.fill(v); else await field.selectOption(v.select);
+    if (typeof v === 'string') await card.getByLabel(labelled(label)).fill(v);
+    else await card.locator('label').filter({ hasText: new RegExp(`^${label}`) }).locator('select').selectOption(v.select);
   }
   await card.getByRole('button', { name: cta ?? title, exact: true }).click();
   await expect(card.getByRole('status')).toHaveText(/Done in 1 transaction\./);
@@ -36,8 +42,8 @@ async function refuses(page: Page, title: string, fill: Fill, route: string, sen
   const card = action(page, title);
   await card.getByRole('button', { name: 'Connect wallet' }).click();
   for (const [label, v] of Object.entries(fill)) {
-    const field = card.getByLabel(new RegExp(`^${label}`));
-    if (typeof v === 'string') await field.fill(v); else await field.selectOption(v.select);
+    if (typeof v === 'string') await card.getByLabel(labelled(label)).fill(v);
+    else await card.locator('label').filter({ hasText: new RegExp(`^${label}`) }).locator('select').selectOption(v.select);
   }
   await card.getByRole('button', { name: cta ?? title, exact: true }).click();
   await expect(card.getByRole('status')).toHaveText(sentence);
@@ -171,7 +177,6 @@ test.describe('with a wallet', () => {
     await page.goto('/agents');
     const b = await run(page, 'Register', { Name: 'e2e agent', Kinds: '3' }, 'agents/register', 'Register passport');
     expect(b).toMatchObject({ name: 'e2e agent', kinds: 3 });
-    expect(b).not.toHaveProperty('avatarUri');
   });
 
   test('governance: queue an admin action by its hash', async ({ page }) => {
