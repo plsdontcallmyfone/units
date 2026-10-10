@@ -55,6 +55,7 @@ export function readEnv(env: EnvMap = process.env): RuntimeEnv {
     try {
       const u = new URL(rpc);
       if (u.search.length > 1) secretValues.push(u.search.slice(1));
+      for (const v of u.searchParams.values()) if (v.length >= 8) secretValues.push(v);
       if (u.password) secretValues.push(u.password);
       for (const seg of u.pathname.split('/')) if (seg.length >= 16) secretValues.push(seg);
     } catch { /* not a URL: the whole value is redacted already */ }

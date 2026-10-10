@@ -26,7 +26,7 @@ const item = hookwars.itemAddress(itemMint);
 const itemData = (templateId: number) => hookwars.itemCodec().encode({
   version: 1, bump: 255, itemMint, templateId, params: Array(hookwars.PARAM_FIELDS).fill(0),
   manifest: { kind: 0, tokenFlags: 0, poolFlags: 0, maxCutBuyBps: 0, maxCutSellBps: 0, maxCutTransferBps: 0, maxDiscountBps: 0, mayRefuse: false, mayBurn: false, dataBytes: 0, readsOtherPools: 0 },
-  author, royaltyBps: 0, level: 1, source: 0, equippedCount: 0, royaltyOwnerBump: 255, createdAt: 0n, hasWear: false, reserved: Buffer.alloc(31),
+  author, royaltyBps: 0, level: 1, source: 0, equippedCount: 0, royaltyOwnerBump: 255, createdAt: 0n, hasWear: false, accessMode: 0, exclusive: false, reserved: Buffer.alloc(29),
 });
 const launch = Buffer.alloc(400); pool.toBuffer().copy(launch, 74);
 
@@ -87,7 +87,7 @@ describe('market prepares', () => {
     const a = await built('market/lease/accept', 'market', 'accept_lease', { itemMint: S(itemMint) });
     expect(a.lessor).toBe(S(lessor));
     expect((await built('market/lease/withdraw', 'market', 'withdraw_offer', { itemMint: S(itemMint) })).lessor).toBe(S(lessor));
-    expect((await built('market/lease/end', 'market', 'end_lease', { itemMint: S(itemMint) })).lessor).toBe(S(lessor));
+    expect((await built('market/lease/end', 'market', 'end_lease', { itemMint: S(itemMint) }, 1)).lessor).toBe(S(lessor));
     // Review 3 M-5: with the slot no longer holding the item, the token mint alone follows the named accounts.
     const [end] = await PREPARES['market/lease/end/prepare']!.build({ owner: S(owner), itemMint: S(itemMint) }, conn);
     expect(end!.keys.slice(hookwars.coderOf('market').accountsOf('end_lease').length).map((k) => S(k.pubkey))).toEqual([S(tokenMint)]);

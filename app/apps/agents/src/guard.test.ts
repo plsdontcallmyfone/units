@@ -77,7 +77,7 @@ describe('URLs (M-10, L-9)', () => {
     const url = 'https://rpc.example.org/v2/abcdefghijklmnopqrstuvwx?api-key=sekret-value-123';
     const env = readEnv({ UNITS_RPC_URL: url });
     const log = memoryLogger(env.secrets());
-    log.info('rpc', { url, note: 'key sekret-value-123 and path abcdefghijklmnopqrstuvwx' });
+    log.log('info', 'rpc', { url, note: 'key sekret-value-123 and path abcdefghijklmnopqrstuvwx' });
     expect(log.lines.join('\n')).not.toMatch(/sekret-value-123|abcdefghijklmnopqrstuvwx/);
   });
 });
