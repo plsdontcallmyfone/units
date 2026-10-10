@@ -1562,6 +1562,207 @@
       "args": []
     },
     {
+      "name": "fuse",
+      "docs": [
+        "Integration pass 3 (08 wave F, section 2.9): the holder of every component fuses them into",
+        "one composite: each component is burned and becomes a module (its template and params, the",
+        "targets given here), in order. Remaining accounts: the components' templates in order, then",
+        "`(item, item mint (mut), holder's holding (mut))` per component, then the optional suffixes",
+        "`create_composite` takes. One-way: there is no unfuse."
+      ],
+      "discriminator": [
+        217,
+        196,
+        80,
+        243,
+        178,
+        186,
+        12,
+        156
+      ],
+      "accounts": [
+        {
+          "name": "author",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "template",
+          "docs": [
+            "The Composite template (id 41)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  101,
+                  109,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  41,
+                  0
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "minter",
+          "address": "GMD68dRY3cr58rLgwyNtxyGFjGRVg2RUzmeNo7X7CVPe"
+        },
+        {
+          "name": "item_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  116,
+                  101,
+                  109,
+                  45,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.items_minted",
+                "account": "ArmoryConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "item",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  116,
+                  101,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "composite",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient_holding",
+          "writable": true
+        },
+        {
+          "name": "token",
+          "accounts": [
+            {
+              "name": "token_program",
+              "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+            },
+            {
+              "name": "token_event_authority",
+              "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
+            },
+            {
+              "name": "system_program",
+              "address": "11111111111111111111111111111111"
+            }
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "targets",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "FuseTarget"
+              }
+            }
+          }
+        },
+        {
+          "name": "royalty_bps",
+          "type": "u16"
+        }
+      ]
+    },
+    {
       "name": "init",
       "docs": [
         "Creates the config; the program's upgrade authority signs."
@@ -1704,6 +1905,402 @@
         {
           "name": "wallet",
           "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "mint_composite",
+      "docs": [
+        "Integration pass 3 (08 section 2.9): `create_composite` whose module templates must be the",
+        "preset's, in its order. Remaining accounts: the preset, then what `create_composite` takes."
+      ],
+      "discriminator": [
+        176,
+        38,
+        17,
+        247,
+        1,
+        69,
+        65,
+        215
+      ],
+      "accounts": [
+        {
+          "name": "author",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "template",
+          "docs": [
+            "The Composite template (id 41)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  101,
+                  109,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  41,
+                  0
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "minter",
+          "address": "GMD68dRY3cr58rLgwyNtxyGFjGRVg2RUzmeNo7X7CVPe"
+        },
+        {
+          "name": "item_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  116,
+                  101,
+                  109,
+                  45,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.items_minted",
+                "account": "ArmoryConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "item",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  116,
+                  101,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "composite",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient_holding",
+          "writable": true
+        },
+        {
+          "name": "token",
+          "accounts": [
+            {
+              "name": "token_program",
+              "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+            },
+            {
+              "name": "token_event_authority",
+              "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
+            },
+            {
+              "name": "system_program",
+              "address": "11111111111111111111111111111111"
+            }
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "preset_id",
+          "type": "u16"
+        },
+        {
+          "name": "modules",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "Module"
+              }
+            }
+          }
+        },
+        {
+          "name": "royalty_bps",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "mint_crafted",
+      "docs": [
+        "Integration pass 3 (E-5, 11 section 5.3): craft's output. Only `[\"craft-signer\"]` under",
+        "craft may call it; the crafter receives the item (`source = CRAFTED`)."
+      ],
+      "discriminator": [
+        121,
+        196,
+        34,
+        30,
+        90,
+        249,
+        235,
+        177
+      ],
+      "accounts": [
+        {
+          "name": "craft_signer",
+          "docs": [
+            "Craft's `[\"craft-signer\"]` (checked in the handler)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "owner"
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "template",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  101,
+                  109,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "template_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "minter",
+          "address": "GMD68dRY3cr58rLgwyNtxyGFjGRVg2RUzmeNo7X7CVPe"
+        },
+        {
+          "name": "item_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  116,
+                  101,
+                  109,
+                  45,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.items_minted",
+                "account": "ArmoryConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "item",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  116,
+                  101,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "item_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient_holding",
+          "writable": true
+        },
+        {
+          "name": "armory_signer",
+          "address": "2NSNJ4W51G5ZZSc4wVqkjyR8yr5yzuEjquKv7iprzSHP"
+        },
+        {
+          "name": "items_program",
+          "address": "8wMqHBAWhKxw2fNpczHfMohKjowbUM4hGqQkoYPf93Gv"
+        },
+        {
+          "name": "token",
+          "accounts": [
+            {
+              "name": "token_program",
+              "address": "5yeVq5rEWWBRkBWiA49So9u4jpxeZQTeYsjQcFRwX618"
+            },
+            {
+              "name": "token_event_authority",
+              "address": "DDC3wgjnqERxZxZfnpPp85bMxtENvmuUULwbr9DeS61R"
+            },
+            {
+              "name": "system_program",
+              "address": "11111111111111111111111111111111"
+            }
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "crafter",
+          "type": "pubkey"
+        },
+        {
+          "name": "template_id",
+          "type": "u16"
+        },
+        {
+          "name": "param_min",
+          "type": {
+            "vec": "u32"
+          }
+        },
+        {
+          "name": "param_max",
+          "type": {
+            "vec": "u32"
+          }
+        },
+        {
+          "name": "recipe_id",
+          "type": "u16"
         }
       ]
     },
@@ -2181,6 +2778,100 @@
       ]
     },
     {
+      "name": "register_preset",
+      "docs": [
+        "Integration pass 3 (08 section 4.8): the admin registers a composite preset (the module",
+        "templates in order). Admin-direct like `register_template` (see L-1 in 13-integration-3)."
+      ],
+      "discriminator": [
+        138,
+        109,
+        237,
+        61,
+        79,
+        223,
+        29,
+        49
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "preset",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  101,
+                  115,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "u16"
+        },
+        {
+          "name": "template_ids",
+          "type": {
+            "vec": "u16"
+          }
+        },
+        {
+          "name": "name",
+          "type": "string"
+        }
+      ]
+    },
+    {
       "name": "register_template",
       "docs": [
         "Registers a template (02 section 3.1)."
@@ -2530,6 +3221,162 @@
       ]
     },
     {
+      "name": "set_item_protocol_bps",
+      "docs": [
+        "Integration pass 3 (E-2, R37): the admin sets `ITEM_PROTOCOL_BPS`, the protocol's share of",
+        "each token-side cut `settle_equip` settles. Admin-direct (see L-1 in 13-integration-3)."
+      ],
+      "discriminator": [
+        217,
+        215,
+        200,
+        89,
+        15,
+        147,
+        18,
+        249
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "item_protocol_bps",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "set_template_economy",
+      "docs": [
+        "Integration pass 3 (E-7, 11 sections 1.2, 2.2, 5.4): the admin sets a template's economy",
+        "fields. Admin-direct like `register_template` and `retire_template` (review 1 L-1 puts all",
+        "three behind the timelock; see 13-integration-3)."
+      ],
+      "discriminator": [
+        231,
+        55,
+        163,
+        193,
+        252,
+        188,
+        140,
+        231
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "template",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  101,
+                  109,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "template.id",
+                "account": "Template"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "template_id",
+          "type": "u16"
+        },
+        {
+          "name": "author_bps",
+          "type": "u16"
+        },
+        {
+          "name": "default_access",
+          "type": "u8"
+        },
+        {
+          "name": "allowed_access",
+          "type": "u8"
+        },
+        {
+          "name": "charges_on_create",
+          "type": "u32"
+        }
+      ]
+    },
+    {
       "name": "vote",
       "docs": [
         "Votes by locking tokens in place (02 section 6.3)."
@@ -2740,6 +3587,19 @@
       ]
     },
     {
+      "name": "Preset",
+      "discriminator": [
+        0,
+        20,
+        95,
+        225,
+        110,
+        88,
+        220,
+        190
+      ]
+    },
+    {
       "name": "Proposal",
       "discriminator": [
         26,
@@ -2846,6 +3706,19 @@
       ]
     },
     {
+      "name": "ItemCrafted",
+      "discriminator": [
+        19,
+        69,
+        109,
+        223,
+        116,
+        34,
+        30,
+        27
+      ]
+    },
+    {
       "name": "ItemCreated",
       "discriminator": [
         9,
@@ -2856,6 +3729,19 @@
         45,
         29,
         225
+      ]
+    },
+    {
+      "name": "ItemProtocolBpsSet",
+      "discriminator": [
+        51,
+        131,
+        46,
+        252,
+        22,
+        115,
+        138,
+        126
       ]
     },
     {
@@ -2924,6 +3810,19 @@
       ]
     },
     {
+      "name": "PresetRegistered",
+      "discriminator": [
+        164,
+        133,
+        125,
+        47,
+        20,
+        140,
+        224,
+        121
+      ]
+    },
+    {
       "name": "ProposalCreated",
       "discriminator": [
         186,
@@ -2960,6 +3859,19 @@
         230,
         105,
         189
+      ]
+    },
+    {
+      "name": "TemplateEconomySet",
+      "discriminator": [
+        131,
+        58,
+        187,
+        134,
+        5,
+        98,
+        78,
+        217
       ]
     },
     {
@@ -3265,6 +4177,21 @@
       "code": 6049,
       "name": "NotMarketCaller",
       "msg": "only the market may end a lease"
+    },
+    {
+      "code": 6050,
+      "name": "WearAccountsMissing",
+      "msg": "this template's items wear: pass the craft init-wear accounts"
+    },
+    {
+      "code": 6051,
+      "name": "NotCraftSigner",
+      "msg": "only craft's [\\craft-signer\\] may mint a crafted item"
+    },
+    {
+      "code": 6052,
+      "name": "NotItemHolder",
+      "msg": "the signer does not hold this item"
     }
   ],
   "types": [
@@ -3362,11 +4289,20 @@
             }
           },
           {
+            "name": "item_protocol_bps",
+            "docs": [
+              "Integration pass 3 (11 section 2.2, R37, E-2): the protocol's share of every token-side cut",
+              "`settle_equip` settles, taken first (`ITEM_PROTOCOL_BPS`, to set; 0 until the admin sets",
+              "it with `set_economy`). Paid to the admin's holding."
+            ],
+            "type": "u16"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                62
+                60
               ]
             }
           }
@@ -3698,6 +4634,25 @@
       }
     },
     {
+      "name": "FuseTarget",
+      "docs": [
+        "IDL-only stand-in for the (u8, u8) tuple: identical Borsh layout."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "start",
+            "type": "u8"
+          },
+          {
+            "name": "count",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "Item",
       "docs": [
         "`Item` at `[\"item\", item_mint]` (02 section 2.4)."
@@ -3770,13 +4725,62 @@
             "type": "i64"
           },
           {
+            "name": "has_wear",
+            "docs": [
+              "Integration pass 3 (E-3): a craft `Wear` exists for this item (made at creation when its",
+              "template's `charges_on_create` is above 0); the items engine then reads it last in the",
+              "registry and answers the default while it is dormant (R38)."
+            ],
+            "type": "bool"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                32
+                31
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ItemCrafted",
+      "docs": [
+        "Integration pass 3 (E-5): an item made by craft's `mint_crafted`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "recipe_id",
+            "type": "u16"
+          },
+          {
+            "name": "params",
+            "type": {
+              "array": [
+                "u32",
+                11
+              ]
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
           }
         ]
       }
@@ -3834,6 +4838,21 @@
           {
             "name": "ts",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ItemProtocolBpsSet",
+      "docs": [
+        "Integration pass 3 (E-2)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item_protocol_bps",
+            "type": "u16"
           }
         ]
       }
@@ -4464,6 +5483,65 @@
       }
     },
     {
+      "name": "Preset",
+      "docs": [
+        "Integration pass 3 (08 section 4.8): a composite preset at `[\"preset\", id]`: the module",
+        "templates in order; each minted composite chooses its own params inside their ceilings."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "id",
+            "type": "u16"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "template_ids",
+            "type": {
+              "vec": "u16"
+            }
+          },
+          {
+            "name": "registered_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PresetRegistered",
+      "docs": [
+        "Integration pass 3 (08 section 4.8): a composite preset registered."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u16"
+          },
+          {
+            "name": "template_ids",
+            "type": {
+              "vec": "u16"
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "Proposal",
       "docs": [
         "`Proposal` at `[\"proposal\", mint, slot, nonce]` (02 section 2.8)."
@@ -4946,13 +6024,65 @@
             "type": "i64"
           },
           {
+            "name": "author_bps",
+            "docs": [
+              "Integration pass 3 (E-7, 11 sections 1.2, 2.2, 5.4): the template author's share of each",
+              "item royalty and licence (R34), the access mode new items get, the modes allowed, and the",
+              "charges an item of this template starts with (0 = never wears)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "default_access",
+            "type": "u8"
+          },
+          {
+            "name": "allowed_access",
+            "type": "u8"
+          },
+          {
+            "name": "charges_on_create",
+            "type": "u32"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                32
+                24
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "TemplateEconomySet",
+      "docs": [
+        "Integration pass 3 (E-7)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "template_id",
+            "type": "u16"
+          },
+          {
+            "name": "author_bps",
+            "type": "u16"
+          },
+          {
+            "name": "default_access",
+            "type": "u8"
+          },
+          {
+            "name": "allowed_access",
+            "type": "u8"
+          },
+          {
+            "name": "charges_on_create",
+            "type": "u32"
           }
         ]
       }
