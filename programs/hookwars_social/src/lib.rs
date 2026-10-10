@@ -406,7 +406,7 @@ fn mark_item_claim<'info>(
     if have == 0 {
         return system_program::create_account(
             CpiContext::new_with_signer(
-                system_program.clone(),
+                *system_program.key,
                 system_program::CreateAccount { from: payer.clone(), to: marker.clone() },
                 &[signer],
             ),
@@ -419,7 +419,7 @@ fn mark_item_claim<'info>(
     if have < rent {
         system_program::transfer(
             CpiContext::new(
-                system_program.clone(),
+                *system_program.key,
                 system_program::Transfer { from: payer.clone(), to: marker.clone() },
             ),
             rent - have,
@@ -427,7 +427,7 @@ fn mark_item_claim<'info>(
     }
     system_program::assign(
         CpiContext::new_with_signer(
-            system_program.clone(),
+            *system_program.key,
             system_program::Assign { account_to_assign: marker.clone() },
             &[signer],
         ),
