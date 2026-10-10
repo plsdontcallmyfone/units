@@ -1,3 +1,4 @@
+// Changed by Hookwars: pass 4b: boss, coalition and rivalry errors.
 //! Errors (05 section 13, plus the ones the implementation needs).
 
 use anchor_lang::prelude::*;
@@ -92,4 +93,23 @@ pub enum WarError {
     NoTreatyTemplate,
     #[msg("the account passed is not the one expected")]
     WrongAccount,
+    // Pass 4b (10 sections 8, 11.1, 11.3).
+    #[msg("the token does not equip that item")]
+    ItemNotEquipped,
+    #[msg("the item is not of the template this step reads")]
+    WrongItem,
+    #[msg("the boss pool is sealed or not yet sealable")]
+    BossPoolState,
+    #[msg("this source has no share or has claimed it")]
+    NoBossShare,
+    #[msg("the coalition's members are invalid")]
+    InvalidCoalition,
+    #[msg("the coalition has ended or is dissolved")]
+    CoalitionClosed,
+    #[msg("the coalition has not ended yet, or still holds captured tokens")]
+    CoalitionNotDone,
+    #[msg("the contribution is above the item's cap or inside its interval")]
+    ContributionLimit,
+    #[msg("the rivalry is invalid, not live, or already open")]
+    RivalryState,
 }

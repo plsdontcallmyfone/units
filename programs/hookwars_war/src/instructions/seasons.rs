@@ -1,4 +1,4 @@
-// Changed by Hookwars: security review 2: raid volume capped by season funding (M-B)
+// Changed by Hookwars: security review 2: raid volume capped by season funding (M-B); pass 4b: the boss pool's share of the prize split (10 section 11.1)
 //! Seasons (05 section 10): opening, king of the hill in O(1) per call, and the prize, a share of
 //! protocol fees that already exist (R14).
 
@@ -215,6 +215,9 @@ pub struct SplitProtocolFees<'info> {
     /// The last winner's season (its `prize_paid` accumulates).
     #[account(mut)]
     pub winner_season: Option<Box<Account<'info, Season>>>,
+    /// Pass 4b: the running season's `BossPool`, when there is one (takes `boss_share_bps`).
+    #[account(mut)]
+    pub boss_pool: Option<Box<Account<'info, BossPool>>>,
     pub system_program: Program<'info, System>,
 }
 
@@ -282,7 +285,27 @@ pub fn process_split_protocol_fees<'info>(
             )?;
         }
     }
-    let rest = available_lamports - to_winner;
+    // Pass 4b (10 section 11.1): the boss pool's share, of the same amount.
+    let mut to_boss = 0u64;
+    if let Some(pool) = ctx.accounts.boss_pool.as_mut() {
+        require_keys_eq!(
+            pool.key(),
+            BossPool::address(ctx.accounts.config.current_season).0,
+            WarError::WrongAccount
+        );
+        require!(!pool.sealed, WarError::BossPoolState);
+        to_boss = bps_of(available_lamports, u64::from(params.boss_share_bps));
+        pool.funded = pool.funded.saturating_add(to_boss);
+        let (season, funded) = (pool.season, pool.funded);
+        let info = pool.to_account_info();
+        transfer_lamports(&all, &vault_seeds.seeds(), vault, &info, to_boss)?;
+        emit_cpi!(BossPoolFunded {
+            season,
+            amount: to_boss,
+            funded,
+        });
+    }
+    let rest = available_lamports - to_winner - to_boss;
     let bounty = bps_of(rest, u64::from(params.max_crank_bounty_bps));
     let to_treasury = rest - bounty;
     transfer_lamports(

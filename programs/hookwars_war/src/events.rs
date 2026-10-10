@@ -1,4 +1,4 @@
-// Changed by Hookwars: security review 1: RazeWaited (M-3)
+// Changed by Hookwars: security review 1: RazeWaited (M-3); pass 4b: boss, coalition, rivalry events
 //! Events, all emitted by self-CPI (`emit_cpi!`), with the names 06 uses (05 section 12).
 
 use anchor_lang::prelude::*;
@@ -228,4 +228,96 @@ pub struct PendingCancelled {
     pub what: u8,
     pub season: u32,
     pub eta: i64,
+}
+
+// ---- pass 4b (10 sections 8, 11.1, 11.3) -----------------------------------------------------------
+
+#[event]
+pub struct BossPoolOpened {
+    pub season: u32,
+    pub boss_mint: Pubkey,
+}
+
+#[event]
+pub struct BossPoolFunded {
+    pub season: u32,
+    pub amount: u64,
+    pub funded: u64,
+}
+
+#[event]
+pub struct BossPoolSealed {
+    pub season: u32,
+    pub to_share: u64,
+    pub total_volume: u64,
+    pub sources: u8,
+}
+
+#[event]
+pub struct BossShareClaimed {
+    pub season: u32,
+    pub source_mint: Pubkey,
+    pub volume: u64,
+    pub amount: u64,
+}
+
+#[event]
+pub struct CoalitionFormed {
+    pub id: u32,
+    pub members: Vec<Pubkey>,
+    pub ends_at: i64,
+}
+
+#[event]
+pub struct CoalitionContributed {
+    pub id: u32,
+    pub mint: Pubkey,
+    pub amount: u64,
+    pub contributed: u64,
+}
+
+#[event]
+pub struct CoalitionSiegeExecuted {
+    pub id: u32,
+    pub rival_mint: Pubkey,
+    pub spent: u64,
+    pub bought: u64,
+    pub bounty: u64,
+    pub cranker: Pubkey,
+}
+
+#[event]
+pub struct CoalitionRazed {
+    pub id: u32,
+    pub rival_mint: Pubkey,
+    pub sold: u64,
+    pub got: u64,
+    pub bounty: u64,
+}
+
+#[event]
+pub struct CoalitionDissolved {
+    pub id: u32,
+    pub returned: Vec<u64>,
+}
+
+#[event]
+pub struct RivalryOpened {
+    pub mint: Pubkey,
+    pub rival_mint: Pubkey,
+    pub budget: u64,
+    pub ends_at: i64,
+}
+
+/// `won`: this token's raid volume from the rival beat the rival's from it (score and badge only;
+/// nothing moves between the chests, R36).
+#[event]
+pub struct RivalrySettled {
+    pub mint: Pubkey,
+    pub rival_mint: Pubkey,
+    pub ours: u64,
+    pub theirs: u64,
+    pub won: bool,
+    pub spent: u64,
+    pub early: bool,
 }

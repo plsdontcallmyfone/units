@@ -1,4 +1,4 @@
-// Changed by Hookwars: security review 1: the bounty rate capped by bounty_max_point_bps (M-6)
+// Changed by Hookwars: security review 1: the bounty rate capped by bounty_max_point_bps (M-6); pass 4b: bounties leave a live rivalry's budget alone
 //! `claim_bounty`: a holder turns raid points into SOL from the chest (05 section 7).
 
 use anchor_lang::prelude::*;
@@ -80,7 +80,8 @@ pub fn process_claim_bounty<'info>(
     let pay = u64::from(points)
         .saturating_mul(rate)
         .min(params.bounty_max_per_claim)
-        .min(balance_now);
+        // Pass 4b (10 section 11.3): a live rivalry's budget is not for bounties.
+        .min(balance_now.saturating_sub(ctx.accounts.war_state.rivalry.reserved(Clock::get()?.unix_timestamp)));
     require!(pay > 0, WarError::ChestInsufficient);
     let spent = pay.div_ceil(rate).min(u64::from(points)) as u32;
 
