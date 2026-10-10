@@ -82,8 +82,23 @@ for (const [n, st] of plan.steps.entries()) {
     web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
     ix,
   );
-  const sig = await web3.sendAndConfirmTransaction(conn, tx, [deployer], { commitment: 'confirmed' });
+  // The public devnet RPC answers bursts with 429 (seen on the first run, 2026-10-10): retry with a
+  // pause, and count a step whose account appeared meanwhile as landed (its first send went through).
+  let sig = null;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      sig = await web3.sendAndConfirmTransaction(conn, tx, [deployer], { commitment: 'confirmed' });
+      break;
+    } catch (e) {
+      await new Promise((r) => setTimeout(r, 5000 * attempt));
+      const landed = st.creates ? (await conn.getAccountInfo(new web3.PublicKey(st.creates), 'confirmed')) !== null : false;
+      if (landed) { sig = '(landed; signature not returned by the RPC)'; break; }
+      if (attempt >= 6) throw e;
+      console.log(`  [${st.step}] retry ${attempt}: ${String(e.message ?? e).slice(0, 120)}`);
+    }
+  }
   console.log(`  [${st.step}] sent ${sig}: ${st.label}`);
   sent += 1;
+  await new Promise((r) => setTimeout(r, 400));
 }
 console.log(`done: ${sent} sent, ${skipped} already done`);

@@ -11,7 +11,7 @@
 import { PublicKey, TransactionInstruction, type AccountMeta, type Connection } from '@solana/web3.js';
 import { activeSlots, decodeSlotMint } from './accounts.ts';
 import { decodeHookAccountList, resolveHookAccounts } from '../hooks.ts';
-import { idlIx } from './from-idl.ts';
+import { idlData, idlIx } from './from-idl.ts';
 import {
   ARMORY_ID, ITEMS_ID, LAUNCH_ID, SWAP_ID, TOKEN_ID,
   armoryCallerAddress, armoryConfigAddress, equipStateAddress, holdingAddr, itemRegistryAddress, launchAddr, poolCutsAddress,
@@ -113,7 +113,9 @@ export function createPreparedLaunch(creator: PublicKey, mint: PublicKey, treasu
   const base = upLaunch.createLaunch(creator, mint, treasury, quoteMint, lpFeeBps, args);
   const pc = poolCutsAddress(mint);
   const keys = [...base.keys, rw(preparedLaunchAddress(mint)), ro(pc), rw(holdingAddr(quoteMint, pc)), ...itemRegistries.map(ro), ...slices];
-  const step = idlIx('launch', 'create_prepared_launch', {}, { args }).data;
+  // The accounts are laid out above (the IDL names them since the regenerated launch IDL), so only
+  // the data comes from the IDL.
+  const step = idlData('launch', 'create_prepared_launch', { args });
   return new TransactionInstruction({ programId: LAUNCH_ID, keys, data: step });
 }
 

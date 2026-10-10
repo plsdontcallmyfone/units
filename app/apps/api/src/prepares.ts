@@ -9,7 +9,7 @@ import {
   AddressLookupTableAccount, AddressLookupTableProgram, ComputeBudgetProgram, Connection, PublicKey, TransactionMessage, VersionedTransaction,
   type AccountMeta, type TransactionInstruction,
 } from '@solana/web3.js';
-import { hookwars, decodeLaunch, decodeKitConfig, decodePool, decodeLaunchConfig, launchHookExtras, launchPoolAddress, launchRulesFromInput, checkProtocolLookupTable, token, LAUNCH_CONFIG, companion, companionCreatorAddress, COMPANION_DEFAULTS, type CompanionArgs } from '@hookwars/sdk';
+import { hookwars, holderVaultAddress, decodeLaunch, decodeKitConfig, decodePool, decodeLaunchConfig, launchHookExtras, launchPoolAddress, launchRulesFromInput, checkProtocolLookupTable, token, LAUNCH_CONFIG, companion, companionCreatorAddress, COMPANION_DEFAULTS, type CompanionArgs } from '@hookwars/sdk';
 import type { Pool as Db } from 'pg';
 import { EXPANSION_PREPARES } from './expansion-prepares.ts';
 import { SOCIAL_PREPARES } from './social-prepares.ts';
@@ -406,8 +406,15 @@ export async function launchStages(b: Body, conn: Connection, companionLaunch = 
   const stages: Stage[] = [];
   const first: TransactionInstruction[] = companionLaunch ? [companion.create(owner, b.beneficiary === undefined ? owner : pk(b, 'beneficiary'), mint, companionArgs(b))] : [];
   first.push(step(hookwars.prepareLaunch(creator, mint, { name, symbol, uri, creatorFeeBps, rules, slots })));
-  stages.push({ label: companionLaunch ? 'Create the companion and prepare the launch' : 'Prepare the launch', ixs: first, extraSigners: ['mint'], simulate: !companionLaunch, tables: [] });
+  // A resumed launch (the mint already prepared): the prepare stage landed before, and simulating it
+  // again only fails on the existing mint, so it is left out and the equips follow.
+  const prepared = (await conn.getAccountInfo(mint, 'confirmed')) !== null;
+  if (!prepared) stages.push({ label: companionLaunch ? 'Create the companion and prepare the launch' : 'Prepare the launch', ixs: first, extraSigners: ['mint'], simulate: !companionLaunch, tables: [] });
   const armory = new PublicKey(PROGRAM_IDS.armory);
+  // Rules that install a kit module put the kit, Locked, in slot 0 of the mint (bordrless_launch
+  // `prepare_launch`); the requested slots follow it (found on the devnet drill, 2026-10-10).
+  const kitSlot = rulesIn.holderFeeBuyBps > 0 || rulesIn.holderFeeSellBps > 0 || rulesIn.maxWalletBps > 0 || rulesIn.creatorLockDays > 0 || rulesIn.earlyWindowSecs > 0 ? 1 : 0;
+  if (req.length + kitSlot > 4) throw new PrepareError(400, 'BadRequest', 'These rules take slot 0 for the kit, so at most 3 more slots fit.');
   for (let i = 0; i < req.length; i++) {
     const r = req[i]!;
     if (!r.launchItem) continue;
@@ -417,11 +424,11 @@ export async function launchStages(b: Body, conn: Connection, companionLaunch = 
     if (!info || !info.owner.equals(armory)) throw new PrepareError(409, 'NoItem', `slot ${i}: no such item on this cluster.`);
     const it = hookwars.itemCodec().decode(info.data) as { templateId: number; manifest: { tokenFlags: number; poolFlags: number } };
     const targets = (r.targets ?? []).slice(0, MAX_TARGETS).map((x) => new PublicKey(x));
-    const entry = { slot: i, item, config: { targets, role: 0 }, noticeSecs: Number.isInteger(r.noticeSecs) && r.noticeSecs >= 0 ? r.noticeSecs : 0, rule: null };
+    const entry = { slot: i + kitSlot, item, config: { targets, role: 0 }, noticeSecs: Number.isInteger(r.noticeSecs) && r.noticeSecs >= 0 ? r.noticeSecs : 0, rule: null };
     const tokenCuts = (it.manifest.tokenFlags & 64) !== 0; const poolCuts = it.manifest.poolFlags !== 0;
     const mode = (it as { accessMode?: number }).accessMode ?? 0;
     const eq = hookwars.equipLaunch(creator, mint, QUOTE, entry, { item, templateId: it.templateId, tokenCuts, poolCuts, composite: it.templateId === 41 }, hookwars.accessProof(mode, item, mint));
-    stages.push({ label: `Equip slot ${i}`, ixs: [step(hookwars.equipPrepared(creator, mint, eq))], extraSigners: [], simulate: false, tables: [] });
+    stages.push({ label: `Equip slot ${i + kitSlot}`, ixs: [step(hookwars.equipPrepared(creator, mint, eq))], extraSigners: [], simulate: false, tables: [] });
   }
   return stages;
 }
@@ -445,7 +452,9 @@ export async function launchPhase(conn: Connection, owner: PublicKey, mint: Publ
   const treasury = decodeLaunchConfig(cfg.data).treasury;
   const pool = launchPoolAddress(mint, QUOTE, LP_FEE_BPS);
   const launch = hookwars.launchAddr(mint);
-  const s = await hookwars.fetchTokenHookSlices(conn, { mint, source: holding(mint, launch), destination: holding(mint, pool), authority: launch, sourceOwner: launch, destinationOwner: pool });
+  // The kit writes its registry inside the launch, so its slice for the deposit comes from the rules.
+  const rewards = args.rules.holderFeeBuyBps > 0 || args.rules.holderFeeSellBps > 0;
+  const s = await hookwars.fetchTokenHookSlices(conn, { mint, source: holding(mint, launch), destination: holding(mint, pool), authority: launch, sourceOwner: launch, destinationOwner: pool, kitRewardVault: rewards ? holderVaultAddress(mint, QUOTE) : null });
   if (!s) throw new PrepareError(409, 'NotPrepared', 'This mint is not a prepared slot launch.');
   const created = hookwars.createPreparedLaunch(creator, mint, treasury, QUOTE, LP_FEE_BPS, args, poolItemRegistries(m, mint), hookwars.sliceAccounts(s));
   const create = companionLaunch ? hookwars.companionLaunchSlots(owner, mint, created) : created;
@@ -466,9 +475,11 @@ export async function launchPhase(conn: Connection, owner: PublicKey, mint: Publ
   const local = new AddressLookupTableAccount({ key: table, state: { deactivationSlot: BigInt('18446744073709551615'), lastExtendedSlot: 0, lastExtendedSlotStartIndex: 0, authority: owner, addresses: addrs } });
   stages.push({ label: 'Launch', ixs: [create], extraSigners: create.keys.some((k) => k.isSigner && k.pubkey.equals(mint)) ? ['mint'] : [], simulate: false, tables: [local] });
   const raids = req.some((r) => r.templateId === 1 || r.templateId === 2);
-  const after: TransactionInstruction[] = [hookwars.initWar(owner, mint)];
+  // `init_war` refuses a mint with no War slot (MissingWarSlot, seen on the devnet drill), so only a
+  // war token gets its war state; the raid ledger follows any Raid or Shield item.
+  const after: TransactionInstruction[] = req.some((r) => r.kind === 'war') ? [hookwars.initWar(owner, mint)] : [];
   if (raids) after.push(hookwars.initRaidLedger(owner, mint));
-  stages.push({ label: 'War chest', ixs: after, extraSigners: [], simulate: false, tables: [] });
+  if (after.length) stages.push({ label: after.length > 1 || req.some((r) => r.kind === 'war') ? 'War chest' : 'Raid ledger', ixs: after, extraSigners: [], simulate: false, tables: [] });
   return stages;
 }
 

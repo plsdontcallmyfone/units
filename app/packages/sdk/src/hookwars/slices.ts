@@ -9,7 +9,8 @@
  * resolved against `[signer, mint, source, destination, authority]` as upstream resolves them.
  */
 import { PublicKey, type AccountMeta, type Connection } from '@solana/web3.js';
-import { decodeHookAccountList, resolveHookAccounts } from '../hooks.ts';
+import { decodeHookAccountList, kitHookExtras, resolveHookAccounts } from '../hooks.ts';
+import { KIT_PROGRAM } from '../addresses.ts';
 import { activeSlots, decodeSlotMint, type SlotData, type SlotMintData } from './accounts.ts';
 import { TOKEN_ID, tokenHookSigner } from './addresses.ts';
 
@@ -48,6 +49,10 @@ export interface SliceArgs {
   mint: PublicKey; source: PublicKey; destination: PublicKey; authority: PublicKey;
   sourceOwner?: PublicKey; destinationOwner?: PublicKey;
   op?: SlotOp;
+  /** A prepared launch's deposit, before the kit has written its registry: the kit slot's extras
+   * are known without it (`bordrless_kit::client::hook_extras`), the reward vault with holder
+   * rewards or `null` without (found on the devnet drill, 2026-10-10). */
+  kitRewardVault?: PublicKey | null;
 }
 
 /** The registry of a slot's item: `["bordrless-hook-accounts", mint, item]` under the item's program;
@@ -69,6 +74,10 @@ export function resolveSlices(mint: SlotMintData, args: SliceArgs, registries: M
     if (slot.extraCount > 0) {
       const reg = registries.get(slotRegistryAddress(slot, args.mint).toBase58());
       const list = reg ? decodeHookAccountList(reg) : null;
+      if (!list && args.kitRewardVault !== undefined && slot.program.equals(KIT_PROGRAM)) {
+        slices.push({ slot: i, program: slot.program, signer, extras: kitHookExtras(args.mint, args.kitRewardVault) });
+        return;
+      }
       if (!list) throw new Error(`slot ${i}: its registry is missing; the slot takes ${slot.extraCount} extras`);
       extras = resolveHookAccounts(list, [signer, args.mint, args.source, args.destination, args.authority], args.sourceOwner, args.destinationOwner);
       if (extras.length !== slot.extraCount) throw new Error(`slot ${i}: registry lists ${extras.length} extras, the slot takes ${slot.extraCount} (SlotAccountsMismatch)`);

@@ -140,5 +140,11 @@ export function idlIx(program: string, name: string, accounts: Record<string, Pu
   return new TransactionInstruction({ programId: c.programId, keys: [...c.metas(name, accounts, args), ...remaining], data });
 }
 
+/** The data of `program::name(args)` alone (discriminator and arguments), for a builder that lays
+ * out the accounts itself. */
+export function idlData(program: string, name: string, args: Record<string, unknown> = {}): Buffer {
+  return Buffer.concat([Buffer.from(coderOf(program).instruction(name).discriminator), encode({ struct: idlArgs(program, name) }, args)]);
+}
+
 /** The program id an IDL declares. */
 export function idlProgramId(program: string): PublicKey { return coderOf(program).programId; }
