@@ -9,7 +9,7 @@ import {
   AddressLookupTableAccount, AddressLookupTableProgram, ComputeBudgetProgram, Connection, PublicKey, TransactionMessage, VersionedTransaction,
   type AccountMeta, type TransactionInstruction,
 } from '@solana/web3.js';
-import { hookwars, holderVaultAddress, decodeLaunch, decodeKitConfig, decodePool, decodeLaunchConfig, launchHookExtras, launchPoolAddress, launchRulesFromInput, checkProtocolLookupTable, token, LAUNCH_CONFIG, companion, companionCreatorAddress, COMPANION_DEFAULTS, type CompanionArgs } from '@hookwars/sdk';
+import { hookwars, holderVaultAddress, programDataAddress, decodeLaunch, decodeKitConfig, decodePool, decodeLaunchConfig, launchHookExtras, launchPoolAddress, launchRulesFromInput, checkProtocolLookupTable, token, LAUNCH_CONFIG, companion, companionCreatorAddress, COMPANION_DEFAULTS, type CompanionArgs } from '@hookwars/sdk';
 import type { Pool as Db } from 'pg';
 import { EXPANSION_PREPARES } from './expansion-prepares.ts';
 import { SOCIAL_PREPARES } from './social-prepares.ts';
@@ -84,12 +84,21 @@ export const PREPARES: Record<string, PrepareDef> = {
       const item = b.item ? pk(b, 'item') : null;
       // Pass 4a: a Gated, Licensed or Leased item carries its access proof.
       let proof: AccountMeta[] = [];
+      let template: { address: PublicKey; program: PublicKey; programData: PublicKey } | undefined;
       if (item) {
         const info = await conn.getAccountInfo(item, 'confirmed');
-        const mode = info ? (hookwars.itemCodec().decode(info.data) as { accessMode?: number }).accessMode ?? 0 : 0;
-        proof = hookwars.accessProof(mode, item, mint);
+        if (!info) throw new PrepareError(404, 'NoSuchItem', 'The proposed item does not exist.');
+        const it = hookwars.itemCodec().decode(info.data) as { templateId: number; accessMode?: number };
+        proof = hookwars.accessProof(it.accessMode ?? 0, item, mint);
+        // The armory checks the proposed item's template and its program's deploy slot (found on the
+        // devnet drill: without them `propose` is refused with WrongAccount).
+        const address = hookwars.templateAddress(it.templateId);
+        const ti = await conn.getAccountInfo(address, 'confirmed');
+        if (!ti) throw new PrepareError(409, 'NoTemplate', 'The item\'s template is not registered on this cluster.');
+        const program = (hookwars.templateCodec().decode(ti.data) as { program: PublicKey }).program;
+        template = { address, program, programData: programDataAddress(program) };
       }
-      return [hookwars.propose(pk(b, 'owner'), mint, slot, state.nextNonce, item, targets, role, undefined, proof)];
+      return [hookwars.propose(pk(b, 'owner'), mint, slot, state.nextNonce, item, targets, role, template, proof)];
     },
   },
   'settle/prepare': {
@@ -544,7 +553,10 @@ export async function prepare(conn: Connection, route: string, body: Body, db?: 
   if (missing.length) {
     throw new PrepareError(409, 'NotDeployed', `Not on this cluster yet: the ${missing.join(', ')} program${missing.length > 1 ? 's are' : ' is'} not deployed, so this cannot be prepared.`);
   }
-  const protocol = [...await protocolTable(conn), ...await mintTables(conn, db, body.mint ?? body.tokenMint)];
+  // A raid routes through two launches: both tokens' tables (seen on the devnet drill: the route
+  // did not fit a packet with one).
+  const mints = [...new Set([body.mint ?? body.tokenMint, body.target, body.rival].filter((m): m is string => typeof m === 'string'))];
+  const protocol = [...await protocolTable(conn), ...(await Promise.all(mints.map((m) => mintTables(conn, db, m)))).flat()];
   if (def.staged) {
     const stages = await def.staged(body, conn);
     const out: PreparedTx[] = [];

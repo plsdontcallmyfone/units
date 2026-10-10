@@ -125,7 +125,10 @@ export const EXPANSION_PREPARES: Record<string, PrepareDef> = {
 
   // ---------------------------------------------------------------- agents (09) --
   'agents/register/prepare': one('Register an agent passport', ['agents', 'token'], async (b, conn) => {
-    const owner = pk(b, 'owner'); const agentKey = optPk(b, 'agentKey') ?? owner;
+    // The agent key signs too and must differ from the operator (KeyIsOperator); defaulting it to the
+    // operator could never land (found on the devnet drill).
+    const owner = pk(b, 'owner'); const agentKey = optPk(b, 'agentKey');
+    if (!agentKey || agentKey.equals(owner)) throw new PrepareError(400, 'BadRequest', '"agentKey" is required: the agent\'s own key, not the operator\'s; it signs the registration too.');
     const cfg = await account(conn, hookwars.agentsConfigAddress(), (d) => hookwars.agentsConfigCodec.decode(d), 'Agents has no config on this cluster yet.');
     const idx = await conn.getAccountInfo(hookwars.operatorIndexAddress(owner), 'confirmed');
     const index = idx ? hookwars.operatorIndexCodec.decode(idx.data).next : 0;

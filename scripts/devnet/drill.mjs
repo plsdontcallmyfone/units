@@ -108,6 +108,37 @@ if (cmd === 'wallets') {
   const sig = await web3.sendAndConfirmTransaction(conn, tx, [w], { commitment: 'confirmed' });
   log({ step: 'bridge wrap_sol', wallet: argv[1], lamports: String(lamports), signature: sig });
   console.log(`wrapped ${lamports} for ${argv[1]}: ${sig}`);
+} else if (cmd === 'holding') {
+  // holding <wallet> <saved mint name>: the wallet's balance of that token, in base units.
+  const s6 = state();
+  const mint = new web3.PublicKey(s6.saved[argv[2]] ?? argv[2]);
+  const info = await conn.getAccountInfo(sdk.hookwars.holdingAddr(mint, wallet(argv[1]).publicKey), 'confirmed');
+  console.log(info ? String(sdk.hookwars.holdingCodec.decode(info.data).amount) : '0');
+} else if (cmd === 'royalty') {
+  // royalty <saved item account name>: the item's royalty holding of bridged SOL, in lamports.
+  const item = new web3.PublicKey(state().saved[argv[1]] ?? argv[1]);
+  const info = await conn.getAccountInfo(sdk.hookwars.holdingAddr(sdk.BRIDGED_SOL_MINT, sdk.hookwars.royaltyOwner(item)), 'confirmed');
+  console.log(info ? String(sdk.hookwars.holdingCodec.decode(info.data).amount) : '0');
+} else if (cmd === 'link') {
+  // link <operator wallet> <agent wallet> <passport name> <platform> <handle> <post uri>: agents
+  // `link_social`, with the ed25519 instruction the agent key signs over the v2 statement (the API
+  // has no prepare route for it yet).
+  const [, payerName, agentName, passportName, platform, handle, postUri] = argv;
+  const payer = wallet(payerName); const agent = wallet(agentName);
+  const passport = new web3.PublicKey(state().saved[passportName] ?? passportName);
+  const p = sdk.hookwars.passportCodec.decode((await conn.getAccountInfo(passport, 'confirmed')).data);
+  const statement = `units agent link v2\npassport: ${passport.toBase58()}\nplatform: ${Number(platform)}\nhandle: ${handle}\nnonce: ${Number(p.linkNonce ?? 0)}`;
+  const ed = web3.Ed25519Program.createInstructionWithPrivateKey({ privateKey: agent.secretKey, message: Buffer.from(statement) });
+  const link = web3.PublicKey.findProgramAddressSync([Buffer.from('link'), passport.toBuffer(), Buffer.from([Number(platform)])], sdk.hookwars.AGENTS_ID)[0];
+  const ix = sdk.hookwars.idlIx('agents', 'link_social', { payer: payer.publicKey, config: sdk.hookwars.agentsConfigAddress(), passport, link, instructions: web3.SYSVAR_INSTRUCTIONS_PUBKEY }, { platform: Number(platform), handle, postUri });
+  const sig = await web3.sendAndConfirmTransaction(conn, new web3.Transaction().add(ed, ix), [payer], { commitment: 'confirmed' });
+  log({ step: 'agents link_social', passport: passport.toBase58(), platform: Number(platform), handle, signature: sig });
+  console.log(`linked: ${sig}`);
+} else if (cmd === 'save-fresh') {
+  // Saves the address of a "$new:" key as <name> (a launch whose --save did not run).
+  const s5 = state();
+  s5.saved[argv[1]] = web3.Keypair.fromSecretKey(Uint8Array.from(s5.fresh[argv[2]])).publicKey.toBase58(); saveState(s5);
+  console.log(`saved ${argv[1]} = ${s5.saved[argv[1]]}`);
 } else if (cmd === 'item-account') {
   // Saves "<name>Item", the armory Item account of the item mint saved as <name>.
   const s4 = state();
@@ -160,6 +191,8 @@ if (cmd === 'wallets') {
   });
   const sigs = [];
   // --skip <label,...>: stages already landed on an earlier run (a resumed launch), skipped by label.
+  // --also <wallet,...>: drill wallets that sign too (an agent key at registration).
+  const also = (opt('--also', '') ?? '').split(',').filter(Boolean).map(wallet);
   const skip = new Set((opt('--skip', '') ?? '').split(',').filter(Boolean));
   for (const t of out.transactions ?? []) {
     if (skip.has(t.label)) { console.log(`${t.label}: skipped (landed earlier)`); continue; }
@@ -169,12 +202,12 @@ if (cmd === 'wallets') {
       const tx = web3.VersionedTransaction.deserialize(bytes);
       const bh = await conn.getLatestBlockhash('confirmed');
       tx.message.recentBlockhash = bh.blockhash;
-      tx.sign([owner, ...extra(t.extraSigners ?? [])]);
+      tx.sign([owner, ...extra(t.extraSigners ?? []), ...also]);
       raw = tx.serialize();
     } else {
       const tx = web3.Transaction.from(bytes);
       tx.recentBlockhash = (await conn.getLatestBlockhash('confirmed')).blockhash;
-      tx.sign(owner, ...extra(t.extraSigners ?? []));
+      tx.sign(owner, ...extra(t.extraSigners ?? []), ...also);
       raw = tx.serialize();
     }
     if (flag('--dry')) { const sim = await conn.simulateTransaction(t.version === 'v0' ? web3.VersionedTransaction.deserialize(raw) : web3.Transaction.from(raw)); console.log(`[dry] ${t.label}: ${JSON.stringify(sim.value.err)} ${sim.value.logs?.slice(-3).join(' | ')}`); continue; }
