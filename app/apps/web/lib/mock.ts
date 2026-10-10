@@ -157,6 +157,12 @@ export function mock(path: string): unknown {
   }
   // Changed by Hookwars (explorer v2): the explorer's demo is real LiteSVM transactions as the
   // explorer decodes them (lib/explorer-demo.json, from packages/sdk/scripts/explorer-fixtures.mjs).
+  // Changed by Hookwars (app pass 5): the new reads answer with empty chain state in the demo (no
+  // invented rows), so each page shows its empty state and its forms.
+  if (/^\/v1\/access\/\w+$/.test(p!)) return { mode: 0, exclusive: false, policy: null, approvals: [], licenceOffer: null };
+  if (p === '/v1/governance/queue') return { armoryAdmin: null, queued: [], marketTerms: [], bookParams: [] };
+  if (p === '/v1/templates/submissions') return [];
+  if (p === '/v1/war/coalitions') return { coalitions: [], bossPools: [] };
   if (p!.startsWith('/v1/explorer/')) return explorerMock(p!, q);
   return undefined;
 }

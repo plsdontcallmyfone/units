@@ -4,6 +4,7 @@ import { read } from '@/lib/api';
 import { short } from '@/lib/format';
 import { Empty, Head, Panel, ReadFailed } from '@/components/ui';
 import { Action, Actions } from '@/components/action';
+import { AccessPanel } from '@/components/access-panel';
 
 type Wear = { maxCharges: number; used: number; dormant: boolean; repairs: number };
 
@@ -35,6 +36,9 @@ export default async function ItemPage({ params }: { params: Promise<{ item: str
         </Panel>
       </div>
       <div style={{ height: 16 }} />
+      {/* Changed by Hookwars (app pass 5): access modes, approvals and licences (spec 14 E-1). */}
+      <AccessPanel itemMint={it.itemMint} />
+      <div style={{ height: 16 }} />
       <Panel title="History" flush>
         {it.history.length === 0 ? <Empty title="No history yet" what="Equips, cuts, settlements and claims of this item land here." /> : (
           <div className="rows">{it.history.map((h) => <div className="row" key={`${h.signature}:${h.ordinal}`}><span className="chip">{h.kind}</span><span className="muted">{short(h.signature, 8)}</span><span className="faint">{h.amount ?? ''}</span></div>)}</div>
@@ -45,10 +49,8 @@ export default async function ItemPage({ params }: { params: Promise<{ item: str
       <Panel title="Act" meta={<Link href={`/marketplace/items/${it.itemMint}`}>sell or rent on the market</Link>}>
         <Actions>
           <Action route="royalties" title="Claim royalty" what="Settled royalty in one cut mint goes to the holder." fixed={{ item: it.item, itemMint: it.itemMint }} fields={[{ name: 'cutMint', label: 'Cut mint', kind: 'key' }, { name: 'amount', label: 'Amount (base units)', kind: 'amount' }]} />
-          <Action route="forge" title="Forge" what="Burns this item and another of the same template into one a level higher." fixed={{ itemA: it.item }} fields={[{ name: 'itemB', label: 'Second item', kind: 'key' }]} />
+          <Action route="forge" title="Forge" what="Burns this item and another of the same template into one a level higher. Two composites forge when their modules run the same templates in the same order." fixed={{ itemA: it.item }} fields={[{ name: 'itemB', label: 'Second item', kind: 'key' }]} />
           {wear ? <Action route="craft/repair" title="Repair" what={wear.dormant ? 'This item is dormant: a repair restores charges and wakes it.' : 'Restores charges before the item wears out.'} fixed={{ itemMint: it.itemMint }} fields={[{ name: 'recipeId', label: 'Repair recipe', kind: 'int' }]} /> : null}
-          <Action route="licences/offer" title="Offer licences" what="Tokens pay you for the right to equip this item for a term, without buying it." fixed={{ itemMint: it.itemMint }} fields={[{ name: 'priceLamports', label: 'Price', kind: 'sol' }, { name: 'termSecs', label: 'Term (seconds)', kind: 'int' }, { name: 'maxLive', label: 'Licences at once', kind: 'int', optional: true }, { name: 'exclusive', label: 'Exclusive', kind: 'bool' }]} />
-          <Action route="licences/buy" title="Buy a licence" what="Your token may equip this item for the offer's term." fixed={{ itemMint: it.itemMint }} fields={[{ name: 'tokenMint', label: 'Token mint', kind: 'key' }]} />
           <Action route="items/fuse" title="Fuse" what={<>Burns this item and others you hold into one composite. One way. <Link href="/craft">Presets and recipes</Link></>} fields={[{ name: 'components', label: 'Components', kind: 'json', hint: `[{"itemMint":"${it.itemMint}","start":0,"count":1}, ...]` }, { name: 'royaltyBps', label: 'Royalty (bps)', kind: 'int' }]} />
         </Actions>
       </Panel>

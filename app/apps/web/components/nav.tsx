@@ -41,6 +41,7 @@ export const GROUPS: Group[] = [
     { title: 'War', items: [
       { href: '/war', label: 'War room', what: 'The map, the feed, sieges building and holding.', icon: I.war },
       { href: '/seasons', label: 'Seasons', what: 'King of the hill, scored from war counters.', icon: I.seasons },
+      { href: '/war/coalitions', label: 'Coalitions', what: 'Shared war chests and season boss pools.', icon: I.war },
     ] },
     { title: 'Standing', items: [
       { href: '/generals', label: 'Generals', what: 'Top raiders across tokens this season.', icon: I.generals },
@@ -55,6 +56,7 @@ export const GROUPS: Group[] = [
       { href: '/commissions', label: 'Commissions', what: 'Bounties for a new hook in one slot.', icon: I.brief },
       { href: '/craft', label: 'Craft', what: 'Materials, recipes, repairs and presets.', icon: I.armory },
       { href: '/book', label: 'Order book', what: 'Material orders and bids for classes of items.', icon: I.market },
+      { href: '/governance', label: 'Governance', what: 'Admin changes waiting out their timelock.', icon: I.docs },
     ] },
     { title: 'Funds', items: [{ href: '/bridge', label: 'Bridge', what: 'Bridged SOL in and out.', icon: I.bridge }] },
   ] },

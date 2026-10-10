@@ -12,7 +12,7 @@ export default async function Templates() {
   const byId = new Map((reg.ok ? reg.data : []).map((t) => [t.templateId, t]));
   return (
     <>
-      <Head eyebrow="Armory" title="Templates" lede={`${TEMPLATES.length} templates. A template is the code; an item is one minted with its own values inside the template's floor and ceiling.${reg.ok ? '' : ' Registration could not be read, so none is shown as registered.'}`} />
+      <Head eyebrow="Armory" title="Templates" lede={`${TEMPLATES.length} templates. A template is the code; an item is one minted with its own values inside the template's floor and ceiling.${reg.ok ? '' : ' Registration could not be read, so none is shown as registered.'}`} right={<Link className="btn sm" href="/armory/templates/submissions">Submissions</Link>} />
       <div className="grid cols-2">
         {FAMILIES.map((f) => {
           const ts = TEMPLATES.filter((t) => FAMILY_OF[t.id] === f);

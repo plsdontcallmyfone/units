@@ -246,3 +246,18 @@ a.row:hover { background: var(--bg-3); }
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 td.r, th.r { text-align: right; }
 .demo-banner { margin: 0 0 var(--s4); padding: var(--s2) var(--s3); border: 1px solid rgba(245, 217, 122, 0.4); color: var(--warn); font-size: 13px; }
+
+/* Changed by Hookwars (app pass 5): access panel, governance queue, coalitions. */
+.access-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s5); align-items: start; margin-bottom: var(--s4); }
+.access-mode { display: flex; align-items: center; gap: var(--s3); font: 600 26px/1.1 var(--sans); letter-spacing: -0.01em; margin-bottom: var(--s2); }
+.access-terms { grid-template-columns: auto auto; padding: var(--s3) var(--s4); border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2); }
+.access-terms dd { text-align: right; }
+dd.num, span.num { font-variant-numeric: tabular-nums; }
+.stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-bottom: var(--s5); }
+.stat-strip > div { padding: var(--s4); border-right: 1px solid var(--line); }
+.stat-strip > div:last-child { border-right: 0; }
+.stat-strip b { display: block; font: 600 24px/1.1 var(--sans); font-variant-numeric: tabular-nums; margin-top: var(--s2); }
+.ready { color: var(--good); }
+.waiting { color: var(--warn); }
+.members { display: flex; flex-wrap: wrap; gap: var(--s2); }
+@media (max-width: 720px) { .access-head { grid-template-columns: 1fr; } .stat-strip > div { border-right: 0; border-bottom: 1px solid var(--line); } }

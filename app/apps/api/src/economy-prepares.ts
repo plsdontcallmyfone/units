@@ -352,12 +352,15 @@ export const ECONOMY_PREPARES: Record<string, PrepareDef> = {
     })];
   }),
   'licences/buy/prepare': one('Buy a licence', ['market', 'social'], async (b, conn) => {
+    // secfix3 (spec 15): `buy_license` reads the item's `AccessPolicy` terms (pass 4a E-1), so the
+    // price and term quoted here are the policy's; the market's older licence offer is not read.
     const itemMint = pk(b, 'itemMint'); const itemKey = hookwars.itemAddress(itemMint);
-    const [it, offer, cfg] = await Promise.all([
-      item(conn, itemMint), need(conn, hookwars.licenceOfferAddress(itemKey), (d) => hookwars.coderOf('market').decodeAccount<{ setBy: PublicKey; priceLamports: bigint; active: boolean }>('LicenceOffer', d), 'This item offers no licences.'),
+    const [it, policy, cfg] = await Promise.all([
+      item(conn, itemMint),
+      need(conn, hookwars.accessPolicyAddress(itemKey), (d) => hookwars.idlAccountCodec<{ mode: number; licenceTerms: { priceLamports: bigint } | null; holderAtSet: PublicKey }>('armory', 'AccessPolicy').decode(d), 'This item has no access policy: its holder sets the Licensed mode with terms first.'),
       need(conn, hookwars.marketConfigAddress(), (d) => hookwars.marketConfigCodec.decode(d), 'The market has no config on this cluster yet.'),
     ]);
-    if (!offer.active) throw new PrepareError(409, 'Inactive', 'This licence offer is paused.');
+    if (policy.mode !== hookwars.ACCESS.LICENSED || !policy.licenceTerms) throw new PrepareError(409, 'NotLicensed', 'This item is not Licensed, so it sells no licences.');
     const [t, holder] = await Promise.all([template(conn, it.templateId), itemHolder(conn, itemMint)]);
     // Review 3 L-4: a listed or leased item sits in a market escrow, which could never pass the
     // holder's share on; the program refuses it, so say so here.
@@ -365,8 +368,8 @@ export const ECONOMY_PREPARES: Record<string, PrepareDef> = {
       throw new PrepareError(409, 'HolderIsEscrow', 'This item is listed or leased right now; licences can be bought when it is back with its holder.');
     }
     return [hookwars.buyLicense(pk(b, 'owner'), {
-      item: itemKey, itemMint, templateId: it.templateId, tokenMint: pk(b, 'tokenMint'), holder: holder ?? offer.setBy, author: t.registeredBy, treasury: cfg.treasury,
-      maxPrice: b.maxPrice === undefined ? offer.priceLamports : big(b, 'maxPrice'), renew: b.renew === true,
+      item: itemKey, itemMint, templateId: it.templateId, tokenMint: pk(b, 'tokenMint'), holder: holder ?? policy.holderAtSet, author: t.registeredBy, treasury: cfg.treasury,
+      maxPrice: b.maxPrice === undefined ? policy.licenceTerms.priceLamports : big(b, 'maxPrice'), renew: b.renew === true,
     })];
   }),
 

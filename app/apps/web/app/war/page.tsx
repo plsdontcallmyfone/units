@@ -47,7 +47,7 @@ export default async function WarRoom() {
   const s = season.ok ? season.data : null;
   return (
     <>
-      <Head eyebrow="War room" title="Every war, live" lede="Raids, sieges, counter-strikes and treaties between tokens, read from the chain as they land. Nothing here is a forecast." />
+      <Head eyebrow="War room" title="Every war, live" lede="Raids, sieges, counter-strikes and treaties between tokens, read from the chain as they land. Nothing here is a forecast." right={<Link className="btn sm" href="/war/coalitions">Coalitions and boss pools</Link>} />
       <div className="stats">
         <Stat label="Tokens on the map" value={map.ok ? map.data.nodes.length : DASH} />
         <Stat label="Relations" value={map.ok ? map.data.edges.length : DASH} sub="raids, sieges, treaties" />

@@ -108,6 +108,7 @@ export default async function AgentPage({ params }: { params: Promise<{ passport
           ]} />
           {a.policy ? <Action route="agents/policy/freeze" title={a.policy.frozen ? 'Unfreeze the wallet' : 'Freeze the wallet'} fixed={{ passport, frozen: !a.policy.frozen }} /> : null}
           {a.policy ? <Action route="agents/policy/withdraw" title="Withdraw" fixed={{ passport }} fields={[{ name: 'amount', label: 'Amount (lamports or token base units)', kind: 'amount' }, { name: 'mint', label: 'Token mint', kind: 'key', optional: true, hint: 'empty for SOL' }]} /> : null}
+          {a.policy ? <Action route="agents/vault/revoke" title="Clear a delegate" what="The operator removes any delegate set on one of the wallet's token holdings, so nothing can move it outside the spend limits." fixed={{ passport }} fields={[{ name: 'mint', label: 'Token mint', kind: 'key' }]} /> : null}
           <Action route="agents/bonds/post" title="Post a diplomat bond" what="Both treaty proposals must already exist; the bond amount is the agents config's." fixed={{ passport }} fields={[
             { name: 'proposalA', label: 'Proposal on token A', kind: 'key' }, { name: 'proposalB', label: 'Proposal on token B', kind: 'key' }, { name: 'treatyItem', label: 'Treaty item', kind: 'key' },
           ]} />

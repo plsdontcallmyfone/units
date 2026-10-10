@@ -247,7 +247,7 @@ describe('licence buy refuses a market escrow as holder (review 3 L-4)', () => {
   it('a listed item: the holder is the listing escrow, the prepare says so', async () => {
     const escrow = hookwars.marketEscrowAddress(wearing);
     const extra = new Map<string, Buffer>([
-      [S(hookwars.licenceOfferAddress(wearItem)), enc('market', 'LicenceOffer', { item: wearItem, itemMint: wearing, setBy: holder, priceLamports: 5n, termSecs: 3_600, maxLive: 1, active: true })],
+      [S(hookwars.accessPolicyAddress(wearItem)), enc('armory', 'AccessPolicy', { item: wearItem, mode: 2, licenceTerms: { priceLamports: 5n, termSecs: 3_600, per: 0, maxLive: 1 }, holderAtSet: holder })],
       [S(hookwars.marketConfigAddress()), enc('market', 'MarketConfig', { admin, treasury })],
     ]);
     const look = (k: PublicKey): AccountInfo<Buffer> | null => { const d = extra.get(S(k)); return d ? { data: d, owner: hookwars.MARKET_ID, lamports: 1, executable: false, rentEpoch: 0 } : info(k); };
@@ -257,5 +257,11 @@ describe('licence buy refuses a market escrow as holder (review 3 L-4)', () => {
       getProgramAccounts: async () => [{ pubkey: hookwars.holdingAddr(wearing, escrow), account: { data: escrowHolding, owner: hookwars.TOKEN_ID, lamports: 1, executable: false, rentEpoch: 0 } }],
     } as never;
     await expect(PREPARES['licences/buy/prepare']!.build({ owner: S(owner), itemMint: S(wearing), tokenMint: S(mint) }, c)).rejects.toThrow(/listed or leased/);
+  });
+  it('an item that is not Licensed sells no licence (the price comes from its AccessPolicy)', async () => {
+    const gated = new Map<string, Buffer>([[S(hookwars.accessPolicyAddress(wearItem)), enc('armory', 'AccessPolicy', { item: wearItem, mode: 1, holderAtSet: holder })], [S(hookwars.marketConfigAddress()), enc('market', 'MarketConfig', { admin, treasury })]]);
+    const look = (k: PublicKey): AccountInfo<Buffer> | null => { const d = gated.get(S(k)); return d ? { data: d, owner: hookwars.MARKET_ID, lamports: 1, executable: false, rentEpoch: 0 } : info(k); };
+    const c = { getAccountInfo: async (k: PublicKey) => look(k), getMultipleAccountsInfo: async (ks: PublicKey[]) => ks.map(look), getProgramAccounts: async () => [] } as never;
+    await expect(PREPARES['licences/buy/prepare']!.build({ owner: S(owner), itemMint: S(wearing), tokenMint: S(mint) }, c)).rejects.toThrow(/not Licensed/);
   });
 });
