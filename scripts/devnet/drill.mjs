@@ -157,6 +157,25 @@ if (cmd === 'wallets') {
   const sig = await web3.sendAndConfirmTransaction(conn, new web3.Transaction().add(ix), [admin], { commitment: 'confirmed' });
   log({ step: 'war propose_loot_table', season, signature: sig });
   console.log(`loot table for season ${season} proposed: ${sig}`);
+} else if (cmd === 'sweep') {
+  // sweep <wallet>...: unwraps the wallet's bridged SOL and sends its lamports back to the deployer,
+  // leaving the fee (the end of a drill).
+  const to = loadKey(DEPLOYER).publicKey;
+  for (const name of argv.slice(1).filter((a) => !a.startsWith('--'))) {
+    const w = wallet(name);
+    const h = await conn.getAccountInfo(sdk.hookwars.holdingAddr(sdk.BRIDGED_SOL_MINT, w.publicKey), 'confirmed');
+    const held = h ? BigInt(sdk.hookwars.holdingCodec.decode(h.data).amount) : 0n;
+    if (held > 0n) {
+      const sig = await web3.sendAndConfirmTransaction(conn, new web3.Transaction().add(sdk.bridge.unwrapSol(w.publicKey, held)), [w], { commitment: 'confirmed' });
+      log({ step: 'sweep unwrap_sol', wallet: name, amount: String(held), signature: sig });
+    }
+    const bal = await conn.getBalance(w.publicKey, 'confirmed');
+    if (bal <= 5000) { console.log(`${name}: nothing to sweep`); continue; }
+    const tx = new web3.Transaction().add(web3.SystemProgram.transfer({ fromPubkey: w.publicKey, toPubkey: to, lamports: bal - 5000 }));
+    const sig = await web3.sendAndConfirmTransaction(conn, tx, [w], { commitment: 'confirmed' });
+    log({ step: 'sweep', wallet: name, lamports: bal - 5000, signature: sig });
+    console.log(`${name}: ${bal - 5000} lamports back to the deployer: ${sig}`);
+  }
 } else if (cmd === 'save-fresh') {
   // Saves the address of a "$new:" key as <name> (a launch whose --save did not run).
   const s5 = state();

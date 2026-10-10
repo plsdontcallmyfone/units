@@ -225,10 +225,20 @@ rival, War orders, Size Tiers), plain `6nb4ZabNV5KFtYhXXWmLHQYoNZcTk6ohVMk6n6DZB
 | 12 | Guild hall: create, deposit, officer action after the delay | done | create `VWT1RNqtfEvMLeZshthF6SHpPssndw147QLkQzpuMZLyQsKdptMcxPz6onP1WisUrerToCbeSGwxXvbjkP7oUvk`, execute `3Luw1M3XXGsnSF9HiMewWS3dtrEhdgVEVP8aGNrUqktYq4AeVkUVq9gK1w8PnXW3mSJ6zZxdtFdDCHV729iY5g4m` |
 | 13 | Agent passport, link, badge | done (passport `5qRQujWoALwNzPVyugjVg1XfVz3oi6rdQMTiWaNzQPfj`; link by `drill.mjs link`, gap G-2) | register `3ppnvc9yKFA9usjsC8BoDfasadXTa2q95aK9dtJbuKVbsj6XG4mjeS9pg3aw8r2do8SRmv1rbmMFWz5y34fA5HAK`, link `Ahx6YAyoGUgFz2ZgjHixcbQdrVeRWD8uciS5PD2JugJaAEZ5KHC6WmF5Pv5hChZHs2c54NF5bsNfkaGENwmmkSn`, badge `29irWedVARvcu3S7W9ZM4iJ788byZY4DFmH9VGDsJrQqQr5gcX2AzLaSUvAr3JKT6kyp8SqW7ZAo9q3diMFwzDyf` |
 | 14 | War: funding, siege, counter-strike, raze | funding recorded; siege due after the raids but refused ItemAccountsMissing (gap G-3); counter-strike refused OwnTokenHasRewards and raze refused RazeDisabled, both as designed for this token and these TEST orders | funding `xULwg7VBgvZtrmca4NkntquRCM9oXiFebp3rA59Rrbk9cwXM4pK8PYNtVWqR37fsTPwsbng3DVgBMi4JBXT5rKG` |
-| 15 | Bounty and quest | bounty claimed; quest: see 17 | bounty `4ZaMz6FVnGdtiuB8HqyGYKRpeyzbu1hkw6peELfoPeWWAf2bDWVvtt9cbgWurbzeXJZRdv23EgUAqQg5iM9cGu8U` |
-| 16 | Loot | see 17 | |
-| 17 | Season | season 1 proposed (TEST weights) and its loot table (one TEST entry) proposed behind the war timelock; open, quest, roll and prize split: see the season run below | season `41Sn24E2v9AcQPUAw2vCU44KDMrCHTh7XrD7bFsGng9B42TddYww5Tc1BVdgTBkdWd7K1aiTZe2d1T9DmdDjBU7x`, loot table `4c5DoQCFhxUjiTVdWAEA8Tj4WYWbkeUUE3ZMpGZJjRUzXjYyg67AdfeW9wSwgk7PetZRVr3DToWy5GTpVJHCZQ4k` |
+| 15 | Bounty and quest | bounty claimed; Raid quest claimed in season 1 after an in-season raid (quest periods start at 1) | bounty `4ZaMz6FVnGdtiuB8HqyGYKRpeyzbu1hkw6peELfoPeWWAf2bDWVvtt9cbgWurbzeXJZRdv23EgUAqQg5iM9cGu8U`, raid `2ZbKQdjh7LbbsC9Qswd2MveoUtnCYSA35qnUo1JCALtNEHhoxVV46a959KpQfWG5MdhSQ6xJw3PqhycgdW4EysFj`, quest `32E67utpn7diogyzMRQDa34YhBFPHgb6DpRTTXmGwLDj1Qbo5q8kLHaib3GRuhg4ywHnrAEVwv4ap8JpNK5wqAdy` |
+| 16 | Loot | `roll` stops as expected (D-4): the war config names the undeployed randomness stub, and the simulation fails "Unsupported program id" at its call | |
+| 17 | Season | season 1 proposed (TEST weights) with its loot table (one TEST entry: Raid over its schema), both behind the war timelock, then opened; `split_protocol_fees` refused NothingToDo (no fees reach the prize vault, G-5); submit, challenge and finalize wait for the end of the 7-day TEST season plus the 1-day challenge | season `41Sn24E2v9AcQPUAw2vCU44KDMrCHTh7XrD7bFsGng9B42TddYww5Tc1BVdgTBkdWd7K1aiTZe2d1T9DmdDjBU7x`, loot table `4c5DoQCFhxUjiTVdWAEA8Tj4WYWbkeUUE3ZMpGZJjRUzXjYyg67AdfeW9wSwgk7PetZRVr3DToWy5GTpVJHCZQ4k`, open `WcePx2k7aQExpYfMvDQ61avTC7sEwXiuDwtZZ7Q7RzrKkgPLKDRX1QzyjnLzr9fbQi7aeJVB82XypjA7ER2JtNg` |
 | 18 | Graduation with the remainder buy | not run: filling the curve to graduation needs more devnet SOL than the lane holds | |
+
+### SOL
+
+| Account | Before | After | Note |
+| --- | --- | --- | --- |
+| Units deployer `AHQeXN...` | 34.998629516 (owner's) + 12 borrowed = 46.998629516 | 0.020074847 | 45.358 SOL kept as program rent (16 programs), about 0.05 SOL of upload fees, 0.202 SOL of init accounts, the lookup tables, and the drill's account rent and fees; 0.02 SOL kept as a reserve for admin steps |
+| Instance deployer `HzGbDT...` | 17.442225059 | 6.436220059 | lent 12 (`5N9CfLJ2eYacLbPRExmumJKKn3gQ8keTfejqb5zG4CnK3M4m8XoPMZGMmzLuedXYxDEHBDdGmp649QbLHozojW2r`), got 0.994 back (`2zScVtaRASupFxQ7Sez1f7jSRYN6UTjg7tXsN8UH3YMvkXias8qyzgnMsJGKWcznGFsr6sYZNU6DGChoXPQLNGjD`); the other 11.006 SOL of the loan is in the deployed programs' rent and comes back only if they are closed (section 6) |
+
+The drill wallets were swept back to the units deployer before the return (`drill.mjs sweep`;
+signatures in `drill-log.jsonl`); what is left in them is their holdings' rent.
 
 ### Fixes the drill needed (on branch devnet)
 
@@ -250,6 +260,7 @@ API and SDK changes, each found by a refused or failing step above and covered b
   was the operator itself, so it could never land).
 - `claim_bounty` passes the chest's inner `unwrap_sol` (MissingAccount).
 - `finalize` passes the launch and its holdings (WrongAccount).
+- `send-plan.mjs` retries on the public RPC's 429 replies.
 
 ### Gaps the drill found (not fixed here)
 
@@ -265,5 +276,7 @@ API and SDK changes, each found by a refused or failing step above and covered b
 - G-5: the init plan leaves out the DEX `fee_collector` to the war prize vault (R14), the first
   season and its loot table; `open_season` needs the loot table, and `split_protocol_fees` finds
   nothing to split until fees reach the prize vault.
-- G-6: the public devnet RPC rate-limits the indexer and the plan sender (429); a private RPC is
-  needed for a running site.
+- G-6: the public devnet RPC rate-limits the indexer, the API and the plan sender (429); with the
+  indexer running the API's prepares stalled. A private RPC is needed for a running site.
+- G-7: `claim_quest` takes the current period, and periods start at 1; the site should send the
+  period from the season's start rather than a fixed 0.
