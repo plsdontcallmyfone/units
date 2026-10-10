@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "name": "Transfer Cut",
+  "program_id": "4NZsFq4R1UgcAzRKCeqcW8iyNvhcuLCfhGQ34Ey4gSce",
+  "kind": "fee",
+  "callbacks": ["before_transfer"],
+  "pool_callbacks": [],
+  "max_cut_transfer_bps": 500,
+  "may_refuse": false,
+  "may_burn": false,
+  "data_bytes": 5,
+  "answers_touch": false,
+  "max_cu_per_call": 15000,
+  "extras": ["item", "equip_vault"],
+  "params": {
+    "field_count": 1,
+    "names": ["cut_bps"],
+    "field_min": [0],
+    "field_max": [500]
+  },
+  "registry": {
+    "open_authoring": true,
+    "loot_enabled": false,
+    "forge_enabled": false,
+    "max_level": 1,
+    "loot_royalty_bps": 0,
+    "max_targets": 0
+  }
+}
