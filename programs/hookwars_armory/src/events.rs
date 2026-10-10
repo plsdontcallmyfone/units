@@ -178,3 +178,14 @@ pub struct AdminAccepted {
     pub admin: Pubkey,
     pub ts: i64,
 }
+
+/// Integration pass 3 (E-5): an item made by craft's `mint_crafted`.
+#[event]
+pub struct ItemCrafted {
+    pub item: Pubkey,
+    pub owner: Pubkey,
+    pub template_id: u16,
+    pub recipe_id: u16,
+    pub params: [u32; PARAM_FIELDS],
+    pub ts: i64,
+}

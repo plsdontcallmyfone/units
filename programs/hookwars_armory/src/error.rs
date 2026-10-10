@@ -105,4 +105,8 @@ pub enum ArmoryError {
     ItemLeasedElsewhere,
     #[msg("only the market may end a lease")]
     NotMarketCaller,
+    #[msg("this template's items wear: pass the craft init-wear accounts")]
+    WearAccountsMissing,
+    #[msg("only craft's [\"craft-signer\"] may mint a crafted item")]
+    NotCraftSigner,
 }

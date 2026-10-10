@@ -1,4 +1,4 @@
-// Changed by Hookwars: integration pass 2: one items error enum (Soulbound and arsenal codes kept); LeaseRentPaid.
+// Changed by Hookwars: integration pass 2: one items error enum (Soulbound and arsenal codes kept); LeaseRentPaid; integration pass 3: EquipState.runs_at_settle, init_equip wear flag, ProtocolFee.
 // Changed by Hookwars: new file (M2), the template program's armory-facing entry points; M3b: the
 // token and pool callbacks, every base template and arsenal wave A, composites, the raid ledger
 // and settle_equip; arsenal waves D and E (templates, `payouts`).
@@ -204,8 +204,10 @@ pub struct EquipState {
     pub token_unsettled: [u64; MAX_MODULES],
     /// Unsettled pool-side cuts per module.
     pub pool_unsettled: [u64; MAX_MODULES],
+    /// Integration pass 3 (E-3): `runs` at the last `settle_equip`; the difference is the wear.
+    pub runs_at_settle: u64,
     /// Reserved.
-    pub reserved: [u8; 32],
+    pub reserved: [u8; 24],
 }
 
 impl EquipState {
@@ -279,6 +281,27 @@ pub struct EquipSettled {
     pub bounty_quote: u64,
 }
 
+/// Integration pass 3 (E-2, R37): the protocol's share of a settle.
+#[event]
+pub struct ProtocolFee {
+    pub source: u8,
+    pub mint: Pubkey,
+    pub amount: u64,
+    pub reference: [u8; 32],
+    pub ts: i64,
+}
+
+/// Integration pass 3 (R34, spec 10 I-2): the template author's share of a settle's royalty.
+#[event]
+pub struct AuthorSharePaid {
+    pub mint: Pubkey,
+    pub slot: u8,
+    pub item: Pubkey,
+    pub template_id: u16,
+    pub author_token: u64,
+    pub author_quote: u64,
+}
+
 /// Integration pass 2 (10 section 17 I-7, R32): the lessor's share of a leased item's royalty,
 /// paid by `settle_equip` out of the royalty (never on top of it).
 #[event]
@@ -341,8 +364,9 @@ pub mod hookwars_items {
         manifest: hookwars_common::Manifest,
         config: EquipConfig,
         max_targets: u8,
+        wear: bool,
     ) -> Result<()> {
-        equip::process_init_equip(ctx, slot, item, template_id, manifest, config, max_targets)
+        equip::process_init_equip(ctx, slot, item, template_id, manifest, config, max_targets, wear)
     }
 
     /// Empties the slot's `EquipState`; refused while its vaults hold anything unsettled.

@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file, helpers for the expansion programs (docs/spec/10-expansion.md).
+// Changed by Hookwars: new file, helpers for the expansion programs (docs/spec/10-expansion.md); integration pass 3: Item.has_wear.
 //! `hookwars_market` and `hookwars_social` in the LiteSVM suites: loads them into a world, sets
 //! their upgrade authority to the deployer, initializes them with TEST values, and builds their
 //! instructions from the Anchor account structs.
@@ -563,7 +563,8 @@ pub fn put_item(env: &mut Env, item_mint: Pubkey, template_id: u16, level: u8) -
         equipped_count: 1,
         royalty_owner_bump: 0,
         created_at: 0,
-        reserved: [0; 32],
+        has_wear: false,
+        reserved: [0; 31],
     };
     put_anchor(env, key, ids::ARMORY_ID, &it, 0);
     key

@@ -284,6 +284,19 @@ pub mod hookwars_armory {
         process_mint_loot(ctx, template_id, params)
     }
 
+    /// Integration pass 3 (E-5, 11 section 5.3): craft's output. Only `["craft-signer"]` under
+    /// craft may call it; the crafter receives the item (`source = CRAFTED`).
+    pub fn mint_crafted<'info>(
+        ctx: Context<'_, '_, 'info, 'info, MintCrafted<'info>>,
+        crafter: Pubkey,
+        template_id: u16,
+        param_min: Vec<u32>,
+        param_max: Vec<u32>,
+        recipe_id: u16,
+    ) -> Result<()> {
+        process_mint_crafted(ctx, crafter, template_id, param_min, param_max, recipe_id)
+    }
+
     /// The item's holder claims royalty from one of its royalty holdings (02 section 5.2).
     pub fn claim_royalty<'info>(
         ctx: Context<'info, ClaimRoyalty<'info>>,
@@ -592,6 +605,44 @@ pub struct MintLoot<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     /// CHECK: who receives the item.
+    pub owner: UncheckedAccount<'info>,
+    #[account(mut, seeds = [seeds::CONFIG], bump = config.bump)]
+    pub config: Box<Account<'info, ArmoryConfig>>,
+    #[account(seeds = [seeds::TEMPLATE, &template_id.to_le_bytes()], bump = template.bump)]
+    pub template: Box<Account<'info, Template>>,
+    /// CHECK: `["minter"]`.
+    #[account(address = MINTER)]
+    pub minter: UncheckedAccount<'info>,
+    /// CHECK: `["item-mint", items_minted]`.
+    #[account(mut, seeds = [seeds::ITEM_MINT, &config.items_minted.to_le_bytes()], bump)]
+    pub item_mint: UncheckedAccount<'info>,
+    #[account(init, payer = payer, space = 8 + Item::INIT_SPACE,
+        seeds = [seeds::ITEM, item_mint.key().as_ref()], bump)]
+    pub item: Box<Account<'info, Item>>,
+    /// CHECK: the owner's holding of the item mint.
+    #[account(mut)]
+    pub recipient_holding: UncheckedAccount<'info>,
+    /// CHECK: `["armory"]`.
+    #[account(address = ARMORY_SIGNER)]
+    pub armory_signer: UncheckedAccount<'info>,
+    /// CHECK: the items program.
+    #[account(address = ids::ITEMS_ID)]
+    pub items_program: UncheckedAccount<'info>,
+    pub token: TokenAccounts<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+/// Integration pass 3 (E-5): `MintLoot` with craft's signer in place of the war program's.
+#[event_cpi]
+#[derive(Accounts)]
+#[instruction(crafter: Pubkey, template_id: u16)]
+pub struct MintCrafted<'info> {
+    /// Craft's `["craft-signer"]` (checked in the handler).
+    pub craft_signer: Signer<'info>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    /// CHECK: who receives the item (the crafter).
+    #[account(address = crafter @ ArmoryError::WrongAccount)]
     pub owner: UncheckedAccount<'info>,
     #[account(mut, seeds = [seeds::CONFIG], bump = config.bump)]
     pub config: Box<Account<'info, ArmoryConfig>>,
@@ -1063,6 +1114,9 @@ fn process_register_template(
         name: args.name,
         ts
     });
+    // Integration pass 3 (E-6): the registrant's TEMPLATES_REGISTERED when the social suffix is given.
+    let (_, _, social) = split_eco(ctx.remaining_accounts);
+    record_social(social, &ctx.accounts.admin.key(), hookwars_common::economy::counter::TEMPLATES_REGISTERED)?;
     Ok(())
 }
 
@@ -1169,7 +1223,13 @@ fn process_create_item(
     });
     // Integration pass 2 (09 section 21 item 3): optional agent attribution, after the effects.
     let (rest, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    // Integration pass 3 (E-3, E-6): wear and the social counter.
+    let (rest, craft, social) = split_eco(rest);
+    let charges = ctx.accounts.template.charges_on_create;
+    let payer = ctx.accounts.author.to_account_info();
+    open_wear(craft, &payer, &mut ctx.accounts.item, &item_key, charges)?;
     bump_author_counter(rest, &author)?;
+    record_social(social, &author, hookwars_common::economy::counter::ITEMS_AUTHORED)?;
     hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.author.key(), hookwars_common::agents_record::ITEMS_AUTHORED, 0)?;
     Ok(())
 }
@@ -1195,6 +1255,44 @@ fn bump_author_counter<'info>(rest: &[AccountInfo<'info>], author: &Pubkey) -> R
     v.items = v.items.saturating_add(1);
     v.try_serialize(&mut &mut c.try_borrow_mut_data()?[..])?;
     Ok(())
+}
+
+/// Integration pass 3 (E-3, E-6): the optional economy suffixes, before the agents suffix:
+/// `[..., craft init-wear (6), social (5)]`. Returns the rest, the craft and the social suffix.
+#[allow(clippy::type_complexity)]
+fn split_eco<'a, 'info>(
+    rem: &'a [AccountInfo<'info>],
+) -> (&'a [AccountInfo<'info>], Option<&'a [AccountInfo<'info>]>, Option<&'a [AccountInfo<'info>]>) {
+    use hookwars_common::{economy as eco, eco_cpi};
+    let (rem, social) = eco_cpi::split_tagged(rem, &eco::SOCIAL_ID, eco_cpi::SOCIAL_SUFFIX);
+    let (rem, craft) = eco_cpi::split_tagged(rem, &eco::CRAFT_ID, eco_cpi::INIT_WEAR_SUFFIX);
+    (rem, craft, social)
+}
+
+/// Integration pass 3 (E-3): opens the item's craft `Wear` when its template wears; the init-wear
+/// suffix is then required, so no item of a wearing template is made without one.
+fn open_wear<'info>(
+    craft: Option<&[AccountInfo<'info>]>,
+    payer: &AccountInfo<'info>,
+    item: &mut Item,
+    item_key: &Pubkey,
+    charges: u32,
+) -> Result<()> {
+    if charges == 0 {
+        return Ok(());
+    }
+    let s = craft.ok_or(ArmoryError::WearAccountsMissing)?;
+    hookwars_common::eco_cpi::init_wear(s, &crate::ID, payer, item_key, charges)?;
+    item.has_wear = true;
+    Ok(())
+}
+
+/// Integration pass 3 (E-6): a social counter when the social suffix was given.
+fn record_social<'info>(social: Option<&[AccountInfo<'info>]>, wallet: &Pubkey, counter: u8) -> Result<()> {
+    match social {
+        Some(s) => hookwars_common::eco_cpi::record_wallet(s, &crate::ID, wallet, counter, 1),
+        None => Ok(()),
+    }
 }
 
 /// Integration pass 2 (I-5): creates `wallet`'s `AuthorCounter` and `ClaimCounter` (anyone pays).
@@ -1230,6 +1328,8 @@ fn process_create_composite<'info>(
     );
     // Integration pass 2: an optional agent attribution suffix comes after the module templates.
     let (rem, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    // Integration pass 3 (E-3, E-6): optional craft and social suffixes before it.
+    let (rem, craft, social) = split_eco(rem);
     // I-5: an optional `AuthorCounter` after the module templates.
     let (rem, counter) = take_counter(rem, &pda::author_counter(&a.author.key()).0);
     require!(rem.len() == modules.len(), ArmoryError::WrongAccount);
@@ -1309,10 +1409,107 @@ fn process_create_composite<'info>(
         source: source::AUTHORED,
         ts
     });
+    let charges = ctx.accounts.template.charges_on_create;
+    let payer = ctx.accounts.author.to_account_info();
+    open_wear(craft, &payer, &mut ctx.accounts.item, &item_key, charges)?;
     if let Some(c) = counter {
         bump_author_counter(core::slice::from_ref(c), &ctx.accounts.author.key())?;
     }
+    record_social(social, &author, hookwars_common::economy::counter::ITEMS_AUTHORED)?;
     hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.author.key(), hookwars_common::agents_record::ITEMS_AUTHORED, 0)?;
+    Ok(())
+}
+
+/// Integration pass 3 (E-5): the crafted item's fields are fixed, not drawn: each is the
+/// midpoint of the recipe's range (so a range with `min == max` gives exactly that value). The
+/// loot randomness adapter is not wired here (deviation, 13-integration-3).
+fn process_mint_crafted<'info>(
+    ctx: Context<'_, '_, 'info, 'info, MintCrafted<'info>>,
+    crafter: Pubkey,
+    template_id: u16,
+    param_min: Vec<u32>,
+    param_max: Vec<u32>,
+    recipe_id: u16,
+) -> Result<()> {
+    let (craft_signer, _) = Pubkey::find_program_address(
+        &[b"craft-signer"],
+        &hookwars_common::economy::CRAFT_ID,
+    );
+    require_keys_eq!(ctx.accounts.craft_signer.key(), craft_signer, ArmoryError::NotCraftSigner);
+    require!(
+        param_min.len() == param_max.len() && param_min.len() <= PARAM_FIELDS,
+        ArmoryError::InvalidSchema
+    );
+    let mut params = [0u32; PARAM_FIELDS];
+    for (i, (lo, hi)) in param_min.iter().zip(param_max.iter()).enumerate() {
+        require!(lo <= hi, ArmoryError::InvalidSchema);
+        params[i] = lo + (hi - lo) / 2;
+    }
+    let a = &ctx.accounts;
+    let signer = a.armory_signer.to_account_info();
+    let items = a.items_program.to_account_info();
+    let manifest = validate_item(&signer, &items, &a.template, &params)?;
+    let (tp, ea, sp) = a.token.infos();
+    let t = TokenInfos {
+        token_program: &tp,
+        event_authority: &ea,
+        system_program: &sp,
+    };
+    let n = a.config.items_minted;
+    mint_item(
+        &t,
+        &a.payer.to_account_info(),
+        &a.minter.to_account_info(),
+        &a.item_mint.to_account_info(),
+        ctx.bumps.item_mint,
+        n,
+        &a.owner.to_account_info(),
+        &a.recipient_holding.to_account_info(),
+        &a.template.name,
+    )?;
+    let ts = now()?;
+    let royalty_bps = a.template.loot_royalty_bps;
+    let item_key = ctx.accounts.item.key();
+    let item_mint = ctx.accounts.item_mint.key();
+    write_item(
+        &mut ctx.accounts.item,
+        item_key,
+        ctx.bumps.item,
+        item_mint,
+        template_id,
+        params,
+        manifest,
+        craft_signer,
+        royalty_bps,
+        1,
+        source::CRAFTED,
+        ts,
+    );
+    let (_, craft, _) = split_eco(ctx.remaining_accounts);
+    let charges = ctx.accounts.template.charges_on_create;
+    let payer = ctx.accounts.payer.to_account_info();
+    open_wear(craft, &payer, &mut ctx.accounts.item, &item_key, charges)?;
+    ctx.accounts.config.items_minted = n + 1;
+    emit_cpi!(ItemCreated {
+        item: item_key,
+        item_mint,
+        template_id,
+        params,
+        manifest,
+        author: craft_signer,
+        royalty_bps,
+        level: 1,
+        source: source::CRAFTED,
+        ts
+    });
+    emit_cpi!(ItemCrafted {
+        item: item_key,
+        owner: crafter,
+        template_id,
+        recipe_id,
+        params,
+        ts
+    });
     Ok(())
 }
 
@@ -1359,6 +1556,11 @@ fn process_mint_loot(ctx: Context<MintLoot>, template_id: u16, params: Params) -
         source::LOOT,
         ts,
     );
+    // Integration pass 3 (E-3): wear for a wearing template (the war program passes the suffix).
+    let (_, craft, _) = split_eco(ctx.remaining_accounts);
+    let charges = ctx.accounts.template.charges_on_create;
+    let payer = ctx.accounts.payer.to_account_info();
+    open_wear(craft, &payer, &mut ctx.accounts.item, &item_key, charges)?;
     ctx.accounts.config.items_minted = n + 1;
     emit_cpi!(ItemCreated {
         item: item_key,

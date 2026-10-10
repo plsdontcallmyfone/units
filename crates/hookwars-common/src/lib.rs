@@ -2228,8 +2228,9 @@ pub mod eco_cpi {
     /// The init-wear suffix: head + `wear (mut)` + `system program`.
     pub const INIT_WEAR_SUFFIX: usize = CRAFT_HEAD + 2;
     /// The settle suffix: head + `wear` + drop accounts `drop_rule, material, material_mint,
-    /// minter, recipient, recipient_holding`.
-    pub const SETTLE_CRAFT_SUFFIX: usize = CRAFT_HEAD + 7;
+    /// minter, recipient, recipient_holding` + the recipient's holding of the item mint (proves
+    /// the recipient holds the item).
+    pub const SETTLE_CRAFT_SUFFIX: usize = CRAFT_HEAD + 8;
     /// The reveal suffix (war): head + drop accounts (6).
     pub const DROP_SUFFIX: usize = CRAFT_HEAD + 6;
 
@@ -2282,6 +2283,14 @@ pub mod eco_cpi {
         args.extend(runs.to_le_bytes());
         let infos = [s[3].clone(), s[1].clone(), s[4].clone(), s[2].clone(), s[0].clone()];
         cpi(eco::CRAFT_ID, "wear", args, metas, &infos, &[eco::CRAFT_CALLER_SEED, &[bump]])
+    }
+
+    /// Craft's drop sources (11 section 5.2).
+    pub mod drop_source {
+        pub const SETTLE_CRANK: u8 = 0;
+        pub const RAID_REVEAL: u8 = 1;
+        pub const SEASON_FINISH: u8 = 2;
+        pub const QUEST_CLAIM: u8 = 3;
     }
 
     /// The common accounts a `drop` needs beside the suffix.

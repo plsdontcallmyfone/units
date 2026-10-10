@@ -3,6 +3,8 @@
 // Changed by Hookwars: integration pass 2 (10 section 17 I-7, R32): a leased item's lessor is paid
 // its rent share out of the royalty; optional agent attribution suffix (09 section 21 item 5);
 // kit tokens pay token-side cuts only to on-curve wallets or mint vaults (review 1 H-2).
+// Changed by Hookwars: integration pass 3: the protocol fee (E-2, R37) and the template author's share
+// (R34, spec 10 I-2) through a fee suffix; craft wear and the settle drop (E-3, E-4) through a craft suffix.
 //! `settle_equip` (04 section 2.5, 08 section 2.11): pays what a slot's item collected. For each
 //! module, token side and pool side apart: the royalty (`Item.royalty_bps`) to the item's royalty
 //! holding, the sender's bounty (the armory's `settle_bounty_bps`), the rest to the module's
@@ -23,6 +25,13 @@ fn split(x: u64, royalty_bps: u16, bounty_bps: u16) -> (u64, u64, u64) {
     let royalty = (u128::from(x) * u128::from(royalty_bps.min(10_000)) / 10_000) as u64;
     let bounty = (u128::from(x - royalty) * u128::from(bounty_bps.min(10_000)) / 10_000) as u64;
     (royalty, bounty, x - royalty - bounty)
+}
+
+/// Integration pass 3 (E-2): accounts in the fee suffix.
+pub const FEE_SUFFIX: usize = 4;
+
+fn bps(x: u64, b: u16) -> u64 {
+    (u128::from(x) * u128::from(b.min(10_000)) / 10_000) as u64
 }
 
 struct Cpi<'a, 'info> {
@@ -173,9 +182,9 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
     };
     require_keys_eq!(*a.armory_config.owner, ids::ARMORY_ID, ItemsError::WrongAccount);
     require_keys_eq!(a.armory_config.key(), pda::config().0, ItemsError::WrongAccount);
-    let bounty_bps = hookwars_armory::state::ArmoryConfig::try_deserialize(&mut &a.armory_config.try_borrow_data()?[..])?
-        .params
-        .settle_bounty_bps;
+    let armory_cfg = hookwars_armory::state::ArmoryConfig::try_deserialize(&mut &a.armory_config.try_borrow_data()?[..])?;
+    let bounty_bps = armory_cfg.params.settle_bounty_bps;
+    let protocol_bps = armory_cfg.item_protocol_bps;
     let royalty_owner = pda::royalty_owner(&item_key).0;
     require_keys_eq!(a.royalty_owner.key(), royalty_owner, ItemsError::WrongAccount);
     let (pool_cuts, pool_cuts_bump) = pda::pool_cuts(&mint_key);
@@ -193,6 +202,30 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
     }
     // Integration pass 2 (09 section 21 item 5): an optional agent attribution suffix comes last.
     let (rest, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    // Integration pass 3 (E-2, R34): the fee suffix `[Template, protocol token holding (the armory
+    // admin's), author token holding, author quote holding (the template's registrant's)]`, before
+    // the agent suffix. Required once `ITEM_PROTOCOL_BPS` is set, so neither share can be skipped.
+    let template_key = pda::template(item.template_id).0;
+    let (rest, fee_sfx) = hookwars_common::eco_cpi::split_tagged(rest, &template_key, FEE_SUFFIX);
+    let quote_key = a.quote_mint.key();
+    let author_bps = match fee_sfx {
+        Some(f) => {
+            require_keys_eq!(*f[0].owner, ids::ARMORY_ID, ItemsError::WrongAccount);
+            let t = hookwars_armory::state::Template::try_deserialize(&mut &f[0].try_borrow_data()?[..])?;
+            require_keys_eq!(f[1].key(), pda::holding(&mint_key, &armory_cfg.admin), ItemsError::WrongAccount);
+            require_keys_eq!(f[2].key(), pda::holding(&mint_key, &t.registered_by), ItemsError::WrongAccount);
+            require_keys_eq!(f[3].key(), pda::holding(&quote_key, &t.registered_by), ItemsError::WrongAccount);
+            t.author_bps
+        }
+        None => 0,
+    };
+    // E-3, E-4: the craft suffix `[craft head (4), Wear, drop rule, material, material mint, minter,
+    // recipient, recipient's material holding, recipient's item holding]`, before the fee suffix.
+    let (rest, craft_sfx) = hookwars_common::eco_cpi::split_tagged(
+        rest,
+        &hookwars_common::economy::CRAFT_ID,
+        hookwars_common::eco_cpi::SETTLE_CRAFT_SUFFIX,
+    );
     // I-7: an optional lease suffix (before the agent suffix) names the item's `Lease`.
     let (rest, rent_sfx) = hookwars_common::market::split_rent(rest, &item_key);
     require!(rest.len() >= 2 * modules.len(), ItemsError::WrongAccount);
@@ -228,6 +261,10 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
     let kit = templates::runs_kit(&bordrless_token::client::read_mint(&a.mint.to_account_info())?);
     let any_token = token_owed.iter().any(|x| *x > 0);
     let any_quote = pool_owed.iter().any(|x| *x > 0);
+    if protocol_bps > 0 && any_token {
+        require!(fee_sfx.is_some(), ItemsError::WrongAccount);
+    }
+    let mut p_t = 0u64;
     if any_token {
         cpi.create_holding(&cranker, &mint_info, &cranker, &a.cranker_token.to_account_info(), &system)?;
     }
@@ -258,13 +295,16 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
         let targets = &a.equip_state.config.targets[start.min(end)..end];
         let x = token_owed.get(i).copied().unwrap_or(0);
         if x > 0 {
-            let (royalty, bounty, left) = split(x, royalty_bps, bounty_bps);
+            // E-2 (R37): the protocol's share comes first, on the token side only.
+            let protocol = bps(x, protocol_bps);
+            let (royalty, bounty, left) = split(x - protocol, royalty_bps, bounty_bps);
             match templates::token_destination(m.template_id, targets) {
                 Destination::Burn => {
                     cpi.burn(&state_info, &vault, &mint_info, left, state_seeds)?;
                     burned += left;
                     r_t += royalty;
                     b_t += bounty;
+                    p_t += protocol;
                 }
                 Destination::Owner(o) => {
                     let d = &dests[2 * i];
@@ -279,6 +319,7 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
                         paid_t += left;
                         r_t += royalty;
                         b_t += bounty;
+                        p_t += protocol;
                     } else {
                         token_left[i] = x;
                     }
@@ -310,6 +351,25 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
         cpi.burn(&state_info, &vault, &mint_info, stray, state_seeds)?;
         burned += stray;
     }
+    // E-2: the protocol's share to the armory admin's holding; R34: the template author's share of
+    // the royalty, before the rent. A holding that does not exist leaves that share with the
+    // royalty holding (anyone may create it and later settles pay it).
+    let (mut a_t, mut a_q, mut protocol_paid) = (0u64, 0u64, 0u64);
+    if let Some(f) = fee_sfx {
+        if exists(&f[1]) {
+            cpi.pay(&state_info, &vault, &f[1], &mint_info, p_t, state_seeds, true)?;
+            protocol_paid = p_t;
+        }
+        if exists(&f[2]) {
+            a_t = bps(r_t, author_bps);
+            cpi.pay(&state_info, &vault, &f[2], &mint_info, a_t, state_seeds, true)?;
+        }
+        if exists(&f[3]) {
+            a_q = bps(r_q, author_bps);
+            cpi.pay(&pool_cuts_info, &a.pool_cuts_holding.to_account_info(), &f[3], &quote_info, a_q, cuts_seeds, false)?;
+        }
+    }
+    let (r_t, r_q) = (r_t + (p_t - protocol_paid) - a_t, r_q - a_q);
     // I-7 (R32): while an `Active` lease names this (token, slot), the lessor's share of the royalty
     // goes to the lessor's holdings; a holding that does not exist leaves that share with the
     // royalty holding (the item returns to the lessor at the lease's end, so nothing is lost).
@@ -340,10 +400,41 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
     cpi.pay(&pool_cuts_info, &cuts_holding, &a.cranker_quote.to_account_info(), &quote_info, b_q, cuts_seeds, false)?;
 
     let total_quote: u64 = pool_owed.iter().sum::<u64>() - pool_left.iter().sum::<u64>();
+    let total_token: u64 = token_owed.iter().sum::<u64>() - token_left.iter().sum::<u64>();
+    // E-3: the runs since the last settle wear the item; E-4: what settled on the token side drops
+    // material to the item's holder (SETTLE_CRANK). An item that wears needs the craft suffix.
+    let runs = ctx.accounts.equip_state.runs;
+    let new_runs = runs.saturating_sub(ctx.accounts.equip_state.runs_at_settle);
+    if item.has_wear && new_runs > 0 {
+        require!(craft_sfx.is_some(), ItemsError::WrongAccount);
+    }
+    if let Some(c) = craft_sfx {
+        let n = hookwars_common::eco_cpi::CRAFT_HEAD;
+        if item.has_wear {
+            require_keys_eq!(c[n].key(), hookwars_common::eco_cpi::wear_address(&item_key), ItemsError::WrongAccount);
+            hookwars_common::eco_cpi::wear(c, &crate::ID, &item_key, u32::try_from(new_runs).unwrap_or(u32::MAX))?;
+        }
+        let d = &c[n + 1..n + 7];
+        let holder_item = &c[n + 7];
+        require_keys_eq!(holder_item.key(), pda::holding(&item.item_mint, d[4].key), ItemsError::WrongAccount);
+        let holds = *holder_item.owner == bordrless_token::ID
+            && holder_item.data_len() > 0
+            && bordrless_token::client::read_holding(holder_item)?.amount == 1;
+        if holds {
+            let common = hookwars_common::eco_cpi::DropCommon {
+                payer: &cranker,
+                token_program: &token_program,
+                token_event_authority: &events,
+                system_program: &system,
+            };
+            hookwars_common::eco_cpi::drop(c, d, &common, &crate::ID, hookwars_common::eco_cpi::drop_source::SETTLE_CRANK, total_token)?;
+        }
+    }
     let s = &mut ctx.accounts.equip_state;
     s.token_unsettled = token_left;
     s.pool_unsettled = pool_left;
     s.pool_settled = s.pool_settled.checked_add(total_quote).ok_or(ItemsError::Overflow)?;
+    s.runs_at_settle = runs;
     emit!(EquipSettled {
         mint: mint_key,
         slot,
@@ -364,6 +455,25 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
             lessor,
             rent_token: rent_t,
             rent_quote: rent_q,
+        });
+    }
+    if protocol_paid > 0 {
+        emit!(crate::ProtocolFee {
+            source: hookwars_common::economy::fee_source::ITEM_RUN,
+            mint: mint_key,
+            amount: protocol_paid,
+            reference: [0; 32],
+            ts: Clock::get()?.unix_timestamp,
+        });
+    }
+    if a_t > 0 || a_q > 0 {
+        emit!(crate::AuthorSharePaid {
+            mint: mint_key,
+            slot,
+            item: item_key,
+            template_id: item.template_id,
+            author_token: a_t,
+            author_quote: a_q,
         });
     }
     hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.cranker.key(), hookwars_common::agents_record::CRANK, total_quote)?;

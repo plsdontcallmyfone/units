@@ -1,3 +1,4 @@
+// Changed by Hookwars: integration pass 3 (E-3): the registry ends with the craft Wear of an item that wears.
 // Changed by Hookwars: integration pass 2 (08 arsenal 2 request 1): registries carry derived extra sources;
 // kit tokens refuse off-curve token-side payees (review 1 H-2 carried to settle).
 // Changed by Hookwars: new file (M3b), the armory-facing entry points moved out of lib.rs (M2) and; agents branch: template 42 takes no targets.
@@ -114,7 +115,8 @@ fn check_targets(template_id: u16, config: &EquipConfig, max_targets: u8, module
 }
 
 /// The registry of an equipped item (04 section 2.2): `Item`, `EquipState`, the equip vault when
-/// it cuts on the token side, the module list for a composite, then each module's own extras.
+/// it cuts on the token side, the module list for a composite, then each module's own extras,
+/// then (integration pass 3, E-3) the item's craft `Wear` when it wears.
 pub fn registry_list(
     template_id: u16,
     mint: &Pubkey,
@@ -123,6 +125,7 @@ pub fn registry_list(
     equip_vault: Option<Pubkey>,
     config: &EquipConfig,
     composite: Option<(&Pubkey, &[Module])>,
+    wear: Option<Pubkey>,
 ) -> HookAccountList {
     let key = |k: Pubkey, writable: bool| ExtraAccount {
         writable,
@@ -146,6 +149,10 @@ pub fn registry_list(
                 v.extend(crate::templates::extra_sources(m.template_id, mint, &config.targets[start..end]));
             }
         }
+    }
+    // Integration pass 3 (E-3): an item that wears reads its craft `Wear` last.
+    if let Some(w) = wear {
+        v.push(key(w, false));
     }
     HookAccountList::new(v)
 }
@@ -255,6 +262,7 @@ pub fn process_init_equip<'info>(
     manifest: Manifest,
     config: EquipConfig,
     max_targets: u8,
+    wear: bool,
 ) -> Result<()> {
     let composite = if template_id == template_id::COMPOSITE {
         let info = ctx.remaining_accounts.first().ok_or(ItemsError::BadComposite)?;
@@ -341,7 +349,8 @@ pub fn process_init_equip<'info>(
         pool_settled: carried.1,
         token_unsettled: [0; MAX_MODULES],
         pool_unsettled: [0; MAX_MODULES],
-        reserved: [0; 32],
+        runs_at_settle: 0,
+        reserved: [0; 24],
     };
     {
         let mut data = state_info.try_borrow_mut_data()?;
@@ -390,6 +399,7 @@ pub fn process_init_equip<'info>(
         vault,
         &config,
         composite.as_ref().map(|(k, c)| (k, c.modules.as_slice())),
+        wear.then(|| hookwars_common::eco_cpi::wear_address(&item)),
     );
     let bytes = list.encode();
     let (reg_key, reg_bump) = Pubkey::find_program_address(

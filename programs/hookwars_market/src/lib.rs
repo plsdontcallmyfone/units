@@ -1,4 +1,4 @@
-// Changed by Hookwars: new program (expansion, docs/spec/10-expansion.md sections 0, 1, 4, 5).
+// Changed by Hookwars: new program (expansion, docs/spec/10-expansion.md sections 0, 1, 4, 5); integration pass 3: buy records ITEMS_SOLD (E-6).
 // Integration pass 2: end_lease reverts the leased slot through the armory (10 section 17 I-3).
 // Economy (11): licences (11 sections 1.4, 2.3).
 //! `hookwars_market`: items are assets. Listings and sales of item tokens (price in SOL, paid by
@@ -274,6 +274,16 @@ pub mod hookwars_market {
             resale,
             ts
         });
+        // Integration pass 3 (E-6): the seller's ITEMS_SOLD when the social suffix is given.
+        let (_, social) = hookwars_common::eco_cpi::split_tagged(
+            ctx.remaining_accounts,
+            &hookwars_common::economy::SOCIAL_ID,
+            hookwars_common::eco_cpi::SOCIAL_SUFFIX,
+        );
+        if let Some(sfx) = social {
+            let seller = ctx.accounts.listing.seller;
+            hookwars_common::eco_cpi::record_wallet(sfx, &crate::ID, &seller, hookwars_common::economy::counter::ITEMS_SOLD, 1)?;
+        }
         Ok(())
     }
 
