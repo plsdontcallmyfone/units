@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { BookOpen, Bridge, Briefcase, Buildings, CaretDown, CheckSquare, FileText, MagnifyingGlass, Medal, Robot, RocketLaunch, Shield, SquaresFour, Storefront, Sword, Trophy, UserCircle } from '@phosphor-icons/react';
 
 /** 06 6.1 navigation, grouped: three menus that open on hover or focus, plus Docs. The narrow-screen
  * sheet keeps every page as a flat link. */
@@ -10,22 +11,10 @@ type Item = { href: string; label: string; what: string; icon: ReactNode };
 type Group = { label: string; href?: string; columns: { title: string; items: Item[] }[]; foot?: Item };
 
 const I = {
-  board: <svg viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" /><rect x="9" y="2" width="5" height="5" /><rect x="2" y="9" width="5" height="5" /><rect x="9" y="9" width="5" height="5" /></svg>,
-  launch: <svg viewBox="0 0 16 16"><path d="M8 2l3 6-3 6-3-6z" /><path d="M5 8h6" /></svg>,
-  explorer: <svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5L14 14" /></svg>,
-  portfolio: <svg viewBox="0 0 16 16"><rect x="2" y="5" width="12" height="9" /><path d="M5 5V3h6v2" /></svg>,
-  war: <svg viewBox="0 0 16 16"><path d="M2 14l5-5M14 2l-5 5M9 7l-2 2" /><path d="M9 2h5v5" /><path d="M2 9v5h5" /></svg>,
-  seasons: <svg viewBox="0 0 16 16"><path d="M3 13h10M4 13V7l4-4 4 4v6" /></svg>,
-  quests: <svg viewBox="0 0 16 16"><path d="M3 3h10v10H3z" /><path d="M6 8l1.5 1.5L10 6.5" /></svg>,
-  generals: <svg viewBox="0 0 16 16"><circle cx="8" cy="5" r="3" /><path d="M2 14c0-3 3-4 6-4s6 1 6 4" /></svg>,
-  armory: <svg viewBox="0 0 16 16"><path d="M8 2l5 2v4c0 3-2 5-5 6-3-1-5-3-5-6V4z" /></svg>,
-  market: <svg viewBox="0 0 16 16"><path d="M2 6h12l-1 8H3z" /><path d="M5 6V4a3 3 0 016 0v2" /></svg>,
-  bridge: <svg viewBox="0 0 16 16"><path d="M2 10c2-4 10-4 12 0" /><path d="M2 10v3M14 10v3M6 8.5V13M10 8.5V13" /></svg>,
-  agents: <svg viewBox="0 0 16 16"><rect x="3" y="4" width="10" height="8" /><path d="M6 8h.01M10 8h.01M8 2v2" /></svg>,
-  guild: <svg viewBox="0 0 16 16"><path d="M2 6l6-4 6 4v8H2z" /><path d="M6 14V9h4v5" /></svg>,
-  badge: <svg viewBox="0 0 16 16"><circle cx="8" cy="6" r="4" /><path d="M5.5 9.5L4 14l4-2 4 2-1.5-4.5" /></svg>,
-  brief: <svg viewBox="0 0 16 16"><path d="M4 2h6l3 3v9H4z" /><path d="M6 8h5M6 11h5" /></svg>,
-  docs: <svg viewBox="0 0 16 16"><path d="M8 3c-2-1-4-1-6 0v10c2-1 4-1 6 0 2-1 4-1 6 0V3c-2-1-4-1-6 0z" /><path d="M8 3v10" /></svg>,
+  board: <SquaresFour />, launch: <RocketLaunch />, explorer: <MagnifyingGlass />, portfolio: <Briefcase />,
+  war: <Sword />, seasons: <Trophy />, quests: <CheckSquare />, generals: <UserCircle />,
+  armory: <Shield />, market: <Storefront />, bridge: <Bridge />,
+  agents: <Robot />, guild: <Buildings />, badge: <Medal />, brief: <FileText />, docs: <BookOpen />,
 };
 
 export const GROUPS: Group[] = [
@@ -90,7 +79,7 @@ export function Nav() {
   const [open, setOpen] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const show = (label: string) => { if (timer.current) clearTimeout(timer.current); setOpen(label); };
-  const hide = () => { if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => setOpen(null), 120); };
+  const hide = () => { if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => setOpen(null), 220); };
   useEffect(() => { setOpen(null); }, [path]);
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(null); }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, []);
   return (
@@ -101,7 +90,7 @@ export function Nav() {
         const isOpen = open === g.label;
         return (
           <div key={g.label} className={`nav-group ${isOpen ? 'open' : ''}`} onMouseEnter={() => show(g.label)} onMouseLeave={hide} onFocus={() => show(g.label)} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) hide(); }}>
-            <button type="button" className={active ? 'on' : ''} aria-expanded={isOpen} aria-haspopup="true" onClick={() => setOpen(isOpen ? null : g.label)}>{g.label}<svg className="caret" viewBox="0 0 10 6" aria-hidden><path d="M1 1l4 4 4-4" /></svg></button>
+            <button type="button" className={active ? 'on' : ''} aria-expanded={isOpen} aria-haspopup="true" onClick={() => setOpen(isOpen ? null : g.label)}>{g.label}<span className="caret" aria-hidden><CaretDown weight="bold" /></span></button>
             <div className="menu" role="menu" hidden={!isOpen}>
               <div className="menu-cols">{g.columns.map((c) => <div className="menu-col" key={c.title}><div className="label">{c.title}</div>{c.items.map((i) => <Entry key={i.href} item={i} path={path} />)}</div>)}</div>
               {g.foot ? <div className="menu-foot"><div className="menu-foot-in"><Entry item={g.foot} path={path} read /></div></div> : null}
