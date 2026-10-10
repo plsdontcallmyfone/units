@@ -1,3 +1,4 @@
+import { PublicKey } from '@solana/web3.js';
 // Changed by Hookwars: body caps, rate limits, redaction and number checks for the API (app audit A-2, A-3, A-4, A-12).
 /**
  * Request guards of the API (app audit 1): the cluster a status may name (never the RPC URL, A-2),
@@ -94,6 +95,12 @@ export function clientKey(req: IncomingMessage, trustedHops = 0): string {
 }
 
 /** An integer in [lo, hi] from a path or query string, else a 400. */
+/** A base58 public key from a path or query value; anything else is a 400 with a sentence, never a 500. */
+export function keyParam(v: string | null | undefined, name: string): string {
+  if (v === null || v === undefined || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(v)) throw new HttpError(400, 'BadAddress', `"${name}" is not an address.`);
+  try { return new PublicKey(v).toBase58(); } catch { throw new HttpError(400, 'BadAddress', `"${name}" is not an address.`); }
+}
+
 export function intParam(v: string | null | undefined, name: string, lo: number, hi: number): number {
   if (v === null || v === undefined || !/^\d+$/.test(v)) throw new HttpError(400, 'BadRequest', `"${name}" must be an integer.`);
   const n = Number(v);

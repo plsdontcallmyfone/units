@@ -37,11 +37,33 @@ test.describe('desktop menus', () => {
   });
 
   test('clicking a menu pill leaves its menu open', async ({ page }) => {
-    test.fixme(true, 'Pointing at a pill opens its menu (onMouseEnter, and onFocus for the keyboard), and the click that follows toggles it shut (onClick sets open to null when it is already open), so a click or Enter on a pill closes the menu it just opened. components/site-header.tsx.');
     await page.goto('/projects');
     const button = page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Armory', exact: true });
     await button.click();
     await expect(button).toHaveAttribute('aria-expanded', 'true');
+    // Pinned by the click: moving the pointer away keeps it open; a second click closes it.
+    await page.mouse.move(5, 600);
+    await page.waitForTimeout(400);
+    await expect(button).toHaveAttribute('aria-expanded', 'true');
+    await button.click();
+    await expect(button).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('the keyboard opens a menu, walks into it and Escape returns to the pill', async ({ page }) => {
+    await page.goto('/projects');
+    const button = page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'War', exact: true });
+    await button.focus();
+    await expect(button).toHaveAttribute('aria-expanded', 'false');
+    await page.keyboard.press('Enter');
+    await expect(button).toHaveAttribute('aria-expanded', 'true');
+    await page.keyboard.press('Tab');
+    await expect(page.locator(`#${await button.getAttribute('aria-controls')} a`).first()).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(button).toHaveAttribute('aria-expanded', 'false');
+    await expect(button).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(button).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator(`#${await button.getAttribute('aria-controls')} a`).first()).toBeFocused();
   });
 
   test('Docs and Launch are direct links', async ({ page }) => {
@@ -61,9 +83,8 @@ test.describe('desktop menus', () => {
   });
 
   test('the pages added in app pass 5 are in the menu', async ({ page }) => {
-    test.fixme(true, 'The header (components/site-header.tsx) has no entry for /governance or /war/coalitions; app pass 5 added them to components/nav.tsx, which the layout no longer renders.');
     await page.goto('/projects');
-    for (const href of ['/governance', '/war/coalitions']) await expect(page.locator(`header a[href="${href}"]`)).toHaveCount(1);
+    for (const href of ['/governance', '/war/coalitions', '/economy']) await expect(page.locator(`header a[href="${href}"]`)).toHaveCount(1);
   });
 });
 

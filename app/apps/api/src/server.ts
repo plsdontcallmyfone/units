@@ -18,7 +18,7 @@ import { socialRoute } from './social.ts';
 import * as explorer from './explorer.ts';
 import * as launchPlan from './launch-plan.ts';
 import * as econ from './economy.ts';
-import { clientKey, clusterName, HttpError, intParam, RateLimiter, readJsonBody } from './guard.ts';
+import { clientKey, clusterName, HttpError, intParam, keyParam, RateLimiter, readJsonBody } from './guard.ts';
 
 export interface Deps { db: Pool | null; conn: Connection; rpcUrl: string }
 
@@ -144,23 +144,23 @@ export function handler(deps: Deps) {
       const social = await socialRoute(p, q, deps.conn, db);
       if (social) return json(res, social.status, social.body);
       if (p === '/v1/agents') return json(res, 200, await cached(`agents:${q.get('sort') ?? ''}`, 15_000, () => xreads.agentsLeague(deps.conn, q.get('sort'))));
-      if ((m = /^\/v1\/agents\/(\w{32,44})$/.exec(p))) { const a = await xreads.agent(deps.conn, m[1]!); return json(res, 200, a); }
+      if ((m = /^\/v1\/agents\/([^/]+)$/.exec(p))) { const a = await xreads.agent(deps.conn, keyParam(m[1], 'passport')); return json(res, 200, a); }
       if (p === '/v1/market/listings') return json(res, 200, await cached('listings', 10_000, () => xreads.listings(deps.conn, db)));
-      if ((m = /^\/v1\/market\/items\/(\w{32,44})$/.exec(p))) { const it = await xreads.marketItem(deps.conn, db, m[1]!); return json(res, 200, it); }
+      if ((m = /^\/v1\/market\/items\/([^/]+)$/.exec(p))) { const it = await xreads.marketItem(deps.conn, db, keyParam(m[1], 'item mint')); return json(res, 200, it); }
       // The hook economy (app pass v3): craft, the order books and item wear.
       if (p === '/v1/craft') return json(res, 200, await cached('craft', 15_000, () => xreads.craftOverview(deps.conn)));
       if (p === '/v1/book') return json(res, 200, await cached('books', 10_000, () => xreads.books(deps.conn, null)));
       if ((m = /^\/v1\/book\/(\d{1,5})$/.exec(p))) return json(res, 200, await xreads.books(deps.conn, Number(m[1])));
-      if ((m = /^\/v1\/items\/(\w{32,44})\/wear$/.exec(p))) return json(res, 200, await xreads.itemWear(deps.conn, m[1]!));
+      if ((m = /^\/v1\/items\/([^/]+)\/wear$/.exec(p))) return json(res, 200, await xreads.itemWear(deps.conn, keyParam(m[1], 'item')));
       if (p === '/v1/market/leases') return json(res, 200, await cached('leases', 10_000, () => xreads.leases(deps.conn)));
       if (p === '/v1/market/collections') return json(res, 200, await cached('collections', 30_000, () => xreads.collections(deps.conn)));
       if (p === '/v1/commissions') return json(res, 200, await cached('commissions', 10_000, () => xreads.commissions(deps.conn)));
-      if ((m = /^\/v1\/commissions\/(\w{32,44})$/.exec(p))) { const c = await xreads.commission(deps.conn, m[1]!); return json(res, 200, c); }
+      if ((m = /^\/v1\/commissions\/([^/]+)$/.exec(p))) { const c = await xreads.commission(deps.conn, keyParam(m[1], 'commission')); return json(res, 200, c); }
       if (p === '/v1/guilds') return json(res, 200, await cached('guilds', 15_000, () => xreads.guilds(deps.conn)));
       if ((m = /^\/v1\/guilds\/(\d+)$/.exec(p))) { const g = await xreads.guild(deps.conn, intParam(m[1], 'guild', 0, 4_294_967_295)); return json(res, 200, g); }
       if (p === '/v1/badges') return json(res, 200, await cached('badges', 15_000, () => xreads.badges(deps.conn, db)));
       // App pass 5: item access, what waits on a timelock, Hook Lab submissions, coalitions and boss pools.
-      if ((m = /^\/v1\/access\/(\w{32,44})$/.exec(p))) return json(res, 200, await xreads.access(deps.conn, m[1]!));
+      if ((m = /^\/v1\/access\/([^/]+)$/.exec(p))) return json(res, 200, await xreads.access(deps.conn, keyParam(m[1], 'item mint')));
       if (p === '/v1/governance/queue') return json(res, 200, await cached('governance-queue', 10_000, () => xreads.governanceQueue(deps.conn)));
       if (p === '/v1/templates/submissions') return json(res, 200, await cached('template-submissions', 15_000, () => xreads.templateSubmissions(deps.conn)));
       if (p === '/v1/war/coalitions') return json(res, 200, await cached('coalitions', 10_000, () => xreads.coalitions(deps.conn)));
@@ -176,16 +176,16 @@ export function handler(deps: Deps) {
       }
       if (p === '/v1/templates') return json(res, 200, await reads.templates(db));
       if (p === '/v1/items') return json(res, 200, await reads.items(db, q));
-      if ((m = /^\/v1\/items\/(\w+)$/.exec(p))) {
-        const it = await reads.item(db, m[1]!);
+      if ((m = /^\/v1\/items\/([^/]+)$/.exec(p))) {
+        const it = await reads.item(db, keyParam(m[1], 'item'));
         return it ? json(res, 200, it) : json(res, 404, { error: 'No such item.' });
       }
-      if ((m = /^\/v1\/launches\/(\w+)\/slots$/.exec(p))) return json(res, 200, await reads.slots(db, m[1]!));
-      if ((m = /^\/v1\/launches\/(\w+)\/proposals$/.exec(p))) return json(res, 200, await reads.proposals(db, m[1]!, q.get('status')));
-      if ((m = /^\/v1\/launches\/(\w+)\/generals$/.exec(p))) { const mint = m[1]!; return json(res, 200, await cached(`generals:${mint}`, 30_000, async () => reads.generals(db, mint, await currentSeason(deps.conn)))); }
-      if ((m = /^\/v1\/launches\/(\w+)\/treaties$/.exec(p))) return json(res, 200, []);
-      if ((m = /^\/v1\/launches\/(\w+)\/war$/.exec(p))) {
-        const mint = new PublicKey(m[1]!);
+      if ((m = /^\/v1\/launches\/([^/]+)\/slots$/.exec(p))) return json(res, 200, await reads.slots(db, keyParam(m[1], 'mint')));
+      if ((m = /^\/v1\/launches\/([^/]+)\/proposals$/.exec(p))) return json(res, 200, await reads.proposals(db, keyParam(m[1], 'mint'), q.get('status')));
+      if ((m = /^\/v1\/launches\/([^/]+)\/generals$/.exec(p))) { const mint = keyParam(m[1], 'mint'); return json(res, 200, await cached(`generals:${mint}`, 30_000, async () => reads.generals(db, mint, await currentSeason(deps.conn)))); }
+      if ((m = /^\/v1\/launches\/([^/]+)\/treaties$/.exec(p))) { keyParam(m[1], 'mint'); return json(res, 200, []); }
+      if ((m = /^\/v1\/launches\/([^/]+)\/war$/.exec(p))) {
+        const mint = new PublicKey(keyParam(m[1], 'mint'));
         const info = await deps.conn.getAccountInfo(hookwars.warStateAddress(mint), 'confirmed');
         return json(res, 200, info ? { mint: mint.toBase58(), chest: hookwars.warChestAddress(mint).toBase58() } : null);
       }
@@ -195,8 +195,8 @@ export function handler(deps: Deps) {
       }
       if (p === '/v1/map') return json(res, 200, await cached('map', 30_000, () => reads.warMap(db, Math.floor(Date.now() / 1000))));
       if (p === '/v1/feed') return json(res, 200, await reads.feed(db, q));
-      if ((m = /^\/v1\/wallet\/(\w+)\/war$/.exec(p))) {
-        const owner = m[1]!;
+      if ((m = /^\/v1\/wallet\/([^/]+)\/war$/.exec(p))) {
+        const owner = keyParam(m[1], 'wallet');
         return json(res, 200, { holdings: [], items: (await reads.items(db, new URLSearchParams({ owner }))).items, rolls: [] });
       }
       if ((m = /^\/v1\/cards\/(\w+)\/(\d+)\.png$/.exec(p))) {

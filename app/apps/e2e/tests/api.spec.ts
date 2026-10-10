@@ -53,9 +53,9 @@ test.describe('API reads', () => {
   });
 
   test('a malformed key in a path is a 400, not a server error', async ({ request }) => {
-    test.fixme(true, 'GET /v1/agents/<not a public key> answers 500 ("Invalid public key input" in the log) instead of a 400 with a sentence; apps/api reads the path segment without checking it first.');
     const r = await request.get(`${API}/v1/agents/not-a-key`);
     expect(r.status()).toBe(400);
+    expect((await r.json()).error).toMatch(/is not an address/);
   });
 
   test('a write method on a read route is refused', async ({ request }) => {

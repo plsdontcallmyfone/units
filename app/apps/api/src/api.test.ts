@@ -45,6 +45,20 @@ const get = async (p: string) => { const r = await fetch(base + p); return { sta
 const M = 'So11111111111111111111111111111111111111112';
 
 withDb('reads with an empty database', () => {
+  it('a malformed key in a path is a 400 with a sentence on every key route, never a 500', async () => {
+    for (const bad of ['not-a-key', 'O0Il' + '1'.repeat(40), '1'.repeat(60)]) {
+      for (const path of [
+        `/v1/agents/${bad}`, `/v1/agents/${bad}/timeline`, `/v1/u/${bad}`, `/v1/social/follows/${bad}`,
+        `/v1/market/items/${bad}`, `/v1/items/${bad}`, `/v1/items/${bad}/wear`, `/v1/commissions/${bad}`, `/v1/access/${bad}`,
+        `/v1/launches/${bad}/slots`, `/v1/launches/${bad}/proposals`, `/v1/launches/${bad}/generals`, `/v1/launches/${bad}/treaties`,
+        `/v1/launches/${bad}/war`, `/v1/wallet/${bad}/war`,
+      ]) {
+        const r = await get(path);
+        expect(r.status, path).toBe(400);
+        expect(r.body.error, path).toEqual(expect.stringMatching(/is not an address/));
+      }
+    }
+  });
   it('answers every route with its empty shape', async () => {
     expect((await get('/v1/status')).body).toMatchObject({ rpcReachable: true, slot: 123, database: true });
     expect((await get('/v1/templates')).body).toEqual([]);
