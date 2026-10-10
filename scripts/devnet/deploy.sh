@@ -43,9 +43,14 @@ DEPLOY_DIR="${SBF_OUT_DIR:-$ROOT/target/deploy}"
 DEPLOYER="$KEYS/deployer-keypair.json"
 PROTOCOL_AUTHORITY="$KEYS/protocol_authority-keypair.json"
 
-# Deployed programs (scripts/solana/programs.sh PROGRAMS minus TEST_ONLY), in dependency order.
-PROGRAMS=(bordrless_token bordrless_swap bordrless_bridge bordrless_launch bordrless_kit tax_hook half_life
-  bordrless_companion hookwars_armory hookwars_items hookwars_war hookwars_market hookwars_social hookwars_agents)
+# Deployed programs (scripts/solana/programs.sh PROGRAMS minus TEST_ONLY), largest .so first: the
+# peak balance is the kept rent of everything already deployed plus the program being deployed
+# plus its temporary buffer, so the biggest buffer is held while the least rent is committed
+# (docs/DEVNET.md section 2). Deploying needs no program to exist before another; init order is the
+# init plan's.
+PROGRAMS=(hookwars_armory hookwars_war hookwars_agents hookwars_items bordrless_launch hookwars_market
+  hookwars_social bordrless_swap hookwars_craft hookwars_book bordrless_token bordrless_companion bordrless_kit
+  bordrless_bridge half_life tax_hook)
 HOOK_PROGRAMS=" hookwars_items half_life tax_hook "
 if ((${#SELECTED[@]} > 0)); then PROGRAMS=("${SELECTED[@]}"); fi
 
