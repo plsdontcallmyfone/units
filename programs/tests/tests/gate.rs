@@ -234,3 +234,14 @@ fn a_plain_token_2022_mint_is_untouched_and_cannot_buy_licences() {
     let buy = gw.ew.buy_license_ix(&payer.pubkey(), &item, &item_mint, &mint, &holder.pubkey(), &author, SOL, false);
     gw.send(&payer, &[buy]).expect_code(market_code(M::WrongAccount));
 }
+
+#[test]
+fn the_templates_the_app_offers_on_external_tokens_never_cut_and_run_on_transfers() {
+    use hookwars_common::{manifest, token_flags};
+    for id in [17u16, 18, 19, 20, 22, 26, 39] {
+        let (min, _max, _, _) = bordrless_program_tests::armory::test_schema(id);
+        let m = manifest(id, &min, 0).expect("manifest");
+        assert!(!m.token_cuts(), "template {id} cuts on the token side");
+        assert!(m.token_flags & token_flags::BEFORE_TRANSFER != 0, "template {id} has no token-side callback");
+    }
+}

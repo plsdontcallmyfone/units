@@ -189,4 +189,4 @@ export function gateTransferAccounts(mint: PublicKey, gate: MintGateView, source
 /** Templates whose items can run on an external token: no token-side cut, a token-side callback,
  * the items program's own code (spec 18 section 3.3). The gate checks the item's manifest at bind;
  * this list is what the app offers. */
-export const GATEABLE_TEMPLATES: readonly number[] = [17, 18, 19, 20, 22, 26, 35, 39, 42];
+export const GATEABLE_TEMPLATES: readonly number[] = [17, 18, 19, 20, 22, 26, 39];

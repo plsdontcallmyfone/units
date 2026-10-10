@@ -311,9 +311,6 @@ fn a_premium_templates_items_start_licensed_and_need_a_live_licence() {
     // The holder may not switch it to Open.
     let ix = set_access(&hw, &author, &item, acc::OPEN, None);
     hw.w.env.send_paid_by(&[ix], &author, &[]).expect_code(armory_code(E::AccessNotAllowed));
-    let terms = LicenceTerms { price_lamports: SOL / 10, term_secs: 3_600, per: 0, max_live: 2 };
-    let ix = set_access(&hw, &author, &item, acc::LICENSED, Some(terms));
-    hw.w.env.send_paid_by(&[ix], &author, &[]).ok();
     // A token without a licence cannot equip it at launch.
     let owner = hw.w.env.funded(100 * SOL);
     let mint = hw.slot_mint(&owner, vec![bordrless_program_tests::slots::item_slot(slot_kind::DEFENSE, equip_rule::VOTE, 0, 0, false)]);
