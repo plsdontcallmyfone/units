@@ -97,17 +97,24 @@ export async function leaseRevert(conn: Connection, payer: PublicKey, lease: { i
   const change = await revertChange(conn, mint, slot, lease.item, hookwars.slotStateCodec.decode(ssInfo.data));
   // Pass 4a: a slot launch's Pool or Relation slot also refreshes the pool registry (spec 14 3.1).
   const metas = hookwars.revertForLeaseEndMetas(payer, mint, slot, lease.item, change);
-  return [...metas, ...(await refreshTailOf(conn, mint, slot))];
+  return [...metas, ...(await refreshTailOf(conn, mint, slot, change.newItem ?? null))];
 }
 
 /** The equip change back to the slot's launch item, `oldItem` going out (lease end, enforce_access). */
 export async function revertChange(conn: Connection, mint: PublicKey, slot: number, oldItemKey: PublicKey, slotState?: { launchItem: PublicKey | null }): Promise<hookwars.EquipChange> {
   const ss = slotState ?? await need(conn, hookwars.slotStateAddress(mint, slot), (d) => hookwars.slotStateCodec.decode(d), 'This slot has no state.');
-  const oldItem = await need(conn, oldItemKey, (d) => hookwars.itemCodec().decode(d), 'The outgoing item no longer exists.');
-  const change: hookwars.EquipChange = { oldItem: oldItemKey, oldEquipVault: (oldItem.manifest.tokenFlags & 64) !== 0 ? hookwars.equipVault(mint, slot) : null };
-  const next = ss.launchItem;
+  return equipChange(conn, mint, slot, oldItemKey, ss.launchItem);
+}
+
+/** The equip change of `slot`: `oldItemKey` going out (or none), `next` coming in (or none). */
+export async function equipChange(conn: Connection, mint: PublicKey, slot: number, oldItemKey: PublicKey | null, next: PublicKey | null): Promise<hookwars.EquipChange> {
+  const change: hookwars.EquipChange = {};
+  if (oldItemKey) {
+    const oldItem = await need(conn, oldItemKey, (d) => hookwars.itemCodec().decode(d), 'The outgoing item no longer exists.');
+    Object.assign(change, { oldItem: oldItemKey, oldEquipVault: (oldItem.manifest.tokenFlags & 64) !== 0 ? hookwars.equipVault(mint, slot) : null });
+  }
   if (next) {
-    const ni = await need(conn, next, (d) => hookwars.itemCodec().decode(d), 'The slot\'s launch item no longer exists.');
+    const ni = await need(conn, next, (d) => hookwars.itemCodec().decode(d), 'The incoming item no longer exists.');
     const t = await template(conn, ni.templateId);
     const owner = hookwars.royaltyOwner(next);
     Object.assign(change, {
@@ -120,15 +127,36 @@ export async function revertChange(conn: Connection, mint: PublicKey, slot: numb
   return change;
 }
 
-/** The refresh tail of an equip change on `slot` of `mint` (empty unless a Pool or Relation slot). */
-export async function refreshTailOf(conn: Connection, mint: PublicKey, slot: number): Promise<AccountMeta[]> {
+/**
+ * The refresh tail of an equip change on `slot` of `mint` (empty unless a Pool or Relation slot):
+ * `[launch program, launch, pool registry, launchpad event authority]`, then the item registry of
+ * every slot that forwards pool callbacks once the change lands, in slot order (the launchpad's
+ * `append_pool_items` wants exactly those). `next` is the item the change puts in `slot` (null
+ * empties it); the other slots are read as they are now.
+ */
+export async function refreshTailOf(conn: Connection, mint: PublicKey, slot: number, next?: PublicKey | null): Promise<AccountMeta[]> {
   const [mi, li] = await conn.getMultipleAccountsInfo([mint, hookwars.launchAddr(mint)], 'confirmed');
   if (!mi) return [];
-  let kind = 0;
-  try { kind = hookwars.decodeSlotMint(mi.data).slots[slot]?.kind ?? 0; } catch { return []; }
+  let slots: ReturnType<typeof hookwars.activeSlots>;
+  try { slots = hookwars.activeSlots(hookwars.decodeSlotMint(mi.data)); } catch { return []; }
+  const kind = slots[slot]?.kind ?? 0;
   if (kind !== 3 && kind !== 4) return [];
   const pool = li && li.data.length >= 106 ? new PublicKey(li.data.subarray(74, 106)) : PublicKey.default;
-  return hookwars.refreshTail(mint, pool);
+  const registries: PublicKey[] = [];
+  for (let i = 0; i < slots.length; i++) {
+    const s = slots[i]!;
+    let view: { kind: number; program: PublicKey; poolFlags: number; item: PublicKey } = s;
+    if (i === slot && next !== undefined) {
+      if (next === null) view = { kind: s.kind, program: PublicKey.default, poolFlags: 0, item: PublicKey.default };
+      else {
+        const ni = await need(conn, next, (d) => hookwars.itemCodec().decode(d), 'The incoming item no longer exists.');
+        const t = await template(conn, ni.templateId);
+        view = { kind: s.kind, program: t.program, poolFlags: ni.manifest.poolFlags, item: next };
+      }
+    }
+    if (hookwars.forwards(view)) registries.push(hookwars.itemRegistryAddress(mint, view.item));
+  }
+  return hookwars.refreshTail(mint, pool, registries);
 }
 
 const UPGRADEABLE_LOADER = new PublicKey('BPFLoaderUpgradeab1e11111111111111111111111');
@@ -420,6 +448,22 @@ export const ECONOMY_PREPARES: Record<string, PrepareDef> = {
     const slots = mi ? hookwars.activeSlots(hookwars.decodeSlotMint(mi.data)).map((s, i) => ({ s, i })).filter(({ s }) => s.item.equals(itemKey)).map(({ i }) => hookwars.slotStateAddress(tokenMint, i)) : [];
     return [hookwars.revokeApproval(pk(b, 'owner'), itemMint, pk(b, 'owner'), tokenMint, slots)];
   }),
+  'proposals/execute/prepare': one('Apply the proposal', ['armory', 'items', 'token', 'launch'], async (b, conn) => {
+    // Anyone applies a passed proposal after its notice (02 section 6.4); the change reads the slot's
+    // current item, the access proof of the incoming one (pass 4a) and the refresh tail of a pool slot.
+    const mint = pk(b, 'mint'); const slot = int(b, 'slot', 0, 7); const nonce = big(b, 'nonce');
+    const p = await need(conn, hookwars.proposalAddress(mint, slot, nonce), (d) => hookwars.proposalCodec.decode(d), 'No proposal has this nonce on this slot.');
+    if (p.status !== 1) throw new PrepareError(409, 'NotPassed', 'This proposal has not passed, so it cannot be applied.');
+    const esInfo = await conn.getAccountInfo(hookwars.equipStateAddress(mint, slot), 'confirmed');
+    const oldItem = esInfo ? hookwars.equipStateCodec.decode(esInfo.data).item : null;
+    const change = await equipChange(conn, mint, slot, oldItem && !oldItem.equals(PublicKey.default) ? oldItem : null, p.item);
+    let proof: AccountMeta[] = [];
+    if (p.item) {
+      const it = await need(conn, p.item, (d) => hookwars.itemCodec().decode(d) as { accessMode?: number }, 'The proposed item no longer exists.');
+      proof = hookwars.accessProof(it.accessMode ?? 0, p.item, mint);
+    }
+    return [hookwars.execute(pk(b, 'owner'), mint, slot, nonce, change, [...await refreshTailOf(conn, mint, slot, p.item), ...proof])];
+  }),
   'access/enforce/prepare': one('Enforce a lapsed access', ['armory', 'items', 'token', 'launch'], async (b, conn) => {
     const mint = pk(b, 'mint'); const slot = int(b, 'slot', 0, 7);
     const es = await need(conn, hookwars.equipStateAddress(mint, slot), (d) => hookwars.equipStateCodec.decode(d), 'Nothing is equipped in this slot.');
@@ -427,7 +471,7 @@ export const ECONOMY_PREPARES: Record<string, PrepareDef> = {
     const mode = it.accessMode ?? 0;
     if (mode !== hookwars.ACCESS.GATED && mode !== hookwars.ACCESS.LICENSED) throw new PrepareError(409, 'NotGated', 'The equipped item is neither Gated nor Licensed, so there is nothing to enforce.');
     const change = await revertChange(conn, mint, slot, es.item);
-    return [hookwars.enforceAccess(pk(b, 'owner'), mint, slot, es.item, mode, change, await refreshTailOf(conn, mint, slot))];
+    return [hookwars.enforceAccess(pk(b, 'owner'), mint, slot, es.item, mode, change, await refreshTailOf(conn, mint, slot, change.newItem ?? null))];
   }),
   'templates/submit/prepare': one('Submit a template', ['armory'], async (b) => [hookwars.submitTemplate(pk(b, 'owner'), pk(b, 'program'), hex32(b, 'codeHash'), hex32(b, 'uriHash'))]),
   'templates/settle/prepare': one('Settle a template submission', ['armory'], async (b, conn) => {
