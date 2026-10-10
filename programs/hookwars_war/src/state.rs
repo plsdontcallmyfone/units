@@ -1,10 +1,10 @@
-// Changed by Hookwars: new file (M4/M5); M3b: POINT_UNIT_LAMPORTS and LOOT_MIN_RAID_LAMPORTS in WarParams; security review 1: raze_max_discount_bps (M-3), bounty_max_point_bps (M-6); security review 2: SeasonCounters.funded, raid_volume_per_funded (M-B)
+// Changed by Hookwars: new file (M4/M5); M3b: POINT_UNIT_LAMPORTS and LOOT_MIN_RAID_LAMPORTS in WarParams; security review 1: raze_max_discount_bps (M-3), bounty_max_point_bps (M-6); security review 2: SeasonCounters.funded, raid_volume_per_funded (M-B); pass 4b: boss_share_bps, contribute_interval_secs, received_other, sent_coalition, RivalryBudget, rivalry_wins, BossPool, Coalition (10 sections 8, 11.1, 11.3)
 //! Accounts of the war program (05 section 2).
 
 use anchor_lang::prelude::*;
 
 use crate::constants::*;
-use crate::foreign::PARAM_FIELDS;
+use crate::foreign::{PARAM_FIELDS, RAID_TABLE_LEN};
 
 /// Every policy number of the war program (00 section 6, the parameters 05 uses). Set at
 /// `init_config` and changed only through the timelock (`propose_config`, `apply_config`).
@@ -62,6 +62,12 @@ pub struct WarParams {
     /// the season. Washed raid volume costs nothing but fees; real chest funding is real money, so
     /// the score can only be bought at this price. 0 leaves raid volume out of the score. To set.
     pub raid_volume_per_funded: u64,
+    /// Pass 4b, `BOSS_SHARE_BPS` (10 section 11.1): of the prize vault's split, to the running
+    /// season's `BossPool` when `split_protocol_fees` is given one. To set.
+    pub boss_share_bps: u16,
+    /// Pass 4b, `CONTRIBUTE_INTERVAL_SECS` (10 section 8): spacing of one member's contributions
+    /// to its coalition's chest. To set.
+    pub contribute_interval_secs: i64,
 }
 
 impl WarParams {
@@ -77,6 +83,7 @@ impl WarParams {
             self.season_prize_share_bps,
             self.raze_max_discount_bps,
             self.bounty_max_point_bps,
+            self.boss_share_bps,
         ];
         let secs = [
             self.admin_timelock_secs,
@@ -89,6 +96,7 @@ impl WarParams {
             self.quest_period_secs,
             self.season_secs,
             self.challenge_secs,
+            self.contribute_interval_secs,
         ];
         bps.iter().all(|b| u64::from(*b) <= BPS)
             && self.siege_slippage_bps < 10_000
@@ -96,6 +104,7 @@ impl WarParams {
             && secs.iter().all(|s| *s > 0)
             && self.siege_unit_lamports > 0
             && self.raze_max_discount_bps < 10_000
+            && u64::from(self.season_prize_share_bps) + u64::from(self.boss_share_bps) <= BPS
     }
 }
 
@@ -174,6 +183,54 @@ pub struct SeasonCounters {
     /// Security review 2, M-B: what the chest received in this season (bridged SOL, from
     /// `note_funding`). The score counts raid volume only up to `raid_volume_per_funded` times this.
     pub funded: u64,
+    /// Pass 4b (10 section 11.3): rivalries this token won in the season (`settle_rivalry`).
+    pub rivalry_wins: u32,
+}
+
+/// Pass 4b (10 section 11.3, R36): a live rivalry's ring-fenced budget inside the token's own
+/// chest. Only an accounting reservation: the lamports never leave the chest because of it.
+#[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RivalryBudget {
+    /// The rival mint (default: no rivalry).
+    pub rival: Pubkey,
+    /// The rival's chest (a counter-strike against its siege may spend the budget).
+    pub rival_chest: Pubkey,
+    /// The Rivalry item that opened it.
+    pub item: Pubkey,
+    pub starts_at: i64,
+    pub ends_at: i64,
+    /// Lamports ring-fenced at `open_rivalry`.
+    pub budget: u64,
+    /// Of it, spent against the rival.
+    pub spent: u64,
+}
+
+impl RivalryBudget {
+    pub fn is_open(&self) -> bool {
+        self.rival != Pubkey::default()
+    }
+
+    pub fn live(&self, now: i64) -> bool {
+        self.is_open() && now >= self.starts_at && now < self.ends_at
+    }
+
+    /// What the budget still holds back from other spends at `now`.
+    pub fn reserved(&self, now: i64) -> u64 {
+        if self.live(now) {
+            self.budget.saturating_sub(self.spent)
+        } else {
+            0
+        }
+    }
+
+    /// The part of a spend `amount` against `target` the budget covers (recorded by the caller).
+    pub fn covers(&self, target: &Pubkey, now: i64, amount: u64) -> u64 {
+        if self.live(now) && self.rival == *target {
+            amount.min(self.budget.saturating_sub(self.spent))
+        } else {
+            0
+        }
+    }
 }
 
 /// `WarState` at `["war", mint]`: war-side facts only (05 section 2.4).
@@ -208,6 +265,13 @@ pub struct WarState {
     pub season: SeasonCounters,
     /// The frozen previous season (10.1).
     pub prev_season: SeasonCounters,
+    /// Pass 4b: bridged SOL received that is not season funding (boss shares, coalition returns);
+    /// counted for solvency, never for the M-B score cap.
+    pub received_other: u64,
+    /// Pass 4b: bridged SOL contributed to coalition chests.
+    pub sent_coalition: u64,
+    /// Pass 4b: the live or last rivalry (10 section 11.3).
+    pub rivalry: RivalryBudget,
     pub reserved: [u8; 64],
 }
 
@@ -254,6 +318,8 @@ impl WarState {
     pub fn expected_balance(&self) -> Option<u64> {
         self.funded_total
             .checked_add(self.razed_proceeds)?
+            .checked_add(self.received_other)?
+            .checked_sub(self.sent_coalition)?
             .checked_sub(self.spent_siege)?
             .checked_sub(self.spent_counter)?
             .checked_sub(self.paid_bounties)?
@@ -291,6 +357,8 @@ pub struct ScoreWeights {
     pub times_besieged: u64,
     pub counter_strikes: u64,
     pub treaty_secs: u64,
+    /// Pass 4b (10 section 11.3).
+    pub rivalry_wins: u64,
 }
 
 /// `Season` at `["season", number: u32 le]` (05 section 10.2).
@@ -332,6 +400,7 @@ impl Season {
         s = s.checked_add(term(c.siege_spend, w.siege_spend)?)?;
         s = s.checked_add(term(u64::from(c.counter_strikes), w.counter_strikes)?)?;
         s = s.checked_add(term(c.treaty_secs, w.treaty_secs)?)?;
+        s = s.checked_add(term(u64::from(c.rivalry_wins), w.rivalry_wins)?)?;
         if self.penalize_besieged {
             s.checked_sub(besieged)
         } else {
@@ -454,4 +523,96 @@ impl WarOrders {
 /// `part` basis points of `amount`, rounded down.
 pub fn bps_of(amount: u64, part: u64) -> u64 {
     (u128::from(amount) * u128::from(part) / u128::from(BPS)) as u64
+}
+
+/// Pass 4b (10 section 11.1): one source's recorded raid volume into the boss, sealed.
+#[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct BossSource {
+    pub mint: Pubkey,
+    pub volume: u64,
+    pub claimed: bool,
+}
+
+/// `BossPool` at `["boss", season: u32 le]` (10 section 11.1): funded by `boss_share_bps` of the
+/// prize split while its season runs, sealed from the boss token's `RaidLedger` after the season's
+/// end, then paid out to the source tokens' war chests by `claim_boss_share`.
+#[account]
+#[derive(InitSpace, Debug)]
+pub struct BossPool {
+    pub version: u8,
+    pub bump: u8,
+    pub season: u32,
+    /// The season's boss token (named by the admin at `init_boss_pool`).
+    pub boss_mint: Pubkey,
+    /// Lamports paid in by `split_protocol_fees`.
+    pub funded: u64,
+    /// Lamports paid out by `claim_boss_share`.
+    pub paid: u64,
+    pub sealed: bool,
+    /// Sum of the sealed sources' volumes.
+    pub total_volume: u64,
+    /// Lamports to share at the seal (`funded` then).
+    pub to_share: u64,
+    pub sources: [BossSource; RAID_TABLE_LEN],
+}
+
+impl BossPool {
+    pub const LEN: usize = 8 + Self::INIT_SPACE;
+
+    pub fn address(season: u32) -> (Pubkey, u8) {
+        Pubkey::find_program_address(&[BOSS_SEED, &season.to_le_bytes()], &crate::ID)
+    }
+}
+
+/// `Coalition` at `["coalition", id: u32 le]` (10 section 8): members' contributions into a shared
+/// chest `["coalition-chest", id]`, spent only by `coalition_siege` and refilled by
+/// `coalition_raze`, returned pro rata at `dissolve_coalition`.
+#[account]
+#[derive(InitSpace, Debug)]
+pub struct Coalition {
+    pub version: u8,
+    pub bump: u8,
+    pub chest_bump: u8,
+    pub id: u32,
+    pub count: u8,
+    pub members: [Pubkey; COALITION_MAX_MEMBERS],
+    pub contributed: [u64; COALITION_MAX_MEMBERS],
+    pub last_contribution_at: [i64; COALITION_MAX_MEMBERS],
+    pub created_at: i64,
+    pub ends_at: i64,
+    /// Solvency totals of the shared chest, as `WarState`'s.
+    pub funded_total: u64,
+    pub spent_siege: u64,
+    pub razed_proceeds: u64,
+    pub paid_cranks: u64,
+    pub returned: u64,
+    pub last_seen_balance: u64,
+    pub last_siege_at: i64,
+    pub captured: [Captured; COALITION_CAPTURED],
+    pub dissolved: bool,
+}
+
+impl Coalition {
+    pub const LEN: usize = 8 + Self::INIT_SPACE;
+
+    pub fn address(id: u32) -> (Pubkey, u8) {
+        Pubkey::find_program_address(&[COALITION_SEED, &id.to_le_bytes()], &crate::ID)
+    }
+
+    pub fn chest(id: u32) -> (Pubkey, u8) {
+        Pubkey::find_program_address(&[COALITION_CHEST_SEED, &id.to_le_bytes()], &crate::ID)
+    }
+
+    pub fn member_index(&self, mint: &Pubkey) -> Option<usize> {
+        self.members[..usize::from(self.count)].iter().position(|m| m == mint)
+    }
+
+    /// What the shared chest's balance must be by the totals.
+    pub fn expected_balance(&self) -> Option<u64> {
+        self.funded_total
+            .checked_add(self.razed_proceeds)?
+            .checked_sub(self.spent_siege)?
+            .checked_sub(self.paid_cranks)?
+            .checked_sub(self.returned)
+    }
 }

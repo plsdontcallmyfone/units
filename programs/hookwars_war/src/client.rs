@@ -1,4 +1,4 @@
-// Changed by Hookwars: security review 1: siege always names the rival war state (M-4); security review 2: record_funding takes the config (M-B).
+// Changed by Hookwars: security review 1: siege always names the rival war state (M-4); security review 2: record_funding takes the config (M-B); pass 4b: boss, coalition and rivalry builders, split_protocol_fees_with_boss.
 //! Instruction builders for clients and the LiteSVM suites. The steps that call other programs take
 //! a `slice` (the token slice the client resolved, as the token program checks it) and `inner`:
 //! the instructions the step will build on chain, whose accounts must be present (see
@@ -617,6 +617,7 @@ pub fn split_protocol_fees(
         treasury,
         winner_chest: winner.map(|(m, _)| chest_address(&m).0),
         winner_season: winner.map(|(_, s)| Season::address(s).0),
+        boss_pool: None,
         system_program: system_program::ID,
         event_authority: event_authority(),
         program: crate::ID,
@@ -624,4 +625,280 @@ pub fn split_protocol_fees(
     .to_account_metas(None);
     accounts.extend(accounts_of(inner));
     ix(accounts, crate::instruction::SplitProtocolFees {}.data())
+}
+
+// ---- pass 4b (10 sections 8, 11.1, 11.3) -----------------------------------------------------------
+
+/// `split_protocol_fees` with the running season's boss pool (`boss_season`).
+pub fn split_protocol_fees_with_boss(
+    cranker: Pubkey,
+    treasury: Pubkey,
+    winner: Option<(Pubkey, u32)>,
+    boss_season: Option<u32>,
+    inner: &[Instruction],
+) -> Instruction {
+    let mut i = split_protocol_fees(cranker, treasury, winner, inner);
+    // The optional account sits after `winner_season`: index 7 (cranker, config, vault, holding,
+    // treasury, winner chest, winner season).
+    i.accounts[7] = match boss_season {
+        Some(n) => AccountMeta::new(BossPool::address(n).0, false),
+        None => AccountMeta::new_readonly(crate::ID, false),
+    };
+    i
+}
+
+pub fn init_boss_pool(admin: Pubkey, season: u32, boss_mint: Pubkey) -> Instruction {
+    let accounts = crate::accounts::InitBossPool {
+        admin,
+        config: config_address(),
+        pool: BossPool::address(season).0,
+        system_program: system_program::ID,
+        event_authority: event_authority(),
+        program: crate::ID,
+    }
+    .to_account_metas(None);
+    ix(accounts, crate::instruction::InitBossPool { season, boss_mint }.data())
+}
+
+pub fn seal_boss_pool(season: u32, boss_mint: Pubkey) -> Instruction {
+    let accounts = crate::accounts::SealBossPool {
+        season_account: Season::address(season).0,
+        pool: BossPool::address(season).0,
+        boss_ledger: crate::foreign::raid_ledger_address(&boss_mint),
+        event_authority: event_authority(),
+        program: crate::ID,
+    }
+    .to_account_metas(None);
+    ix(accounts, crate::instruction::SealBossPool { season }.data())
+}
+
+/// `claim_boss_share` for `source_mint`'s chest; `inner`: the bridge's `wrap_sol` for the chest.
+pub fn claim_boss_share(season: u32, source_mint: Pubkey, inner: &[Instruction]) -> Instruction {
+    let chest = chest_address(&source_mint).0;
+    let mut accounts = crate::accounts::ClaimBossShare {
+        config: config_address(),
+        pool: BossPool::address(season).0,
+        war_state: WarState::address(&source_mint).0,
+        war_chest: chest,
+        chest_holding: token_client::holding_address(&BRIDGED_SOL_MINT, &chest),
+        system_program: system_program::ID,
+        event_authority: event_authority(),
+        program: crate::ID,
+    }
+    .to_account_metas(None);
+    accounts.extend(accounts_of(inner));
+    ix(accounts, crate::instruction::ClaimBossShare { season }.data())
+}
+
+/// A coalition member as `form_coalition` takes it: its mint, Coalition item and the template.
+#[derive(Clone, Copy, Debug)]
+pub struct Member {
+    pub mint: Pubkey,
+    pub item: Pubkey,
+    pub template: Pubkey,
+}
+
+pub fn form_coalition(payer: Pubkey, id: u32, term_secs: i64, members: &[Member]) -> Instruction {
+    let mut accounts = crate::accounts::FormCoalition {
+        payer,
+        config: config_address(),
+        coalition: Coalition::address(id).0,
+        system_program: system_program::ID,
+        event_authority: event_authority(),
+        program: crate::ID,
+    }
+    .to_account_metas(None);
+    for m in members {
+        accounts.push(AccountMeta::new_readonly(m.mint, false));
+        accounts.push(AccountMeta::new_readonly(m.item, false));
+        accounts.push(AccountMeta::new_readonly(m.template, false));
+        accounts.push(AccountMeta::new_readonly(WarState::address(&m.mint).0, false));
+    }
+    ix(accounts, crate::instruction::FormCoalition { id, term_secs }.data())
+}
+
+/// `contribute`; `inner`: unwrap from the member's chest, wrap into the shared chest, and the shared
+/// chest's `create_holding`.
+pub fn contribute(cranker: Pubkey, id: u32, member: Member, amount: u64, inner: &[Instruction]) -> Instruction {
+    let mut accounts = crate::accounts::Contribute {
+        cranker,
+        config: config_address(),
+        coalition: Coalition::address(id).0,
+        coalition_chest: Coalition::chest(id).0,
+        war_state: WarState::address(&member.mint).0,
+        war_chest: chest_address(&member.mint).0,
+        mint: member.mint,
+        item: member.item,
+        template: member.template,
+        system_program: system_program::ID,
+        event_authority: event_authority(),
+        program: crate::ID,
+    }
+    .to_account_metas(None);
+    accounts.extend(accounts_of(inner));
+    ix(accounts, crate::instruction::Contribute { amount }.data())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn coalition_siege(
+    cranker: Pubkey,
+    id: u32,
+    member_mint: Pubkey,
+    orders: Orders,
+    rival_mint: Pubkey,
+    rival_pool: Pubkey,
+    rival_kit_config: Option<Pubkey>,
+    slice: Vec<AccountMeta>,
+    inner: &[Instruction],
+) -> Instruction {
+    let mut accounts = crate::accounts::CoalitionSiege {
+        cranker,
+        config: config_address(),
+        coalition: Coalition::address(id).0,
+        coalition_chest: Coalition::chest(id).0,
+        member_mint,
+        orders_item: orders.item,
+        orders_template: orders.template,
+        raid_ledger: crate::foreign::raid_ledger_address(&member_mint),
+        rival_mint,
+        rival_launch: bordrless_launch::client::launch_address(&rival_mint),
+        rival_pool,
+        rival_war_state: WarState::address(&rival_mint).0,
+        rival_kit_config,
+        system_program: system_program::ID,
+        event_authority: event_authority(),
+        program: crate::ID,
+    }
+    .to_account_metas(None);
+    let first = slice.len() as u8;
+    accounts.extend(slice);
+    accounts.extend(accounts_of(inner));
+    ix(accounts, crate::instruction::CoalitionSiege { args: SliceArgs { first, second: 0 } }.data())
+}
+
+pub fn coalition_raze(
+    cranker: Pubkey,
+    id: u32,
+    rival_mint: Pubkey,
+    rival_pool: Pubkey,
+    slice: Vec<AccountMeta>,
+    inner: &[Instruction],
+) -> Instruction {
+    let mut accounts = crate::accounts::CoalitionRaze {
+        cranker,
+        config: config_address(),
+        coalition: Coalition::address(id).0,
+        coalition_chest: Coalition::chest(id).0,
+        rival_mint,
+        rival_launch: bordrless_launch::client::launch_address(&rival_mint),
+        rival_pool,
+        system_program: system_program::ID,
+        event_authority: event_authority(),
+        program: crate::ID,
+    }
+    .to_account_metas(None);
+    let first = slice.len() as u8;
+    accounts.extend(slice);
+    accounts.extend(accounts_of(inner));
+    ix(accounts, crate::instruction::CoalitionRaze { args: SliceArgs { first, second: 0 } }.data())
+}
+
+/// `dissolve_coalition` of `members` (in the coalition's order); `inner`: the bridge's
+/// `unwrap_sol` of the shared chest and `wrap_sol` of each member chest.
+pub fn dissolve_coalition(id: u32, members: &[Pubkey], inner: &[Instruction]) -> Instruction {
+    let shared = Coalition::chest(id).0;
+    let mut accounts = crate::accounts::DissolveCoalition {
+        config: config_address(),
+        coalition: Coalition::address(id).0,
+        coalition_chest: shared,
+        coalition_holding: token_client::holding_address(&BRIDGED_SOL_MINT, &shared),
+        system_program: system_program::ID,
+        event_authority: event_authority(),
+        program: crate::ID,
+    }
+    .to_account_metas(None);
+    for m in members {
+        let chest = chest_address(m).0;
+        accounts.push(AccountMeta::new(WarState::address(m).0, false));
+        accounts.push(AccountMeta::new(chest, false));
+        accounts.push(AccountMeta::new(token_client::holding_address(&BRIDGED_SOL_MINT, &chest), false));
+    }
+    // Each key once: the program's 32 KiB heap holds every account info the instruction lists, and
+    // the per-member `wrap_sol`s repeat most of theirs.
+    for m in accounts_of(inner) {
+        match accounts.iter_mut().find(|a| a.pubkey == m.pubkey) {
+            Some(a) => a.is_writable |= m.is_writable,
+            None => accounts.push(m),
+        }
+    }
+    ix(accounts, crate::instruction::DissolveCoalition {}.data())
+}
+
+/// `open_rivalry`: `slot` is the Rivalry item's slot in `mint` (its `EquipState` names the rival).
+pub fn open_rivalry(mint: Pubkey, item: Pubkey, slot: u8) -> Instruction {
+    let accounts = crate::accounts::OpenRivalry {
+        config: config_address(),
+        war_state: WarState::address(&mint).0,
+        mint,
+        item,
+        template: crate::foreign::template_address(RIVALRY_TEMPLATE),
+        equip_state: hookwars_common::pda::equip_state(&mint, slot).0,
+        chest_holding: token_client::holding_address(&BRIDGED_SOL_MINT, &chest_address(&mint).0),
+        event_authority: event_authority(),
+        program: crate::ID,
+    }
+    .to_account_metas(None);
+    ix(accounts, crate::instruction::OpenRivalry {}.data())
+}
+
+pub fn settle_rivalry(mint: Pubkey, rival: Pubkey) -> Instruction {
+    let accounts = crate::accounts::SettleRivalry {
+        config: config_address(),
+        war_state: WarState::address(&mint).0,
+        mint,
+        ledger: crate::foreign::raid_ledger_address(&mint),
+        rival_ledger: crate::foreign::raid_ledger_address(&rival),
+        event_authority: event_authority(),
+        program: crate::ID,
+    }
+    .to_account_metas(None);
+    ix(accounts, crate::instruction::SettleRivalry {}.data())
+}
+
+/// Pass 4b (11 E-4): the craft drop suffix a war step takes (`[craft program, craft config, craft
+/// event authority, war's ["craft-caller"], drop rule ["drop", source], material ["material", id],
+/// material mint ["material-mint", id], craft minter ["craft-minter"], recipient, the recipient's
+/// material holding]`). The drop's token program, its event authority and the system program must
+/// also be among the step's accounts ([`drop_common`]).
+pub fn drop_suffix(source: u8, material_id: u16, recipient: Pubkey) -> Vec<AccountMeta> {
+    use hookwars_common::{economy as eco, eco_cpi};
+    let craft = eco::CRAFT_ID;
+    let pda = |seeds: &[&[u8]]| Pubkey::find_program_address(seeds, &craft).0;
+    let material_mint = pda(&[b"material-mint", &material_id.to_le_bytes()]);
+    vec![
+        AccountMeta::new_readonly(craft, false),
+        AccountMeta::new_readonly(eco_cpi::craft_config(), false),
+        AccountMeta::new_readonly(eco_cpi::event_authority(&craft), false),
+        AccountMeta::new_readonly(eco::caller_pda(eco::CRAFT_CALLER_SEED, &crate::ID).0, false),
+        AccountMeta::new(pda(&[b"drop", &[source]]), false),
+        AccountMeta::new(pda(&[b"material", &material_id.to_le_bytes()]), false),
+        AccountMeta::new(material_mint, false),
+        AccountMeta::new_readonly(pda(&[b"craft-minter"]), false),
+        AccountMeta::new_readonly(recipient, false),
+        AccountMeta::new(token_client::holding_address(&material_mint, &recipient), false),
+    ]
+}
+
+/// Pass 4b: the token program and its event authority, for a step whose own accounts lack them;
+/// placed before the drop suffix.
+pub fn drop_common() -> Vec<AccountMeta> {
+    vec![
+        AccountMeta::new_readonly(TOKEN_ID, false),
+        AccountMeta::new_readonly(token_client::event_authority(), false),
+    ]
+}
+
+/// Pass 4b (11 E-6): the social suffix for `wallet`.
+pub fn social_suffix(wallet: Pubkey) -> Vec<AccountMeta> {
+    hookwars_common::eco_cpi::social_metas(&crate::ID, &wallet)
 }

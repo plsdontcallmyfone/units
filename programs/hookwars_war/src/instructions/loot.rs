@@ -1,3 +1,4 @@
+// Changed by Hookwars: pass 4b: reveal drops through craft (RAID_REVEAL, 11 E-4) and counts RAIDS in social (E-6).
 //! Loot (05 section 8): `roll` spends a ticket and asks the randomness adapter; `reveal` reads the
 //! value and asks the armory to mint the item; `cancel_roll` returns the rent of an expired roll
 //! (never the ticket).
@@ -229,8 +230,12 @@ pub fn process_reveal<'info>(ctx: Context<'info, Reveal<'info>>) -> Result<()> {
     let (template_id, params) =
         draw(table, &randomness.value).ok_or(WarError::LootTableNotReady)?;
     let (owner, mint, season) = (r.owner, r.mint, r.season);
-    let extra = ctx
-        .remaining_accounts
+    // Pass 4b: the agents record, then the economy suffixes, come off the end; the rest is the
+    // armory's.
+    let (rem, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
+    let eco = split_economy(rem);
+    let extra = eco
+        .rest
         .iter()
         .map(|a| AccountMeta {
             pubkey: *a.key,
@@ -259,8 +264,17 @@ pub fn process_reveal<'info>(ctx: Context<'info, Reveal<'info>>) -> Result<()> {
         params,
         season,
     });
+    // Pass 4b (11 E-4, E-6): one drop per revealed raid ticket to the raider, and the RAIDS counter.
+    economy_effects(
+        &eco,
+        &all,
+        &ctx.accounts.revealer.to_account_info(),
+        &owner,
+        hookwars_common::eco_cpi::drop_source::RAID_REVEAL,
+        1,
+        Some(hookwars_common::economy::counter::RAIDS),
+    )?;
     // Integration pass 2 (09 section 21 item 4): optional agent attribution, after the effects.
-    let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
     hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.revealer.key(), hookwars_common::agents_record::LOOT_REVEAL, 0)?;
     Ok(())
 }

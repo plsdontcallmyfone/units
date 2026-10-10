@@ -1,6 +1,6 @@
 // Changed by Hookwars: new file (M4/M5); M3b integration: the owning crates' types replace the spec
 // decoders (the armory's `Item`, `Template`, `ForgeCounter`; the shared `RaidLedger`; the DEX's
-// ring in the pool account).
+// ring in the pool account); pass 4b: the items program's `EquipState` targets, config items.
 //! Accounts of other Hookwars programs, read with their owners' own types:
 //! - [`Item`], [`Template`], [`ForgeCounter`]: `hookwars_armory::state` (02);
 //! - [`RaidLedger`], [`RaidWindow`], [`Mark`]: `hookwars_common::raid` (04 section 2.9), written by
@@ -27,6 +27,54 @@ pub const TEMPLATE_ACTIVE: u8 = hookwars_armory::state::template_status::ACTIVE;
 pub mod disc {
     /// The randomness adapter's result account (`oracle.rs`).
     pub const RANDOMNESS: [u8; 8] = [0xbc, 0x60, 0xd8, 0xf8, 0x5d, 0x5e, 0x31, 0x70];
+    /// Pass 4b: `hookwars_items::EquipState` (`sha256("account:EquipState")[..8]`; items depends on
+    /// war, so war decodes it by hand; pinned in `programs/tests/tests/war_expansion.rs`).
+    pub const EQUIP_STATE: [u8; 8] = [224, 65, 82, 232, 178, 33, 39, 28];
+}
+
+/// Pass 4b: the first target of the item equipped in `mint`'s `slot`, from the items program's
+/// `EquipState` at `["equip", mint, slot]` (layout after the discriminator: version, bump, mint,
+/// slot, item, template_id, then `EquipConfig { targets: Vec<Pubkey>, role }`). `None` when the
+/// account is not that slot's equip state of `item` or names no target.
+pub fn equip_first_target(info: &AccountInfo, mint: &Pubkey, slot: u8, item: &Pubkey) -> Option<Pubkey> {
+    if *info.owner != ITEMS_ID || *info.key != hookwars_common::pda::equip_state(mint, slot).0 {
+        return None;
+    }
+    let d = info.try_borrow_data().ok()?;
+    if d.len() < 8 + 2 + 32 + 1 + 32 + 2 + 4 || d[..8] != disc::EQUIP_STATE {
+        return None;
+    }
+    let at = |o: usize| Pubkey::try_from(&d[o..o + 32]).ok();
+    if at(10)? != *mint || d[42] != slot || at(43)? != *item {
+        return None;
+    }
+    let n = u32::from_le_bytes(d[77..81].try_into().ok()?);
+    if n == 0 || d.len() < 81 + 32 {
+        return None;
+    }
+    at(81)
+}
+
+/// Pass 4b: a config item (Coalition 43, Rivalry 45) equipped by `mint`: the slot index and the
+/// item's params, when `item` is in one of `mint`'s slots, is an item of `template_id`, and
+/// `template` is that template of the items program.
+pub fn config_item(
+    mint: &bordrless_token::state::Mint,
+    item: &AccountInfo,
+    template: &AccountInfo,
+    template_id: u16,
+) -> Result<(u8, [u32; PARAM_FIELDS])> {
+    let slot = mint
+        .active_slots()
+        .iter()
+        .position(|s| s.item == *item.key && *item.key != Pubkey::default())
+        .ok_or(error!(WarError::ItemNotEquipped))?;
+    let it = Item::read(item)?;
+    require!(it.template_id == template_id, WarError::WrongItem);
+    require_keys_eq!(*template.key, template_address(template_id), WarError::WrongItem);
+    let t = Template::read(template)?;
+    require!(t.program == ITEMS_ID && t.id == template_id, WarError::WrongItem);
+    Ok((slot as u8, it.params))
 }
 
 /// Reads an armory account of type `T` (owner and discriminator checked by `try_deserialize`).

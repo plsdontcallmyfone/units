@@ -1,3 +1,4 @@
+// Changed by Hookwars: pass 4b: boss, coalition seeds and layouts, template ids war reads.
 //! Seeds, layout constants and the programs the war program calls (and nothing else).
 //!
 //! Every number that is a policy (spends, intervals, windows, bounties, season lengths) is a field
@@ -35,6 +36,19 @@ pub const BPS: u64 = 10_000;
 /// Layout: captured rival holdings a chest tracks at once (`MAX_CAPTURED`, 00 section 6, set by
 /// measurement; provisional until 07 records the measured account size and rent).
 pub const MAX_CAPTURED: usize = 8;
+/// Pass 4b: `["boss", season]`, `["coalition", id]`, `["coalition-chest", id]`.
+pub const BOSS_SEED: &[u8] = b"boss";
+pub const COALITION_SEED: &[u8] = b"coalition";
+pub const COALITION_CHEST_SEED: &[u8] = b"coalition-chest";
+/// Layout (10 section 8): `COALITION_MIN` and `COALITION_MAX` members.
+pub const COALITION_MIN_MEMBERS: usize = 2;
+pub const COALITION_MAX_MEMBERS: usize = 5;
+/// Layout: rival holdings a coalition chest tracks at once.
+pub const COALITION_CAPTURED: usize = 2;
+/// Armory template ids war reads (10 sections 8, 11.3).
+pub const COALITION_TEMPLATE: u16 = hookwars_common::template_id::COALITION;
+pub const RIVALRY_TEMPLATE: u16 = hookwars_common::template_id::RIVALRY;
+
 /// Layout: entries of a season's loot table (`LOOT_TABLE_LEN`, provisional as above).
 pub const LOOT_TABLE_LEN: usize = 8;
 

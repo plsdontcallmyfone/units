@@ -1,4 +1,4 @@
-// Changed by Hookwars: new program.
+// Changed by Hookwars: new program; pass 4b: boss pool, coalitions, rivalries (10 sections 8, 11.1, 11.3).
 //! `hookwars_war`: each token's war chest, spent only through the instructions here
 //! (docs/spec/05-war.md). Every spend is permissionless, checks on chain that it is due, is capped
 //! per call and per interval, and pays its sender a crank bounty. Spot only: a siege is a spot buy,
@@ -189,6 +189,58 @@ pub mod hookwars_war {
         ctx: Context<'info, SplitProtocolFees<'info>>,
     ) -> Result<()> {
         instructions::seasons::process_split_protocol_fees(ctx)
+    }
+
+    // ---- pass 4b: boss events, coalitions, rivalries (10 sections 8, 11.1, 11.3)
+
+    /// The admin names season `season`'s boss token and opens its pool.
+    pub fn init_boss_pool(ctx: Context<InitBossPool>, season: u32, boss_mint: Pubkey) -> Result<()> {
+        instructions::boss::process_init_boss_pool(ctx, season, boss_mint)
+    }
+
+    /// Seals the boss pool from the boss's raid ledger after the season's end.
+    pub fn seal_boss_pool(ctx: Context<SealBossPool>, season: u32) -> Result<()> {
+        instructions::boss::process_seal_boss_pool(ctx, season)
+    }
+
+    /// Pays a source token's chest its share of the sealed boss pool.
+    pub fn claim_boss_share<'info>(ctx: Context<'info, ClaimBossShare<'info>>, season: u32) -> Result<()> {
+        instructions::boss::process_claim_boss_share(ctx, season)
+    }
+
+    /// Forms coalition `id` of the tokens whose Coalition items name it.
+    pub fn form_coalition<'info>(ctx: Context<'info, FormCoalition<'info>>, id: u32, term_secs: i64) -> Result<()> {
+        instructions::coalition::process_form_coalition(ctx, id, term_secs)
+    }
+
+    /// Moves part of a member's chest into the coalition's shared chest.
+    pub fn contribute<'info>(ctx: Context<'info, Contribute<'info>>, amount: u64) -> Result<()> {
+        instructions::coalition::process_contribute(ctx, amount)
+    }
+
+    /// The shared chest's siege of a non-member rival.
+    pub fn coalition_siege<'info>(ctx: Context<'info, CoalitionSiege<'info>>, args: SliceArgs) -> Result<()> {
+        instructions::coalition::process_coalition_siege(ctx, args)
+    }
+
+    /// Sells the shared chest's captured rival tokens back, slowly.
+    pub fn coalition_raze<'info>(ctx: Context<'info, CoalitionRaze<'info>>, args: SliceArgs) -> Result<()> {
+        instructions::coalition::process_coalition_raze(ctx, args)
+    }
+
+    /// Returns the shared chest to the members pro rata after the term.
+    pub fn dissolve_coalition<'info>(ctx: Context<'info, DissolveCoalition<'info>>) -> Result<()> {
+        instructions::coalition::process_dissolve_coalition(ctx)
+    }
+
+    /// Opens a rivalry from a Rivalry item: ring-fences its budget in the chest.
+    pub fn open_rivalry(ctx: Context<OpenRivalry>) -> Result<()> {
+        instructions::rivalry::process_open_rivalry(ctx)
+    }
+
+    /// Settles a rivalry: score only, nothing moves between chests.
+    pub fn settle_rivalry(ctx: Context<SettleRivalry>) -> Result<()> {
+        instructions::rivalry::process_settle_rivalry(ctx)
     }
 }
 

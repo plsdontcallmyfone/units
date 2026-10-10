@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file, the war program's harness; M3b: the armory's and the shared types; security review 1: TEST params, WarWorld::with_params; integration pass 3: new Template and Item fields.
+// Changed by Hookwars: new file, the war program's harness; M3b: the armory's and the shared types; security review 1: TEST params, WarWorld::with_params; integration pass 3: new Template and Item fields; pass 4b: boss_share_bps, contribute_interval_secs, the new WarState fields.
 // the observation ring in the pool account.
 //! The war suites' world: the upstream world plus `hookwars_war` and its test-only stand-ins at the
 //! items and armory ids (`war_items_stub`, `war_armory_stub`) and a randomness adapter
@@ -58,6 +58,9 @@ pub const TEST_PARAMS: WarParams = WarParams {
     bounty_max_point_bps: 10_000,
     // Security review 2, M-B: TEST, raid volume scored per lamport the chest received in the season.
     raid_volume_per_funded: 1_000,
+    // Pass 4b: TEST values (10 sections 8, 11.1).
+    boss_share_bps: 1_000,
+    contribute_interval_secs: 3_600,
 };
 
 /// TEST template ids (the armory numbers its templates densely; these are the suites').
@@ -257,7 +260,7 @@ impl WarWorld {
 
     // ---------------------------------------------------------------------------- foreign accounts
 
-    fn put_anchor<T: AccountSerialize>(&mut self, key: Pubkey, owner: Pubkey, value: &T, len: usize) {
+    pub fn put_anchor<T: AccountSerialize>(&mut self, key: Pubkey, owner: Pubkey, value: &T, len: usize) {
         let mut data = Vec::with_capacity(len);
         value.try_serialize(&mut data).expect("serialize");
         data.resize(data.len().max(len), 0);
@@ -429,7 +432,7 @@ impl WarWorld {
 
     // ---------------------------------------------------------------------------- mints and slots
 
-    fn write_mint(&mut self, key: &Pubkey, f: impl FnOnce(&mut Mint)) {
+    pub fn write_mint(&mut self, key: &Pubkey, f: impl FnOnce(&mut Mint)) {
         let mut account = self.w.env.account(key).expect("mint");
         let mut mint = Mint::try_deserialize(&mut &account.data[..]).expect("mint decodes");
         f(&mut mint);
@@ -557,6 +560,9 @@ impl WarWorld {
             season_id: 0,
             season: SeasonCounters::default(),
             prev_season: SeasonCounters::default(),
+            received_other: 0,
+            sent_coalition: 0,
+            rivalry: RivalryBudget::default(),
             reserved: [0; 64],
         };
         self.put_anchor(key, hookwars_war::ID, &s, WarState::LEN);

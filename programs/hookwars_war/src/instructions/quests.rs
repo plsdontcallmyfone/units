@@ -1,3 +1,4 @@
+// Changed by Hookwars: pass 4b: a quest claim drops through craft (QUEST_CLAIM, 11 E-4).
 //! Quests whose condition this program checks, each granting one loot ticket (05 section 9).
 //! "Once per period" lives in a `QuestMark` PDA, never in hook data.
 
@@ -198,6 +199,13 @@ pub fn process_claim_quest<'info>(
     );
     mark.last_period = period;
     write_mark(&ctx.accounts.quest_mark, &mark)?;
+    // Pass 4b (11 E-4): a drop to the claimant when the craft suffix is given.
+    {
+        let eco = split_economy(ctx.remaining_accounts);
+        let all = available(ctx.accounts.to_account_infos(), ctx.remaining_accounts);
+        let owner = ctx.accounts.owner.to_account_info();
+        economy_effects(&eco, &all, &owner, &owner.key(), hookwars_common::eco_cpi::drop_source::QUEST_CLAIM, 1, None)?;
+    }
     emit_cpi!(QuestClaimed {
         quest_id,
         mint: mint_key,

@@ -1,4 +1,4 @@
-// Changed by Hookwars: security review 1: the siege always names the rival's war state (M-4), the raze waits below the TWAP floor (M-3)
+// Changed by Hookwars: security review 1: the siege always names the rival's war state (M-4), the raze waits below the TWAP floor (M-3); pass 4b: rivalry budgets ring-fenced in siege and counter-strike (10 section 11.3), helpers shared with coalitions
 //! Attack and defense paid from the chest (05 section 6): `siege`, `counter_strike`, `raze`,
 //! `return_captured`. Each is permissionless, checks on chain that it is due, is capped per call
 //! and per interval, and pays its sender at most the War orders' crank bounty (capped by the
@@ -48,7 +48,27 @@ pub fn pool_share_bps(launch: &Launch) -> u64 {
     bordrless_companion::pool_share_bps(launch)
 }
 
-fn read_launch(info: &AccountInfo, mint: &Pubkey) -> Result<Launch> {
+/// Pass 4b: what a siege of `target` may take its share of: the whole chest against the rival of a
+/// live rivalry, the chest less the ring-fenced budget otherwise.
+pub fn siege_base(r: &RivalryBudget, target: &Pubkey, now: i64, balance: u64) -> u64 {
+    if r.live(now) && r.rival == *target {
+        balance
+    } else {
+        balance.saturating_sub(r.reserved(now))
+    }
+}
+
+/// Pass 4b: the same for a counter-strike, which answers the rival when the rival's chest is the
+/// one besieging.
+pub fn counter_base(s: &WarState, now: i64, balance: u64) -> u64 {
+    if s.rivalry.live(now) && s.under_siege_until > now && s.siege_by_chest == s.rivalry.rival_chest {
+        balance
+    } else {
+        balance.saturating_sub(s.rivalry.reserved(now))
+    }
+}
+
+pub(crate) fn read_launch(info: &AccountInfo, mint: &Pubkey) -> Result<Launch> {
     require_keys_eq!(
         *info.key,
         launch_client::launch_address(mint),
@@ -59,18 +79,18 @@ fn read_launch(info: &AccountInfo, mint: &Pubkey) -> Result<Launch> {
     Ok(launch)
 }
 
-fn read_pool(info: &AccountInfo, launch: &Launch) -> Result<Pool> {
+pub(crate) fn read_pool(info: &AccountInfo, launch: &Launch) -> Result<Pool> {
     require_keys_eq!(*info.key, launch.pool, WarError::WrongAccount);
     read_own::<Pool>(info)
 }
 
 /// The pool's quote side (real and virtual) times `bps`.
-fn quote_side_cap(pool: &Pool, bps: u64) -> u64 {
+pub(crate) fn quote_side_cap(pool: &Pool, bps: u64) -> u64 {
     let side = u128::from(pool.quote_reserve) + u128::from(pool.virtual_quote);
     (side * u128::from(bps) / u128::from(BPS)).min(u128::from(u64::MAX)) as u64
 }
 
-fn chest_seeds(mint: &Pubkey, bump: u8) -> KeyedSeeds {
+pub(crate) fn chest_seeds(mint: &Pubkey, bump: u8) -> KeyedSeeds {
     KeyedSeeds::new(CHEST_SEED, *mint, bump)
 }
 
@@ -127,7 +147,7 @@ pub struct Siege<'info> {
 /// Security review 1, M-4: marks the rival's war state besieged when the address holds one. Its
 /// own frame, the state boxed: `WarState` on `process_siege`'s stack overflows the 4 KB frame.
 #[inline(never)]
-fn mark_besieged(info: &AccountInfo, current: u32, until: i64, chest: Pubkey) -> Result<()> {
+pub(crate) fn mark_besieged(info: &AccountInfo, current: u32, until: i64, chest: Pubkey) -> Result<()> {
     if *info.owner != crate::ID || info.data_len() == 0 {
         return Ok(());
     }
@@ -218,7 +238,9 @@ pub fn process_siege<'info>(ctx: Context<'info, Siege<'info>>, args: SliceArgs) 
 
     // Spend, bounty and the least the buy must bring.
     let spend_bps = orders.bps(orders::SIEGE_SPEND_BPS, params.siege_max_spend_bps);
-    let total = bps_of(balance_now, spend_bps).min(quote_side_cap(&pool, pool_share_bps(&rival_launch)));
+    // Pass 4b (10 section 11.3): a live rivalry's budget is only for the rival.
+    let base = siege_base(&ctx.accounts.war_state.rivalry, &rival_key, now, balance_now);
+    let total = bps_of(base, spend_bps).min(quote_side_cap(&pool, pool_share_bps(&rival_launch)));
     require!(total > 0, WarError::NothingToDo);
     let bounty = bps_of(total, orders.crank_bps(&params));
     let spend = total - bounty;
@@ -284,6 +306,8 @@ pub fn process_siege<'info>(ctx: Context<'info, Siege<'info>>, args: SliceArgs) 
     c.amount = c.amount.checked_add(bought).ok_or(WarError::MathOverflow)?;
     c.cost = c.cost.saturating_add(spend);
     let captured_total = c.amount;
+    let covered = s.rivalry.covers(&rival_key, now, spend);
+    s.rivalry.spent = s.rivalry.spent.saturating_add(covered);
     s.season.sieges = s.season.sieges.saturating_add(1);
     s.season.siege_spend = s.season.siege_spend.saturating_add(spend);
     s.spent_siege = s.spent_siege.saturating_add(spend);
@@ -398,7 +422,9 @@ pub fn process_counter_strike<'info>(
         s.roll(current);
         note_funding(s, balance_now);
     }
-    let total = bps_of(balance_now, spend_bps).min(quote_side_cap(&pool, pool_share_bps(&launch)));
+    // Pass 4b (10 section 11.3): the rivalry budget answers only the rival's siege.
+    let base = counter_base(&ctx.accounts.war_state, now, balance_now);
+    let total = bps_of(base, spend_bps).min(quote_side_cap(&pool, pool_share_bps(&launch)));
     require!(total > 0, WarError::NothingToDo);
     let bounty = bps_of(total, orders.crank_bps(&params));
     let spend = total - bounty;
@@ -462,6 +488,11 @@ pub fn process_counter_strike<'info>(
     )?;
     let balance_after = chest_balance(find(&all, &chest_holding)?)?;
     let s = &mut ctx.accounts.war_state;
+    if s.under_siege_until > now && s.siege_by_chest == s.rivalry.rival_chest {
+        let rival = s.rivalry.rival;
+        let covered = s.rivalry.covers(&rival, now, spend);
+        s.rivalry.spent = s.rivalry.spent.saturating_add(covered);
+    }
     s.season.counter_strikes = s.season.counter_strikes.saturating_add(1);
     s.spent_counter = s.spent_counter.saturating_add(spend);
     s.paid_cranks = s.paid_cranks.saturating_add(bounty);

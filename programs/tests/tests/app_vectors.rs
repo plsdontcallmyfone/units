@@ -1,4 +1,4 @@
-// Changed by Hookwars: window vectors from the pool ring reader (bordrless_core::observations).
+// Changed by Hookwars: window vectors from the pool ring reader (bordrless_core::observations).; pass 4b: rivalry_wins 0 in the score vectors
 //! Vectors for the app's TypeScript mirror of the units math (app/INTEGRATION.md section 4):
 //! `programs/tests/vectors/hookwars-math.json`, copied to `app/packages/shared/vectors/`. Rendered
 //! from the Rust the programs run: `bordrless_core::observations::window_read`, `hookwars_common::{shape, combine, manifest,
@@ -211,6 +211,8 @@ fn render() -> String {
         let weights = ScoreWeights {
             raid_volume_won: w(&mut rng), sieges: w(&mut rng), siege_spend: w(&mut rng),
             times_besieged: w(&mut rng), counter_strikes: w(&mut rng), treaty_secs: w(&mut rng),
+            // Pass 4b: 0 keeps the rendered vectors (the random stream is unchanged).
+            rivalry_wins: 0,
         };
         let c = SeasonCounters {
             raid_volume_won: if big { rng.next() } else { rng.below(1_000_000_000_000) },
@@ -221,6 +223,7 @@ fn render() -> String {
             treaty_secs: rng.below(10_000_000),
             // Security review 2 M-B: not read by the score itself.
             funded: 0,
+            rivalry_wins: 0,
         };
         let penalize = rng.below(2) == 1;
         let season = Season {
