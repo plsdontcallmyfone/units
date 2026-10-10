@@ -277,6 +277,28 @@ export const ECONOMY_PREPARES: Record<string, PrepareDef> = {
     return [hookwars.bookMatchClass(pk(b, 'owner'), { bid, bidder: cb.bidder, item: hookwars.itemAddress(itemMint), itemMint, treasury: cfg.treasury, reference: ref(b) })];
   }),
 
+  // ---------------------------------------------------------------- licences (11 section 2) --
+  'licences/offer/prepare': one('Offer licences', ['market', 'token'], async (b) => {
+    const itemMint = pk(b, 'itemMint');
+    return [hookwars.setLicenceOffer(pk(b, 'owner'), hookwars.itemAddress(itemMint), itemMint, {
+      priceLamports: big(b, 'priceLamports'), termSecs: int(b, 'termSecs', 1, U32_MAX), per: b.per === undefined ? 0 : int(b, 'per', 0, 255),
+      maxLive: b.maxLive === undefined ? 1 : int(b, 'maxLive', 1, 65_535), exclusive: b.exclusive === true, active: b.active !== false,
+    })];
+  }),
+  'licences/buy/prepare': one('Buy a licence', ['market', 'social'], async (b, conn) => {
+    const itemMint = pk(b, 'itemMint'); const itemKey = hookwars.itemAddress(itemMint);
+    const [it, offer, cfg] = await Promise.all([
+      item(conn, itemMint), need(conn, hookwars.licenceOfferAddress(itemKey), (d) => hookwars.coderOf('market').decodeAccount<{ setBy: PublicKey; priceLamports: bigint; active: boolean }>('LicenceOffer', d), 'This item offers no licences.'),
+      need(conn, hookwars.marketConfigAddress(), (d) => hookwars.marketConfigCodec.decode(d), 'The market has no config on this cluster yet.'),
+    ]);
+    if (!offer.active) throw new PrepareError(409, 'Inactive', 'This licence offer is paused.');
+    const [t, holder] = await Promise.all([template(conn, it.templateId), itemHolder(conn, itemMint)]);
+    return [hookwars.buyLicense(pk(b, 'owner'), {
+      item: itemKey, itemMint, templateId: it.templateId, tokenMint: pk(b, 'tokenMint'), holder: holder ?? offer.setBy, author: t.registeredBy, treasury: cfg.treasury,
+      maxPrice: b.maxPrice === undefined ? offer.priceLamports : big(b, 'maxPrice'), renew: b.renew === true,
+    })];
+  }),
+
   // ---------------------------------------------------------------- R-1: sells --
   'sell/prepare': one('Sell', ['swap', 'launch', 'items', 'token', 'bridge'], async (b, conn) => {
     const owner = pk(b, 'owner'); const mint = pk(b, 'mint');

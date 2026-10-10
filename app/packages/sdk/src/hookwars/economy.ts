@@ -377,3 +377,21 @@ export function companionLaunchSlots(launcher: PublicKey, mint: PublicKey, step:
   const keys = step.keys.map((k) => ({ pubkey: k.pubkey, isSigner: k.isSigner && k.pubkey.equals(mint), isWritable: k.isWritable }));
   return idlIx('companion', 'launch_slots', { launcher, companion, creator, launchProgram: step.programId }, { data: step.data }, keys);
 }
+
+// ---------------------------------------------------------------- licences (11 section 2) --
+
+/** `set_licence_offer(price, term, per, max_live, exclusive, active)` by the item's holder. */
+export function setLicenceOffer(holder: PublicKey, item: PublicKey, itemMint: PublicKey, o: { priceLamports: bigint; termSecs: number; per: number; maxLive: number; exclusive: boolean; active: boolean }): TransactionInstruction {
+  return idlIx('market', 'set_licence_offer', { holder, item, itemMint, holderHolding: holdingAddr(itemMint, holder) }, o);
+}
+
+/** `buy_license(max_price, reference)` (or `renew_license`): a token's right to equip the item for a term. */
+export function buyLicense(payer: PublicKey, o: { item: PublicKey; itemMint: PublicKey; templateId: number; tokenMint: PublicKey; holder: PublicKey; author: PublicKey; treasury: PublicKey; maxPrice: bigint; renew?: boolean; reference?: Uint8Array }): TransactionInstruction {
+  return idlIx('market', o.renew ? 'renew_license' : 'buy_license', {
+    payer, item: o.item, itemMint: o.itemMint, template: templateAddress(o.templateId), tokenMint: o.tokenMint, holder: o.holder, holderHolding: holdingAddr(o.itemMint, o.holder),
+    author: o.author, treasury: o.treasury, skills: skillsAddress(), holderProfile: profileAddress(o.holder), socialCaller: socialCallerAddress(MARKET_ID), socialEventAuthority: eventAuthorityOf(SOCIAL_ID), socialProgram: SOCIAL_ID,
+  }, { maxPrice: o.maxPrice, reference: Buffer.from(o.reference ?? new Uint8Array(32)) });
+}
+
+/** The licence offer address of an item (`["licence-offer", item]` under the market). */
+export const licenceOfferAddress = (item: PublicKey): PublicKey => PublicKey.findProgramAddressSync([Buffer.from('licence-offer'), item.toBuffer()], MARKET_ID)[0];

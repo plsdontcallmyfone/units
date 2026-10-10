@@ -37,7 +37,15 @@ interface Sim { ok: boolean; units: number | null; failure: { name: string | nul
 interface Config { launchFeeLamports: string; maxCreatorFeeBps: number; lpFeeBps: number; minVirtualQuote: string; maxVirtualQuote: string; paused: boolean; ruleBounds: Record<string, string | number> }
 interface ItemView { templateId: number; params: number[]; manifest: Record<string, unknown>; royaltyBps: number; level: number }
 
-interface Draft { name: string; symbol: string; uri: string; virtualSol: string; creatorFeeBps: number; kit: boolean; rules: LaunchRulesInput; slots: SlotDraft[] }
+interface Draft { name: string; symbol: string; uri: string; virtualSol: string; creatorFeeBps: number; kit: boolean; rules: LaunchRulesInput; slots: SlotDraft[]; companion?: CompanionDraft }
+// Changed by Hookwars (app pass v3): a companion slot launch, the companion program the creator
+// (bordrless_companion `launch_slots`); its splits are the SDK's `COMPANION_TEMPLATES`.
+interface CompanionDraft { on: boolean; split: keyof typeof SPLITS; fundSol: string }
+const SPLITS = {
+  buysItself: { label: 'Buys itself: every creator fee buys back and burns', split: { buybackBps: 10_000, holdersBps: 0, beneficiaryBps: 0 } },
+  rugProofDev: { label: 'Half to holders, half to you, your buy vests', split: { buybackBps: 0, holdersBps: 5_000, beneficiaryBps: 5_000 } },
+  buybackAndReward: { label: 'Half bought back and burned, half to holders', split: { buybackBps: 5_000, holdersBps: 5_000, beneficiaryBps: 0 } },
+} as const;
 interface Run { mint: number[]; phase: 'prepare' | 'launch' | 'done'; sent: { label: string; sig: string }[] }
 const EMPTY: Draft = { name: '', symbol: '', uri: '', virtualSol: '', creatorFeeBps: 0, kit: false, rules: { ...NO_RULES }, slots: [] };
 
@@ -46,6 +54,12 @@ function load(): { draft: Draft; run: Run | null } {
   return { draft: EMPTY, run: null };
 }
 function save(v: { draft: Draft; run: Run | null }) { try { localStorage.setItem(STORE, JSON.stringify(v)); } catch { /* not kept: the page still works */ } }
+
+/** SOL typed as text, in lamports (a string), or '0' when it does not parse. */
+function solLamports(v: string): string {
+  const m = /^(\d+)(?:\.(\d{1,9}))?$/.exec(v.trim());
+  return m ? (BigInt(m[1]!) * 1_000_000_000n + BigInt((m[2] ?? '').padEnd(9, '0'))).toString() : '0';
+}
 
 function argsText(a: Record<string, unknown> | null): string {
   if (!a) return '';
@@ -115,6 +129,7 @@ export function LaunchForm() {
     return {
       owner: wallet, mint: m.publicKey.toBase58(), name: draft.name, symbol: draft.symbol, uri: draft.uri, virtualQuote: virtualQuote?.toString(),
       creatorFeeBps: draft.creatorFeeBps, kit: draft.kit, rules: draft.kit ? draft.rules : undefined, phase,
+      ...(draft.companion?.on ? { companion: true, split: SPLITS[draft.companion.split].split, fund: solLamports(draft.companion.fundSol) } : {}),
       slots: draft.slots.map((s) => ({ kind: s.kind, rule: s.rule, maxCutBps: s.maxCutBps, noticeSecs: s.noticeSecs, templateId: s.templateId, launchItem: s.launchItem.trim(), targets: s.targets })),
     };
   }
@@ -201,6 +216,20 @@ export function LaunchForm() {
                 <select value={draft.creatorFeeBps} onChange={(e) => set({ creatorFeeBps: Number(e.target.value) })}>{CREATOR_FEE_CHOICES_BPS.filter((c) => c <= maxFee).map((c) => <option key={c} value={c}>{pct(c)}</option>)}</select>
               </label>
               <p className="muted launch-note">The creator fee is taken out of each trade on the launch pool, never added on top of it; the trader sees it in the quote before signing.</p>
+              <label className="field">Creator
+                <select value={draft.companion?.on ? 'companion' : 'wallet'} onChange={(e) => set({ companion: { split: draft.companion?.split ?? 'buysItself', fundSol: draft.companion?.fundSol ?? '', on: e.target.value === 'companion' } })}>
+                  <option value="wallet">My wallet</option><option value="companion">A companion program</option>
+                </select>
+              </label>
+              {draft.companion?.on ? (
+                <>
+                  <label className="field">What the creator fees do
+                    <select value={draft.companion.split} onChange={(e) => set({ companion: { ...draft.companion!, split: e.target.value as CompanionDraft['split'] } })}>{Object.entries(SPLITS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select>
+                  </label>
+                  <label className="field">Fund for the companion (SOL)<input value={draft.companion.fundSol} inputMode="decimal" onChange={(e) => set({ companion: { ...draft.companion!, fundSol: e.target.value } })} placeholder="Pays the launch's fee and rent from the companion's creator address" /></label>
+                  <p className="muted launch-note">The companion program is the token's creator: every launch step goes through it, and its creator fees follow the split above by code. Nobody holds a creator key.</p>
+                </>
+              ) : null}
             </>
           )}
           {step === 1 && (

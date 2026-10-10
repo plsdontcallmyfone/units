@@ -53,6 +53,8 @@ export const GROUPS: Group[] = [
       { href: '/armory/templates', label: 'Templates', what: 'Every template, its fields and what it keeps.', icon: I.armory },
       { href: '/marketplace', label: 'Marketplace', what: 'Items for sale, sale history and rentals.', icon: I.market },
       { href: '/commissions', label: 'Commissions', what: 'Bounties for a new hook in one slot.', icon: I.brief },
+      { href: '/craft', label: 'Craft', what: 'Materials, recipes, repairs and presets.', icon: I.armory },
+      { href: '/book', label: 'Order book', what: 'Material orders and bids for classes of items.', icon: I.market },
     ] },
     { title: 'Funds', items: [{ href: '/bridge', label: 'Bridge', what: 'Bridged SOL in and out.', icon: I.bridge }] },
   ] },
