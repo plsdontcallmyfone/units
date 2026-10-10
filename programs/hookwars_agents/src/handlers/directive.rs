@@ -135,14 +135,30 @@ fn check_memo_params(p: &MemoParams) -> Result<()> {
     Ok(())
 }
 
+/// Pass 5 (review 3 L-6): lowercase hex of `sha256(borsh(constraints))`, the memo's `c`.
+pub fn constraints_hash_hex(constraints: &DirectiveConstraints) -> Result<String> {
+    let mut bytes = Vec::with_capacity(64);
+    constraints.serialize(&mut bytes)?;
+    let h = sha256(&bytes);
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(64);
+    for b in h {
+        out.push(char::from(HEX[usize::from(b >> 4)]));
+        out.push(char::from(HEX[usize::from(b & 15)]));
+    }
+    Ok(out)
+}
+
 /// Finds, in this transaction, a memo instruction that is the canonical directive for
-/// `passport`/`seq` and lists `operator` as a signer; returns its sha256.
+/// `passport`/`seq` and lists `operator` as a signer; returns its sha256. Pass 5 (L-6): the
+/// memo's `c` must be `constraints_c`, the hash of the constraints this call writes.
 pub fn find_directive_memo(
     sysvar: &AccountInfo,
     passport: &Pubkey,
     operator: &Pubkey,
     seq: u32,
     max_bytes: usize,
+    constraints_c: &str,
 ) -> Result<[u8; 32]> {
     let n = {
         let data = sysvar.try_borrow_data()?;
@@ -169,6 +185,7 @@ pub fn find_directive_memo(
         if body.passport != pp || m.from != pp || body.seq != u64::from(seq) {
             continue;
         }
+        require!(body.c == constraints_c, DirectiveError::MemoMismatch);
         require!(
             ix.accounts.iter().any(|a| a.pubkey == *operator && a.is_signer),
             DirectiveError::MemoNotSigned
@@ -207,6 +224,7 @@ pub fn process_set_directive(
         &ctx.accounts.operator.key(),
         seq,
         usize::from(ctx.accounts.memo_config.params.memo_max_bytes),
+        &constraints_hash_hex(&constraints)?,
     )?;
     // The enforceable part goes into the policy, where `spend` already checks it.
     let limits = PolicyLimits {

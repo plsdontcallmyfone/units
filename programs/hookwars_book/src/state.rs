@@ -46,6 +46,9 @@ pub struct BookParams {
     pub min_size_max: u64,
     /// A fill counts toward the Trader skill only when its fees reach this (review 3 L-1).
     pub skill_min_fee_lamports: u64,
+    /// Pass 5 (review 3 I-6): `BOOK_MIN_REST_SECS`, the least time an order rests before its
+    /// owner may cancel it, and the least time to its expiry (owner value, 00 section 6).
+    pub min_rest_secs: u32,
 }
 
 /// `BookConfig` at `["book-config"]`.
@@ -101,6 +104,8 @@ pub struct Order {
     pub bounty: u64,
     /// 0 = never.
     pub expires_at: i64,
+    /// Pass 5 (I-6): when the order was placed.
+    pub placed_at: i64,
 }
 
 /// `BookMarket` at `["book", base_mint]`: a material book (11 section 6.2). Quote is native SOL

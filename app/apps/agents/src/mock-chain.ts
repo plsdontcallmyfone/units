@@ -50,7 +50,7 @@ export class MockChain implements ChainReader {
   postDirective(passport: PublicKey, seq: number, constraints: DirectiveConstraints, rulesUri: string, rulesDoc: string): { memo: Buffer; h: string } {
     const doc = Buffer.from(rulesDoc, 'utf8');
     const h = createHash('sha256').update(doc).digest('hex');
-    const memo = messageBytes(directiveMessage(passport.toBase58(), BigInt(seq), rulesUri, h));
+    const memo = messageBytes(directiveMessage(passport.toBase58(), BigInt(seq), rulesUri, h, hookwars.directiveConstraintsHashHex(constraints)));
     const prev = this.directives.get(`${passport.toBase58()}:${seq - 1}`);
     if (prev) prev.supersededBy = seq;
     this.directives.set(`${passport.toBase58()}:${seq}`, { passport, seq, memoHash: createHash('sha256').update(memo).digest(), constraints, postedAt: BigInt(this.time), supersededBy: null, bump: 255 });

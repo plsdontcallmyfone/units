@@ -344,6 +344,23 @@ pub fn submit_ix(submitter: &Pubkey, commission: &Pubkey, token_mint: &Pubkey, i
     )
 }
 
+/// Pass 5 (I-2): `take_submission` by the item's current holder.
+pub fn take_submission_ix(holder: &Pubkey, commission: &Pubkey, item: &Pubkey, item_mint: &Pubkey) -> Instruction {
+    market_ix(
+        hookwars_market::accounts::TakeSubmission {
+            holder: *holder,
+            commission: *commission,
+            submission: ms::submission_address(commission, item).0,
+            item: *item,
+            item_mint: *item_mint,
+            holder_holding: token::holding_address(item_mint, holder),
+            event_authority: events(&hookwars_market::ID),
+            program: hookwars_market::ID,
+        },
+        hookwars_market::instruction::TakeSubmission {},
+    )
+}
+
 /// `pay_commission`.
 pub fn pay_commission_ix(commission: &Pubkey, token_mint: &Pubkey, item: &Pubkey, submitter: &Pubkey) -> Instruction {
     market_ix(
@@ -400,6 +417,11 @@ pub fn create_badge_ix(admin: &Pubkey, id: u32, name: &str, criterion: hookwars_
 }
 
 /// `claim_badge` of badge `id` for `recipient`; `extra` are the criterion's accounts.
+/// Pass 5 (I-3): the ForgeLevel claim marker `["badge-claim", id, item]`.
+pub fn item_claim_marker(id: u32, item: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(&[hookwars_social::seeds::ITEM_CLAIM, &id.to_le_bytes(), item.as_ref()], &hookwars_social::ID).0
+}
+
 pub fn claim_badge_ix(claimant: &Pubkey, id: u32, recipient: &Pubkey, extra: Vec<AccountMeta>) -> Instruction {
     let badge = Pubkey::find_program_address(&[hookwars_social::seeds::BADGE, &id.to_le_bytes()], &hookwars_social::ID).0;
     let award = Pubkey::find_program_address(

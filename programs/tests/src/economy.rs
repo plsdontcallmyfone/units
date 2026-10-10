@@ -46,6 +46,7 @@ pub const TEST_BOOK: BookParams = BookParams {
     tick_max_lamports: SOL,
     min_size_max: 1_000_000,
     skill_min_fee_lamports: 0,
+    min_rest_secs: 0,
 };
 
 /// TEST values of the licence parameters.
@@ -689,6 +690,7 @@ impl Ew {
         book_ix(
             hookwars_book::accounts::Cancel {
                 owner: *owner,
+                config: bs::config_address().0,
                 market,
                 escrow,
                 base_mint: *base,

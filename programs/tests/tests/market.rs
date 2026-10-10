@@ -8,6 +8,7 @@ use bordrless_hook::{equip_rule, slot_kind};
 use bordrless_program_tests::armory::*;
 use bordrless_program_tests::expansion::*;
 use bordrless_program_tests::slots::item_slot;
+use bordrless_token::client as token;
 use hookwars_common::{template_id as t, EquipConfig};
 use hookwars_market::error::MarketError;
 use hookwars_market::state::{self as ms, Collection, Commission, Lease, Listing};
@@ -296,6 +297,43 @@ fn an_unfilled_commission_refunds_its_creator_after_the_vote_window() {
     let c0 = m.hw.w.env.lamports(&creator.pubkey());
     send(&mut m.hw.w.env, &cranker, &[refund_commission_ix(&commission, &creator.pubkey())]).ok();
     assert_eq!(m.hw.w.env.lamports(&creator.pubkey()) - c0, bounty);
+}
+
+/// Pass 5 (review 3 I-2): a submitter who sells the item loses the submission to the buyer, who
+/// takes it over (and so the bounty); only the holder can take it.
+#[test]
+fn p5_i2_the_items_holder_takes_over_its_submission() {
+    let mut m = Mw::new();
+    let owner = m.hw.w.env.funded(100 * SOL);
+    let mint = m.hw.slot_mint(&owner, test_slots());
+    let (_, incumbent, _) = m.fee_item();
+    let cfg = m.fee_config();
+    m.hw.equip_launch(&owner, &mint, Hw::entry(2, Some(incumbent), cfg)).ok();
+    let creator = m.hw.w.env.funded(10 * SOL);
+    let bounty = TEST_MARKET.commission_min_lamports;
+    send(&mut m.hw.w.env, &creator, &[open_commission_ix(&creator.pubkey(), &mint, 0, 2, bounty, 3_600)]).ok();
+    let commission = ms::commission_address(&mint, 0).0;
+    let (submitter, item, item_mint) = m.fee_item();
+    let s = submitter.pubkey();
+    send(&mut m.hw.w.env, &submitter, &[submit_ix(&s, &commission, &mint, &item, &item_mint)]).ok();
+    // The item is sold to a buyer.
+    let buyer = m.hw.w.env.funded(SOL);
+    let b = buyer.pubkey();
+    let ixs = [
+        token::create_holding(s, item_mint, b),
+        token::transfer(s, token::holding_address(&item_mint, &s), token::holding_address(&item_mint, &b), item_mint, None, vec![], 1),
+    ];
+    m.hw.w.env.send_paid_by(&ixs, &submitter, &[]).ok();
+    // The old submitter no longer holds it; the buyer does.
+    send(&mut m.hw.w.env, &submitter, &[take_submission_ix(&s, &commission, &item, &item_mint)])
+        .expect_code(market_code(MarketError::NotItemHolder));
+    send(&mut m.hw.w.env, &buyer, &[take_submission_ix(&b, &commission, &item, &item_mint)]).ok();
+    let sub: ms::Submission = m.hw.w.env.read(&ms::submission_address(&commission, &item).0);
+    assert_eq!(sub.submitter, b);
+    // The bounty can only go to the buyer now.
+    m.hw.w.env.warp(3_600);
+    send(&mut m.hw.w.env, &creator, &[pay_commission_ix(&commission, &mint, &item, &s)])
+        .expect_code(market_code(MarketError::WrongRecipient));
 }
 
 #[test]

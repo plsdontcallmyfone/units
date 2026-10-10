@@ -105,7 +105,8 @@ fn volume_from(ledger: &AccountInfo, from: &Pubkey) -> u64 {
 }
 
 /// `settle_rivalry`: permissionless after the rivalry's end, or at once when the token no longer
-/// equips the item (an early end counts no win). A win adds one to the season's `rivalry_wins`.
+/// equips the item (an early end counts no win). A win adds one to the season's `rivalry_wins`;
+/// pass 5 (I-4): only when the rival raided back, and once per rival per season.
 pub fn process_settle_rivalry(ctx: Context<SettleRivalry>) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
     let mint_key = ctx.accounts.mint.key();
@@ -115,12 +116,17 @@ pub fn process_settle_rivalry(ctx: Context<SettleRivalry>) -> Result<()> {
     require!(early || now >= r.ends_at, WarError::RivalryState);
     let ours = volume_from(&ctx.accounts.ledger, &r.rival);
     let theirs = volume_from(&ctx.accounts.rival_ledger, &mint_key);
-    let won = !early && ours > theirs;
     let current = ctx.accounts.config.current_season;
     let s = &mut ctx.accounts.war_state;
     s.roll(current);
+    // Pass 5 (review 3 I-4): a win counts only against a rival that raided back (a contested
+    // rivalry, both ledgers), and once per rival per season.
+    let repeat = s.last_win_rival == r.rival && s.last_win_season == current;
+    let won = !early && theirs > 0 && ours > theirs && !repeat;
     if won {
         s.season.rivalry_wins = s.season.rivalry_wins.saturating_add(1);
+        s.last_win_rival = r.rival;
+        s.last_win_season = current;
     }
     s.rivalry = RivalryBudget::default();
     emit_cpi!(RivalrySettled {

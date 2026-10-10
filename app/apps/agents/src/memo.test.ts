@@ -49,10 +49,11 @@ describe('memo v1', () => {
   });
 
   it('builds and reads directive bodies in their only key order', () => {
-    const m = directiveMessage('PassX', 3n, 'https://r', 'ab12');
+    const m = directiveMessage('PassX', 3n, 'https://r', 'ab12', 'cd34');
     const parsed = parseMessage(Buffer.from(encodeMessage(m)), 1_000);
     expect(parsed.kind).toBe('directive');
-    expect(readDirectiveBody(parsed.body)).toEqual({ passport: 'PassX', seq: 3n, rulesUri: 'https://r', h: 'ab12' });
+    expect(readDirectiveBody(parsed.body)).toEqual({ passport: 'PassX', seq: 3n, rulesUri: 'https://r', h: 'ab12', c: 'cd34' });
+    expect(code(() => readDirectiveBody(obj([['passport', 'P'], ['seq', 1n], ['rules_uri', ''], ['h', '']])))).toBe('Shape');
     expect(code(() => readDirectiveBody(obj([['seq', 1n]])))).toBe('Shape');
     expect(code(() => readDirectiveBody(obj([['seq', 1n], ['passport', 'P'], ['rules_uri', ''], ['h', '']])))).toBe('Shape');
   });

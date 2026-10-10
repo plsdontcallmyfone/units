@@ -1753,6 +1753,11 @@
       "code": 6021,
       "name": "DuplicateSkill",
       "msg": "two skills share an id"
+    },
+    {
+      "code": 6022,
+      "name": "AlreadyClaimed",
+      "msg": "this item already earned this badge"
     }
   ],
   "types": [

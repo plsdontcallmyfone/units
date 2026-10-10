@@ -4,13 +4,14 @@
 // the craft and book programs. Everything is built from the generated IDLs (`idlIx`); the suffix
 // shapes are `crates/hookwars-common` `agents_record`, `market`, `eco_cpi` (`init_wear_metas`,
 // `social_metas`) and the items program's `settle.rs`.
+import { createHash } from 'node:crypto';
 import { accessPolicyAddress, adminActionHash, gated, queueAdmin } from './access.ts';
 import { PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY, SystemProgram, type AccountMeta, type TransactionInstruction } from '@solana/web3.js';
 import { FIXED_ADDRESSES } from '@hookwars/shared';
 import { coderOf, idlIx } from './from-idl.ts';
 import {
   AGENTS_ID, ARMORY_ID, BOOK_ID, CRAFT_ID, ITEMS_ID, MARKET_ID, SOCIAL_ID, TOKEN_ID,
-  agentsCallerAddress, agentsConfigAddress, authorCounterAddress, bookEscrowAddress, bookMarketAddress,
+  agentsCallerAddress, agentsConfigAddress, authorCounterAddress, bookConfigAddress, bookEscrowAddress, bookMarketAddress,
   claimCounterAddress, classBidAddress, commitmentAddress, compositeAddress, craftCallerAddress, craftConfigAddress, craftMinterAddress,
   directiveAddress, dropRuleAddress, eventAuthorityOf, holdingAddr, itemAddress, itemMintAddress, leaseAddress, leaseEscrowAddress,
   marketCallerAddress, materialAddress, materialMintAddress, memoConfigAddress, policyAddress, presetAddress, profileAddress,
@@ -224,6 +225,15 @@ export function reslotLoyalty(mint: PublicKey, oldSlot: number, oldItem: PublicK
 
 export interface DirectiveConstraintsInput { maxSpendPerAction: bigint; maxSpendPerDay: bigint; allowedTargets: PublicKey[]; allowedAccessModes: number; maxLicencePrice: bigint; frozen: boolean }
 
+/** Pass 5 (review 3 L-6): hex `sha256(borsh(constraints))`, the directive memo's `c`, which
+ * `set_directive` checks against the constraints it writes. */
+export function directiveConstraintsHashHex(c: DirectiveConstraintsInput): string {
+  const u64 = (x: bigint) => { const b = Buffer.alloc(8); b.writeBigUInt64LE(x); return b; };
+  const n = Buffer.alloc(4); n.writeUInt32LE(c.allowedTargets.length);
+  const bytes = Buffer.concat([u64(c.maxSpendPerAction), u64(c.maxSpendPerDay), n, ...c.allowedTargets.map((t) => t.toBuffer()), Buffer.from([c.allowedAccessModes]), u64(c.maxLicencePrice), Buffer.from([c.frozen ? 1 : 0])]);
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
 /** `set_directive(seq, constraints)`; the directive memo signed by the operator goes in the same transaction. */
 export function agentsSetDirective(operator: PublicKey, passport: PublicKey, seq: number, constraints: DirectiveConstraintsInput): TransactionInstruction {
   return idlIx('agents', 'set_directive', {
@@ -310,7 +320,7 @@ export function bookPlace(owner: PublicKey, o: { baseMint: PublicKey; treasury: 
 
 /** `cancel(id)`: the owner takes a resting order and its escrow back. */
 export function bookCancel(owner: PublicKey, baseMint: PublicKey, id: bigint): TransactionInstruction {
-  return idlIx('book', 'cancel', { owner, ...bookAccounts(baseMint), ownerHolding: holdingAddr(baseMint, owner), ...tok }, { id });
+  return idlIx('book', 'cancel', { owner, config: bookConfigAddress(), ...bookAccounts(baseMint), ownerHolding: holdingAddr(baseMint, owner), ...tok }, { id });
 }
 
 /** `crank(max)`: removes up to `max` expired orders; `owners` are their wallets in book order. */

@@ -586,6 +586,30 @@ pub mod hookwars_market {
         Ok(())
     }
 
+    /// Pass 5 (review 3 I-2): the item's current holder takes over its submission (and so the
+    /// bounty) while the commission is open, so a submitter who sold the item is not paid for it.
+    pub fn take_submission(ctx: Context<TakeSubmission>) -> Result<()> {
+        let a = &ctx.accounts;
+        require!(a.commission.state == commission_state::OPEN, MarketError::CommissionNotOpen);
+        read_item(&a.item, a.item_mint.key)?;
+        require_keys_eq!(a.item.key(), a.submission.item, MarketError::WrongAccount);
+        require!(
+            holding_amount(&a.holder_holding, a.item_mint.key, a.holder.key)? == 1,
+            MarketError::NotItemHolder
+        );
+        let ts = now()?;
+        let (commission, item_key, holder) = (a.commission.key(), a.item.key(), a.holder.key());
+        let sub = &mut ctx.accounts.submission;
+        sub.submitter = holder;
+        emit_cpi!(Submitted {
+            commission,
+            item: item_key,
+            submitter: holder,
+            ts
+        });
+        Ok(())
+    }
+
     /// Anyone pays the bounty to a submission's submitter once that item is equipped in the slot
     /// (and was not the incumbent when the commission opened), after the submission window.
     pub fn pay_commission(ctx: Context<PayCommission>) -> Result<()> {
@@ -1027,6 +1051,27 @@ pub struct Submit<'info> {
     )]
     pub submission: Box<Account<'info, Submission>>,
     pub system_program: Program<'info, System>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct TakeSubmission<'info> {
+    pub holder: Signer<'info>,
+    #[account(seeds = [seeds::COMMISSION, commission.token_mint.as_ref(), &commission.nonce.to_le_bytes()], bump = commission.bump)]
+    pub commission: Box<Account<'info, Commission>>,
+    #[account(
+        mut,
+        seeds = [seeds::SUBMISSION, commission.key().as_ref(), submission.item.as_ref()],
+        bump = submission.bump,
+        has_one = commission @ MarketError::WrongAccount
+    )]
+    pub submission: Box<Account<'info, Submission>>,
+    /// CHECK: the armory `Item`, read in the handler.
+    pub item: UncheckedAccount<'info>,
+    /// CHECK: the item's mint, checked against the `Item`.
+    pub item_mint: UncheckedAccount<'info>,
+    /// CHECK: the holder's holding of the item, read in the handler.
+    pub holder_holding: UncheckedAccount<'info>,
 }
 
 #[event_cpi]

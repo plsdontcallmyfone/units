@@ -60,7 +60,7 @@ export function decodeMemoConfig(data: Buffer): MemoParams {
 
 /** The operator's two instructions: the directive memo (signed by the operator) and `set_directive`. */
 export function setDirectiveInstructions(operator: PublicKey, passport: PublicKey, seq: number, constraints: DirectiveConstraints, rulesUri: string, rulesHashHex: string): TransactionInstruction[] {
-  const memo = memoInstruction(directiveMessage(passport.toBase58(), BigInt(seq), rulesUri, rulesHashHex), [operator]);
+  const memo = memoInstruction(directiveMessage(passport.toBase58(), BigInt(seq), rulesUri, rulesHashHex, hookwars.directiveConstraintsHashHex(constraints)), [operator]);
   return [memo, hookwars.agentsSetDirective(operator, passport, seq, constraints)];
 }
 
@@ -102,6 +102,7 @@ export function verifyDirectiveMemo(memo: Uint8Array, d: DirectiveAccount, maxBy
   const b = readDirectiveBody(m.body);
   if (b.passport !== d.passport.toBase58() || m.from !== b.passport || b.seq !== BigInt(d.seq)) throw new DirectiveError('the memo names another passport or sequence');
   if (!/^[0-9a-f]{64}$/.test(b.h)) throw new DirectiveError('the rules hash is not 64 hex characters');
+  if (b.c !== hookwars.directiveConstraintsHashHex(d.constraints)) throw new DirectiveError('the memo names other constraints than the Directive account');
   return b;
 }
 

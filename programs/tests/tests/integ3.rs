@@ -232,9 +232,10 @@ fn settle_takes_the_protocol_fee_and_author_share_wears_the_item_and_drops_to_it
     assert_eq!(ew.holding(&mint, &admin.pubkey()) - before, protocol + author);
     assert_eq!(ew.holding(&mint, &pda::royalty_owner(&item).0), royalty - author);
     assert_eq!(ew.holding(&mint, &cranker.pubkey()), bounty);
-    // The run wore the item's only charge; the settle dropped x / 1,000 of MAT to its holder.
+    // The run wore the item's only charge. Pass 5 (review 3 M-11): the drop is measured in
+    // bridged SOL settled, so token-side cuts (raw units of a token anyone can launch) drop none.
     assert!(ew.wear(&item).dormant);
-    assert_eq!(ew.holding(&cs::material_mint_address(MAT).0, &holder.pubkey()), x / 1_000);
+    assert_eq!(ew.holding(&cs::material_mint_address(MAT).0, &holder.pubkey()), 0);
     // Dormant: the item answers the default, so a transfer is no longer cut (R38).
     let carol = ew.funded(SOL);
     transfer(&mut ew.hw, &alice, &mint, &carol.pubkey(), 100_000).ok();

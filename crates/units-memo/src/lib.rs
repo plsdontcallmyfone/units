@@ -425,6 +425,9 @@ pub struct DirectiveBody {
     pub rules_uri: String,
     /// Hex sha256 of the rules document.
     pub h: String,
+    /// Pass 5 (review 3 L-6): hex sha256 of the Borsh-encoded `DirectiveConstraints` the same
+    /// transaction's `set_directive` writes; the agents program refuses a mismatch.
+    pub c: String,
 }
 
 impl DirectiveBody {
@@ -435,6 +438,7 @@ impl DirectiveBody {
             ("seq".into(), Value::Num(self.seq)),
             ("rules_uri".into(), Value::Str(self.rules_uri.clone())),
             ("h".into(), Value::Str(self.h.clone())),
+            ("c".into(), Value::Str(self.c.clone())),
         ])
     }
 
@@ -444,7 +448,7 @@ impl DirectiveBody {
             Value::Obj(kv) => kv,
             _ => return Err(MemoError::Shape),
         };
-        let keys = ["passport", "seq", "rules_uri", "h"];
+        let keys = ["passport", "seq", "rules_uri", "h", "c"];
         if kv.len() != keys.len() || kv.iter().zip(keys).any(|((k, _), want)| k != want) {
             return Err(MemoError::Shape);
         }
@@ -453,12 +457,20 @@ impl DirectiveBody {
             seq: kv[1].1.as_u64().ok_or(MemoError::Shape)?,
             rules_uri: kv[2].1.as_str().ok_or(MemoError::Shape)?.to_string(),
             h: kv[3].1.as_str().ok_or(MemoError::Shape)?.to_string(),
+            c: kv[4].1.as_str().ok_or(MemoError::Shape)?.to_string(),
         })
     }
 }
 
-/// A directive memo for `passport` (base58) at `seq`, from the passport itself to everyone.
-pub fn directive_message(passport: &str, seq: u64, rules_uri: &str, rules_hash_hex: &str) -> Message {
+/// A directive memo for `passport` (base58) at `seq`, from the passport itself to everyone;
+/// `constraints_hash_hex` is the hex sha256 of the Borsh-encoded constraints (pass 5, L-6).
+pub fn directive_message(
+    passport: &str,
+    seq: u64,
+    rules_uri: &str,
+    rules_hash_hex: &str,
+    constraints_hash_hex: &str,
+) -> Message {
     Message {
         kind: kind::DIRECTIVE.into(),
         from: passport.into(),
@@ -470,6 +482,7 @@ pub fn directive_message(passport: &str, seq: u64, rules_uri: &str, rules_hash_h
             seq,
             rules_uri: rules_uri.into(),
             h: rules_hash_hex.into(),
+            c: constraints_hash_hex.into(),
         }
         .to_value(),
         expires_at: 0,
@@ -589,13 +602,22 @@ mod tests {
 
     #[test]
     fn directive_body_round_trip() {
-        let m = directive_message("PassX", 3, "https://r", "ab12");
+        let m = directive_message("PassX", 3, "https://r", "ab12", "cd34");
         let parsed = Message::parse(m.encode().as_bytes(), 1_000).unwrap();
         assert_eq!(parsed.kind, kind::DIRECTIVE);
         let b = DirectiveBody::from_value(&parsed.body).unwrap();
         assert_eq!(b.passport, "PassX");
         assert_eq!(b.seq, 3);
         assert_eq!(b.h, "ab12");
+        assert_eq!(b.c, "cd34");
+        // Pass 5 (L-6): a body without the constraints hash is refused.
+        let four = Value::Obj(vec![
+            ("passport".into(), Value::Str("PassX".into())),
+            ("seq".into(), Value::Num(3)),
+            ("rules_uri".into(), Value::Str("https://r".into())),
+            ("h".into(), Value::Str("ab12".into())),
+        ]);
+        assert_eq!(DirectiveBody::from_value(&four), Err(MemoError::Shape));
         let wrong = Value::Obj(vec![("seq".into(), Value::Num(1))]);
         assert_eq!(DirectiveBody::from_value(&wrong), Err(MemoError::Shape));
     }

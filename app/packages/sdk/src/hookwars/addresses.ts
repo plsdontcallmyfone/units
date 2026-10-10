@@ -116,6 +116,8 @@ export const submissionAddress = (commission: PublicKey, item: PublicKey) => pda
 export const socialConfigAddress = () => pda([s('social-config')], SOCIAL_ID);
 export const badgeTypeAddress = (id: number) => pda([s('badge'), u32(id)], SOCIAL_ID);
 export const badgeMintAddress = (id: number) => pda([s('badge-mint'), u32(id)], SOCIAL_ID);
+/** Pass 5 (review 3 I-3): the ForgeLevel claim's third criterion account (writable), one award per item. */
+export const badgeItemClaimAddress = (id: number, item: PublicKey) => pda([s('badge-claim'), u32(id), item.toBuffer()], SOCIAL_ID);
 export const badgeAwardAddress = (id: number, recipient: PublicKey) => pda([s('award'), u32(id), recipient.toBuffer()], SOCIAL_ID);
 export const badgeMinterAddress = () => pda([s('badge-minter')], SOCIAL_ID);
 export const guildAddress = (id: number) => pda([s('guild'), u32(id)], SOCIAL_ID);

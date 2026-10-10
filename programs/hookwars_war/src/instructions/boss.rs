@@ -43,7 +43,7 @@ pub fn process_init_boss_pool(ctx: Context<InitBossPool>, season: u32, boss_mint
     p.boss_mint = boss_mint;
     p.effective_at = Clock::get()?
         .unix_timestamp
-        .saturating_add(i64::from(ctx.accounts.config.params.admin_timelock_secs));
+        .saturating_add(ctx.accounts.config.params.admin_timelock_secs);
     emit_cpi!(BossPoolOpened { season, boss_mint });
     Ok(())
 }
@@ -121,7 +121,8 @@ pub struct ClaimBossShare<'info> {
 }
 
 /// `claim_boss_share(season)`: permissionless; pays the war state's token its sealed share into its
-/// chest (wrapped), booked as `received_other` (solvency, not season funding).
+/// chest (wrapped), booked as `received_other` (solvency, not season funding). Pass 5 (M-7): the
+/// source's volume is capped by its season funding.
 pub fn process_claim_boss_share<'info>(ctx: Context<'info, ClaimBossShare<'info>>, season: u32) -> Result<()> {
     let mint = ctx.accounts.war_state.mint;
     let (i, amount, volume) = {
@@ -133,7 +134,20 @@ pub fn process_claim_boss_share<'info>(ctx: Context<'info, ClaimBossShare<'info>
             .position(|s| s.mint == mint && s.volume > 0)
             .ok_or(WarError::NoBossShare)?;
         require!(!p.sources[i].claimed, WarError::NoBossShare);
-        let v = p.sources[i].volume;
+        // Pass 5 (review 3 M-7): a source's volume counts only up to `raid_volume_per_funded`
+        // times what its chest received in that season (the M-B cap of the score), so volume
+        // washed through the boss by a token with an unfunded chest earns nothing. What a cap
+        // withholds stays in the pool.
+        let st = &ctx.accounts.war_state;
+        let funded = if st.season_id == season {
+            st.season.funded
+        } else if st.season_id == season.saturating_add(1) {
+            st.prev_season.funded
+        } else {
+            0
+        };
+        let cap = funded.saturating_mul(ctx.accounts.config.params.raid_volume_per_funded);
+        let v = p.sources[i].volume.min(cap);
         let amount = (u128::from(p.to_share) * u128::from(v) / u128::from(p.total_volume.max(1))) as u64;
         (i, amount, v)
     };

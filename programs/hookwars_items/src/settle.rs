@@ -426,9 +426,8 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
     cpi.pay(&pool_cuts_info, &cuts_holding, &a.cranker_quote.to_account_info(), &quote_info, b_q, cuts_seeds, false)?;
 
     let total_quote: u64 = pool_owed.iter().sum::<u64>() - pool_left.iter().sum::<u64>();
-    let total_token: u64 = token_owed.iter().sum::<u64>() - token_left.iter().sum::<u64>();
-    // E-3: the runs since the last settle wear the item; E-4: what settled on the token side drops
-    // material to the item's holder (SETTLE_CRANK). An item that wears needs the craft suffix.
+    // E-3: the runs since the last settle wear the item; E-4: what settled drops material to the
+    // item's holder (SETTLE_CRANK), measured on the quote side (pass 5, M-11). An item that wears needs the craft suffix.
     let runs = ctx.accounts.equip_state.runs;
     let new_runs = runs.saturating_sub(ctx.accounts.equip_state.runs_at_settle);
     if item.has_wear && new_runs > 0 {
@@ -453,7 +452,10 @@ pub fn process<'info>(ctx: Context<'info, SettleEquip<'info>>, slot: u8) -> Resu
                 token_event_authority: &events,
                 system_program: &system,
             };
-            hookwars_common::eco_cpi::drop(c, d, &common, &crate::ID, hookwars_common::eco_cpi::drop_source::SETTLE_CRANK, total_token)?;
+            // Pass 5 (review 3 M-11): measured in bridged SOL (the quote side settled), the one
+            // unit every token shares, never in raw units of the item's token, which anyone can
+            // mint in any quantity by launching a token of their own.
+            hookwars_common::eco_cpi::drop(c, d, &common, &crate::ID, hookwars_common::eco_cpi::drop_source::SETTLE_CRANK, total_quote)?;
         }
     }
     let s = &mut ctx.accounts.equip_state;

@@ -2616,6 +2616,112 @@
       "args": []
     },
     {
+      "name": "take_submission",
+      "docs": [
+        "Pass 5 (review 3 I-2): the item's current holder takes over its submission (and so the",
+        "bounty) while the commission is open, so a submitter who sold the item is not paid for it."
+      ],
+      "discriminator": [
+        142,
+        85,
+        204,
+        70,
+        149,
+        152,
+        103,
+        219
+      ],
+      "accounts": [
+        {
+          "name": "holder",
+          "signer": true
+        },
+        {
+          "name": "commission",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "commission.token_mint",
+                "account": "Commission"
+              },
+              {
+                "kind": "account",
+                "path": "commission.nonce",
+                "account": "Commission"
+              }
+            ]
+          },
+          "relations": [
+            "submission"
+          ]
+        },
+        {
+          "name": "submission",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  117,
+                  98,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "commission"
+              },
+              {
+                "kind": "account",
+                "path": "submission.item",
+                "account": "Submission"
+              }
+            ]
+          }
+        },
+        {
+          "name": "item"
+        },
+        {
+          "name": "item_mint"
+        },
+        {
+          "name": "holder_holding"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "withdraw_offer",
       "docs": [
         "The lessor withdraws an offer nobody accepted; the item returns."
