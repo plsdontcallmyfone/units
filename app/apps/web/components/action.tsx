@@ -11,7 +11,7 @@ import { bodyOf, type Field } from '@/lib/action-body';
 
 export type { Field, FieldKind } from '@/lib/action-body';
 
-export function Action({ route, title, what, fields = [], fixed = {}, cta, children }: { route: string; title: string; what?: ReactNode; fields?: Field[]; fixed?: Record<string, unknown>; cta?: string; children?: ReactNode }) {
+export function Action({ route, title, what, fields = [], fixed = {}, cta, children, note }: { route: string; title: string; what?: ReactNode; fields?: Field[]; fixed?: Record<string, unknown>; cta?: string; children?: ReactNode; /** Changed by Hookwars (launch page): a line under the fields from what is typed, e.g. a buy's remainder quote. */ note?: (values: Record<string, string>, wallet: string | null) => ReactNode }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [wallet, setWallet] = useState<string | null>(null);
   const [hasWallet, setHasWallet] = useState<boolean | null>(null);
@@ -64,6 +64,7 @@ export function Action({ route, title, what, fields = [], fixed = {}, cta, child
           ))}
         </div>
       ) : null}
+      {note ? note(values, wallet) : null}
       <div className="action-row">
         {hasWallet === false ? <span className="muted">No Solana wallet in this browser.</span>
           : !wallet ? <button type="button" className="btn sm" onClick={connect}>Connect wallet</button>

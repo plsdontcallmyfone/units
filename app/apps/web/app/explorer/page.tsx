@@ -5,7 +5,9 @@ import { redirect } from 'next/navigation';
 import { read } from '@/lib/api';
 import { short } from '@/lib/format';
 import { Empty, Head, Panel, ReadFailed } from '@/components/ui';
-import { SearchBox } from '@/components/explorer-ui';
+import { SearchBox, Signatures } from '@/components/explorer-ui';
+import { PROGRAM_IDS } from '@hookwars/shared';
+import type { ProgramPage } from '@/lib/explorer';
 import './explorer.css';
 
 type Hit = { kind: string; value: string; href: string | null };
@@ -19,13 +21,17 @@ export default async function Explorer({ searchParams }: { searchParams: Promise
     if (hit.ok && hit.data.href) redirect(hit.data.href);
     miss = hit.ok ? 'That is not a signature, an address or "template" with a number.' : hit.error;
   }
-  const programs = await read<Prog[]>('/v1/explorer/programs');
+  const [programs, recent] = await Promise.all([read<Prog[]>('/v1/explorer/programs'), read<ProgramPage>(`/v1/explorer/program/${PROGRAM_IDS.token}?limit=15`)]);
   return (
     <>
       <Head eyebrow="Explorer" title="Every units transaction, decoded" lede="Paste a signature to see each instruction and event in the order it ran: slot items on each transfer, pool items on swaps, raid marks, settlements and their split, war, market, craft and book actions, agent records and memos." />
       <Panel title="Search">
         <SearchBox q={q} />
         {miss ? <p className="reason" role="alert">{miss}</p> : null}
+      </Panel>
+      <div style={{ height: 16 }} />
+      <Panel title="Recent transactions" meta="every units token movement goes through the token program" flush>
+        {!recent.ok ? <ReadFailed what="recent transactions" error={recent.error} /> : <Signatures list={recent.data.recent} empty={<Empty title="No transactions yet" what="Nothing has called the token program on this cluster yet." />} />}
       </Panel>
       <div style={{ height: 16 }} />
       <Panel title="Programs" meta="recent activity on each program's page" flush>

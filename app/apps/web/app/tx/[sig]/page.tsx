@@ -42,7 +42,7 @@ export default async function Tx({ params }: { params: Promise<{ sig: string }> 
         right={t.ok ? <span className="chip ok">succeeded</span> : <span className="chip bad">failed</span>} />
       <div className="stats">
         <Stat label="Slot" value={t.slot === null ? DASH : int(t.slot)} />
-        <Stat label="Time" value={t.blockTime ? new Date(t.blockTime * 1000).toISOString().replace('T', ' ').slice(0, 19) + ' UTC' : DASH} />
+        <Stat label="Time" value={t.blockTime ? new Date(t.blockTime * 1000).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : DASH} />
         <Stat label="Fee" value={t.fee === null ? DASH : sol(t.fee, 9)} />
         <Stat label="Compute units" value={t.computeUnits === null ? DASH : int(t.computeUnits)} />
         <Stat label="Events" value={int(t.events.length)} />
@@ -57,7 +57,7 @@ export default async function Tx({ params }: { params: Promise<{ sig: string }> 
         <Panel title="What happened" meta={`${t.story.length} lines`} flush>
           {t.story.length === 0 ? <Empty title="Nothing units-specific" what="No units event or memo in this transaction; its instructions are listed alongside." /> : <Story lines={t.story} />}
         </Panel>
-        <Panel title="Instructions" meta={t.programs.map((p) => p).join(', ')} flush>
+        <Panel title="Instructions" meta={`${t.instructions.length} top-level, ${t.programs.length} programs`} flush>
           {t.instructions.map((ix, i) => <Instruction key={i} ix={ix} n={String(i + 1)} />)}
         </Panel>
       </div>

@@ -1,12 +1,14 @@
 // Changed by Hookwars: new file. Every prepare that acts on one token, as forms on its page; each
 // signs in the wallet and sends through /api/v1/submit (components/action.tsx).
 import { Action } from './action';
+import { BuyAction } from './buy-action';
 
 export function TokenActions({ mint, hasWar }: { mint: string; hasWar: boolean }) {
   const m = { mint };
   return (
     <div className="act-grid">
-      <Action route="buy" title="Buy" what="Buys this token for SOL on its pool." fixed={m} fields={[{ name: 'amount', label: 'SOL in', kind: 'sol' }, { name: 'minOut', label: 'Least tokens out (base units)', kind: 'amount', optional: true }]} />
+      {/* Changed by Hookwars (launch page): the buy says when it is cut to the curve's remainder (fuzz audit 1, finding 1). */}
+      <BuyAction mint={mint} />
       <Action route="raid" title="Raid" what="Buys this token by selling a rival it targets; earns raid points where a Raid item is equipped." fixed={{ target: mint }} fields={[{ name: 'rival', label: 'Rival token', kind: 'key' }, { name: 'amount', label: 'Rival tokens to sell (base units)', kind: 'amount' }, { name: 'minOut', label: 'Least tokens out (base units)', kind: 'amount', optional: true }]} />
       <Action route="proposals" title="Propose an item" what="For a Vote slot. Empty item proposes clearing the slot." fixed={{ ...m, targets: [] }} fields={[{ name: 'slot', label: 'Slot', kind: 'int' }, { name: 'item', label: 'Item', kind: 'key', optional: true }, { name: 'targets', label: 'Targets', kind: 'keys', optional: true, hint: 'comma separated mints' }, { name: 'role', label: 'Treaty role', kind: 'text', optional: true, choices: [['none', 'none'], ['pay', 'pay'], ['receive', 'receive']] }]} />
       <Action route="votes" title="Vote" what="Locks the tokens you vote with in your wallet until the vote ends." fixed={m} fields={[{ name: 'slot', label: 'Slot', kind: 'int' }, { name: 'nonce', label: 'Proposal nonce', kind: 'amount' }, { name: 'support', label: 'For', kind: 'bool' }, { name: 'amount', label: 'Tokens (base units)', kind: 'amount' }]} />

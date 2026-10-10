@@ -44,6 +44,13 @@ const NAMES: Record<string, string> = Object.fromEntries(Object.entries(PROGRAM_
 NAMES['39LXQBGqZtg591jkGnZi9BELQ9hp1ZngbAxu6K1cC29Y'] = 'craft';
 NAMES['C4k2QquxzDdgHf74tnvyyWQyGUR8xvhPo1i1gFYb639g'] = 'book';
 
+/** Programs a units transaction carries that are not units programs: named for display only. */
+const OTHER: Record<string, string> = {
+  '11111111111111111111111111111111': 'system', ComputeBudget111111111111111111111111111111: 'compute budget',
+  MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr: 'memo', AddressLookupTab1e1111111111111111111111111: 'lookup table',
+};
+export const otherNameOf = (k: string): string | null => OTHER[k] ?? null;
+
 /** The units program name of an address, or null. */
 export const programNameOf = (k: string): string | null => NAMES[k] ?? null;
 

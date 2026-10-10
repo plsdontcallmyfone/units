@@ -76,7 +76,7 @@ export async function simulate(conn: Connection, b: Body) {
   if (typeof b.transaction !== 'string' || b.transaction.length > 4000) throw new PrepareError(400, 'BadRequest', '"transaction" is the base64 of one prepared transaction.');
   const tx = VersionedTransaction.deserialize(Buffer.from(b.transaction, 'base64'));
   const keys = tx.message.staticAccountKeys;
-  const ours = new Set(Object.values(PROGRAM_IDS));
+  const ours = new Set<string>([...Object.values(PROGRAM_IDS), hookwars.explore.programIdOf('craft') ?? '', hookwars.explore.programIdOf('book') ?? '']);
   if (!tx.message.compiledInstructions.some((c) => ours.has(keys[c.programIdIndex]?.toBase58() ?? '')) && !tx.message.compiledInstructions.some((c) => keys[c.programIdIndex]?.toBase58() === 'AddressLookupTab1e1111111111111111111111111')) {
     throw new PrepareError(400, 'BadRequest', 'Only units transactions are simulated here.');
   }

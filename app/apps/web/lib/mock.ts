@@ -2,6 +2,7 @@
  * items, a map, a feed and a season, so every page can be seen filled before the programs are on a
  * cluster. Every figure here is made up for display and is labelled so in the nav. Never on in
  * production. */
+import explorerDemo from './explorer-demo.json';
 import type { BattleEvent, General, ItemManifest, ItemSummary, Page, PrizeVaultInfo, ProposalInfo, SeasonInfo, SlotInfo, TreatyInfo, WarInfo, WarMap } from '@hookwars/shared';
 
 export const MOCK = process.env.MOCK_DATA === '1';
@@ -149,6 +150,43 @@ export function mock(path: string): unknown {
   if ((m = /^\/v1\/launches\/(\w+)\/(slots|proposals|war|treaties|generals)$/.exec(p!))) {
     const t = by[m[1]!]; if (!t) return undefined;
     return { slots: SLOTS[t.mint] ?? [], proposals: PROPOSALS[t.mint] ?? [], war: war(t), treaties: TREATIES[t.mint] ?? [], generals: GENERALS }[m[2]!];
+  }
+  // Changed by Hookwars (explorer v2): the explorer's demo is real LiteSVM transactions as the
+  // explorer decodes them (lib/explorer-demo.json, from packages/sdk/scripts/explorer-fixtures.mjs).
+  if (p!.startsWith('/v1/explorer/')) return explorerMock(p!, q);
+  return undefined;
+}
+
+type DemoEvent = { signature: string; ordinal: number; slot: number; program: string; name: string; story: unknown };
+type DemoTx = { slot: number; blockTime: number; ok: boolean; programs: string[] };
+const DEMO = explorerDemo as unknown as { programs: { name: string; title: string; address: string; instructions: string[]; events: string[] }[]; txs: Record<string, DemoTx>; byAddress: Record<string, DemoEvent[]> };
+const demoSig = (sig: string) => { const t = DEMO.txs[sig]!; return { signature: sig, slot: t.slot, blockTime: t.blockTime, ok: t.ok, memo: null }; };
+
+function explorerMock(p: string, q: URLSearchParams): unknown {
+  let m: RegExpExecArray | null;
+  if (p === '/v1/explorer/programs') return DEMO.programs.map(({ name, title, address }) => ({ name, title, address }));
+  if ((m = /^\/v1\/explorer\/tx\/(\w+)$/.exec(p))) return DEMO.txs[m[1]!];
+  if ((m = /^\/v1\/explorer\/program\/(\w+)$/.exec(p))) {
+    const pr = DEMO.programs.find((x) => x.address === m![1]);
+    if (!pr) return undefined;
+    const sigs = Object.entries(DEMO.txs).filter(([, t]) => t.programs.includes(pr.name)).map(([s]) => demoSig(s)).reverse();
+    const counts: Record<string, { n: number; last: number }> = {};
+    for (const list of Object.values(DEMO.byAddress)) for (const e of list) if (e.program === pr.name) { const c = (counts[e.name] ??= { n: 0, last: 0 }); c.n++; c.last = Math.max(c.last, e.slot); }
+    return { address: pr.address, name: pr.name, title: pr.title, deployed: false, instructions: pr.instructions, events: pr.events, indexedCounts: Object.entries(counts).map(([name, c]) => ({ name, n: c.n, last_slot: String(c.last) })), recent: sigs };
+  }
+  if ((m = /^\/v1\/explorer\/address\/(\w+)$/.exec(p))) {
+    const ev = DEMO.byAddress[m[1]!] ?? [];
+    const seen = [...new Set(ev.map((e) => e.signature))];
+    return { address: m[1], exists: false, lamports: null, owner: null, ownerName: null, executable: false, space: null, kind: 'account', program: null, decoded: { program: null, type: null, data: null }, extra: {}, indexed: { events: ev }, recent: seen.map(demoSig) };
+  }
+  if (p === '/v1/explorer/search') {
+    const v = (q.get('q') ?? '').trim();
+    if (DEMO.txs[v]) return { kind: 'transaction', value: v, href: `/tx/${v}` };
+    const pr = DEMO.programs.find((x) => x.address === v);
+    if (pr) return { kind: 'program', value: v, href: `/program/${v}` };
+    if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(v)) return { kind: 'account', value: v, href: `/address/${v}` };
+    if (/^(template\s*|#)\d+$/i.test(v)) return undefined;
+    return { kind: 'invalid', value: v, href: null };
   }
   return undefined;
 }

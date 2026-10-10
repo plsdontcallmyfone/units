@@ -2,11 +2,11 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ago, short } from '@/lib/format';
-import { hrefOf, isKey, programNameOf, type Fact, type Signature, type StoryLine } from '@/lib/explorer';
+import { hrefOf, isKey, otherNameOf, programNameOf, type Fact, type Signature, type StoryLine } from '@/lib/explorer';
 
 /** An address as a link to its page, shortened, the full key on hover. */
 export function Addr({ k, full }: { k: string; full?: boolean }) {
-  const name = programNameOf(k);
+  const name = programNameOf(k) ?? otherNameOf(k);
   return <Link className="addr x-addr" href={hrefOf(k)} title={k}>{name ? `${name} program` : full ? k : short(k, 6)}</Link>;
 }
 

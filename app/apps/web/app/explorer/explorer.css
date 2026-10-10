@@ -29,3 +29,4 @@
   .x-kv dd { margin-bottom: var(--s2); }
   .x-story-line, .x-ix { padding-left: var(--s4); padding-right: var(--s4); }
 }
+.panel-head .meta { overflow-wrap: anywhere; min-width: 0; }
