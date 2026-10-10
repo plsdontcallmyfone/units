@@ -4,6 +4,7 @@
 // security review 2, L-D: execute and the performance revert refresh a slot launch's pool registry.
 // Integration pass 2: badge equip by the agents caller, admin Soulbound item, close_proposal bond
 // guard, agent record calls, lease gate, revert_for_lease_end, listed claim refusal, badge counters.
+// Integration pass 3: set_template_economy, set_item_protocol_bps (E-7, E-2), Template and Item economy fields.
 //! `hookwars_armory` (docs/spec/02-armory.md): templates, items as supply-1 tokens on the token
 //! standard, royalties and their claims, equip rules (holder vote with notice, performance revert,
 //! locked), equipping at launch (signed by the launchpad), loot minting (signed by the war program),
@@ -135,7 +136,8 @@ pub mod hookwars_armory {
         c.items_minted = 0;
         c.templates = 0;
         c.params = params;
-        c.reserved = [0; 62];
+        c.item_protocol_bps = 0;
+        c.reserved = [0; 60];
         Ok(())
     }
 
@@ -206,6 +208,50 @@ pub mod hookwars_armory {
             template_id,
             ts: now()?
         });
+        Ok(())
+    }
+
+    /// Integration pass 3 (E-7, 11 sections 1.2, 2.2, 5.4): the admin sets a template's economy
+    /// fields. Admin-direct like `register_template` and `retire_template` (review 1 L-1 puts all
+    /// three behind the timelock; see 13-integration-3).
+    pub fn set_template_economy(
+        ctx: Context<RetireTemplate>,
+        template_id: u16,
+        author_bps: u16,
+        default_access: u8,
+        allowed_access: u8,
+        charges_on_create: u32,
+    ) -> Result<()> {
+        let t = &mut ctx.accounts.template;
+        require!(t.id == template_id, ArmoryError::WrongAccount);
+        require!(author_bps <= 10_000, ArmoryError::RoyaltyTooHigh);
+        require!(
+            allowed_access == 0 || allowed_access & (1u8 << default_access.min(7)) != 0,
+            ArmoryError::InvalidSchema
+        );
+        t.author_bps = author_bps;
+        t.default_access = default_access;
+        t.allowed_access = allowed_access;
+        t.charges_on_create = charges_on_create;
+        emit_cpi!(TemplateEconomySet {
+            template_id,
+            author_bps,
+            default_access,
+            allowed_access,
+            charges_on_create,
+        });
+        Ok(())
+    }
+
+    /// Integration pass 3 (E-2, R37): the admin sets `ITEM_PROTOCOL_BPS`, the protocol's share of
+    /// each token-side cut `settle_equip` settles. Admin-direct (see L-1 in 13-integration-3).
+    pub fn set_item_protocol_bps(ctx: Context<AdminOnly>, item_protocol_bps: u16) -> Result<()> {
+        require!(
+            item_protocol_bps <= ctx.accounts.config.params.max_royalty_bps,
+            ArmoryError::RoyaltyTooHigh
+        );
+        ctx.accounts.config.item_protocol_bps = item_protocol_bps;
+        emit_cpi!(ItemProtocolBpsSet { item_protocol_bps });
         Ok(())
     }
 
@@ -1000,7 +1046,11 @@ fn process_register_template(
     t.name = args.name.clone();
     t.registered_by = ctx.accounts.admin.key();
     t.created_at = ts;
-    t.reserved = [0; 32];
+    t.author_bps = 0;
+    t.default_access = 0;
+    t.allowed_access = 0;
+    t.charges_on_create = 0;
+    t.reserved = [0; 24];
     emit_cpi!(TemplateRegistered {
         template_id: args.id,
         program: program.key(),
@@ -1044,7 +1094,8 @@ fn write_item(
     item.equipped_count = 0;
     item.royalty_owner_bump = pda::royalty_owner(&item_key).1;
     item.created_at = ts;
-    item.reserved = [0; 32];
+    item.has_wear = false;
+    item.reserved = [0; 31];
 }
 
 fn process_create_item(

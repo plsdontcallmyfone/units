@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (M2); M3b: settle_bounty_bps, CompositeItem; security review 1: proposal_min_bps; integration pass 2: AuthorCounter, ClaimCounter.
+// Changed by Hookwars: new file (M2); M3b: settle_bounty_bps, CompositeItem; security review 1: proposal_min_bps; integration pass 2: AuthorCounter, ClaimCounter; integration pass 3: item_protocol_bps, Template economy fields (E-7), Item.has_wear (E-3), source CRAFTED (E-5).
 //! Accounts of the armory (docs/spec/02-armory.md section 2).
 
 use anchor_lang::prelude::*;
@@ -57,7 +57,11 @@ pub struct ArmoryConfig {
     pub templates: u16,
     /// The numbers.
     pub params: ArmoryParams,
-    pub reserved: [u8; 62],
+    /// Integration pass 3 (11 section 2.2, R37, E-2): the protocol's share of every token-side cut
+    /// `settle_equip` settles, taken first (`ITEM_PROTOCOL_BPS`, to set; 0 until the admin sets
+    /// it with `set_economy`). Paid to the admin's holding.
+    pub item_protocol_bps: u16,
+    pub reserved: [u8; 60],
 }
 
 /// Hookwars M3b: a composite's module list at `["composite", item]` (08 section 2.2; the same
@@ -108,7 +112,14 @@ pub struct Template {
     pub name: String,
     pub registered_by: Pubkey,
     pub created_at: i64,
-    pub reserved: [u8; 32],
+    /// Integration pass 3 (E-7, 11 sections 1.2, 2.2, 5.4): the template author's share of each
+    /// item royalty and licence (R34), the access mode new items get, the modes allowed, and the
+    /// charges an item of this template starts with (0 = never wears).
+    pub author_bps: u16,
+    pub default_access: u8,
+    pub allowed_access: u8,
+    pub charges_on_create: u32,
+    pub reserved: [u8; 24],
 }
 
 /// Template status.
@@ -135,7 +146,11 @@ pub struct Item {
     pub equipped_count: u32,
     pub royalty_owner_bump: u8,
     pub created_at: i64,
-    pub reserved: [u8; 32],
+    /// Integration pass 3 (E-3): a craft `Wear` exists for this item (made at creation when its
+    /// template's `charges_on_create` is above 0); the items engine then reads it last in the
+    /// registry and answers the default while it is dormant (R38).
+    pub has_wear: bool,
+    pub reserved: [u8; 31],
 }
 
 /// Item sources.
@@ -143,6 +158,8 @@ pub mod source {
     pub const AUTHORED: u8 = 0;
     pub const LOOT: u8 = 1;
     pub const FORGED: u8 = 2;
+    /// Integration pass 3 (E-5): made by craft through `mint_crafted`.
+    pub const CRAFTED: u8 = 3;
 }
 
 /// `SlotState` at `["slot-state", mint, slot]` (02 section 2.7).

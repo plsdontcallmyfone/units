@@ -2145,3 +2145,250 @@ pub mod economy {
         }
     }
 }
+
+/// Integration pass 3 (docs/spec/13-integration-3.md): hand-built calls from the armory, items, war
+/// and market into craft (`init_wear`, `wear`, `drop`) and social (`record_wallet`), plus the
+/// optional account suffixes that carry their accounts. Built by hand so no protocol program needs
+/// a crate dependency on craft or social (both depend on the armory, social on war: a cycle).
+pub mod eco_cpi {
+    use super::economy as eco;
+    use super::*;
+    use anchor_lang::solana_program::hash::hash;
+    use anchor_lang::solana_program::instruction::{AccountMeta, Instruction};
+    use anchor_lang::solana_program::program::invoke_signed;
+
+    /// `sha256("global:<name>")[..8]`.
+    pub fn disc(name: &str) -> [u8; 8] {
+        let h = hash(format!("global:{name}").as_bytes()).to_bytes();
+        let mut d = [0u8; 8];
+        d.copy_from_slice(&h[..8]);
+        d
+    }
+
+    /// An Anchor program's event authority.
+    pub fn event_authority(program: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(&[b"__event_authority"], program).0
+    }
+
+    /// Splits a suffix of `len` accounts whose first account is `tag` off the end of `rem`.
+    pub fn split_tagged<'a, 'info>(
+        rem: &'a [AccountInfo<'info>],
+        tag: &Pubkey,
+        len: usize,
+    ) -> (&'a [AccountInfo<'info>], Option<&'a [AccountInfo<'info>]>) {
+        let n = rem.len();
+        if n >= len && rem[n - len].key == tag {
+            (&rem[..n - len], Some(&rem[n - len..]))
+        } else {
+            (rem, None)
+        }
+    }
+
+    /// Craft's `["craft-config"]`.
+    pub fn craft_config() -> Pubkey {
+        Pubkey::find_program_address(&[b"craft-config"], &eco::CRAFT_ID).0
+    }
+    /// Craft's `["wear", item]`.
+    pub fn wear_address(item: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(&[b"wear", item.as_ref()], &eco::CRAFT_ID).0
+    }
+    /// Social's `["skills"]`.
+    pub fn skills_address() -> Pubkey {
+        Pubkey::find_program_address(&[b"skills"], &eco::SOCIAL_ID).0
+    }
+    /// Social's `["profile", wallet]`.
+    pub fn profile_address(wallet: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(&[b"profile", wallet.as_ref()], &eco::SOCIAL_ID).0
+    }
+
+    /// Reads craft's `Wear` at `["wear", item]` without the craft crate: `Some(dormant)` when the
+    /// account is the item's wear record owned by craft, `None` otherwise. Layout after the
+    /// 8-byte discriminator: version, bump, item (32), max_charges (u32), used (u32), dormant.
+    pub fn wear_dormant(info: &AccountInfo, item: &Pubkey) -> Option<bool> {
+        if *info.owner != eco::CRAFT_ID || *info.key != wear_address(item) {
+            return None;
+        }
+        let d = info.try_borrow_data().ok()?;
+        if d.len() < 8 + 2 + 32 + 4 + 4 + 1 || d[10..42] != item.as_ref()[..] {
+            return None;
+        }
+        Some(d[50] != 0)
+    }
+
+    fn cpi<'info>(program: Pubkey, name: &str, args: Vec<u8>, metas: Vec<AccountMeta>, infos: &[AccountInfo<'info>], seeds: &[&[u8]]) -> Result<()> {
+        let mut data = disc(name).to_vec();
+        data.extend(args);
+        invoke_signed(&Instruction { program_id: program, accounts: metas, data }, infos, &[seeds])?;
+        Ok(())
+    }
+
+    /// Accounts of the craft suffix `[craft program, craft config, craft event authority, the
+    /// caller's ["craft-caller"] PDA, ...]` an instruction appends; `CRAFT_HEAD` of them.
+    pub const CRAFT_HEAD: usize = 4;
+    /// The init-wear suffix: head + `wear (mut)` + `system program`.
+    pub const INIT_WEAR_SUFFIX: usize = CRAFT_HEAD + 2;
+    /// The settle suffix: head + `wear` + drop accounts `drop_rule, material, material_mint,
+    /// minter, recipient, recipient_holding`.
+    pub const SETTLE_CRAFT_SUFFIX: usize = CRAFT_HEAD + 7;
+    /// The reveal suffix (war): head + drop accounts (6).
+    pub const DROP_SUFFIX: usize = CRAFT_HEAD + 6;
+
+    fn check_head(s: &[AccountInfo], caller_program: &Pubkey) -> Result<u8> {
+        let (caller, bump) = eco::caller_pda(eco::CRAFT_CALLER_SEED, caller_program);
+        require!(
+            *s[0].key == eco::CRAFT_ID && *s[1].key == craft_config() && *s[2].key == event_authority(&eco::CRAFT_ID) && *s[3].key == caller,
+            ErrorCode::ConstraintAddress
+        );
+        Ok(bump)
+    }
+
+    /// `craft::init_wear(caller_program, item, max_charges)` from an init-wear suffix.
+    pub fn init_wear<'info>(s: &[AccountInfo<'info>], caller_program: &Pubkey, payer: &AccountInfo<'info>, item: &Pubkey, max_charges: u32) -> Result<()> {
+        require!(s.len() == INIT_WEAR_SUFFIX, ErrorCode::AccountNotEnoughKeys);
+        let bump = check_head(s, caller_program)?;
+        require!(*s[4].key == wear_address(item), ErrorCode::ConstraintAddress);
+        let metas = vec![
+            AccountMeta::new_readonly(*s[3].key, true),
+            AccountMeta::new(*payer.key, true),
+            AccountMeta::new_readonly(*s[1].key, false),
+            AccountMeta::new(*s[4].key, false),
+            AccountMeta::new_readonly(*s[5].key, false),
+            AccountMeta::new_readonly(*s[2].key, false),
+            AccountMeta::new_readonly(eco::CRAFT_ID, false),
+        ];
+        let mut args = caller_program.as_ref().to_vec();
+        args.extend_from_slice(item.as_ref());
+        args.extend(max_charges.to_le_bytes());
+        let infos = [s[3].clone(), payer.clone(), s[1].clone(), s[4].clone(), s[5].clone(), s[2].clone(), s[0].clone()];
+        cpi(eco::CRAFT_ID, "init_wear", args, metas, &infos, &[eco::CRAFT_CALLER_SEED, &[bump]])
+    }
+
+    /// `craft::wear(caller_program, runs)` when the settle suffix's wear slot holds the item's
+    /// `Wear`; a no-op otherwise.
+    pub fn wear<'info>(s: &[AccountInfo<'info>], caller_program: &Pubkey, item: &Pubkey, runs: u32) -> Result<()> {
+        require!(s.len() >= CRAFT_HEAD + 1, ErrorCode::AccountNotEnoughKeys);
+        if runs == 0 || wear_dormant(&s[4], item).is_none() {
+            return Ok(());
+        }
+        let bump = check_head(s, caller_program)?;
+        let metas = vec![
+            AccountMeta::new_readonly(*s[3].key, true),
+            AccountMeta::new_readonly(*s[1].key, false),
+            AccountMeta::new(*s[4].key, false),
+            AccountMeta::new_readonly(*s[2].key, false),
+            AccountMeta::new_readonly(eco::CRAFT_ID, false),
+        ];
+        let mut args = caller_program.as_ref().to_vec();
+        args.extend(runs.to_le_bytes());
+        let infos = [s[3].clone(), s[1].clone(), s[4].clone(), s[2].clone(), s[0].clone()];
+        cpi(eco::CRAFT_ID, "wear", args, metas, &infos, &[eco::CRAFT_CALLER_SEED, &[bump]])
+    }
+
+    /// The common accounts a `drop` needs beside the suffix.
+    pub struct DropCommon<'a, 'info> {
+        pub payer: &'a AccountInfo<'info>,
+        pub token_program: &'a AccountInfo<'info>,
+        pub token_event_authority: &'a AccountInfo<'info>,
+        pub system_program: &'a AccountInfo<'info>,
+    }
+
+    /// `craft::drop(caller_program, source, measured)` from the six drop accounts `d` (`drop_rule,
+    /// material, material_mint, minter, recipient, recipient_holding`); a no-op when the rule slot
+    /// is not a craft account (no rule set up) or `measured` is 0. `drop` never fails for a spent
+    /// cap (11 section 13.1 item 4).
+    pub fn drop<'info>(head: &[AccountInfo<'info>], d: &[AccountInfo<'info>], c: &DropCommon<'_, 'info>, caller_program: &Pubkey, source: u8, measured: u64) -> Result<()> {
+        require!(head.len() >= CRAFT_HEAD && d.len() == 6, ErrorCode::AccountNotEnoughKeys);
+        if measured == 0 || *d[0].owner != eco::CRAFT_ID || d[0].data_is_empty() {
+            return Ok(());
+        }
+        let bump = check_head(head, caller_program)?;
+        let metas = vec![
+            AccountMeta::new_readonly(*head[3].key, true),
+            AccountMeta::new(*c.payer.key, true),
+            AccountMeta::new_readonly(*head[1].key, false),
+            AccountMeta::new(*d[0].key, false),
+            AccountMeta::new(*d[1].key, false),
+            AccountMeta::new(*d[2].key, false),
+            AccountMeta::new_readonly(*d[3].key, false),
+            AccountMeta::new_readonly(*d[4].key, false),
+            AccountMeta::new(*d[5].key, false),
+            AccountMeta::new_readonly(*c.token_program.key, false),
+            AccountMeta::new_readonly(*c.token_event_authority.key, false),
+            AccountMeta::new_readonly(*c.system_program.key, false),
+            AccountMeta::new_readonly(*head[2].key, false),
+            AccountMeta::new_readonly(eco::CRAFT_ID, false),
+        ];
+        let mut args = caller_program.as_ref().to_vec();
+        args.push(source);
+        args.extend(measured.to_le_bytes());
+        let infos = [
+            head[3].clone(), c.payer.clone(), head[1].clone(), d[0].clone(), d[1].clone(), d[2].clone(), d[3].clone(), d[4].clone(), d[5].clone(),
+            c.token_program.clone(), c.token_event_authority.clone(), c.system_program.clone(), head[2].clone(), head[0].clone(),
+        ];
+        cpi(eco::CRAFT_ID, "drop", args, metas, &infos, &[eco::CRAFT_CALLER_SEED, &[bump]])
+    }
+
+    /// The social suffix `[social program, skills, profile (mut), social event authority, the
+    /// caller's ["social-caller"] PDA]`.
+    pub const SOCIAL_SUFFIX: usize = 5;
+
+    /// `social::record_wallet(caller_program, counter, value)` for `wallet` from a social suffix;
+    /// a no-op when the profile slot is not the wallet's profile (the wallet has none) or social
+    /// does not list the caller (social itself returns early then).
+    pub fn record_wallet<'info>(s: &[AccountInfo<'info>], caller_program: &Pubkey, wallet: &Pubkey, counter: u8, value: u64) -> Result<()> {
+        require!(s.len() == SOCIAL_SUFFIX, ErrorCode::AccountNotEnoughKeys);
+        let (caller, bump) = eco::caller_pda(eco::SOCIAL_CALLER_SEED, caller_program);
+        require!(
+            *s[0].key == eco::SOCIAL_ID && *s[1].key == skills_address() && *s[3].key == event_authority(&eco::SOCIAL_ID) && *s[4].key == caller,
+            ErrorCode::ConstraintAddress
+        );
+        if *s[2].key != profile_address(wallet) || *s[2].owner != eco::SOCIAL_ID || value == 0 {
+            return Ok(());
+        }
+        let metas = vec![
+            AccountMeta::new_readonly(caller, true),
+            AccountMeta::new_readonly(*s[1].key, false),
+            AccountMeta::new(*s[2].key, false),
+            AccountMeta::new_readonly(*s[3].key, false),
+            AccountMeta::new_readonly(eco::SOCIAL_ID, false),
+        ];
+        let mut args = caller_program.as_ref().to_vec();
+        args.push(counter);
+        args.extend(value.to_le_bytes());
+        let infos = [s[4].clone(), s[1].clone(), s[2].clone(), s[3].clone(), s[0].clone()];
+        cpi(eco::SOCIAL_ID, "record_wallet", args, metas, &infos, &[eco::SOCIAL_CALLER_SEED, &[bump]])
+    }
+
+    /// Client side: the init-wear suffix metas for `caller_program` and `item`.
+    pub fn init_wear_metas(caller_program: &Pubkey, item: &Pubkey) -> Vec<AccountMeta> {
+        vec![
+            AccountMeta::new_readonly(eco::CRAFT_ID, false),
+            AccountMeta::new_readonly(craft_config(), false),
+            AccountMeta::new_readonly(event_authority(&eco::CRAFT_ID), false),
+            AccountMeta::new_readonly(eco::caller_pda(eco::CRAFT_CALLER_SEED, caller_program).0, false),
+            AccountMeta::new(wear_address(item), false),
+            AccountMeta::new_readonly(anchor_lang::system_program::ID, false),
+        ]
+    }
+
+    /// Client side: the social suffix metas for `caller_program` and `wallet`.
+    pub fn social_metas(caller_program: &Pubkey, wallet: &Pubkey) -> Vec<AccountMeta> {
+        vec![
+            AccountMeta::new_readonly(eco::SOCIAL_ID, false),
+            AccountMeta::new_readonly(skills_address(), false),
+            AccountMeta::new(profile_address(wallet), false),
+            AccountMeta::new_readonly(event_authority(&eco::SOCIAL_ID), false),
+            AccountMeta::new_readonly(eco::caller_pda(eco::SOCIAL_CALLER_SEED, caller_program).0, false),
+        ]
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        #[test]
+        fn discriminators_match_the_spec() {
+            assert_eq!(disc("mint_crafted"), [121, 196, 34, 30, 90, 249, 235, 177]);
+            assert_eq!(disc("record"), crate::agents_record::RECORD_DISCRIMINATOR);
+        }
+    }
+}
