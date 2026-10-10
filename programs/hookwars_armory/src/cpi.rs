@@ -130,11 +130,11 @@ pub fn validate_item<'info>(
     // ceilings; its items carry the manifest its registrant declared (the lab measured the
     // program against it).
     if template.external {
-        for i in 0..hookwars_common::PARAM_FIELDS {
+        for (i, p) in params.iter().enumerate() {
             let ok = if i < usize::from(template.field_count) {
-                params[i] >= template.field_min[i] && params[i] <= template.field_max[i]
+                *p >= template.field_min[i] && *p <= template.field_max[i]
             } else {
-                params[i] == 0
+                *p == 0
             };
             require!(ok, ArmoryError::ParamOutOfRange);
         }
@@ -319,14 +319,14 @@ pub fn agents_armory_caller(mint: &Pubkey) -> Pubkey {
     Pubkey::find_program_address(&[b"armory-caller", mint.as_ref()], &hookwars_common::ids::AGENTS_ID).0
 }
 
-/// The compatibility check (02 section 6.1). `launch`: the `equip_launch` path (fills a slot whose
-/// rule is `Locked` once). `revert`: a performance revert (staleness allowed, 02 section 3.3).
-#[allow(clippy::too_many_arguments)]
 /// Hookwars R21: an item that may burn fits only a slot whose bounds allow burns.
 pub fn burn_fits(item_may_burn: bool, slot_may_burn: bool) -> bool {
     !item_may_burn || slot_may_burn
 }
 
+/// The compatibility check (02 section 6.1). `launch`: the `equip_launch` path (fills a slot whose
+/// rule is `Locked` once). `revert`: a performance revert (staleness allowed, 02 section 3.3).
+#[allow(clippy::too_many_arguments)]
 pub fn check_fits(
     mint: &Mint,
     slot: u8,
@@ -395,7 +395,7 @@ pub fn check_fits(
     if writes || manifest.data_bytes > 0 {
         require!(s.bounds.may_write_data, ArmoryError::OverBounds);
         require!(
-            u16::from(manifest.data_bytes) + 1 <= u16::from(s.data_len),
+            u16::from(manifest.data_bytes) < u16::from(s.data_len),
             ArmoryError::DataRangeTooSmall
         );
     }

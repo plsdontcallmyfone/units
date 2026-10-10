@@ -2891,6 +2891,7 @@ fn process_forge<'info>(ctx: Context<'info, Forge<'info>>) -> Result<()> {
     )?;
     // Clamp again: a defect in combine_params can never exceed the ceiling (02 section 9.1).
     let s = shape(t.id);
+    #[allow(clippy::needless_range_loop)]
     for i in 0..PARAM_FIELDS {
         if i < usize::from(t.field_count) {
             let off = s.is_some_and(|s| s.zero_off[i]) && params[i] == 0;
@@ -2986,35 +2987,6 @@ fn process_forge<'info>(ctx: Context<'info, Forge<'info>>) -> Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    /// Hookwars R21: burns fit only slots that allow them.
-    #[test]
-    fn a_burning_item_fits_only_a_may_burn_slot() {
-        use crate::cpi::burn_fits;
-        assert!(burn_fits(false, false));
-        assert!(burn_fits(false, true));
-        assert!(burn_fits(true, true));
-        assert!(!burn_fits(true, false));
-    }
-
-    use super::*;
-
-    #[test]
-    fn signer_constants_match_their_seeds() {
-        assert_eq!(pda::armory_signer(), (ARMORY_SIGNER, ARMORY_SIGNER_BUMP));
-        assert_eq!(pda::minter(), (MINTER, MINTER_BUMP));
-        assert_eq!(pda::loot_signer().0, LOOT_SIGNER);
-        assert_eq!(ids::ARMORY_ID, crate::ID);
-        assert_eq!(bordrless_token::constants::ARMORY_ID, crate::ID);
-        assert_eq!(bordrless_token::constants::ITEMS_ID, ids::ITEMS_ID);
-        assert_eq!(bordrless_token::constants::WAR_ID, ids::WAR_ID);
-        assert_eq!(bordrless_token::ID, ids::TOKEN_ID);
-        assert_eq!(bordrless_swap::ID, ids::SWAP_ID);
-        assert_eq!(bordrless_token::constants::LAUNCH_ID, ids::LAUNCH_ID);
-        assert_eq!(bordrless_swap::constants::BRIDGED_SOL_MINT, ids::BRIDGED_SOL_MINT);
-    }
-}
 
 
 /// Integration pass 2 (10 section 17 I-3): see `revert_for_lease_end`.
@@ -3165,14 +3137,14 @@ fn forge_composite<'info>(ctx: Context<'info, Forge<'info>>) -> Result<()> {
         let mut p = hookwars_common::combine(id, &t.field_min, &t.field_max, gain, &ca.modules[i].params, &cb.modules[i].params)
             .map_err(|_| error!(ArmoryError::TemplateClosed))?;
         let sh = shape(id);
-        for f in 0..PARAM_FIELDS {
+        for (f, v) in p.iter_mut().enumerate() {
             if f < usize::from(t.field_count) {
-                let off = sh.is_some_and(|s| s.zero_off[f]) && p[f] == 0;
+                let off = sh.is_some_and(|s| s.zero_off[f]) && *v == 0;
                 if !off {
-                    p[f] = p[f].clamp(t.field_min[f], t.field_max[f]);
+                    *v = (*v).clamp(t.field_min[f], t.field_max[f]);
                 }
             } else {
-                p[f] = 0;
+                *v = 0;
             }
         }
         modules[i].params = p;
@@ -3274,3 +3246,32 @@ fn forge_composite<'info>(ctx: Context<'info, Forge<'info>>) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    /// Hookwars R21: burns fit only slots that allow them.
+    #[test]
+    fn a_burning_item_fits_only_a_may_burn_slot() {
+        use crate::cpi::burn_fits;
+        assert!(burn_fits(false, false));
+        assert!(burn_fits(false, true));
+        assert!(burn_fits(true, true));
+        assert!(!burn_fits(true, false));
+    }
+
+    use super::*;
+
+    #[test]
+    fn signer_constants_match_their_seeds() {
+        assert_eq!(pda::armory_signer(), (ARMORY_SIGNER, ARMORY_SIGNER_BUMP));
+        assert_eq!(pda::minter(), (MINTER, MINTER_BUMP));
+        assert_eq!(pda::loot_signer().0, LOOT_SIGNER);
+        assert_eq!(ids::ARMORY_ID, crate::ID);
+        assert_eq!(bordrless_token::constants::ARMORY_ID, crate::ID);
+        assert_eq!(bordrless_token::constants::ITEMS_ID, ids::ITEMS_ID);
+        assert_eq!(bordrless_token::constants::WAR_ID, ids::WAR_ID);
+        assert_eq!(bordrless_token::ID, ids::TOKEN_ID);
+        assert_eq!(bordrless_swap::ID, ids::SWAP_ID);
+        assert_eq!(bordrless_token::constants::LAUNCH_ID, ids::LAUNCH_ID);
+        assert_eq!(bordrless_swap::constants::BRIDGED_SOL_MINT, ids::BRIDGED_SOL_MINT);
+    }
+}

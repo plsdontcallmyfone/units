@@ -357,6 +357,7 @@ pub mod hookwars_items {
     /// Creates or resets the slot's `EquipState`, writes the item's registry, creates the equip
     /// vault for an item that may cut on the token side. Return data: the registry length (`u8`).
     /// For a composite, the module list is the first remaining account.
+    #[allow(clippy::too_many_arguments)]
     pub fn init_equip<'info>(
         ctx: Context<'info, InitEquip<'info>>,
         slot: u8,

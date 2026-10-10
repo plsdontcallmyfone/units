@@ -126,6 +126,7 @@ fn check_targets(template_id: u16, config: &EquipConfig, max_targets: u8, module
 /// The registry of an equipped item (04 section 2.2): `Item`, `EquipState`, the equip vault when
 /// it cuts on the token side, the module list for a composite, then each module's own extras,
 /// then (integration pass 3, E-3) the item's craft `Wear` when it wears.
+#[allow(clippy::too_many_arguments)]
 pub fn registry_list(
     template_id: u16,
     mint: &Pubkey,
