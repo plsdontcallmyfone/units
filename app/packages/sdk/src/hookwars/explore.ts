@@ -375,6 +375,15 @@ export function solOf(lamports: unknown): string {
   const frac = (n % 1_000_000_000n).toString().padStart(9, '0').replace(/0+$/, '');
   return frac ? `${whole}.${frac} SOL` : `${whole} SOL`;
 }
+/** Access mode names (11 section 1; the armory's `ACCESS_*`). */
+const ACCESS_NAMES = ['Open', 'Gated', 'Licensed', 'Leased', 'Exclusive'];
+const when = (v: unknown): string => { const n = Number(s(v)); return Number.isFinite(n) && n > 0 ? new Date(n * 1000).toISOString() : s(v); };
+const hex = (v: unknown): string => (v instanceof Uint8Array || Array.isArray(v) ? Buffer.from(v as number[]).toString('hex') : s(v));
+function licenceFacts(t: unknown): [string, string][] {
+  if (!t || typeof t !== 'object') return [];
+  const l = t as Record<string, unknown>;
+  return [['Licence price', solOf(l.priceLamports)], ['Licence term', `${s(l.termSecs)} s`], ['Live licences at most', s(l.maxLive)]];
+}
 const bps = (v: unknown): string => `${(Number(s(v)) / 100).toString()}%`;
 /** `direction == 1` is a buy (bordrless_swap swap.rs). */
 const side = (v: unknown): string => (s(v) === '1' ? 'buy' : s(v) === '0' ? 'sell' : s(v));
@@ -456,6 +465,59 @@ export function storyOf(e: { program: string; name: string; data: Record<string,
       return { kind: 'market', title: 'Lease started', facts: [['Item', s(d.item)], ['Payer', s(d.payer)], ['Starts', new Date(Number(s(d.startsAt)) * 1000).toISOString()], ['Ends', new Date(Number(s(d.endsAt)) * 1000).toISOString()]] };
     case 'market.Listed':
       return { kind: 'market', title: 'Item listed', facts: [['Item', s(d.item)], ['Seller', s(d.seller)], ['Price', solOf(d.priceLamports)]] };
+    // App pass 5: pass 4a armory events (access, admin queue, template submissions).
+    case 'armory.AccessSet':
+      return { kind: 'armory', title: `Access set: ${ACCESS_NAMES[Number(s(d.mode))] ?? `mode ${s(d.mode)}`}`, facts: [['Item', s(d.item)], ['Holder', s(d.holder)], ['Exclusive', d.exclusive ? 'yes' : 'no'], ...licenceFacts(d.licenceTerms)] };
+    case 'armory.Approved':
+      return { kind: 'armory', title: 'Token approved for an item', facts: [['Item', s(d.item)], ['Token', s(d.tokenMint)], ['By', s(d.by)]] };
+    case 'armory.ApprovalRevoked':
+      return { kind: 'armory', title: 'Approval revoked', facts: [['Item', s(d.item)], ['Token', s(d.tokenMint)], ['Equips stop after', when(d.revokeAfter)]] };
+    case 'armory.AccessEnforced':
+      return { kind: 'armory', title: `Lapsed access enforced on slot ${s(d.slot)}`, facts: [['Mint', s(d.mint)], ['Item out', s(d.item)], ['Back to', d.toItem ? s(d.toItem) : 'an empty slot'], ['By', s(d.by)]] };
+    case 'armory.AdminActionQueued':
+      return { kind: 'armory', title: 'Admin action queued', facts: [['Action hash', hex(d.actionHash)], ['Ready at', when(d.readyAt)]] };
+    case 'armory.AdminActionCancelled':
+      return { kind: 'armory', title: 'Admin action cancelled', facts: [['Action hash', hex(d.actionHash)]] };
+    case 'armory.AdminActionApplied':
+      return { kind: 'armory', title: 'Admin action applied', facts: [['Action hash', hex(d.actionHash)]] };
+    case 'armory.AccessParamsSet':
+      return { kind: 'armory', title: 'Access parameters set', facts: Object.entries((d.params as Record<string, unknown>) ?? {}).map(([k, v]) => [k, s(v)]) };
+    case 'armory.TemplateSubmitted':
+      return { kind: 'armory', title: 'Template submitted', facts: [['Program', s(d.program)], ['Submitter', s(d.submitter)], ['Code hash', hex(d.codeHash)], ['Bond', solOf(d.bond)]] };
+    case 'armory.SubmissionSettled':
+      return { kind: 'armory', title: d.approved ? 'Submission approved' : d.forfeited ? 'Submission rejected, bond forfeited' : 'Submission rejected, bond returned', facts: [['Program', s(d.program)], ['Bond', solOf(d.bond)]] };
+    // secfix3 book events.
+    case 'book.MarketTermsProposed':
+      return { kind: 'book', title: 'Market terms proposed', facts: [['Market', s(d.market)], ['Tick', solOf(d.tickLamports)], ['Minimum size', s(d.minSize)], ['Ready at', when(d.readyAt)]] };
+    case 'book.MarketTermsSet':
+      return { kind: 'book', title: 'Market terms set', facts: [['Market', s(d.market)], ['Tick', solOf(d.tickLamports)], ['Minimum size', s(d.minSize)]] };
+    case 'book.Unpayable':
+      return { kind: 'book', title: 'Payment below the rent minimum redirected', facts: [['Market', s(d.market)], ['Owed to', s(d.wallet)], ['Amount', solOf(d.amount)], ['Paid to', s(d.paidTo)]] };
+    // Pass 4b and secfix3 war events.
+    case 'war.BossPoolOpened':
+      return { kind: 'war', title: `Boss pool opened, season ${s(d.season)}`, facts: [['Boss', s(d.bossMint)]] };
+    case 'war.BossPoolFunded':
+      return { kind: 'war', title: `Boss pool funded, season ${s(d.season)}`, facts: [['Added', solOf(d.amount)], ['Pool total', solOf(d.funded)]] };
+    case 'war.BossPoolSealed':
+      return { kind: 'war', title: `Boss pool sealed, season ${s(d.season)}`, facts: [['To share', solOf(d.toShare)], ['Total volume', solOf(d.totalVolume)], ['Sources', s(d.sources)]] };
+    case 'war.BossShareClaimed':
+      return { kind: 'war', title: `Boss share claimed, season ${s(d.season)}`, facts: [['Source token', s(d.sourceMint)], ['Volume', solOf(d.volume)], ['Paid', solOf(d.amount)]] };
+    case 'war.CoalitionFormed':
+      return { kind: 'war', title: `Coalition ${s(d.id)} formed`, facts: [['Members', ((d.members as unknown[]) ?? []).map(short).join(', ')], ['Ends', when(d.endsAt)]] };
+    case 'war.CoalitionJoined':
+      return { kind: 'war', title: `Coalition ${s(d.id)} joined`, facts: [['Token', s(d.mint)], ['Members now', s(d.count)]] };
+    case 'war.CoalitionContributed':
+      return { kind: 'war', title: `Coalition ${s(d.id)} contribution`, facts: [['Token', s(d.mint)], ['Amount', solOf(d.amount)], ['Contributed in total', solOf(d.contributed)]] };
+    case 'war.CoalitionSiegeExecuted':
+      return { kind: 'war', title: `Coalition ${s(d.id)} siege`, facts: [['Rival', s(d.rivalMint)], ['Spent', solOf(d.spent)], ['Bought', s(d.bought)], ['Cranker', s(d.cranker)], ['Cranker bounty', solOf(d.bounty)]] };
+    case 'war.CoalitionRazed':
+      return { kind: 'war', title: `Coalition ${s(d.id)} raze`, facts: [['Rival', s(d.rivalMint)], ['Sold', s(d.sold)], ['Got', solOf(d.got)], ['Cranker bounty', solOf(d.bounty)]] };
+    case 'war.CoalitionDissolved':
+      return { kind: 'war', title: `Coalition ${s(d.id)} dissolved`, facts: [['Returned', solOf(d.returned)]] };
+    case 'war.RivalryOpened':
+      return { kind: 'war', title: 'Rivalry opened', facts: [['Token', s(d.mint)], ['Rival', s(d.rivalMint)], ['Budget', solOf(d.budget)], ['Ends', when(d.endsAt)]] };
+    case 'war.RivalrySettled':
+      return { kind: 'war', title: d.early ? 'Rivalry ended early' : d.won ? 'Rivalry won' : 'Rivalry lost', facts: [['Token', s(d.mint)], ['Rival', s(d.rivalMint)], ['Our score', s(d.ours)], ['Their score', s(d.theirs)], ['Spent', solOf(d.spent)]] };
     default:
       return generic(e);
   }
