@@ -62,12 +62,13 @@ export function vote(voter: PublicKey, mint: PublicKey, slot: number, nonce: big
 }
 
 /** `propose(slot, item, equip_config)`. The template accounts are given when proposing an item.
- * Naming an item appends `["lease", item]` under the market, the lease gate (12 section 3 I-3). */
-export function propose(proposer: PublicKey, mint: PublicKey, slot: number, nextNonce: bigint, item: PublicKey | null, targets: PublicKey[], role: number, template?: { address: PublicKey; program: PublicKey; programData: PublicKey }): TransactionInstruction {
+ * Naming an item appends `["lease", item]` under the market, the lease gate (12 section 3 I-3);
+ * `proof` is the access proof suffix of a Gated, Licensed or Leased item (`accessProof`, spec 14). */
+export function propose(proposer: PublicKey, mint: PublicKey, slot: number, nextNonce: bigint, item: PublicKey | null, targets: PublicKey[], role: number, template?: { address: PublicKey; program: PublicKey; programData: PublicKey }, proof: AccountMeta[] = []): TransactionInstruction {
   return idlIx('armory', 'propose', {
     proposer, tokenMint: mint, slotState: slotStateAddress(mint, slot), proposal: proposalAddress(mint, slot, nextNonce), proposerHolding: holdingAddr(mint, proposer),
     item, template: template?.address ?? null, templateProgram: template?.program ?? null, templateProgramdata: template?.programData ?? null,
-  }, { slot, item, equipConfig: { targets, role } }, item ? [ro(leaseAddress(item))] : []);
+  }, { slot, item, equipConfig: { targets, role } }, item ? [ro(leaseAddress(item)), ...proof] : []);
 }
 
 /** `finalize`: counts the vote after its period. `launch` accounts are given for a launch-pool token. */

@@ -832,6 +832,7 @@ impl Ew {
             config: hookwars_market::state::config_address().0,
             licence_config: lic::licence_config_address().0,
             offer: lic::licence_offer_address(item).0,
+            access_policy: hookwars_common::access::policy_address(item).0,
             license: lic::license_address(item, token_mint).0,
             item: *item,
             item_mint: *item_mint,

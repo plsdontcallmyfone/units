@@ -7,8 +7,9 @@
  *
  * The eight kinds of 11 are `CORE_KINDS`. The social layer adds four kinds as an app-level
  * extension (`SOCIAL_KINDS`): `follow`, `unfollow`, `react` and `hide`. Posts are `status` messages.
- * `crates/units-memo` does not know the social kinds yet (it refuses them), so a program that reads
- * memos never accepts one; adding them there is listed as a gap.
+ * `crates/units-memo` knows the social kinds too since pass 4a (`Message::parse_kinds`, the
+ * `kind::SOCIAL` list); its plain `Message::parse` still takes the core kinds only, as `parseMemo`'s
+ * default does. Both sides read the shared vectors in `crates/units-memo/vectors/social.json`.
  *
  * Signatures: a memo is a statement signed by the transaction signatures of the accounts the Memo
  * program instruction lists (Memo v2 fails unless every listed account signed). The signed bytes

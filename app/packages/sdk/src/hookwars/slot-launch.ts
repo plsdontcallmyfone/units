@@ -71,8 +71,9 @@ export interface LaunchEquip {
 /** What `equip_launch` needs to know about the item it equips (read from its `Item` account). */
 export interface EquipItemInfo { item: PublicKey; templateId: number; tokenCuts: boolean; poolCuts: boolean; composite: boolean }
 
-/** The armory's `equip_launch` of one slot, signed by the launchpad as `["armory-caller", mint]`. */
-export function equipLaunch(payer: PublicKey, mint: PublicKey, quoteMint: PublicKey, entry: LaunchEquip, info: EquipItemInfo | null): TransactionInstruction {
+/** The armory's `equip_launch` of one slot, signed by the launchpad as `["armory-caller", mint]`;
+ * `proof` is the item's access proof suffix (`accessProof`, spec 14), when it needs one. */
+export function equipLaunch(payer: PublicKey, mint: PublicKey, quoteMint: PublicKey, entry: LaunchEquip, info: EquipItemInfo | null, proof: AccountMeta[] = []): TransactionInstruction {
   const equipState = equipStateAddress(mint, entry.slot);
   const vault = holdingAddr(mint, equipState);
   const owner = info ? royaltyOwner(info.item) : null;
@@ -92,7 +93,7 @@ export function equipLaunch(payer: PublicKey, mint: PublicKey, quoteMint: Public
     royaltyHoldingQuote: pays && owner ? holdingAddr(quoteMint, owner) : null,
     newComposite: info?.composite ? PublicKey.findProgramAddressSync([Buffer.from('composite'), info.item.toBuffer()], ARMORY_ID)[0] : null,
     itemsProgram: ITEMS_ID,
-  }, { entry });
+  }, { entry }, proof);
 }
 
 /** Step 2, `equip_prepared`: forwards one `equip_launch` for the creator who prepared the mint. */

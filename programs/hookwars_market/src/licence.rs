@@ -1,10 +1,13 @@
 // Changed by Hookwars: new file (hook economy, docs/spec/11-hook-economy.md sections 1.4 and 2.3); integration pass 3: Template.author_bps (E-7).
+// Security review 3 lane: buy_license reads the armory's AccessPolicy terms (11 E-1, spec 14), renewals by the payer only (M-2),
+// no escrow holder (L-4), skill floor (L-1).
 //! Licences: a token pays an item's holder for the right to equip the item for a term (R45).
 //!
-//! - `LicenceOffer` at `["licence-offer", item]`: the item holder's terms (price, term, `per`,
-//!   `max_live`, `exclusive`). These terms belong in the armory's `AccessPolicy.licence_terms`
-//!   (11 section 1.2); until the armory lane adds it, they live here and the armory's equip gate
-//!   reads `License` (integration request).
+//! - Terms: when the armory's `AccessPolicy` at `["access", item]` is `Licensed` with
+//!   `licence_terms` (pass 4a, 11 E-1), `buy_license` takes price, term, `per`, `max_live` and
+//!   `exclusive` from there. `LicenceOffer` at `["licence-offer", item]` keeps the live count (and,
+//!   for an item with no such policy, the holder's own terms as before); `buy_license` opens it
+//!   when the policy is the only source of terms.
 //! - `License` at `["license", item, token_mint]`: one per item and token. `buy_license` writes or
 //!   extends it, `renew_license` extends it, `revoke_license` (per-period terms only) refunds the
 //!   unused fraction from the holder's own wallet, `expire_license` frees the live slot.
@@ -270,13 +273,43 @@ pub fn process_set_licence_offer(
     Ok(())
 }
 
+/// The terms a licence is bought on: the armory's `AccessPolicy` when it is `Licensed` with terms
+/// (11 E-1), else the holder's active `LicenceOffer`.
+fn licence_terms(policy: &AccountInfo, offer: &LicenceOffer) -> Result<hookwars_armory::state::LicenceTerms> {
+    if *policy.owner == hookwars_common::ids::ARMORY_ID && !policy.data_is_empty() {
+        let data = policy.try_borrow_data()?;
+        let p = hookwars_armory::state::AccessPolicy::try_deserialize(&mut &data[..])
+            .map_err(|_| error!(MarketError::WrongAccount))?;
+        if p.mode == hookwars_common::access::LICENSED {
+            return p.licence_terms.ok_or_else(|| error!(LicenceError::NotLicensable));
+        }
+    }
+    require!(offer.item != Pubkey::default() && offer.active, LicenceError::NotLicensable);
+    Ok(hookwars_armory::state::LicenceTerms {
+        price_lamports: offer.price_lamports,
+        term_secs: offer.term_secs,
+        per: offer.per,
+        max_live: offer.max_live,
+    })
+}
+
 /// `buy_license` and `renew_license`: pays the split and writes or extends the licence.
 pub fn process_buy_license(mut ctx: Context<BuyLicense>, max_price: u64, renew_only: bool, reference: [u8; 32]) -> Result<()> {
     let ts = now()?;
+    let terms = licence_terms(&ctx.accounts.access_policy, &ctx.accounts.offer)?;
+    if ctx.accounts.offer.item == Pubkey::default() {
+        // Opened here for the live count only: the policy holds the terms.
+        let (item, item_mint, bump) = (ctx.accounts.item.key(), ctx.accounts.item_mint.key(), ctx.bumps.offer);
+        let o = &mut ctx.accounts.offer;
+        o.bump = bump;
+        o.item = item;
+        o.item_mint = item_mint;
+        o.live = 0;
+        o.set_by = Pubkey::default();
+        o.active = false;
+    }
     let a = &ctx.accounts;
-    let o = &a.offer;
-    require!(o.active, LicenceError::NotLicensable);
-    require!(o.price_lamports <= max_price, MarketError::PriceMoved);
+    require!(terms.price_lamports <= max_price, MarketError::PriceMoved);
     let item = read_item(&a.item, a.item_mint.key)?;
     // The holder at payment time (R45): the wallet holding the item now.
     require!(
@@ -302,7 +335,7 @@ pub fn process_buy_license(mut ctx: Context<BuyLicense>, max_price: u64, renew_o
     require_keys_eq!(a.author.key(), registered_by, MarketError::WrongRecipient);
     require_keys_eq!(*a.token_mint.owner, bordrless_token::ID, MarketError::WrongAccount);
     let lp = a.licence_config.params;
-    let price = o.price_lamports;
+    let price = terms.price_lamports;
     // Integration pass 3 (E-7): the template's own share once the admin has set one; the licence
     // config's share stays the fallback for templates registered before.
     let author_bps = if template_author_bps > 0 { template_author_bps } else { lp.author_bps };
@@ -312,7 +345,7 @@ pub fn process_buy_license(mut ctx: Context<BuyLicense>, max_price: u64, renew_o
     pay_sol(&sys, &payer, &a.treasury, protocol, &[])?;
     pay_sol(&sys, &payer, &a.author, author, &[])?;
     pay_sol(&sys, &payer, &a.holder, to_holder, &[])?;
-    let term = i64::from(o.term_secs);
+    let term = i64::from(terms.term_secs);
     let s = RecordAccs {
         skills: &a.skills,
         profile: &a.holder_profile,
@@ -345,7 +378,7 @@ pub fn process_buy_license(mut ctx: Context<BuyLicense>, max_price: u64, renew_o
         if l.counted {
             offer.live = offer.live.saturating_sub(1);
         }
-        require!(offer.live < offer.max_live, LicenceError::LicenceSoldOut);
+        require!(offer.live < terms.max_live, LicenceError::LicenceSoldOut);
         offer.live += 1;
         l.bump = ctx.bumps.license;
         l.item = item_key;
@@ -357,7 +390,7 @@ pub fn process_buy_license(mut ctx: Context<BuyLicense>, max_price: u64, renew_o
         l.counted = true;
     }
     l.payer = payer_key;
-    l.per = accs.offer.per;
+    l.per = terms.per;
     let ends_at = l.ends_at;
     let c = &mut accs.licence_config;
     c.protocol_fees_total = c.protocol_fees_total.saturating_add(u128::from(protocol));
@@ -499,8 +532,13 @@ pub struct BuyLicense<'info> {
     pub config: Box<Account<'info, MarketConfig>>,
     #[account(mut, seeds = [lseeds::CONFIG], bump = licence_config.bump)]
     pub licence_config: Box<Account<'info, LicenceConfig>>,
-    #[account(mut, seeds = [lseeds::OFFER, item.key().as_ref()], bump = offer.bump)]
+    #[account(init_if_needed, payer = payer, space = 8 + LicenceOffer::INIT_SPACE,
+        seeds = [lseeds::OFFER, item.key().as_ref()], bump)]
     pub offer: Box<Account<'info, LicenceOffer>>,
+    /// CHECK: the armory's `["access", item]` (address-checked; may not exist): its licence terms
+    /// win when the item is `Licensed` (11 E-1).
+    #[account(address = hookwars_common::access::policy_address(&item.key()).0 @ MarketError::WrongAccount)]
+    pub access_policy: UncheckedAccount<'info>,
     #[account(init_if_needed, payer = payer, space = 8 + License::INIT_SPACE,
         seeds = [lseeds::LICENSE, item.key().as_ref(), token_mint.key().as_ref()], bump)]
     pub license: Box<Account<'info, License>>,

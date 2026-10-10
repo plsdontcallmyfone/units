@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { Keypair } from '@solana/web3.js';
 import {
   ALL_KINDS, CORE_KINDS, MEMO_PROGRAM_ID, MemoError, body, encodeMemo, followBody, memoHash, memoInstruction, messageId, messageReference,
-  parseMemo, parseValue, postBody, reactBody, socialMemo, toPlain, type MemoMessage,
+  parseMemo, parseValue, postBody, reactBody, hideBody, socialMemo, toPlain, SOCIAL_KINDS, type MemoMessage, type Reaction,
 } from './memo.ts';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const sample = (): MemoMessage => ({
   kind: 'offer', from: 'Pass1', to: '*', thread: '', re: '',
@@ -69,5 +71,20 @@ describe('memo v1 (the units-memo vectors)', () => {
     const ix = memoInstruction('x', [k]);
     expect(ix.programId.equals(MEMO_PROGRAM_ID)).toBe(true);
     expect(ix.keys).toEqual([{ pubkey: k, isSigner: true, isWritable: false }]);
+  });
+});
+
+describe('the shared social vectors (crates/units-memo/vectors/social.json, pass 4a)', () => {
+  const file = fileURLToPath(new URL('../../../../../crates/units-memo/vectors/social.json', import.meta.url));
+  const cases = (JSON.parse(readFileSync(file, 'utf8')) as { cases: { kind: string; from: string; args: string[]; memo: string }[] }).cases;
+  it('encodes every case byte for byte as the Rust crate does, and parses it back', () => {
+    expect(cases.length).toBeGreaterThan(0);
+    for (const c of cases) {
+      const b2 = c.kind === 'react' ? reactBody(c.args[0]!, c.args[1] as Reaction) : c.kind === 'hide' ? hideBody(c.args[0]!, c.args[1]!) : followBody(c.args[0]!);
+      expect(encodeMemo(socialMemo(c.kind as never, c.from, b2)), c.kind).toBe(c.memo);
+      const m = parseMemo(Buffer.from(c.memo, 'utf8'), 4096, [...CORE_KINDS, ...SOCIAL_KINDS]);
+      expect(m.kind).toBe(c.kind);
+      expect(code(() => parseMemo(Buffer.from(c.memo, 'utf8'), 4096))).not.toBe('ok');
+    }
   });
 });

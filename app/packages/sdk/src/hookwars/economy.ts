@@ -4,6 +4,7 @@
 // the craft and book programs. Everything is built from the generated IDLs (`idlIx`); the suffix
 // shapes are `crates/hookwars-common` `agents_record`, `market`, `eco_cpi` (`init_wear_metas`,
 // `social_metas`) and the items program's `settle.rs`.
+import { accessPolicyAddress, adminActionHash, gated, queueAdmin } from './access.ts';
 import { PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY, SystemProgram, type AccountMeta, type TransactionInstruction } from '@solana/web3.js';
 import { FIXED_ADDRESSES } from '@hookwars/shared';
 import { coderOf, idlIx } from './from-idl.ts';
@@ -138,9 +139,9 @@ export function fuse(author: PublicKey, components: FuseComponent[], royaltyBps:
   ]);
 }
 
-/** `register_preset(id, template_ids, name)` (admin). */
+/** `register_preset(id, template_ids, name)` (admin; gated by the admin queue since pass 4a: send `queueFor` of it first). */
 export function registerPreset(admin: PublicKey, id: number, templateIds: number[], name: string): TransactionInstruction {
-  return idlIx('armory', 'register_preset', { admin }, { id, templateIds, name });
+  return gated(admin, 'register_preset', {}, { id, templateIds, name }).apply;
 }
 
 /** `mint_composite(preset_id, modules, royalty_bps)`: the preset first in the remaining accounts,
@@ -154,12 +155,17 @@ export function mintComposite(author: PublicKey, presetId: number, modules: Modu
 
 /** `set_template_economy(template_id, author_bps, default_access, allowed_access, charges_on_create)` (admin, 13 E-7). */
 export function setTemplateEconomy(admin: PublicKey, templateId: number, authorBps: number, defaultAccess: number, allowedAccess: number, chargesOnCreate: number): TransactionInstruction {
-  return idlIx('armory', 'set_template_economy', { admin, template: templateAddress(templateId) }, { templateId, authorBps, defaultAccess, allowedAccess, chargesOnCreate });
+  return gated(admin, 'set_template_economy', { template: templateAddress(templateId) }, { templateId, authorBps, defaultAccess, allowedAccess, chargesOnCreate }).apply;
 }
 
-/** `set_item_protocol_bps(item_protocol_bps)` (admin, 13 E-2). */
+/** `set_item_protocol_bps(item_protocol_bps)` (admin, 13 E-2; gated, `AdminQueued` accounts). */
 export function setItemProtocolBps(admin: PublicKey, itemProtocolBps: number): TransactionInstruction {
-  return idlIx('armory', 'set_item_protocol_bps', { admin }, { itemProtocolBps });
+  return gated(admin, 'set_item_protocol_bps', {}, { itemProtocolBps }).apply;
+}
+
+/** The `queue_admin` instruction for a gated armory instruction built above (no bound keys). */
+export function queueFor(apply: TransactionInstruction): TransactionInstruction {
+  return queueAdmin(apply.keys[0]!.pubkey, adminActionHash(apply.data));
 }
 
 /** `init_counters(wallet)`: permissionless and idempotent (12 I-5). */
@@ -391,7 +397,7 @@ export function setLicenceOffer(holder: PublicKey, item: PublicKey, itemMint: Pu
 /** `buy_license(max_price, reference)` (or `renew_license`): a token's right to equip the item for a term. */
 export function buyLicense(payer: PublicKey, o: { item: PublicKey; itemMint: PublicKey; templateId: number; tokenMint: PublicKey; holder: PublicKey; author: PublicKey; treasury: PublicKey; maxPrice: bigint; renew?: boolean; reference?: Uint8Array }): TransactionInstruction {
   return idlIx('market', o.renew ? 'renew_license' : 'buy_license', {
-    payer, item: o.item, itemMint: o.itemMint, template: templateAddress(o.templateId), tokenMint: o.tokenMint, holder: o.holder, holderHolding: holdingAddr(o.itemMint, o.holder),
+    payer, item: o.item, itemMint: o.itemMint, template: templateAddress(o.templateId), tokenMint: o.tokenMint, holder: o.holder, holderHolding: holdingAddr(o.itemMint, o.holder), accessPolicy: accessPolicyAddress(o.item),
     author: o.author, treasury: o.treasury, skills: skillsAddress(), holderProfile: profileAddress(o.holder), socialCaller: socialCallerAddress(MARKET_ID), socialEventAuthority: eventAuthorityOf(SOCIAL_ID), socialProgram: SOCIAL_ID,
   }, { maxPrice: o.maxPrice, reference: Buffer.from(o.reference ?? new Uint8Array(32)) });
 }

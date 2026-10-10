@@ -519,3 +519,46 @@ fn sf3_m5_end_lease_cannot_leave_the_item_equipped() {
     assert_eq!(hw.slot_item(&mint, 2), incumbent);
     assert_eq!(hw.w.env.holding(&item_mint, &lessor.pubkey()), 1);
 }
+
+// ---- market: licence terms from the armory (11 E-1, spec 14) -----------------------------------------
+
+/// A `Licensed` `AccessPolicy` with terms is where `buy_license` reads price, term, `per` and
+/// `max_live`; no `LicenceOffer` is needed (it opens one for the live count).
+#[test]
+fn sf3_buy_license_reads_the_armory_access_policy() {
+    let mut ew = Ew::new();
+    let (holder, item, item_mint) = ew.hw.item(t::TRANSFER_FEE, params(&[100, 0]), 100);
+    let author = ew.template_author(&item);
+    let terms = hookwars_armory::state::LicenceTerms { price_lamports: 2 * SOL, term_secs: TERM, per: per::PER_PERIOD, max_live: 1 };
+    let (policy_key, bump) = hookwars_common::access::policy_address(&item);
+    let policy = hookwars_armory::state::AccessPolicy {
+        item,
+        mode: hookwars_common::access::LICENSED,
+        exclusive: true,
+        licence_terms: Some(terms),
+        holder_at_set: holder.pubkey(),
+        updated_at: ew.now(),
+        bump,
+    };
+    let mut data = Vec::new();
+    policy.try_serialize(&mut data).unwrap();
+    let lamports = ew.hw.w.env.rent(data.len());
+    ew.hw.w.env.put(policy_key, solana_account::Account { lamports, data, owner: ids::ARMORY_ID, executable: false, rent_epoch: 0 });
+    let funder = ew.funded(10 * SOL);
+    let tok = ew.hw.w.mint_to_owner(&funder, 6, 1_000_000, "TOK");
+    let tok2 = ew.hw.w.mint_to_owner(&funder, 6, 1_000_000, "TOK2");
+    let payer = ew.funded(10 * SOL);
+    let ix = ew.buy_license_ix(&payer.pubkey(), &item, &item_mint, &tok, &holder.pubkey(), &author, SOL, false);
+    ew.send(&payer, &[ix]).expect_code(market_code(M::PriceMoved));
+    let h0 = ew.lamports(&holder.pubkey());
+    let ix = ew.buy_license_ix(&payer.pubkey(), &item, &item_mint, &tok, &holder.pubkey(), &author, 2 * SOL, false);
+    ew.send(&payer, &[ix]).ok();
+    assert!(ew.lamports(&holder.pubkey()) > h0);
+    let l: License = ew.hw.w.env.read(&lic::license_address(&item, &tok).0);
+    assert_eq!((l.per, l.ends_at - l.starts_at), (per::PER_PERIOD, i64::from(TERM)));
+    let o: hookwars_market::licence::LicenceOffer = ew.hw.w.env.read(&lic::licence_offer_address(&item).0);
+    assert_eq!(o.live, 1);
+    // `max_live` 1 from the policy: a second token is refused.
+    let ix = ew.buy_license_ix(&payer.pubkey(), &item, &item_mint, &tok2, &holder.pubkey(), &author, 2 * SOL, false);
+    ew.send(&payer, &[ix]).expect_code(market_code(M::LicenceSoldOut));
+}
