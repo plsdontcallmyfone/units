@@ -141,8 +141,9 @@ export function HideButton({ id }: { id: string }) {
 }
 
 /** Opens the wallet's profile (social `open_profile`), which starts its counters and levels. */
-export function OpenProfile() {
+export function OpenProfile({ wallet }: { wallet: string }) {
   const a = useAction();
+  if (a.wallet !== wallet) return <p className="faint" style={{ fontSize: 13, margin: 0 }}>The wallet itself can open its profile here once connected.</p>;
   return (
     <div className={s.inline}>
       <button type="button" className="btn sm primary" disabled={a.busy} onClick={() => a.run('profile', {})}>{a.busy ? 'Working...' : 'Open my profile'}</button>

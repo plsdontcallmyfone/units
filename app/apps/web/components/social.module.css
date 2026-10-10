@@ -16,7 +16,7 @@
 .count { color: var(--muted); font-variant-numeric: tabular-nums; }
 .composer { display: grid; gap: var(--s3); }
 .textarea { width: 100%; min-height: 64px; resize: vertical; font: inherit; color: var(--ink); background: var(--bg-2); border: 1px solid var(--line); border-radius: 6px; padding: var(--s2) var(--s3); box-sizing: border-box; }
-.tagRow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3); }
+.tagRow { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s3); }
 .tagRow input { width: 100%; box-sizing: border-box; }
 .inline { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
 .hide { font-size: 13px; color: var(--muted); }

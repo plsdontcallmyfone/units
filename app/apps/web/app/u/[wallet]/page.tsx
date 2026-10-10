@@ -53,7 +53,7 @@ export default async function WalletPage({ params }: { params: Promise<{ wallet:
       </div>
       <div className="grid cols-main">
         <Panel title="Levels and skills" meta={p.levels.profile ? `profile opened ${when(p.levels.openedAt)}` : 'no profile'}>
-          {!p.levels.profile ? <Empty title="No profile yet" what={p.levels.reason ?? 'Counters start when the wallet opens a profile.'} next={<OpenProfile />} /> : (
+          {!p.levels.profile ? <Empty title="No profile yet" what={p.levels.reason ?? 'Counters start when the wallet opens a profile.'} next={<OpenProfile wallet={wallet} />} /> : (
             <>
               {skills.length === 0 ? <p className="muted">{p.levels.reason ?? 'No skills defined on this cluster.'}</p> : (
                 <div className={s.skills}>
