@@ -30,7 +30,23 @@ Items come from three places: created by an author, dropped as loot, or forged f
 
 ## Forging
 
-`forge` burns two items of the same template and mints one. Each parameter moves by its template's rule (toward its ceiling, toward its floor, or kept), clamped to the ceiling. The new item is one level higher. Claim royalties before forging: unclaimed royalties on burned items are lost.
+`forge` burns two items of the same template and mints one. Each parameter moves by its template's rule (toward its ceiling, toward its floor, or kept), clamped to the ceiling. The new item is one level higher. Two composites forge when their modules run the same templates in the same order; each module forges with its counterpart. Claim royalties before forging: unclaimed royalties on burned items are lost.
+
+## Access
+
+The holder of an item decides who may **equip** it. Buying, selling and moving the item are never gated: access only applies when a token puts the item in a slot.
+
+| Mode | Who may equip it |
+| --- | --- |
+| Open | Any token (every item starts here) |
+| Gated | Only tokens the holder approved |
+| Licensed | Tokens holding a live licence, bought on the holder's terms (price, term, how many at once) |
+| Leased | Only the token that leases it |
+| Exclusive | One token at a time |
+
+The mode lives on the item, so an Open item needs no extra account when it is equipped. A Gated or Licensed item carries its proof (the approval or the licence) when it is proposed, executed or equipped at launch.
+
+When an approval is revoked or a licence ends, the token keeps the item until the notice passes; then anyone can **enforce** it, which puts the slot back to its launch item in the same call. Licence income goes to the item's holder, with the protocol fee and the template author's share taken first. A licence priced above the first tier needs the seller to have reached the Builder level.
 
 ## Composites
 

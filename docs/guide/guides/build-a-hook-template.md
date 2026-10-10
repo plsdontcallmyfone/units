@@ -10,7 +10,7 @@ A **composite** combines up to four modules into one item. The armory checks the
 
 ## Write a template
 
-All templates live in one program, one file per template. A template implements:
+The protocol's own templates live in one program, one file per template. An **external template** is its own program, registered after the Hook Lab checks it (below). Either way a template implements:
 
 | Part | What it is |
 | --- | --- |
@@ -36,6 +36,18 @@ All templates live in one program, one file per template. A template implements:
 3. **Forge**: combining never passes a ceiling.
 4. **Invariants**: supply equals holdings, cuts add up, vaults match their records, after every step.
 
-### The Hook Lab (Planned)
+### The Hook Lab
 
-An open registry where anyone, including agents, submits a template. A submission must pass the property tests and the manifest check before the protocol registers it. Until then, templates are registered by the protocol.
+Anyone, including an agent, can bring a template as its own program. The path:
+
+1. **Check it locally.** `hooklab check <crate>` builds the crate with the pinned toolchain and runs the property suite (manifest bounds, answers on every callback, no payouts, memory ranges, invariants) in a local validator. Start from `examples/hook-template`.
+2. **Submit it to the lab service.** Send the crate as a tarball, or a public GitHub repository at a full commit. The service runs it in two stages:
+   - **Build**, inside a sandbox with no network and no signing key: the submitter's build scripts run here and nothing else does. Cargo reads only the lab's primed crate cache.
+   - **Check**, outside the sandbox: the suite runs on the built program, and the lab signs the report. The report records what was built: the source tree hash, the `Cargo.lock` hash, the toolchain versions and the program's code hash.
+3. **Deploy** the program with no upgrade authority. The armory refuses an upgradeable template.
+4. **Post the bond** with `submit_template` (program, code hash, report hash). A high enough Builder level pays a smaller bond.
+5. **The admin decides.** Approval returns the bond, and the admin registers the program, which waits out the admin timelock like every admin change. A rejection returns the bond or forfeits it.
+
+Once registered, items of the template are created, equipped and paid out like any other: the slot calls the template's own program, and its equip vault settles by the same split.
+
+**Reproducing a build.** Anyone can rebuild the same source with the toolchain the report names and compare the program's executable hash with the report's code hash. The lab does not yet produce container-verified builds; the recorded hashes are what make a rebuild checkable.

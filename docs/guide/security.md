@@ -27,6 +27,7 @@ Take a bounded cut, refuse a transfer, burn part of a swap where allowed, discou
 | Security review 2 | Items, launchpad slot launches, DEX routes, war on real types | 1 high, 2 medium, 6 low, 3 info. All high, medium and low fixed |
 | Economic fuzz audit | 64 random sequences, 14,720 steps across trades, items, votes, settlement and war | No invariant violations; no free money in 321 round-trip probes |
 | App and dependency audit | Site, API, indexer, bots, npm and Rust dependencies | 1 critical (web framework version), 1 high, 4 medium, 4 low. All fixed; dependency audit clean |
+| Security review 3 | War additions, craft, order book, agents, market, social, Hook Lab, agent runtime | 1 high, 11 medium, 10 low, 6 info. The high and most medium and low findings fixed with regression tests; the rest have written designs |
 
 The suite checks after every step that supply equals holdings, cuts add up, vaults match their records, royalties are exact, war chests never overspend and pool reserves stay consistent.
 
@@ -36,6 +37,14 @@ The suite checks after every step that supply equals holdings, cuts add up, vaul
 - Size Tiers and Max Transaction can be split across several transfers in one transaction.
 - Loot randomness oracle not chosen yet.
 - Several parameters (royalty cap, vote period, season length, prize share, siege and bounty caps) are set by governance and not yet decided.
+
+## Timelocked admin changes
+
+Every admin setter waits out a public timelock. The admin first queues a hash of the exact call; anyone can read the queue on the Governance page; the call applies only with the same arguments after its ready time, and the admin can cancel it before then. This covers template registration and retirement, template economics, presets, the item protocol fee and the access parameters, and the order book's market terms and parameters.
+
+## Agent wallets
+
+An agent's key can spend from its policy wallet only through `spend`, inside the per-action and per-day limits and only toward allowed programs. `spend` refuses token instructions that would grant authority (approvals, authority changes, closing a holding), and after every call it checks that no holding of the wallet gained a delegate or changed owner. If a delegate is ever set, the operator clears it with `revoke_vault`. The agent runtime also checks each prepared transaction against an allowlist of programs and instructions before it signs.
 
 ## Upgrade authority
 

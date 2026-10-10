@@ -42,7 +42,7 @@ Each passport gets a **soulbound badge**: a units token whose only slot holds th
 - **Royalties and licence income** go to the item holder. An agent holds its items in its vault, so income lands there.
 - **One exception:** royalties from tokens whose kit pays holder rewards can only be claimed to a regular wallet. The agent claims those to its agent key and moves them into its vault.
 - **Template author shares** go to the author recorded on the template, which can be the agent's vault.
-- **Spending** leaves the vault only within the operator's limits.
+- **Spending** leaves the vault only within the operator's limits. The agent key cannot make itself a delegate of the vault's tokens: `spend` refuses approvals and authority changes, and checks every holding after each call. The operator can clear a delegate with `revoke_vault`.
 
 ## Levels (Planned)
 

@@ -186,7 +186,20 @@ How the service handles submissions:
 - **Sandbox:** building a crate runs the submitter's code (build scripts, proc macros). Every run
   therefore goes through `HOOKLAB_SANDBOX`, a command prefix such as a bubblewrap or container line
   with no network. With no sandbox set, every run ends in an error. `HOOKLAB_UNSANDBOXED=1` exists
-  for local development only.
+  for local development only. App pass 5 ships the scripts in `app/apps/hooklab/sandbox/`:
+  - `build.sh` (`HOOKLAB_SANDBOX`): bubblewrap with no network, a read-only system and toolchain
+    (`HOOKLAB_SB_RO` adds paths), the run directory as the only writable place, and `prlimit`
+    limits on CPU time, address space, processes and file size; without bubblewrap it falls back to
+    `unshare --net` (no network, weaker file isolation: run the service as its own user);
+  - `fetch.sh` (`HOOKLAB_FETCH_SANDBOX`): the same for the git fetch, with the network;
+  - `prime-cache.sh <cargo-home> <crate>...`: fills the cargo home the build reads offline
+    (`HOOKLAB_CARGO_HOME`; the build then gets `CARGO_NET_OFFLINE=true`).
+  The build stage gets a fixed environment (`PATH`, `HOME` and `TMPDIR` in the run directory,
+  `SOURCE_DATE_EPOCH=0`, the cargo home): no variable of the service reaches it.
+- **Build provenance:** the lab, outside the sandbox, records the source tree hash (sha256 over
+  `<path>\0<sha256 of the file>\n` for every regular file in path order, `target/` and `.git/`
+  left out), the `Cargo.lock` hash, `cargo build-sbf --version`, `rustc --version` and whether the
+  build ran offline. These go into the signed report's `build`; nothing the sandbox wrote does.
 - **Settings:** every setting is the operator's; none is a protocol parameter. `main.ts` lists
   them.
 
@@ -223,8 +236,11 @@ The lab's own suite still refuses `pool_callbacks` (it has no pool model yet); t
 pool manifests.
 
 5. **`on_touch` is accepted by the manifest but not driven by the suite yet.**
-6. **The build is not yet a verifiable build.** Neither `solana-verify` nor Docker is installed on
-   the build server. The report records the toolchain line, and the admin compares `code_hash`
-   with the deployed program.
-7. **The service needs an operator sandbox and a vendored or cached crate registry.** Builds
-   inside a no-network sandbox need their dependencies available offline.
+6. **The build is reproducible by hand, not container-verified.** Neither `solana-verify` nor
+   Docker is installed on the build servers. The report records the source tree hash, the
+   `Cargo.lock` hash and the toolchain versions (app pass 5), so anyone can rebuild the same
+   source with the same toolchain and compare the executable hash with `code_hash`; a
+   container-pinned build remains to be added.
+7. **Sandbox and offline registry** (done in app pass 5): see the service section. The operator
+   still has to install bubblewrap for full file isolation and prime the crate cache for the crate
+   sets the lab accepts.
