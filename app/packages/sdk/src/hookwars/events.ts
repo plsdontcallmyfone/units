@@ -65,9 +65,10 @@ export function encodeEventBody(program: string, name: string, data: Record<stri
   return eventCodec<Record<string, unknown>>(name, fields).encode(data);
 }
 
-/** Programs that emit some events with `emit!` (program logs): `hookwars_items` callbacks (R18)
- * and the launchpad's `PoolItemCuts` (03 M3b notes). */
-export const LOG_EVENT_PROGRAMS = ['items', 'launch'] as const;
+/** Programs that emit some events with `emit!` (program logs): `hookwars_items` callbacks (R18),
+ * the launchpad's `PoolItemCuts` (03 M3b notes), and the book's fills, evictions and expiries and
+ * the `ProtocolFee` events of book, craft and licences (review 3 I-5). */
+export const LOG_EVENT_PROGRAMS = ['items', 'launch', 'book', 'craft', 'market'] as const;
 
 /** Log events from a transaction's log lines: `Program data:` lines emitted while one of
  * `programs` is the innermost running program, attributed to it. */

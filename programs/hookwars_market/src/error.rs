@@ -82,4 +82,11 @@ pub enum MarketError {
     NotEnded,
     #[msg("licence parameters out of bounds")]
     BadLicenceParams,
+    // Security review 3.
+    #[msg("only the payer of a live licence may renew it")]
+    NotLicencePayer,
+    #[msg("the item sits in a market escrow; licence it when it is back with its holder")]
+    HolderIsEscrow,
+    #[msg("end_lease needs the slot revert accounts, or the token mint when the slot no longer holds the item")]
+    RevertAccountsMissing,
 }

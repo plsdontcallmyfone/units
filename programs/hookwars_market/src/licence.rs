@@ -46,6 +46,9 @@ pub struct LicenceParams {
     /// `LICENCE_MIN_SECS`, `LICENCE_MAX_SECS`.
     pub min_secs: u32,
     pub max_secs: u32,
+    /// A licence counts toward the holder's `LICENCES_SOLD` only when its protocol fee reaches this
+    /// (review 3 L-1; owner value).
+    pub skill_min_fee_lamports: u64,
 }
 
 /// `LicenceConfig` at `["licence-config"]` (admin = the market admin).
@@ -280,6 +283,13 @@ pub fn process_buy_license(mut ctx: Context<BuyLicense>, max_price: u64, renew_o
         holding_amount(&a.holder_holding, a.item_mint.key, a.holder.key)? == 1,
         MarketError::NotItemHolder
     );
+    // Review 3 L-4: not one of this program's escrows (a listed or leased item), whose lamports
+    // nothing could move again.
+    require!(
+        *a.holder.key != crate::state::escrow_address(a.item_mint.key).0
+            && *a.holder.key != crate::state::lease_escrow_address(a.item_mint.key).0,
+        MarketError::HolderIsEscrow
+    );
     // The template's author (R34).
     require_keys_eq!(*a.template.owner, hookwars_common::ids::ARMORY_ID, MarketError::WrongAccount);
     require_keys_eq!(a.template.key(), hookwars_common::pda::template(item.template_id).0, MarketError::WrongAccount);
@@ -310,7 +320,9 @@ pub fn process_buy_license(mut ctx: Context<BuyLicense>, max_price: u64, renew_o
         event_authority: &a.social_event_authority,
         program: &a.social_program,
     };
-    record_wallet_cpi(&s, &crate::ID, a.holder.key, counter::LICENCES_SOLD, 1)?;
+    if protocol >= lp.skill_min_fee_lamports {
+        record_wallet_cpi(&s, &crate::ID, a.holder.key, counter::LICENCES_SOLD, 1)?;
+    }
     record_wallet_cpi(&s, &crate::ID, a.holder.key, counter::LICENCE_REVENUE_LAMPORTS, to_holder)?;
     let holder = a.holder.key();
     let item_key = a.item.key();
@@ -322,6 +334,9 @@ pub fn process_buy_license(mut ctx: Context<BuyLicense>, max_price: u64, renew_o
     let renewal = !fresh && l.live_at(ts);
     require!(!renew_only || !fresh, LicenceError::NotLive);
     if renewal {
+        // Review 3 M-2: the refund of a revocation goes to `payer`, so only the payer of the live
+        // licence may extend it (anyone else would take its prepaid terms' refund).
+        require_keys_eq!(l.payer, payer_key, MarketError::NotLicencePayer);
         l.ends_at = l.ends_at.checked_add(term).ok_or(MarketError::Overflow)?;
         l.price_paid = l.price_paid.saturating_add(price);
     } else {

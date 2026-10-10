@@ -293,6 +293,11 @@ export const ECONOMY_PREPARES: Record<string, PrepareDef> = {
     ]);
     if (!offer.active) throw new PrepareError(409, 'Inactive', 'This licence offer is paused.');
     const [t, holder] = await Promise.all([template(conn, it.templateId), itemHolder(conn, itemMint)]);
+    // Review 3 L-4: a listed or leased item sits in a market escrow, which could never pass the
+    // holder's share on; the program refuses it, so say so here.
+    if (holder && (holder.equals(hookwars.marketEscrowAddress(itemMint)) || holder.equals(hookwars.leaseEscrowAddress(itemMint)))) {
+      throw new PrepareError(409, 'HolderIsEscrow', 'This item is listed or leased right now; licences can be bought when it is back with its holder.');
+    }
     return [hookwars.buyLicense(pk(b, 'owner'), {
       item: itemKey, itemMint, templateId: it.templateId, tokenMint: pk(b, 'tokenMint'), holder: holder ?? offer.setBy, author: t.registeredBy, treasury: cfg.treasury,
       maxPrice: b.maxPrice === undefined ? offer.priceLamports : big(b, 'maxPrice'), renew: b.renew === true,

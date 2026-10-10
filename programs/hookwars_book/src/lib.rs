@@ -1,4 +1,5 @@
-// Changed by Hookwars: new program (hook economy, docs/spec/11-hook-economy.md section 6).
+// Changed by Hookwars: new program (hook economy, docs/spec/11-hook-economy.md section 6); review 3: M-1 unpayable
+// wallets, M-8 market terms, L-1 skill fee floor, L-2 maker fee clamp.
 //! `hookwars_book`: a fully escrowed spot order book (R44).
 //!
 //! - **Material books** (`BookMarket` at `["book", base_mint]`): limit buys and sells of one craft
@@ -73,8 +74,23 @@ fn check_params(p: &BookParams) -> Result<()> {
         u32::from(p.taker_bps) + u32::from(p.maker_bps) <= 10_000
             && p.slots > 0
             && usize::from(p.slots) <= SLOTS_CAP
-            && p.match_max > 0,
+            && p.match_max > 0
+            && p.tick_min_lamports > 0
+            && p.tick_min_lamports <= p.tick_max_lamports
+            && p.min_size_max > 0,
         BookError::BadParams
+    );
+    Ok(())
+}
+
+/// A market's tick and minimum size inside the config's bounds (review 3 M-8).
+fn check_terms(p: &BookParams, tick_lamports: u64, min_size: u64) -> Result<()> {
+    require!(
+        tick_lamports >= p.tick_min_lamports
+            && tick_lamports <= p.tick_max_lamports
+            && min_size > 0
+            && min_size <= p.min_size_max,
+        BookError::BadTerms
     );
     Ok(())
 }
@@ -243,10 +259,33 @@ impl<'info> Settle<'_, 'info> {
         }
     }
 
-    /// Pays everything owed; call after the instruction's last CPI.
+    /// Pays everything owed; call after the instruction's last CPI. A wallet that does not exist
+    /// can only take at least the rent minimum: what is owed to one below that goes to the
+    /// instruction's payer instead (review 3 M-1), so an emptied wallet cannot freeze the book.
     fn flush(&self) -> Result<()> {
-        for (to, amount) in self.owed.borrow_mut().drain(..) {
-            take_lamports(self.escrow, &to, amount)?;
+        let mut owed = self.owed.borrow_mut();
+        let mut totals: Vec<(AccountInfo<'info>, u64)> = Vec::new();
+        for (to, amount) in owed.drain(..) {
+            match totals.iter_mut().find(|(a, _)| a.key == to.key) {
+                Some((_, t)) => *t = t.checked_add(amount).ok_or(BookError::Overflow)?,
+                None => totals.push((to, amount)),
+            }
+        }
+        let min = Rent::get()?.minimum_balance(0);
+        let ts = now()?;
+        for (to, amount) in totals {
+            if to.lamports() == 0 && amount < min && to.key != self.payer.key {
+                take_lamports(self.escrow, self.payer, amount)?;
+                emit!(Unpayable {
+                    market: self.market,
+                    wallet: to.key(),
+                    amount,
+                    paid_to: self.payer.key(),
+                    ts
+                });
+            } else {
+                take_lamports(self.escrow, &to, amount)?;
+            }
         }
         Ok(())
     }
@@ -323,12 +362,56 @@ pub mod hookwars_book {
         Ok(())
     }
 
+    /// The admin proposes a market's tick and minimum size (inside the config's bounds); they apply
+    /// after `admin_timelock_secs` (review 3 M-8).
+    pub fn propose_market_terms(ctx: Context<ProposeMarketTerms>, tick_lamports: u64, min_size: u64) -> Result<()> {
+        check_terms(&ctx.accounts.config.params, tick_lamports, min_size)?;
+        let ready_at = now()?
+            .checked_add(i64::from(ctx.accounts.config.params.admin_timelock_secs))
+            .ok_or(BookError::Overflow)?;
+        let market = ctx.accounts.market.key();
+        let p = &mut ctx.accounts.pending;
+        p.bump = ctx.bumps.pending;
+        p.market = market;
+        p.tick_lamports = tick_lamports;
+        p.min_size = min_size;
+        p.ready_at = ready_at;
+        p.active = true;
+        emit_cpi!(MarketTermsProposed {
+            market,
+            tick_lamports,
+            min_size,
+            ready_at
+        });
+        Ok(())
+    }
+
+    /// Anyone applies a market's pending terms once ready (checked against the bounds again).
+    /// Resting orders keep their prices; new orders use the new tick.
+    pub fn apply_market_terms(ctx: Context<ApplyMarketTerms>) -> Result<()> {
+        let ts = now()?;
+        let p = &mut ctx.accounts.pending;
+        require!(p.active && ts >= p.ready_at, BookError::NotReady);
+        check_terms(&ctx.accounts.config.params, p.tick_lamports, p.min_size)?;
+        let m = &mut ctx.accounts.market;
+        m.tick_lamports = p.tick_lamports;
+        m.min_size = p.min_size;
+        p.active = false;
+        emit_cpi!(MarketTermsSet {
+            market: m.key(),
+            tick_lamports: m.tick_lamports,
+            min_size: m.min_size,
+            ts
+        });
+        Ok(())
+    }
+
     // ---- material books
 
     /// Opens the book of a craft material (one per material). Requires `Trader >=
     /// BOOK_CREATE_LEVEL` (3.3).
     pub fn create_market(ctx: Context<CreateMarket>, tick_lamports: u64, min_size: u64) -> Result<()> {
-        require!(tick_lamports > 0 && min_size > 0, BookError::BadParams);
+        check_terms(&ctx.accounts.config.params, tick_lamports, min_size)?;
         let a = &ctx.accounts;
         let material = {
             let info = a.material.to_account_info();
@@ -448,6 +531,7 @@ pub mod hookwars_book {
         let escrow_seeds: &[&[u8]] = &[seeds::ESCROW, market.as_ref(), &escrow_seeds_bump];
         let mut remaining = size;
         let mut fills: u8 = 0;
+        let mut counted: u8 = 0;
         let mut fees_total: u64 = 0;
         // Cross.
         let mut i = 0usize;
@@ -472,13 +556,22 @@ pub mod hookwars_book {
             let q = remaining.min(o.size);
             let quote = o.price.checked_mul(q).ok_or(BookError::Overflow)?;
             let taker_fee = eco::bps(quote, p.taker_bps);
-            let maker_fee = eco::bps(quote, p.maker_bps);
+            let mut maker_fee = eco::bps(quote, p.maker_bps);
+            if side_ == side::ASK {
+                // A resting bid reserved its maker fee at the rate of its placement: never take
+                // more than the reserve leaves above the quote of the whole rest of the order
+                // (review 3 L-2), so a raised `maker_bps` cannot make old bids unfillable.
+                let rest_quote = o.price.checked_mul(o.size).ok_or(BookError::Overflow)?;
+                maker_fee = maker_fee.min(o.quote_locked.saturating_sub(rest_quote));
+            }
             let (wallet, holding) = pairs.take(&o.owner, &base_mint_key)?;
             let mut left = o;
             left.size -= q;
             if side_ == side::BID {
-                // Taker buys: pays the maker and the fees, receives base from escrow.
-                pay_sol(&sys, &owner, wallet, quote - maker_fee)?;
+                // Taker buys: pays the maker (through the escrow, settled by `flush`) and the
+                // fees, receives base from escrow.
+                pay_sol(&sys, &owner, &escrow, quote - maker_fee)?;
+                st.owe(wallet, quote - maker_fee);
                 pay_sol(&sys, &owner, &treasury, taker_fee + maker_fee)?;
                 create_holding(&st.t, &owner, st.base_mint, &owner, &a.owner_holding)?;
                 transfer(&st.t, &escrow, st.escrow_holding, &a.owner_holding, st.base_mint, q, &[escrow_seeds])?;
@@ -495,6 +588,9 @@ pub mod hookwars_book {
             }
             fees_total = fees_total.saturating_add(taker_fee + maker_fee);
             fills += 1;
+            if taker_fee + maker_fee >= p.skill_min_fee_lamports {
+                counted += 1;
+            }
             remaining -= q;
             emit!(Filled {
                 market,
@@ -583,7 +679,7 @@ pub mod hookwars_book {
                 ts
             });
         }
-        if fills > 0 {
+        if counted > 0 {
             let s = RecordAccs {
                 skills: &a.skills,
                 profile: &a.profile,
@@ -591,7 +687,7 @@ pub mod hookwars_book {
                 event_authority: &a.social_event_authority,
                 program: &a.social_program,
             };
-            record_wallet_cpi(&s, &crate::ID, &owner.key(), counter::BOOK_FILLS, u64::from(fills))?;
+            record_wallet_cpi(&s, &crate::ID, &owner.key(), counter::BOOK_FILLS, u64::from(counted))?;
         }
         emit_cpi!(Placed {
             market,
@@ -878,6 +974,33 @@ pub struct ApplyParams<'info> {
     pub config: Box<Account<'info, BookConfig>>,
     #[account(mut, seeds = [seeds::PENDING], bump = pending.bump)]
     pub pending: Box<Account<'info, PendingBook>>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct ProposeMarketTerms<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [seeds::CONFIG], bump = config.bump, has_one = admin @ BookError::NotAdmin)]
+    pub config: Box<Account<'info, BookConfig>>,
+    #[account(seeds = [seeds::BOOK, market.base_mint.as_ref()], bump = market.bump)]
+    pub market: Box<Account<'info, BookMarket>>,
+    #[account(init_if_needed, payer = admin, space = 8 + PendingMarketTerms::INIT_SPACE,
+        seeds = [seeds::PENDING_TERMS, market.key().as_ref()], bump)]
+    pub pending: Box<Account<'info, PendingMarketTerms>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct ApplyMarketTerms<'info> {
+    #[account(seeds = [seeds::CONFIG], bump = config.bump)]
+    pub config: Box<Account<'info, BookConfig>>,
+    #[account(mut, seeds = [seeds::BOOK, market.base_mint.as_ref()], bump = market.bump)]
+    pub market: Box<Account<'info, BookMarket>>,
+    #[account(mut, seeds = [seeds::PENDING_TERMS, market.key().as_ref()], bump = pending.bump,
+        constraint = pending.market == market.key() @ BookError::WrongAccount)]
+    pub pending: Box<Account<'info, PendingMarketTerms>>,
 }
 
 #[event_cpi]

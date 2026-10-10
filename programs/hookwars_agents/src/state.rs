@@ -145,7 +145,10 @@ pub struct Passport {
     pub created_at: i64,
     pub last_active_at: i64,
     pub record: TrackRecord,
-    pub reserved: [u8; 32],
+    /// Links made so far (never decreases); the next link statement names it, so an old
+    /// statement cannot be replayed after `unlink` (review 3 L-5). Was `reserved[0..4]`.
+    pub link_nonce: u32,
+    pub reserved: [u8; 28],
 }
 
 impl Passport {

@@ -39,4 +39,6 @@ pub enum BookError {
     NotItemHolder,
     #[msg("arithmetic overflow")]
     Overflow,
+    #[msg("the tick or minimum size is outside the config's bounds")]
+    BadTerms,
 }

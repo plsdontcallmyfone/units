@@ -1,4 +1,4 @@
-// Changed by Hookwars: security review 1: the siege always names the rival's war state (M-4), the raze waits below the TWAP floor (M-3); pass 4b: rivalry budgets ring-fenced in siege and counter-strike (10 section 11.3), helpers shared with coalitions
+// Changed by Hookwars: security review 1: the siege always names the rival's war state (M-4), the raze waits below the TWAP floor (M-3); pass 4b: rivalry budgets ring-fenced in siege and counter-strike (10 section 11.3), helpers shared with coalitions; review 3 I-1: agent CRANK records carry the bounty earned
 //! Attack and defense paid from the chest (05 section 6): `siege`, `counter_strike`, `raze`,
 //! `return_captured`. Each is permissionless, checks on chain that it is due, is capped per call
 //! and per interval, and pays its sender at most the War orders' crank bounty (capped by the
@@ -332,7 +332,7 @@ pub fn process_siege<'info>(ctx: Context<'info, Siege<'info>>, args: SliceArgs) 
     });
     // Integration pass 2 (09 section 21 item 4): optional agent attribution, after the effects.
     let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
-    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.cranker.key(), hookwars_common::agents_record::CRANK, total)?;
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.cranker.key(), hookwars_common::agents_record::CRANK, bounty)?;
     Ok(())
 }
 
@@ -505,7 +505,7 @@ pub fn process_counter_strike<'info>(
         bounty,
         cranker: ctx.accounts.cranker.key(),
     });
-    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.cranker.key(), hookwars_common::agents_record::CRANK, total)?;
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.cranker.key(), hookwars_common::agents_record::CRANK, bounty)?;
     Ok(())
 }
 
@@ -674,7 +674,7 @@ pub fn process_raze<'info>(ctx: Context<'info, Raze<'info>>, args: SliceArgs) ->
     });
     // Integration pass 2 (09 section 21 item 4): optional agent attribution, after the effects.
     let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
-    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.cranker.key(), hookwars_common::agents_record::CRANK, got)?;
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.cranker.key(), hookwars_common::agents_record::CRANK, bounty)?;
     Ok(())
 }
 

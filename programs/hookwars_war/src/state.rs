@@ -68,6 +68,13 @@ pub struct WarParams {
     /// Pass 4b, `CONTRIBUTE_INTERVAL_SECS` (10 section 8): spacing of one member's contributions
     /// to its coalition's chest. To set.
     pub contribute_interval_secs: i64,
+    /// Review 3 L-3: the least term `form_coalition` accepts (no throwaway one-second coalition
+    /// burns an id). To set.
+    pub coalition_min_term_secs: i64,
+    /// Review 3 M-6: after the term plus this, `dissolve_coalition` returns the shared chest even
+    /// with captured tokens left (a rival's sell cap cannot lock it); razes of what is left keep
+    /// paying into the chest and a later dissolve returns that too. To set.
+    pub coalition_grace_secs: i64,
 }
 
 impl WarParams {
@@ -97,6 +104,8 @@ impl WarParams {
             self.season_secs,
             self.challenge_secs,
             self.contribute_interval_secs,
+            self.coalition_min_term_secs,
+            self.coalition_grace_secs,
         ];
         bps.iter().all(|b| u64::from(*b) <= BPS)
             && self.siege_slippage_bps < 10_000
@@ -105,6 +114,7 @@ impl WarParams {
             && self.siege_unit_lamports > 0
             && self.raze_max_discount_bps < 10_000
             && u64::from(self.season_prize_share_bps) + u64::from(self.boss_share_bps) <= BPS
+            && self.coalition_min_term_secs <= self.season_secs
     }
 }
 
@@ -554,6 +564,9 @@ pub struct BossPool {
     /// Lamports to share at the seal (`funded` then).
     pub to_share: u64,
     pub sources: [BossSource; RAID_TABLE_LEN],
+    /// Review 3 L-7: the pool takes no prize share before this (`init_boss_pool` time plus
+    /// `admin_timelock_secs`), so naming a boss gives notice like every other admin setter.
+    pub effective_at: i64,
 }
 
 impl BossPool {

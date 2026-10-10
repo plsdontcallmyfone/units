@@ -172,7 +172,7 @@ fn war_budgets() {
         bordrless_bridge::client::unwrap_sol(vault, 0),
         bordrless_bridge::client::wrap_sol(chest, 0),
     ];
-    let ix = war::split_protocol_fees(cranker.pubkey(), treasury, Some((t.mint, s.number)), &inner);
+    let ix = war::split_protocol_fees(cranker.pubkey(), treasury, Some((t.mint, s.number)), s.number, &inner);
     measure(&mut ww, "split_protocol_fees", ix, &cranker, &[]);
 
     // The account sizes and rents the layout constants set (MAX_CAPTURED, LOOT_TABLE_LEN).

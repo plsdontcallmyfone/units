@@ -101,4 +101,9 @@ pub enum AgentsError {
     BadMemoParams,
     #[msg("the signer is not the passport's agent key")]
     NotAgent,
+    // Security review 3 (H-1).
+    #[msg("the token program instruction is not one spend may call")]
+    InstructionNotAllowed,
+    #[msg("the call changed a vault holding's delegate, owner or freeze state")]
+    VaultHoldingChanged,
 }

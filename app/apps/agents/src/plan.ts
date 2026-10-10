@@ -13,6 +13,7 @@ import { get, memoInstruction, messageBytes, messageRef, obj, type Message, type
 import { BANNED_WORDS, checkTrade, observe, type Book, type Identity, type TradeRequest } from './policy.ts';
 import { provenanceValue, type Provenance } from './provenance.ts';
 import type { Router } from './router.ts';
+import { preparedProblems } from './guard.ts';
 import { within, type AgentState } from './state.ts';
 
 export interface TickContext {
@@ -207,6 +208,9 @@ export async function planAction(action: Action, ctx: TickContext, deps: Deps, p
       try { prepared = await deps.router.prepare(action.route, action.body); } catch (e) { return refuse(`prepare failed: ${(e as Error).message}`); }
       const foreign = prepared.instructions.flatMap((ix) => ix.keys.filter((k) => k.isSigner && !k.pubkey.equals(agent)));
       if (foreign.length) return refuse('the prepared crank needs a signer other than the agent key');
+      // Review 3 M-10: the API's answer is checked, not trusted.
+      const bad = preparedProblems(action.route, prepared.instructions, agent, vault);
+      if (bad.length) return refuse(...bad.map((x) => `the prepared crank: ${x}`));
       return done(`crank ${action.route}`, prepared.instructions, actionMemo(ctx, 'crank', `cranked ${action.route}`, pv), prepared.tables);
     }
     case 'trade': {
@@ -228,6 +232,8 @@ export async function planAction(action: Action, ctx: TickContext, deps: Deps, p
       const route = sell ? 'sell/prepare' : 'buy/prepare';
       let prepared;
       try { prepared = await deps.router.prepare(route, { owner: vault.toBase58(), mint: action.mint, amount: action.amountIn.toString(), minOut: action.minOut.toString() }); } catch (e) { return refuse(`prepare failed: ${(e as Error).message}`); }
+      const bad = preparedProblems(route, prepared.instructions, agent, vault);
+      if (bad.length) return refuse(...bad.map((x) => `the prepared ${action.side}: ${x}`));
       const v = vaultInstructions(prepared.instructions, agent, passport, vault);
       if (v.foreignSigner) return refuse(`the prepared ${action.side} needs a signer other than the agent and its vault`);
       for (const ix of v.instructions) if (ix.programId.equals(hookwars.AGENTS_ID)) { const t = targetAllowed(ctx, new PublicKey(ix.keys[5]!.pubkey)); if (t) return refuse(t); }

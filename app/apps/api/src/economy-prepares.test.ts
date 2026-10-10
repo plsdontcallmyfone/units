@@ -242,3 +242,20 @@ describe('the runtime gaps: sells (R-1) and the war cranks (R-2)', () => {
     await expect(PREPARES['sell/prepare']!.build({ owner: S(owner), mint: S(rival), amount: '60' }, wconn)).rejects.toThrow(/holds 50 base units/);
   });
 });
+
+describe('licence buy refuses a market escrow as holder (review 3 L-4)', () => {
+  it('a listed item: the holder is the listing escrow, the prepare says so', async () => {
+    const escrow = hookwars.marketEscrowAddress(wearing);
+    const extra = new Map<string, Buffer>([
+      [S(hookwars.licenceOfferAddress(wearItem)), enc('market', 'LicenceOffer', { item: wearItem, itemMint: wearing, setBy: holder, priceLamports: 5n, termSecs: 3_600, maxLive: 1, active: true })],
+      [S(hookwars.marketConfigAddress()), enc('market', 'MarketConfig', { admin, treasury })],
+    ]);
+    const look = (k: PublicKey): AccountInfo<Buffer> | null => { const d = extra.get(S(k)); return d ? { data: d, owner: hookwars.MARKET_ID, lamports: 1, executable: false, rentEpoch: 0 } : info(k); };
+    const escrowHolding = hookwars.holdingCodec.encode({ ...(zeroOf('token', 'Holding') as unknown as Parameters<typeof hookwars.holdingCodec.encode>[0]), mint: wearing, owner: escrow, amount: 1n });
+    const c = {
+      getAccountInfo: async (k: PublicKey) => look(k), getMultipleAccountsInfo: async (ks: PublicKey[]) => ks.map(look),
+      getProgramAccounts: async () => [{ pubkey: hookwars.holdingAddr(wearing, escrow), account: { data: escrowHolding, owner: hookwars.TOKEN_ID, lamports: 1, executable: false, rentEpoch: 0 } }],
+    } as never;
+    await expect(PREPARES['licences/buy/prepare']!.build({ owner: S(owner), itemMint: S(wearing), tokenMint: S(mint) }, c)).rejects.toThrow(/listed or leased/);
+  });
+});

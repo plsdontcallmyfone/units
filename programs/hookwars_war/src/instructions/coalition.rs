@@ -1,4 +1,5 @@
-// Changed by Hookwars: new file (pass 4b, 10 section 8).
+// Changed by Hookwars: new file (pass 4b, 10 section 8); review 3: a least term and joining until the first
+// contribution (L-3), razes in caller-sized steps and dissolving after a grace period with captured tokens left (M-6).
 //! Coalitions with a shared chest. Tokens that each equip a Coalition item (template 43) naming
 //! the same id form a `Coalition` (`COALITION_MIN_MEMBERS` to `COALITION_MAX_MEMBERS`, a term up
 //! to `season_secs`). Each member's chest may contribute up to its item's bps of the chest (less a
@@ -71,7 +72,9 @@ pub fn process_form_coalition<'info>(
         WarError::InvalidCoalition
     );
     require!(
-        id > 0 && term_secs > 0 && term_secs <= ctx.accounts.config.params.season_secs,
+        id > 0
+            && term_secs >= ctx.accounts.config.params.coalition_min_term_secs
+            && term_secs <= ctx.accounts.config.params.season_secs,
         WarError::InvalidCoalition
     );
     let mut members = [Pubkey::default(); COALITION_MAX_MEMBERS];
@@ -100,6 +103,54 @@ pub fn process_form_coalition<'info>(
         id,
         members: members[..n].to_vec(),
         ends_at: c.ends_at,
+    });
+    Ok(())
+}
+
+// ---- join_coalition ----------------------------------------------------------------------------------
+
+/// Accounts of `join_coalition`. Remaining: `mint, Coalition item, its template, the token's war
+/// state`.
+#[event_cpi]
+#[derive(Accounts)]
+pub struct JoinCoalition<'info> {
+    #[account(seeds = [WAR_CONFIG_SEED], bump = config.bump)]
+    pub config: Box<Account<'info, WarConfig>>,
+    #[account(mut, seeds = [COALITION_SEED, &coalition.id.to_le_bytes()], bump = coalition.bump)]
+    pub coalition: Box<Account<'info, Coalition>>,
+}
+
+/// `join_coalition`: permissionless (review 3 L-3). A war token whose Coalition item names this
+/// id joins while the term runs, before any member contributed, up to `COALITION_MAX_MEMBERS`; so
+/// whoever forms the id first cannot shut out tokens that consented.
+pub fn process_join_coalition<'info>(ctx: Context<'info, JoinCoalition<'info>>) -> Result<()> {
+    let now = Clock::get()?.unix_timestamp;
+    let q = ctx.remaining_accounts;
+    require!(q.len() == 4, WarError::InvalidCoalition);
+    let c = &ctx.accounts.coalition;
+    require!(!c.dissolved && now < c.ends_at, WarError::CoalitionClosed);
+    require!(
+        c.contributed.iter().all(|v| *v == 0) && c.last_contribution_at.iter().all(|t| *t == 0),
+        WarError::CoalitionClosed
+    );
+    let n = usize::from(c.count);
+    require!(n < COALITION_MAX_MEMBERS, WarError::InvalidCoalition);
+    let mint_key = *q[0].key;
+    require!(c.member_index(&mint_key).is_none(), WarError::InvalidCoalition);
+    let mint = token_client::read_mint(&q[0])?;
+    let (_, params) = config_item(&mint, &q[1], &q[2], COALITION_TEMPLATE)?;
+    require!(params[0] == c.id, WarError::InvalidCoalition);
+    require!(
+        *q[3].key == WarState::address(&mint_key).0 && *q[3].owner == crate::ID,
+        WarError::InvalidCoalition
+    );
+    let c = &mut ctx.accounts.coalition;
+    c.members[n] = mint_key;
+    c.count = (n + 1) as u8;
+    emit_cpi!(CoalitionJoined {
+        id: c.id,
+        mint: mint_key,
+        count: c.count,
     });
     Ok(())
 }
@@ -397,7 +448,9 @@ pub struct CoalitionRaze<'info> {
 /// `coalition_raze(rival)`: sells captured rival tokens of the shared chest back into the rival's
 /// pool at the raze rate limit (none after the term), waiting below the M-3 floor (window `min_twap_secs`); the crank
 /// bounty is `max_crank_bounty_bps` of the proceeds.
-pub fn process_coalition_raze<'info>(ctx: Context<'info, CoalitionRaze<'info>>, args: SliceArgs) -> Result<()> {
+/// `max_amount` (review 3 M-6) caps the sale (0: no cap), so a cranker can sell inside a rival's
+/// own sell limits.
+pub fn process_coalition_raze<'info>(ctx: Context<'info, CoalitionRaze<'info>>, args: SliceArgs, max_amount: u64) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
     let params = ctx.accounts.config.params;
     let rival_key = ctx.accounts.rival_mint.key();
@@ -432,7 +485,8 @@ pub fn process_coalition_raze<'info>(ctx: Context<'info, CoalitionRaze<'info>>, 
         require!(allowance > 0, WarError::RazeLimit);
         let side = u128::from(pool.base_reserve) + u128::from(pool.virtual_base);
         let pool_cap = (side * u128::from(pool_share_bps(&rival_launch)) / u128::from(BPS)).min(u128::from(u64::MAX)) as u64;
-        allowance.min(e.amount).min(pool_cap)
+        let s = allowance.min(e.amount).min(pool_cap);
+        if max_amount > 0 { s.min(max_amount) } else { s }
     };
     require!(sell > 0, WarError::NothingToDo);
     let spot = spot_q64(pool.quote_reserve, pool.virtual_quote, pool.base_reserve, pool.virtual_base)
@@ -558,21 +612,27 @@ fn return_share<'info>(
     Ok(())
 }
 
-/// `dissolve_coalition`: permissionless after the term once nothing captured is left; returns the
-/// shared chest pro rata of contributions (equal shares when nobody contributed), the rounding to
-/// the last member. Booked by each member as `received_other`, never as season funding.
+/// `dissolve_coalition`: permissionless after the term once nothing captured is left, or after the
+/// term plus `coalition_grace_secs` in any case (review 3 M-6); returns the shared chest pro rata of
+/// contributions (equal shares when nobody contributed), the rounding to the last member. Booked
+/// by each member as `received_other`, never as season funding. Callable again after it ran, to
+/// return what later razes of leftover captured tokens paid in.
 pub fn process_dissolve_coalition<'info>(ctx: Context<'info, DissolveCoalition<'info>>) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
     let current = ctx.accounts.config.current_season;
     let (n, id, members, contributed) = {
         let c = &ctx.accounts.coalition;
-        require!(!c.dissolved, WarError::CoalitionClosed);
-        require!(now >= c.ends_at && c.captured.iter().all(|x| x.amount == 0), WarError::CoalitionNotDone);
+        let grace_over = now >= c.ends_at.saturating_add(ctx.accounts.config.params.coalition_grace_secs);
+        require!(
+            now >= c.ends_at && (grace_over || c.captured.iter().all(|x| x.amount == 0)),
+            WarError::CoalitionNotDone
+        );
         (usize::from(c.count), c.id, c.members, c.contributed)
     };
     let rem = ctx.remaining_accounts;
     require!(rem.len() >= 3 * n, WarError::MissingAccount);
     let total_balance = chest_balance(&ctx.accounts.coalition_holding)?;
+    require!(!ctx.accounts.coalition.dissolved || total_balance > 0, WarError::CoalitionClosed);
     note_coalition(&mut ctx.accounts.coalition, total_balance);
     let all = available(ctx.accounts.to_account_infos(), rem);
     let shared = ctx.accounts.coalition_chest.key();

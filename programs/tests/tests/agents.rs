@@ -269,11 +269,11 @@ fn links_need_the_agent_keys_ed25519_signature() {
     let ix = aw.link_ix(&payer.pubkey(), &a.passport, 0, "linker_x");
     aw.hw.w.env.send_paid_by(&[ix], &payer, &[]).expect_code(agents_code(E::BadLinkSignature));
     // Signed by the operator, not the agent key.
-    let stmt = Aw::statement(&a, 0, "linker_x");
+    let stmt = aw.statement(&a, 0, "linker_x");
     let ixs = [ed25519_ix(&a.operator, &stmt), aw.link_ix(&payer.pubkey(), &a.passport, 0, "linker_x")];
     aw.hw.w.env.send_paid_by(&ixs, &payer, &[]).expect_code(agents_code(E::BadLinkSignature));
     // The agent key signed another handle.
-    let other = Aw::statement(&a, 0, "someone_else");
+    let other = aw.statement(&a, 0, "someone_else");
     let ixs = [ed25519_ix(&a.key, &other), aw.link_ix(&payer.pubkey(), &a.passport, 0, "linker_x")];
     aw.hw.w.env.send_paid_by(&ixs, &payer, &[]).expect_code(agents_code(E::BadLinkSignature));
     // The real statement.

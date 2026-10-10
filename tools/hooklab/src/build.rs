@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Platform tools the units programs build with (scripts/solana/programs.sh).
 pub const TOOLS_VERSION: &str = "v1.57";
@@ -14,7 +14,7 @@ pub const TOOLS_VERSION: &str = "v1.57";
 pub const SBF_ARCH: &str = "v3";
 
 /// What the build produced.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Built {
     /// The `.so`.
     #[serde(skip)]

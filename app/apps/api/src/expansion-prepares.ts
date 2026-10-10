@@ -190,8 +190,9 @@ async function leaseClose(conn: Connection, b: Body, name: 'withdraw_offer' | 'e
   const lease = await account(conn, hookwars.leaseAddress(item), (d) => hookwars.leaseCodec.decode(d), 'There is no lease for this item.');
   if (name === 'end_lease') {
     // 12 section 3: the slot reverts to its launch item in the same call when it still holds the leased item.
+    // Review 3 M-5: otherwise the lease's token mint alone, so the program can see the slot let go of it.
     const revert = await leaseRevert(conn, pk(b, 'owner'), lease);
-    return [hookwars.marketEndLease(pk(b, 'owner'), item, itemMint, lease.lessor, revert ?? [])];
+    return [hookwars.marketEndLease(pk(b, 'owner'), item, itemMint, lease.lessor, revert ?? [{ pubkey: lease.tokenMint, isSigner: false, isWritable: false }])];
   }
   return [hookwars.marketCloseLease(name, pk(b, 'owner'), item, itemMint, lease.lessor)];
 }

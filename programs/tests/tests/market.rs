@@ -185,7 +185,12 @@ fn a_lease_escrows_the_item_pays_its_fee_and_returns_after_the_term() {
     send(&mut m.hw.w.env, &cranker, &[close_lease_ix(&cranker.pubkey(), &item, &item_mint, &lessor.pubkey(), true)])
         .expect_code(market_code(MarketError::LeaseNotOver));
     m.hw.w.env.warp(i64::from(term));
-    send(&mut m.hw.w.env, &cranker, &[close_lease_ix(&cranker.pubkey(), &item, &item_mint, &lessor.pubkey(), true)]).ok();
+    // Review 3 M-5: the revert accounts (or, with the item not in the slot, the token mint) are required.
+    send(&mut m.hw.w.env, &cranker, &[close_lease_ix(&cranker.pubkey(), &item, &item_mint, &lessor.pubkey(), true)])
+        .expect_code(market_code(MarketError::RevertAccountsMissing));
+    let mut ix = close_lease_ix(&cranker.pubkey(), &item, &item_mint, &lessor.pubkey(), true);
+    ix.accounts.push(anchor_lang::solana_program::instruction::AccountMeta::new_readonly(mint, false));
+    send(&mut m.hw.w.env, &cranker, &[ix]).ok();
     assert_eq!(m.holds(&item_mint, &lessor.pubkey()), 1);
     assert!(m.hw.w.env.account(&ms::lease_address(&item).0).is_none());
 }

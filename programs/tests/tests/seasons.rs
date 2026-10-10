@@ -276,7 +276,7 @@ fn the_prize_is_a_share_of_protocol_fees() {
         bordrless_bridge::client::unwrap_sol(vault, 0),
         bordrless_bridge::client::wrap_sol(chest, 0),
     ];
-    let ix = war::split_protocol_fees(cranker.pubkey(), treasury, Some((a.mint, s.number)), &inner);
+    let ix = war::split_protocol_fees(cranker.pubkey(), treasury, Some((a.mint, s.number)), s.number, &inner);
     let tx = ww.w.env.send_paid_by(&[ix], &cranker, &[]);
     let e = tx.event::<PrizePaid>();
     assert_eq!(e.to_winner, collected * u64::from(TEST_PARAMS.season_prize_share_bps) / 10_000);
@@ -291,7 +291,7 @@ fn the_prize_is_a_share_of_protocol_fees() {
     // Nothing left to split.
     ww.w.env
         .send_paid_by(
-            &[war::split_protocol_fees(cranker.pubkey(), treasury, Some((a.mint, s.number)), &inner)],
+            &[war::split_protocol_fees(cranker.pubkey(), treasury, Some((a.mint, s.number)), s.number, &inner)],
             &cranker,
             &[],
         )
@@ -310,7 +310,7 @@ fn without_a_winner_the_prize_vault_pays_the_treasury() {
     let tx = ww
         .w
         .env
-        .send_paid_by(&[war::split_protocol_fees(cranker.pubkey(), treasury, None, &inner)], &cranker, &[]);
+        .send_paid_by(&[war::split_protocol_fees(cranker.pubkey(), treasury, None, 0, &inner)], &cranker, &[]);
     let e = tx.event::<PrizePaid>();
     assert_eq!(e.to_winner, 0);
     assert_eq!(e.to_treasury + e.bounty, SOL);

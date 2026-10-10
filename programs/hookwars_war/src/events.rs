@@ -268,6 +268,14 @@ pub struct CoalitionFormed {
     pub ends_at: i64,
 }
 
+/// Review 3 L-3: a token whose Coalition item names the id joined before the first contribution.
+#[event]
+pub struct CoalitionJoined {
+    pub id: u32,
+    pub mint: Pubkey,
+    pub count: u8,
+}
+
 #[event]
 pub struct CoalitionContributed {
     pub id: u32,

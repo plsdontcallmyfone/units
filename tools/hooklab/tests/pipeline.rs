@@ -191,3 +191,94 @@ fn the_cli_writes_a_report_the_cli_verifies() {
     // No template id or admin given: no instruction.
     assert!(v["body"]["register_template"].is_null());
 }
+
+// ---- security review 3 M-9: the build and the signature never share a process ----------------------
+
+#[test]
+fn check_no_build_refuses_to_build_and_a_sandboxed_build_failure_is_a_signed_fail() {
+    let bin = env!("CARGO_BIN_EXE_hooklab");
+    let dir = out_dir("m9");
+    std::fs::create_dir_all(&dir).unwrap();
+    let key = Keypair::new();
+    let key_path = dir.join("key.json");
+    std::fs::write(&key_path, serde_json::to_string(&key.to_bytes().to_vec()).unwrap()).unwrap();
+    // `--no-build` without a built `.so`: a usage error, never a build next to the key.
+    let st = std::process::Command::new(bin)
+        .arg("check")
+        .arg(example_dir())
+        .arg("--no-build")
+        .arg("--key")
+        .arg(&key_path)
+        .status()
+        .unwrap();
+    assert_eq!(st.code(), Some(2));
+    // The sandboxed stage failed: the keyed stage signs a fail with the reason.
+    let err = dir.join("build-error.txt");
+    std::fs::write(&err, "cargo build-sbf failed: a test reason").unwrap();
+    let report_path = dir.join("report.json");
+    let st = std::process::Command::new(bin)
+        .arg("check")
+        .arg(example_dir())
+        .arg("--no-build")
+        .arg("--build-error")
+        .arg(&err)
+        .arg("--key")
+        .arg(&key_path)
+        .arg("--report")
+        .arg(&report_path)
+        .args(["--submission", &"ab".repeat(32)])
+        .status()
+        .unwrap();
+    assert_eq!(st.code(), Some(1));
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(&report_path).unwrap()).unwrap();
+    assert!(report::verify(&v, Some(&key.pubkey().to_string())).is_ok());
+    assert_eq!(v["body"]["verdict"], "fail");
+    assert!(v["body"]["problems"][0].as_str().unwrap().contains("a test reason"));
+}
+
+#[test]
+#[ignore = "builds with cargo build-sbf"]
+fn the_two_stage_cli_builds_without_a_key_then_checks_and_signs() {
+    let bin = env!("CARGO_BIN_EXE_hooklab");
+    let dir = out_dir("m9-two-stage");
+    std::fs::create_dir_all(&dir).unwrap();
+    if std::env::var_os("HOOKLAB_CARGO_TARGET_DIR").is_none() {
+        std::env::set_var("HOOKLAB_CARGO_TARGET_DIR", out_dir("target"));
+    }
+    let so_out = dir.join("template.so");
+    let st = std::process::Command::new(bin)
+        .arg("build")
+        .arg(example_dir())
+        .arg("--so-out")
+        .arg(&so_out)
+        .arg("--out-dir")
+        .arg(dir.join("out"))
+        .status()
+        .unwrap();
+    assert!(st.success());
+    let meta = PathBuf::from(format!("{}.json", so_out.display()));
+    assert!(so_out.exists() && meta.exists());
+    let key = Keypair::new();
+    let key_path = dir.join("key.json");
+    std::fs::write(&key_path, serde_json::to_string(&key.to_bytes().to_vec()).unwrap()).unwrap();
+    let report_path = dir.join("report.json");
+    let st = std::process::Command::new(bin)
+        .arg("check")
+        .arg(example_dir())
+        .arg("--no-build")
+        .arg("--so")
+        .arg(&so_out)
+        .arg("--build-meta")
+        .arg(&meta)
+        .args(["--ops", "16", "--random-sets", "1", "--key"])
+        .arg(&key_path)
+        .arg("--report")
+        .arg(&report_path)
+        .status()
+        .unwrap();
+    assert!(st.success());
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(&report_path).unwrap()).unwrap();
+    assert!(report::verify(&v, Some(&key.pubkey().to_string())).is_ok());
+    assert_eq!(v["body"]["verdict"], "pass");
+    assert_eq!(v["body"]["build"]["tools_version"], "v1.57");
+}

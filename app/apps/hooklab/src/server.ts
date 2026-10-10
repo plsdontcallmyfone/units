@@ -67,7 +67,9 @@ function readBody(req: IncomingMessage, max: number): Promise<Buffer> {
 
 export function createLabServer(o: ServerOptions): Server {
   const client = (req: IncomingMessage): string => {
-    const fwd = o.trustProxy ? String(req.headers['x-forwarded-for'] ?? '').split(',')[0]!.trim() : '';
+    // Review 3 L-8: behind the operator's one proxy, the entry it appended (the last), never one
+    // the client wrote.
+    const fwd = o.trustProxy ? (String(req.headers['x-forwarded-for'] ?? '').split(',').map((x) => x.trim()).filter(Boolean).at(-1) ?? '') : '';
     return fwd || req.socket.remoteAddress || 'unknown';
   };
   return createServer((req, res) => {

@@ -124,9 +124,10 @@ pub const RECORDERS: [Pubkey; 3] = [
     Pubkey::from_str_const("BzwMrjS1qBHvFAZk7JDoj8xBNjvPsJPDfAVRbiY3kFS4"),
 ];
 
-/// The statement an agent key signs to link a social account (09 5.2).
-pub fn link_statement(passport: &Pubkey, platform: u8, handle: &str) -> String {
-    format!("units agent link v1\npassport: {passport}\nplatform: {platform}\nhandle: {handle}")
+/// The statement an agent key signs to link a social account (09 5.2). `nonce` is the passport's
+/// `link_nonce` at the time of the link (review 3 L-5: a statement is good for one link only).
+pub fn link_statement(passport: &Pubkey, platform: u8, handle: &str, nonce: u32) -> String {
+    format!("units agent link v2\npassport: {passport}\nplatform: {platform}\nhandle: {handle}\nnonce: {nonce}")
 }
 
 /// `sha256(agent_key || passport || nonce)` zero-padded to 64 bytes (09 5.3).

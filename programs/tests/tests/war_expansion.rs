@@ -74,6 +74,8 @@ fn the_boss_pool_takes_its_share_and_pays_source_chests_by_volume() {
         .send(&[war::init_boss_pool(stranger.pubkey(), s.number, boss)], &[&stranger])
         .expect_code(war_code(WarError::NotAdmin));
     ww.w.env.send(&[war::init_boss_pool(admin.pubkey(), s.number, boss)], &[&admin]).ok();
+    // Review 3 L-7: a named boss takes no share before the admin timelock.
+    ww.w.env.warp(i64::from(TEST_PARAMS.admin_timelock_secs));
 
     fill_vault(&mut ww, 10 * SOL);
     let vault = prize_vault_address().0;
@@ -81,7 +83,7 @@ fn the_boss_pool_takes_its_share_and_pays_source_chests_by_volume() {
     let cranker = ww.w.env.funded(SOL);
     let treasury = ww.w.env.treasury.pubkey();
     let inner = [unwrap(&vault)];
-    let ix = war::split_protocol_fees_with_boss(cranker.pubkey(), treasury, None, Some(s.number), &inner);
+    let ix = war::split_protocol_fees_with_boss(cranker.pubkey(), treasury, None, s.number, &inner);
     let tx = ww.w.env.send_paid_by(&[ix], &cranker, &[]);
     let funded = tx.event::<BossPoolFunded>();
     let paid = tx.event::<PrizePaid>();
@@ -105,10 +107,11 @@ fn the_boss_pool_takes_its_share_and_pays_source_chests_by_volume() {
     ww.w.env
         .send(&[war::seal_boss_pool(s.number, boss)], &[])
         .expect_code(war_code(WarError::BossPoolState));
-    // A sealed pool takes no more funding.
+    // A sealed pool takes no more funding (review 3 M-3: the split goes on without it).
     fill_vault(&mut ww, SOL);
-    let ix = war::split_protocol_fees_with_boss(cranker.pubkey(), treasury, None, Some(s.number), &inner);
-    ww.w.env.send_paid_by(&[ix], &cranker, &[]).expect_code(war_code(WarError::BossPoolState));
+    let ix = war::split_protocol_fees_with_boss(cranker.pubkey(), treasury, None, s.number, &inner);
+    ww.w.env.send_paid_by(&[ix], &cranker, &[]).ok();
+    assert_eq!(ww.w.env.read::<BossPool>(&BossPool::address(s.number).0).funded, funded.amount);
 
     let before = ww.chest_balance(&a.mint);
     let funded_before = ww.state(&a.mint).funded_total;
@@ -559,4 +562,134 @@ fn a_revealed_raid_drops_through_craft_and_counts_raids_in_social() {
     extra.extend(war::drop_suffix(drop_source::RAID_REVEAL, MAT, revealer.pubkey()));
     let ix = war::reveal(revealer.pubkey(), holder.pubkey(), holding, 2, s.number, randomness_of(&roll2), extra);
     ww.w.env.send_paid_by(&[ix], &revealer, &[]).expect_code(war_code(WarError::WrongAccount));
+}
+
+// ---- security review 3 --------------------------------------------------------------------------------
+
+/// M-3: the cranker cannot leave the boss pool out of the split (any other account at its place is
+/// refused); L-7: a newly named boss takes no share before the admin timelock.
+#[test]
+fn sf3_the_boss_share_is_not_the_crankers_choice_and_waits_for_the_timelock() {
+    let mut ww = WarWorld::new();
+    let admin = ww.w.env.deployer.insecure_clone();
+    let s = ww.open_season(by_raid_volume());
+    ww.w.env.send(&[war::init_boss_pool(admin.pubkey(), s.number, Pubkey::new_unique())], &[&admin]).ok();
+    fill_vault(&mut ww, 10 * SOL);
+    let vault = prize_vault_address().0;
+    let cranker = ww.w.env.funded(SOL);
+    let treasury = ww.w.env.treasury.pubkey();
+    let inner = [unwrap(&vault)];
+    // The review's proof: the boss pool's place filled with anything else.
+    for other in [hookwars_war::ID, Pubkey::new_unique(), BossPool::address(s.number + 1).0] {
+        let mut ix = war::split_protocol_fees(cranker.pubkey(), treasury, None, s.number, &inner);
+        ix.accounts[7] = anchor_lang::solana_program::instruction::AccountMeta::new(other, false);
+        ww.w.env.send_paid_by(&[ix], &cranker, &[]).expect_code(war_code(WarError::WrongAccount));
+    }
+    // Before the timelock: the split goes on, the pool takes nothing.
+    let ix = war::split_protocol_fees(cranker.pubkey(), treasury, None, s.number, &inner);
+    ww.w.env.send_paid_by(&[ix], &cranker, &[]).ok();
+    assert_eq!(ww.w.env.read::<BossPool>(&BossPool::address(s.number).0).funded, 0);
+    // After it: funded.
+    ww.w.env.warp(TEST_PARAMS.admin_timelock_secs);
+    fill_vault(&mut ww, 10 * SOL);
+    let available = ww.w.env.lamports(&vault) - ww.w.env.rent(0);
+    let ix = war::split_protocol_fees(cranker.pubkey(), treasury, None, s.number, &inner);
+    let tx = ww.w.env.send_paid_by(&[ix], &cranker, &[]);
+    assert_eq!(tx.event::<BossPoolFunded>().amount, available * u64::from(TEST_PARAMS.boss_share_bps) / 10_000);
+}
+
+/// L-3: a least term, and a consenting token joins before the first contribution. M-6: after the
+/// term plus the grace period the shared chest dissolves with captured tokens left; razes in
+/// caller-sized steps keep paying into the chest and a later dissolve returns that too.
+#[test]
+fn sf3_coalitions_take_late_joiners_and_dissolve_after_the_grace_with_captured_tokens() {
+    let mut ww = WarWorld::new();
+    coalition_template(&mut ww);
+    let a = ww.war_token("SA", OrdersSpec::default());
+    let b = ww.war_token("SB", OrdersSpec::default());
+    let c = ww.war_token("SC", OrdersSpec::default());
+    let rival = ww.launch("SRIV", LaunchRules::NONE);
+    ww.buyer(&rival, SOL);
+    let id = 9;
+    let ma = join(&mut ww, &a, id, 5_000);
+    let mb = join(&mut ww, &b, id, 5_000);
+    let mc = join(&mut ww, &c, id, 5_000);
+    let payer = ww.w.env.payer.insecure_clone();
+    let term = 86_400;
+    // A throwaway one-second term is refused.
+    ww.w.env
+        .send(&[war::form_coalition(payer.pubkey(), id, TEST_PARAMS.coalition_min_term_secs - 1, &[ma, mb])], &[])
+        .expect_code(war_code(WarError::InvalidCoalition));
+    ww.w.env.send(&[war::form_coalition(payer.pubkey(), id, term, &[ma, mb])], &[]).ok();
+    // C consented (its item names the id) and joins; twice is refused.
+    let tx = ww.w.env.send(&[war::join_coalition(id, mc)], &[]);
+    assert_eq!(tx.event::<CoalitionJoined>().count, 3);
+    ww.w.env.warp(1);
+    ww.w.env.send(&[war::join_coalition(id, mc)], &[]).expect_code(war_code(WarError::InvalidCoalition));
+    ww.fund_chest(&a.mint, 10 * SOL);
+    ww.crank(|k, ww| contribute_ix(ww, k, id, ma, 2 * SOL)).0.ok();
+    // After the first contribution nobody joins.
+    let d = ww.war_token("SD", OrdersSpec::default());
+    let md = join(&mut ww, &d, id, 5_000);
+    ww.w.env.send(&[war::join_coalition(id, md)], &[]).expect_code(war_code(WarError::CoalitionClosed));
+
+    // A siege captures rival tokens.
+    ww.w.env.warp(120);
+    let now = ww.now();
+    let threshold = u64::from(OrdersSpec::default().siege_threshold) * TEST_PARAMS.siege_unit_lamports;
+    ww.put_ledger(&a.mint, 0, threshold, &[(rival, now, threshold, 0)]);
+    let pool = ww.w.launch_pool_key(&rival);
+    let spot = ww.spot(&pool);
+    ww.flat_observations(&pool, spot, 3_600);
+    let (tx, _) = ww.crank(|k, ww| {
+        let shared = Coalition::chest(id).0;
+        let keys = ww.w.launch_keys(&rival);
+        let inner = [
+            launch::swap_with_base_slice(&keys, shared, shared, 1, 1, 0, vec![]),
+            token::create_holding(*k, rival, shared),
+            unwrap(&shared),
+        ];
+        war::coalition_siege(*k, id, a.mint, a.orders, rival, ww.w.launch_pool_key(&rival), None, vec![], &inner)
+    });
+    let bought = tx.event::<CoalitionSiegeExecuted>().bought;
+    assert!(bought > 0);
+    let dissolve = |ww: &WarWorld| {
+        let _ = ww;
+        let shared = Coalition::chest(id).0;
+        let inner = [unwrap(&shared), wrap(&WarWorld::chest(&a.mint)), wrap(&WarWorld::chest(&b.mint)), wrap(&WarWorld::chest(&c.mint))];
+        war::dissolve_coalition(id, &[a.mint, b.mint, c.mint], &inner)
+    };
+    // After the term, inside the grace: captured tokens still block.
+    ww.w.env.warp(term);
+    ww.w.env.send(&[dissolve(&ww)], &[]).expect_code(war_code(WarError::CoalitionNotDone));
+    // After the grace (a rival's sell cap could have blocked every raze): it dissolves anyway.
+    ww.w.env.warp(TEST_PARAMS.coalition_grace_secs);
+    let total = shared_balance(&ww, id);
+    let tx = ww.w.env.send(&[dissolve(&ww)], &[]);
+    assert_eq!(tx.event::<CoalitionDissolved>().returned.iter().sum::<u64>(), total);
+    let co: Coalition = ww.w.env.read(&Coalition::address(id).0);
+    assert!(co.dissolved && co.captured[0].amount == bought);
+    // A raze in a step the caller sizes, then a second dissolve returns its proceeds.
+    let pool = ww.w.launch_pool_key(&rival);
+    let spot = ww.spot(&pool);
+    ww.flat_observations(&pool, spot, 3_600);
+    let step = bought / 4;
+    let (tx, _) = ww.crank(|k, ww| {
+        let shared = Coalition::chest(id).0;
+        let keys = ww.w.launch_keys(&rival);
+        let inner = [
+            launch::swap_with_base_slice(&keys, shared, shared, 0, 1, 0, vec![]),
+            token::create_holding(*k, rival, shared),
+            unwrap(&shared),
+        ];
+        war::coalition_raze_max(*k, id, rival, ww.w.launch_pool_key(&rival), vec![], &inner, step)
+    });
+    let r = tx.event::<CoalitionRazed>();
+    assert_eq!(r.sold, step);
+    let again = shared_balance(&ww, id);
+    assert!(again > 0);
+    let tx = ww.w.env.send(&[dissolve(&ww)], &[]);
+    assert_eq!(tx.event::<CoalitionDissolved>().returned.iter().sum::<u64>(), again);
+    assert_eq!(shared_balance(&ww, id), 0);
+    ww.assert_solvent(&a.mint);
 }

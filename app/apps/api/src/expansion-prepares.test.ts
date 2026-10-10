@@ -88,6 +88,9 @@ describe('market prepares', () => {
     expect(a.lessor).toBe(S(lessor));
     expect((await built('market/lease/withdraw', 'market', 'withdraw_offer', { itemMint: S(itemMint) })).lessor).toBe(S(lessor));
     expect((await built('market/lease/end', 'market', 'end_lease', { itemMint: S(itemMint) })).lessor).toBe(S(lessor));
+    // Review 3 M-5: with the slot no longer holding the item, the token mint alone follows the named accounts.
+    const [end] = await PREPARES['market/lease/end/prepare']!.build({ owner: S(owner), itemMint: S(itemMint) }, conn);
+    expect(end!.keys.slice(hookwars.coderOf('market').accountsOf('end_lease').length).map((k) => S(k.pubkey))).toEqual([S(tokenMint)]);
   });
   it('commission open, submit, pay and refund', async () => {
     const o = await built('commissions/open', 'market', 'open_commission', { tokenMint: S(tokenMint), nonce: '1', slot: 1, briefUri: 'https://x', bountyLamports: '100', windowSecs: 60 });

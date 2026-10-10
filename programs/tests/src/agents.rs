@@ -358,8 +358,9 @@ impl Aw {
     }
 
     /// The statement `agent` signs for `platform` and `handle`.
-    pub fn statement(agent: &Agent, platform: u8, handle: &str) -> Vec<u8> {
-        link_statement(&agent.passport, platform, handle).into_bytes()
+    pub fn statement(&self, agent: &Agent, platform: u8, handle: &str) -> Vec<u8> {
+        let nonce = self.passport(&agent.passport).link_nonce;
+        link_statement(&agent.passport, platform, handle, nonce).into_bytes()
     }
 
     /// `submit_attestation` args binding `agent`'s key, expiring `ttl` seconds from now.

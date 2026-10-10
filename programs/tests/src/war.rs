@@ -61,6 +61,9 @@ pub const TEST_PARAMS: WarParams = WarParams {
     // Pass 4b: TEST values (10 sections 8, 11.1).
     boss_share_bps: 1_000,
     contribute_interval_secs: 3_600,
+    // Review 3: TEST values (L-3, M-6).
+    coalition_min_term_secs: 3_600,
+    coalition_grace_secs: 86_400,
 };
 
 /// TEST template ids (the armory numbers its templates densely; these are the suites').

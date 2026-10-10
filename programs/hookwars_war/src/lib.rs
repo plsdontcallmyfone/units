@@ -213,6 +213,11 @@ pub mod hookwars_war {
         instructions::coalition::process_form_coalition(ctx, id, term_secs)
     }
 
+    /// A token whose Coalition item names the id joins before the first contribution (review 3).
+    pub fn join_coalition<'info>(ctx: Context<'info, JoinCoalition<'info>>) -> Result<()> {
+        instructions::coalition::process_join_coalition(ctx)
+    }
+
     /// Moves part of a member's chest into the coalition's shared chest.
     pub fn contribute<'info>(ctx: Context<'info, Contribute<'info>>, amount: u64) -> Result<()> {
         instructions::coalition::process_contribute(ctx, amount)
@@ -224,8 +229,8 @@ pub mod hookwars_war {
     }
 
     /// Sells the shared chest's captured rival tokens back, slowly.
-    pub fn coalition_raze<'info>(ctx: Context<'info, CoalitionRaze<'info>>, args: SliceArgs) -> Result<()> {
-        instructions::coalition::process_coalition_raze(ctx, args)
+    pub fn coalition_raze<'info>(ctx: Context<'info, CoalitionRaze<'info>>, args: SliceArgs, max_amount: u64) -> Result<()> {
+        instructions::coalition::process_coalition_raze(ctx, args, max_amount)
     }
 
     /// Returns the shared chest to the members pro rata after the term.

@@ -79,11 +79,18 @@ export class RateLimiter {
   }
 }
 
-/** The client a request comes from: the first `x-forwarded-for` entry the site sets, else the socket. */
-export function clientKey(req: IncomingMessage): string {
+/**
+ * The client a request comes from (security review 3 L-8). With no trusted proxy the socket
+ * address; behind `trustedHops` proxies that each append to `x-forwarded-for`, the entry the
+ * farthest trusted proxy appended (counted from the right). Entries to its left were set by the
+ * client and are never used.
+ */
+export function clientKey(req: IncomingMessage, trustedHops = 0): string {
+  const socket = req.socket.remoteAddress || 'unknown';
+  if (trustedHops <= 0) return socket;
   const f = req.headers['x-forwarded-for'];
-  const first = (Array.isArray(f) ? f[0] : f)?.split(',')[0]?.trim();
-  return first || req.socket.remoteAddress || 'unknown';
+  const list = (Array.isArray(f) ? f.join(',') : f ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  return list[list.length - trustedHops] ?? socket;
 }
 
 /** An integer in [lo, hi] from a path or query string, else a 400. */

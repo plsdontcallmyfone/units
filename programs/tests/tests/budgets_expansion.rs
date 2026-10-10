@@ -62,7 +62,8 @@ fn market_budgets() {
     measure(&mut hw.w, "market accept_lease", &payer, &[], ix);
     hw.w.env.warp(i64::from(TEST_MARKET.lease_min_secs));
     let cranker = hw.w.env.funded(SOL);
-    let ix = close_lease_ix(&cranker.pubkey(), &item, &item_mint, &lessor.pubkey(), true);
+    let mut ix = close_lease_ix(&cranker.pubkey(), &item, &item_mint, &lessor.pubkey(), true);
+    ix.accounts.push(anchor_lang::solana_program::instruction::AccountMeta::new_readonly(mint, false));
     measure(&mut hw.w, "market end_lease", &cranker, &[], ix);
 
     let creator = hw.w.env.funded(10 * SOL);

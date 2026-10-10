@@ -1,4 +1,5 @@
-// Changed by Hookwars: new file (pass 4b, 10 section 11.1).
+// Changed by Hookwars: new file (pass 4b, 10 section 11.1); review 3 L-7: a named boss takes effect after the admin
+// timelock.
 //! Boss events: the season's `BossPool`, funded by `boss_share_bps` of the prize split
 //! (`split_protocol_fees`), sealed from the boss token's `RaidLedger` after the season's end, and
 //! paid to each source token's war chest by `claim_boss_share`, `to_share * source_volume /
@@ -40,6 +41,9 @@ pub fn process_init_boss_pool(ctx: Context<InitBossPool>, season: u32, boss_mint
     p.bump = ctx.bumps.pool;
     p.season = season;
     p.boss_mint = boss_mint;
+    p.effective_at = Clock::get()?
+        .unix_timestamp
+        .saturating_add(i64::from(ctx.accounts.config.params.admin_timelock_secs));
     emit_cpi!(BossPoolOpened { season, boss_mint });
     Ok(())
 }

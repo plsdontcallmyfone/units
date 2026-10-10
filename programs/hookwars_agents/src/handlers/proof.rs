@@ -96,7 +96,7 @@ pub fn process_link_social(
         ctx.accounts.passport.status != status::RETIRED,
         AgentsError::BadStatus
     );
-    let statement = link_statement(&key, platform, &handle);
+    let statement = link_statement(&key, platform, &handle, ctx.accounts.passport.link_nonce);
     require!(
         ed25519_signed(
             &ctx.accounts.instructions.to_account_info(),
@@ -117,6 +117,7 @@ pub fn process_link_social(
     l.bump = ctx.bumps.link;
     let p = &mut ctx.accounts.passport;
     p.links = p.links.saturating_add(1);
+    p.link_nonce = p.link_nonce.saturating_add(1);
     let changed = refresh(p, key, t);
     emit_cpi!(LinkAdded {
         passport: key,

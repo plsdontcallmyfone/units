@@ -48,6 +48,17 @@ export function readEnv(env: EnvMap = process.env): RuntimeEnv {
   const port = str('UNITS_HEALTH_PORT');
   const secretValues: string[] = [];
   for (const [k, v] of snapshot) if (/_API_KEY$/.test(k) && v.trim()) secretValues.push(v.trim());
+  // Review 3 L-9: an RPC URL usually carries a provider key (in the query, the path or the user part).
+  const rpc = snapshot.get('UNITS_RPC_URL')?.trim();
+  if (rpc) {
+    secretValues.push(rpc);
+    try {
+      const u = new URL(rpc);
+      if (u.search.length > 1) secretValues.push(u.search.slice(1));
+      if (u.password) secretValues.push(u.password);
+      for (const seg of u.pathname.split('/')) if (seg.length >= 16) secretValues.push(seg);
+    } catch { /* not a URL: the whole value is redacted already */ }
+  }
   return {
     rpcUrl: str('UNITS_RPC_URL'),
     apiUrl: str('UNITS_API_URL'),

@@ -66,6 +66,7 @@ export const warStateAddress = (mint: PublicKey) => pda([s('war'), mint.toBuffer
 export const warConfigAddress = () => pda([s('war-config')], WAR_ID);
 export const seasonAddress = (n: number) => pda([s('season'), u32(n)], WAR_ID);
 export const lootTableAddress = (season: number) => pda([s('loot'), u32(season)], WAR_ID);
+export const bossPoolAddress = (season: number) => pda([s('boss'), u32(season)], WAR_ID);
 export const rollAddress = (holding: PublicKey, nonce: bigint | number) => pda([s('roll'), holding.toBuffer(), u64(nonce)], WAR_ID);
 /** 05 section 9 (authoritative over 04 2.10's ordering). For the Forge quest `mint` is the default key. */
 export const questMarkAddress = (season: number, mint: PublicKey, owner: PublicKey) => pda([s('quest'), u32(season), mint.toBuffer(), owner.toBuffer()], WAR_ID);

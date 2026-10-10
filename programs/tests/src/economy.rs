@@ -42,6 +42,10 @@ pub const TEST_BOOK: BookParams = BookParams {
     create_level: 0,
     order_bounty_lamports: 10_000,
     admin_timelock_secs: 600,
+    tick_min_lamports: 1,
+    tick_max_lamports: SOL,
+    min_size_max: 1_000_000,
+    skill_min_fee_lamports: 0,
 };
 
 /// TEST values of the licence parameters.
@@ -50,6 +54,7 @@ pub const TEST_LICENCE: LicenceParams = LicenceParams {
     author_bps: 1_000,
     min_secs: 3_600,
     max_secs: 30 * 86_400,
+    skill_min_fee_lamports: 0,
 };
 
 /// TEST skill table: Crafter from crafts, Trader from fills, Builder from licences sold.

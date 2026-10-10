@@ -190,7 +190,10 @@ export function revertForLeaseEndMetas(payer: PublicKey, mint: PublicKey, slot: 
   return keys.map((k, i) => ({ pubkey: k.pubkey, isSigner: i !== 0 && k.pubkey.equals(payer), isWritable: k.isWritable }));
 }
 
-/** Market `end_lease` with the slot revert (12 section 3); without `revert` it only returns the item. */
+/**
+ * Market `end_lease` with the slot revert (12 section 3). `revert` is required since review 3 M-5:
+ * the revert accounts, or the lease's token mint alone when the slot no longer holds the item.
+ */
 export function marketEndLease(caller: PublicKey, item: PublicKey, itemMint: PublicKey, lessor: PublicKey, revert: AccountMeta[] = []): TransactionInstruction {
   const leaseEscrow = leaseEscrowAddress(itemMint);
   return idlIx('market', 'end_lease', { caller, lease: leaseAddress(item), lessor, itemMint, leaseEscrow, leaseEscrowHolding: holdingAddr(itemMint, leaseEscrow), lessorHolding: holdingAddr(itemMint, lessor), ...tok }, {}, revert);

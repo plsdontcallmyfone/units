@@ -1,10 +1,16 @@
 //! `hooklab`: the Hook Lab command line (tools/hooklab/README.md).
 //!
 //!   hooklab manifest <crate-dir>
+//!   hooklab build <crate-dir> --so-out FILE [--features a,b] [--out-dir DIR]
 //!   hooklab check <crate-dir> [--so FILE] [--features a,b] [--out-dir DIR] [--seed N]
 //!                 [--random-sets N] [--ops N] [--key FILE] [--report FILE]
 //!                 [--submission HEX] [--template-id N] [--admin PUBKEY]
+//!                 [--no-build] [--build-meta FILE] [--build-error FILE]
 //!   hooklab verify <report.json> [--signer PUBKEY]
+//!
+//! Security review 3 M-9: a lab that signs runs `build` inside its sandbox with no key in reach
+//! (the build runs the submitter's build scripts and macros), then `check --no-build --so ...`
+//! outside it with the key: the suite only executes the bytecode, inside LiteSVM.
 //!
 //! Exit codes: 0 pass (or verified), 1 the template failed (or the report does not verify),
 //! 2 usage or I/O error.
@@ -22,7 +28,8 @@ use solana_signer::Signer;
 
 const USAGE: &str = "usage:
   hooklab manifest <crate-dir>
-  hooklab check <crate-dir> [--so FILE] [--features a,b] [--out-dir DIR] [--seed N] [--random-sets N] [--ops N] [--key FILE] [--report FILE] [--submission HEX] [--template-id N] [--admin PUBKEY]
+  hooklab build <crate-dir> --so-out FILE [--features a,b] [--out-dir DIR]
+  hooklab check <crate-dir> [--so FILE] [--features a,b] [--out-dir DIR] [--seed N] [--random-sets N] [--ops N] [--key FILE] [--report FILE] [--submission HEX] [--template-id N] [--admin PUBKEY] [--no-build] [--build-meta FILE] [--build-error FILE]
   hooklab verify <report.json> [--signer PUBKEY]";
 
 /// Default settings: two bound sets plus this many random ones, this many operations each.
@@ -40,6 +47,11 @@ fn parse(argv: &[String]) -> Result<Args, String> {
     let mut i = 0;
     while i < argv.len() {
         let a = &argv[i];
+        if a == "--no-build" {
+            flags.insert("no-build".to_string(), String::new());
+            i += 1;
+            continue;
+        }
         if let Some(name) = a.strip_prefix("--") {
             let value = argv.get(i + 1).ok_or(format!("--{name} needs a value"))?;
             flags.insert(name.to_string(), value.clone());
@@ -72,6 +84,7 @@ fn main() -> ExitCode {
         let a = parse(rest)?;
         match cmd.as_str() {
             "manifest" => manifest_cmd(&a),
+            "build" => build_cmd(&a),
             "check" => check_cmd(&a),
             "verify" => verify_cmd(&a),
             _ => Err(USAGE.into()),
@@ -107,6 +120,39 @@ fn manifest_cmd(a: &Args) -> Result<bool, String> {
     Ok(problems.is_empty())
 }
 
+/// `build`: the sandboxed stage. Writes the `.so` to `--so-out`, its build facts to `<so-out>.json`
+/// and, when the build fails, the reason to `<so-out>.err` (exit 1). Holds no key.
+fn build_cmd(a: &Args) -> Result<bool, String> {
+    let dir = crate_dir(a)?;
+    let so_out = PathBuf::from(a.flags.get("so-out").ok_or("--so-out is required")?);
+    let features: Vec<String> = a
+        .flags
+        .get("features")
+        .map(|f| f.split(',').filter(|s| !s.is_empty()).map(String::from).collect())
+        .unwrap_or_default();
+    let out = a
+        .flags
+        .get("out-dir")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| so_out.parent().map(PathBuf::from).unwrap_or_else(std::env::temp_dir));
+    let side = |ext: &str| PathBuf::from(format!("{}.{ext}", so_out.display()));
+    match build::build(&dir, &out, &features) {
+        Ok(b) => {
+            if b.so != so_out {
+                std::fs::copy(&b.so, &so_out).map_err(|e| format!("{}: {e}", so_out.display()))?;
+            }
+            let meta = serde_json::to_string(&b).map_err(|e| e.to_string())?;
+            std::fs::write(side("json"), meta).map_err(|e| e.to_string())?;
+            Ok(true)
+        }
+        Err(e) => {
+            std::fs::write(side("err"), &e).map_err(|e| e.to_string())?;
+            eprintln!("build: {e}");
+            Ok(false)
+        }
+    }
+}
+
 fn check_cmd(a: &Args) -> Result<bool, String> {
     let dir = crate_dir(a)?;
     let manifest_text =
@@ -121,8 +167,33 @@ fn check_cmd(a: &Args) -> Result<bool, String> {
         Some(_) => return Err("--submission: 64 hex characters".into()),
         None => hex(&tree_hash(&dir)?),
     };
+    if let Some(p) = a.flags.get("build-error") {
+        let reason = std::fs::read_to_string(p).map_err(|e| format!("{p}: {e}"))?;
+        let body = serde_json::json!({
+            "schema": 1,
+            "submission": submission,
+            "verdict": "fail",
+            "problems": [format!("build: {}", reason.chars().take(4000).collect::<String>())],
+            "register_template": Value::Null,
+        });
+        return finish(a, body);
+    }
+    if a.flags.contains_key("no-build") && !a.flags.contains_key("so") {
+        return Err("--no-build needs --so (or --build-error)".into());
+    }
     let (so, built) = match a.flags.get("so") {
-        Some(p) => (std::fs::read(p).map_err(|e| format!("{p}: {e}"))?, None),
+        Some(p) => {
+            let so = std::fs::read(p).map_err(|e| format!("{p}: {e}"))?;
+            // Build facts from the sandboxed stage: informational, read as plain fields only.
+            let meta = match a.flags.get("build-meta") {
+                Some(m) => {
+                    let text = std::fs::read_to_string(m).map_err(|e| format!("{m}: {e}"))?;
+                    Some(serde_json::from_str::<build::Built>(&text).map_err(|_| "--build-meta: not build facts".to_string())?)
+                }
+                None => None,
+            };
+            (so, meta)
+        }
         None => {
             let out = a
                 .flags

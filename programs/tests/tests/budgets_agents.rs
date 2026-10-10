@@ -60,7 +60,7 @@ fn agents_budgets() {
     let ix = aw.issue_ix(&operator.pubkey(), &passport);
     measure(&mut aw, "issue_badge", &operator, &[], vec![ix]);
     // link_social with its ed25519 instruction.
-    let stmt = Aw::statement(&a, 1, "budget_tg");
+    let stmt = aw.statement(&a, 1, "budget_tg");
     let ixs = vec![ed25519_ix(&key, &stmt), aw.link_ix(&operator.pubkey(), &passport, 1, "budget_tg")];
     measure(&mut aw, "link_social (with the ed25519 instruction)", &operator, &[], ixs);
     // submit_attestation and an endorsement.

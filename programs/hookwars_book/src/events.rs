@@ -111,3 +111,30 @@ pub struct ProtocolFee {
     pub reference: [u8; 32],
     pub ts: i64,
 }
+
+/// Review 3 M-1: lamports owed to a wallet that cannot hold them (it does not exist and the sum is
+/// below the rent minimum) went to the instruction's payer instead.
+#[event]
+pub struct Unpayable {
+    pub market: Pubkey,
+    pub wallet: Pubkey,
+    pub amount: u64,
+    pub paid_to: Pubkey,
+    pub ts: i64,
+}
+
+#[event]
+pub struct MarketTermsProposed {
+    pub market: Pubkey,
+    pub tick_lamports: u64,
+    pub min_size: u64,
+    pub ready_at: i64,
+}
+
+#[event]
+pub struct MarketTermsSet {
+    pub market: Pubkey,
+    pub tick_lamports: u64,
+    pub min_size: u64,
+    pub ts: i64,
+}

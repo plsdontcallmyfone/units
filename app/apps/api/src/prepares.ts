@@ -211,7 +211,7 @@ export const PREPARES: Record<string, PrepareDef> = {
       if (!cfgInfo) throw new PrepareError(409, 'NoWarConfig', 'The war program has no config on this cluster yet.');
       const cfg = hookwars.warConfigCodec.decode(cfgInfo.data);
       const winner = cfg.lastWinner ? { mint: cfg.lastWinner, season: cfg.lastWinnerSeason } : null;
-      return [hookwars.splitProtocolFees(pk(b, 'owner'), cfg.protocolTreasury, winner)];
+      return [hookwars.splitProtocolFees(pk(b, 'owner'), cfg.protocolTreasury, winner, cfg.currentSeason)];
     },
   },
   'raid/prepare': {

@@ -14,7 +14,7 @@ import { PublicKey, TransactionInstruction, type AccountMeta } from '@solana/web
 import { idlIx } from './from-idl.ts';
 import {
   ITEMS_EVENT_AUTHORITY, ITEMS_ID, LAUNCH_ID, SWAP_ID, TOKEN_ID, TOKEN_ITEMS_SIGNER, WAR_ID,
-  bondMarkAddress, equipStateAddress, forgeCounterAddress, leaseAddress, holdingAddr, itemAddress, itemMintAddress, launchAddr, lootTableAddress,
+  bondMarkAddress, bossPoolAddress, equipStateAddress, forgeCounterAddress, leaseAddress, holdingAddr, itemAddress, itemMintAddress, launchAddr, lootTableAddress,
   poolCutsAddress, proposalAddress, questMarkAddress, raidLedgerAddress, rollAddress, royaltyOwner, seasonAddress, slotAuthority, slotStateAddress,
   templateAddress, tokenHookSigner, treatyInboxAddress, voteAddress, warChestAddress, warStateAddress,
 } from './addresses.ts';
@@ -257,11 +257,16 @@ export function finalizeSeason(number: number): TransactionInstruction {
   return idlIx('war', 'finalize_season', { season: seasonAddress(number) }, { number });
 }
 
-/** `split_protocol_fees`: the prize vault's share to the last winner's chest, the rest to the treasury. */
-export function splitProtocolFees(cranker: PublicKey, treasury: PublicKey, winner: { mint: PublicKey; season: number } | null, inner: TransactionInstruction[] = []): TransactionInstruction {
+/**
+ * `split_protocol_fees`: the prize vault's share to the last winner's chest and the running
+ * season's boss pool, the rest to the treasury. `currentSeason` is the war config's: its boss pool
+ * address is always passed (review 3 M-3).
+ */
+export function splitProtocolFees(cranker: PublicKey, treasury: PublicKey, winner: { mint: PublicKey; season: number } | null, currentSeason: number, inner: TransactionInstruction[] = []): TransactionInstruction {
   const vault = new PublicKey(FIXED_ADDRESSES.prizeVault);
   return idlIx('war', 'split_protocol_fees', {
     cranker, prizeHolding: holdingAddr(BRIDGED_SOL_MINT, vault), treasury,
     winnerChest: winner ? warChestAddress(winner.mint) : null, winnerSeason: winner ? seasonAddress(winner.season) : null,
+    bossPool: bossPoolAddress(currentSeason),
   }, {}, accountsOf(inner));
 }

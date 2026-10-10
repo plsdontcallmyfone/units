@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { gzipSync } from 'node:zlib';
-import { chmodSync, existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
@@ -104,15 +104,25 @@ describe('service', () => {
 
   const start = (over: Partial<LabConfig> = {}, submitCapacity = 100): Promise<void> => {
     const fake = join(dir, 'fake-hooklab.mjs');
-    // Stands in for the CLI: writes a signed-report shape; fails the run when the crate says so.
+    // Stands in for the CLI. 'build' (the sandboxed stage) writes a .so, or the reason it failed;
+    // 'check' writes a signed-report shape. Each stage appends its argv and sandbox flag to calls.log.
     writeFileSync(fake, `#!/usr/bin/env node
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 const a = process.argv.slice(2);
 const crate = a[1];
 const at = (f) => a[a.indexOf(f) + 1];
-const verdict = existsSync(crate + '/FAIL') ? 'fail' : 'pass';
-if (existsSync(crate + '/HANG')) await new Promise((r) => setTimeout(r, 10000));
-writeFileSync(at('--report'), JSON.stringify({ domain: 'units:hooklab:report:v1', body: { verdict, submission: at('--submission'), manifest: JSON.parse(readFileSync(crate + '/hooklab.json', 'utf8')) }, signer: 'S', signature: 'X' }));
+appendFileSync(${JSON.stringify(join(dir, 'calls.log'))}, JSON.stringify({ argv: a, sandboxed: process.env.HOOKLAB_SANDBOXED === '1' }) + '\\n');
+if (a[0] === 'build') {
+  if (existsSync(crate + '/HANG')) await new Promise((r) => setTimeout(r, 10000));
+  mkdirSync(dirname(at('--so-out')), { recursive: true });
+  if (existsSync(crate + '/BREAK')) { writeFileSync(at('--so-out') + '.err', 'cargo build-sbf failed: broken on purpose'); process.exit(1); }
+  writeFileSync(at('--so-out'), 'ELF');
+  process.exit(0);
+}
+const verdict = existsSync(crate + '/FAIL') || a.includes('--build-error') ? 'fail' : 'pass';
+const problems = a.includes('--build-error') ? ['build: ' + readFileSync(at('--build-error'), 'utf8')] : [];
+writeFileSync(at('--report'), JSON.stringify({ domain: 'units:hooklab:report:v1', body: { verdict, problems, submission: at('--submission'), manifest: JSON.parse(readFileSync(crate + '/hooklab.json', 'utf8')) }, signer: 'S', signature: 'X' }));
 process.exit(verdict === 'pass' ? 0 : 1);
 `);
     chmodSync(fake, 0o755);
@@ -173,6 +183,27 @@ process.exit(verdict === 'pass' ? 0 : 1);
     const r = (await (await post(tar(crate()), 'application/gzip')).json()) as { id: string };
     await lab.drained();
     expect(lab.status(r.id)).toMatchObject({ state: 'done', verdict: 'pass' });
+  });
+
+  it('builds in the sandbox with no key, then checks and signs outside it (review 3 M-9)', async () => {
+    await start({ unsandboxed: false, sandbox: ['env', 'HOOKLAB_SANDBOXED=1'] });
+    const r = (await (await post(tar(crate()), 'application/gzip')).json()) as { id: string };
+    await lab.drained();
+    expect(lab.status(r.id)).toMatchObject({ state: 'done', verdict: 'pass' });
+    const calls = readFileSync(join(dir, 'calls.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { argv: string[]; sandboxed: boolean });
+    expect(calls.map((c) => [c.argv[0], c.sandboxed])).toEqual([['build', true], ['check', false]]);
+    expect(calls[0]!.argv).not.toContain('--key');
+    expect(calls[0]!.argv.join(' ')).not.toContain('key.json');
+    expect(calls[1]!.argv).toEqual(expect.arrayContaining(['--no-build', '--so', '--key']));
+  });
+
+  it('a build that fails in the sandbox ends in a signed fail report with the reason', async () => {
+    await start();
+    const r = (await (await post(tar([...crate(), { path: 'tpl/BREAK', data: '' }]), 'application/gzip')).json()) as { id: string };
+    await lab.drained();
+    expect(lab.status(r.id)).toMatchObject({ state: 'done', verdict: 'fail' });
+    const rep = JSON.parse(lab.report(r.id)!) as { body: { problems: string[] } };
+    expect(rep.body.problems[0]).toMatch(/broken on purpose/);
   });
 
   it('rejects bad archives, bad git inputs and unknown types before queueing', async () => {

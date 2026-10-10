@@ -1,10 +1,12 @@
-// Changed by Hookwars: new file (09); apply_limits visible to directives (11 section 4.3); TrackedLimit for the IDL.
+// Changed by Hookwars: new file (09); apply_limits visible to directives (11 section 4.3); TrackedLimit for the IDL;
+// security review 3 H-1: token instruction allowlist, holding authority check after the call, revoke_vault.
 //! The policy wallet (09 section 7): a vault PDA the agent key spends from through `spend`, within
 //! per-action and per-day limits and a target allowlist; the operator freezes and withdraws.
 
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::instruction::{AccountMeta, Instruction};
 use anchor_lang::system_program;
+use anchor_lang::Discriminator;
 use bordrless_token::client as token;
 use hookwars_common::ids;
 
@@ -228,9 +230,12 @@ struct Seen {
     index: usize,
     mint: Pubkey,
     amount: u64,
+    delegate: Option<Pubkey>,
+    delegated_amount: u64,
+    frozen: bool,
 }
 
-/// The vault holdings among `accounts` that are writable, with their amounts.
+/// The vault holdings among `accounts` that are writable, with their amounts and authority state.
 fn vault_holdings(accounts: &[AccountInfo], vault: &Pubkey) -> Vec<Seen> {
     let mut out = Vec::new();
     for (index, a) in accounts.iter().enumerate() {
@@ -243,11 +248,63 @@ fn vault_holdings(accounts: &[AccountInfo], vault: &Pubkey) -> Vec<Seen> {
                     index,
                     mint: h.mint,
                     amount: h.amount,
+                    delegate: h.delegate,
+                    delegated_amount: h.delegated_amount,
+                    frozen: h.frozen,
                 });
             }
         }
     }
     out
+}
+
+/// The token program instructions `spend` may call (H-1 of review 3): moving or burning the
+/// vault's tokens, which `spend` measures, and opening a holding. Anything that grants authority
+/// (`approve`, `set_authority`) or moves rent unmeasured (`close_holding`) is refused.
+fn token_ix_allowed(data: &[u8]) -> bool {
+    let allowed: [&[u8]; 3] = [
+        bordrless_token::instruction::Transfer::DISCRIMINATOR,
+        bordrless_token::instruction::Burn::DISCRIMINATOR,
+        bordrless_token::instruction::CreateHolding::DISCRIMINATOR,
+    ];
+    allowed.iter().any(|d| data.len() >= d.len() && data[..d.len()] == **d)
+}
+
+/// After the call no vault holding may have gained a delegate, a larger allowance, a new owner or
+/// a changed freeze state, whichever program the call reached (signer rights carry into nested
+/// calls, so the instruction allowlist alone does not cover a target that calls the token
+/// program itself).
+fn check_vault_authority(accounts: &[AccountInfo], vault: &Pubkey, before: &[Seen]) -> Result<()> {
+    for s in before {
+        let a = &accounts[s.index];
+        if a.data_is_empty() || *a.owner != bordrless_token::ID {
+            // Closed: counted as the whole amount out by the caller.
+            continue;
+        }
+        let h = token::read_holding(a).map_err(|_| AgentsError::VaultHoldingChanged)?;
+        require!(
+            h.owner == *vault
+                && h.delegate == s.delegate
+                && h.delegated_amount <= s.delegated_amount
+                && h.frozen == s.frozen,
+            AgentsError::VaultHoldingChanged
+        );
+    }
+    // Holdings the call opened for the vault start with no delegate and must keep none.
+    for (index, a) in accounts.iter().enumerate() {
+        if !a.is_writable || *a.owner != bordrless_token::ID || before.iter().any(|s| s.index == index) {
+            continue;
+        }
+        if before.iter().any(|s| accounts[s.index].key == a.key) {
+            continue;
+        }
+        if let Ok(h) = token::read_holding(a) {
+            if h.owner == *vault {
+                require!(h.delegate.is_none(), AgentsError::VaultHoldingChanged);
+            }
+        }
+    }
+    Ok(())
 }
 
 pub fn process_spend<'info>(ctx: Context<'info, Spend<'info>>, data: Vec<u8>) -> Result<()> {
@@ -266,6 +323,9 @@ pub fn process_spend<'info>(ctx: Context<'info, Spend<'info>>, data: Vec<u8>) ->
             && ctx.accounts.config.targets.contains(&target),
         AgentsError::TargetNotAllowed
     );
+    if target == bordrless_token::ID {
+        require!(token_ix_allowed(&data), AgentsError::InstructionNotAllowed);
+    }
     let vault = ctx.accounts.vault.key();
     let r = ctx.remaining_accounts;
     let before = vault_holdings(r, &vault);
@@ -295,6 +355,7 @@ pub fn process_spend<'info>(ctx: Context<'info, Spend<'info>>, data: Vec<u8>) ->
     infos.push(ctx.accounts.target_program.to_account_info());
     let bump = [ctx.accounts.policy.vault_bump];
     cpi(&ix, &infos, &[&[VAULT_SEED, key.as_ref(), &bump]])?;
+    check_vault_authority(r, &vault, &before)?;
 
     // Measure what left the vault; increases are not counted.
     let mut sol_out = lamports_before.saturating_sub(ctx.accounts.vault.lamports());
@@ -336,6 +397,50 @@ pub fn process_spend<'info>(ctx: Context<'info, Spend<'info>>, data: Vec<u8>) ->
         target_program: target,
         sol_out,
         ts: t
+    });
+    Ok(())
+}
+
+// ---- revoke_vault ----------------------------------------------------------------------------
+
+/// Accounts of `revoke_vault` (H-1 of review 3): the operator clears any delegate on one of the
+/// vault's holdings, frozen policy or not.
+#[event_cpi]
+#[derive(Accounts)]
+pub struct RevokeVault<'info> {
+    pub operator: Signer<'info>,
+    #[account(has_one = operator @ AgentsError::NotOperator)]
+    pub passport: Box<Account<'info, Passport>>,
+    #[account(seeds = [POLICY_SEED, passport.key().as_ref()], bump = policy.bump)]
+    pub policy: Box<Account<'info, Policy>>,
+    /// CHECK: the vault (signs by CPI).
+    #[account(seeds = [VAULT_SEED, passport.key().as_ref()], bump = policy.vault_bump)]
+    pub vault: UncheckedAccount<'info>,
+    /// CHECK: a holding of the vault (the token program checks the owner).
+    #[account(mut, owner = bordrless_token::ID @ AgentsError::WrongAccount)]
+    pub holding: UncheckedAccount<'info>,
+    pub token: TokenAccs<'info>,
+}
+
+pub fn process_revoke_vault(ctx: Context<RevokeVault>) -> Result<()> {
+    let key = ctx.accounts.passport.key();
+    let vault = ctx.accounts.vault.key();
+    let h = token::read_holding(&ctx.accounts.holding.to_account_info())?;
+    require_keys_eq!(h.owner, vault, AgentsError::WrongAccount);
+    let ix = token::revoke(vault, ctx.accounts.holding.key());
+    let infos = [
+        ctx.accounts.vault.to_account_info(),
+        ctx.accounts.holding.to_account_info(),
+        ctx.accounts.token.token_event_authority.to_account_info(),
+        ctx.accounts.token.token_program.to_account_info(),
+    ];
+    let bump = [ctx.accounts.policy.vault_bump];
+    cpi(&ix, &infos, &[&[VAULT_SEED, key.as_ref(), &bump]])?;
+    emit_cpi!(PolicyWithdraw {
+        passport: key,
+        mint: Some(h.mint),
+        amount: 0,
+        ts: now()?
     });
     Ok(())
 }

@@ -1,3 +1,4 @@
+// Changed by Hookwars: review 3 I-1: agent CRANK records carry the bounty earned.
 //! What treaties pay a token, streamed to its holders (05 section 6.6, R13), and the time treaties
 //! held, for the season score (05 section 6.7).
 
@@ -86,7 +87,7 @@ pub fn process_share_treaty_inflow<'info>(
     });
     // Integration pass 2 (09 section 21 item 4): optional agent attribution, after the effects.
     let (_, rec) = hookwars_common::agents_record::split(ctx.remaining_accounts, &crate::ID);
-    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.cranker.key(), hookwars_common::agents_record::CRANK, amount)?;
+    hookwars_common::agents_record::record(rec, &crate::ID, &ctx.accounts.cranker.key(), hookwars_common::agents_record::CRANK, bounty)?;
     Ok(())
 }
 

@@ -171,6 +171,11 @@ pub mod hookwars_agents {
         policy::process_spend(ctx, data)
     }
 
+    /// The operator clears a delegate on one of the vault's holdings (review 3 H-1).
+    pub fn revoke_vault(ctx: Context<RevokeVault>) -> Result<()> {
+        policy::process_revoke_vault(ctx)
+    }
+
     // ---- diplomat bonds (section 8)
 
     /// The agent posts a bond tying two treaty proposals.

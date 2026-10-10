@@ -31,6 +31,8 @@ const json = (res: ServerResponse, status: number, body: unknown): void => {
 const envNum = (k: string, d: number): number => { const v = Number(process.env[k]); return Number.isFinite(v) && v > 0 ? v : d; };
 const prepareLimit = new RateLimiter(envNum('RATE_PREPARE_CAPACITY', 20), envNum('RATE_PREPARE_PER_SEC', 0.5));
 const readLimit = new RateLimiter(envNum('RATE_READ_CAPACITY', 120), envNum('RATE_READ_PER_SEC', 4));
+/** Review 3 L-8: how many proxies in front of the API append to `x-forwarded-for` (0: none, the socket counts). */
+const trustedHops = Math.max(0, Math.floor(Number(process.env.API_TRUSTED_PROXY_HOPS ?? 0)) || 0);
 
 /** A short-lived cache for the aggregate reads (A-7). */
 const cache = new Map<string, { at: number; value: unknown }>();
@@ -101,7 +103,7 @@ export function handler(deps: Deps) {
     const q = url.searchParams;
     const db = deps.db;
     try {
-      const client = clientKey(req);
+      const client = clientKey(req, trustedHops);
       if (req.method === 'POST' && p.startsWith('/v1/') && p.endsWith('/prepare')) {
         if (!prepareLimit.take(client)) return json(res, 429, { error: 'Too many requests; wait a little.', code: 'RateLimited' });
         return json(res, 200, await prepare(deps.conn, p.slice(4), await readJsonBody(req), db));

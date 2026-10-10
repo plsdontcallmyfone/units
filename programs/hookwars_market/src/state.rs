@@ -50,6 +50,9 @@ pub struct MarketParams {
     pub commission_vote_secs: u32,
     /// `ADMIN_TIMELOCK_SECS` (00): delay on every params change.
     pub admin_timelock_secs: u32,
+    /// A sale counts toward the seller's `ITEMS_SOLD` only when its protocol fee reaches this
+    /// (review 3 L-1; owner value).
+    pub skill_min_fee_lamports: u64,
 }
 
 /// `MarketConfig` at `["market-config"]`.

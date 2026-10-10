@@ -1,4 +1,5 @@
-// Changed by Hookwars: new file (hook economy, docs/spec/11-hook-economy.md section 6).
+// Changed by Hookwars: new file (hook economy, docs/spec/11-hook-economy.md section 6); review 3 M-8 and L-1
+// (tick and size bounds, market terms setter, skill fee floor).
 use anchor_lang::prelude::*;
 use hookwars_common::PARAM_FIELDS;
 
@@ -12,6 +13,7 @@ pub mod seeds {
     pub const BOOK: &[u8] = b"book";
     pub const ESCROW: &[u8] = b"book-escrow";
     pub const CLASS_BID: &[u8] = b"class-bid";
+    pub const PENDING_TERMS: &[u8] = b"book-pending-terms";
 }
 
 pub mod side {
@@ -37,6 +39,13 @@ pub struct BookParams {
     pub order_bounty_lamports: u64,
     /// `ADMIN_TIMELOCK_SECS` (00).
     pub admin_timelock_secs: u32,
+    /// Least and most tick a market may have (review 3 M-8; owner values, 00 section 6).
+    pub tick_min_lamports: u64,
+    pub tick_max_lamports: u64,
+    /// Most `min_size` a market may have (review 3 M-8).
+    pub min_size_max: u64,
+    /// A fill counts toward the Trader skill only when its fees reach this (review 3 L-1).
+    pub skill_min_fee_lamports: u64,
 }
 
 /// `BookConfig` at `["book-config"]`.
@@ -62,6 +71,19 @@ pub struct PendingBook {
     pub bump: u8,
     pub treasury: Pubkey,
     pub params: BookParams,
+    pub ready_at: i64,
+    pub active: bool,
+}
+
+/// `PendingMarketTerms` at `["book-pending-terms", market]`: an admin change of one market's tick
+/// and minimum size, applied after `admin_timelock_secs` (review 3 M-8).
+#[account]
+#[derive(InitSpace, Debug)]
+pub struct PendingMarketTerms {
+    pub bump: u8,
+    pub market: Pubkey,
+    pub tick_lamports: u64,
+    pub min_size: u64,
     pub ready_at: i64,
     pub active: bool,
 }
@@ -186,6 +208,9 @@ pub fn pending_address() -> (Pubkey, u8) {
 }
 pub fn market_address(base_mint: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[seeds::BOOK, base_mint.as_ref()], &crate::ID)
+}
+pub fn pending_terms_address(market: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[seeds::PENDING_TERMS, market.as_ref()], &crate::ID)
 }
 pub fn escrow_address(market: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[seeds::ESCROW, market.as_ref()], &crate::ID)

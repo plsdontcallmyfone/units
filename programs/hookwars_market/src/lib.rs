@@ -1,6 +1,8 @@
 // Changed by Hookwars: new program (expansion, docs/spec/10-expansion.md sections 0, 1, 4, 5); integration pass 3: buy records ITEMS_SOLD (E-6).
 // Integration pass 2: end_lease reverts the leased slot through the armory (10 section 17 I-3).
 // Economy (11): licences (11 sections 1.4, 2.3).
+// Security review 3: end_lease binds the revert to the lease's token and requires it (M-4, M-5); sale
+// skill floor (L-1).
 //! `hookwars_market`: items are assets. Listings and sales of item tokens (price in SOL, paid by
 //! the buyer straight to the seller, the item's author and the protocol treasury), collections
 //! (discovery only), item rental (the item token sits in a lease escrow for the term; the lessor's
@@ -280,7 +282,7 @@ pub mod hookwars_market {
             &hookwars_common::economy::SOCIAL_ID,
             hookwars_common::eco_cpi::SOCIAL_SUFFIX,
         );
-        if let Some(sfx) = social {
+        if let (Some(sfx), true) = (social, fee >= p.skill_min_fee_lamports) {
             let seller = ctx.accounts.listing.seller;
             hookwars_common::eco_cpi::record_wallet(sfx, &crate::ID, &seller, hookwars_common::economy::counter::ITEMS_SOLD, 1)?;
         }
@@ -456,10 +458,25 @@ pub mod hookwars_market {
         let l = &ctx.accounts.lease;
         require!(l.state == lease_state::ACTIVE, MarketError::WrongLeaseState);
         require!(now()? >= l.ends_at, MarketError::LeaseNotOver);
-        // Integration pass 2 (10 section 17 I-3): with the armory's accounts given, the slot that
-        // still holds the leased item reverts first, then the item token goes home.
-        if !ctx.remaining_accounts.is_empty() {
-            cpi::revert_leased_slot(ctx.remaining_accounts, l.slot, l.item)?;
+        // Integration pass 2 (10 section 17 I-3): the slot that still holds the leased item reverts
+        // first, then the item token goes home. Review 3: the revert is required (M-5) and bound to
+        // the lease's own token through the armory's slot state address (M-4); when the slot no
+        // longer holds the item, the token mint alone shows it.
+        let rem = ctx.remaining_accounts;
+        require!(!rem.is_empty(), MarketError::RevertAccountsMissing);
+        if rem.len() == 1 {
+            require_keys_eq!(rem[0].key(), l.token_mint, MarketError::WrongAccount);
+            let m = Box::new(bordrless_token::client::read_mint(&rem[0])?);
+            let held = m.slots.get(usize::from(l.slot)).is_some_and(|s| s.item == l.item);
+            require!(!held, MarketError::RevertAccountsMissing);
+        } else {
+            require!(rem.len() > 2, MarketError::WrongAccount);
+            require_keys_eq!(
+                rem[2].key(),
+                hookwars_common::pda::slot_state(&l.token_mint, l.slot).0,
+                MarketError::WrongAccount
+            );
+            cpi::revert_leased_slot(rem, l.slot, l.item)?;
         }
         return_from_lease(&ctx)?;
         emit_cpi!(LeaseEnded {

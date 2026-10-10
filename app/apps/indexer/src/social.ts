@@ -112,14 +112,23 @@ export const mayHoldMemo = (s: ConfirmedSignatureInfo): boolean => typeof s.memo
 
 export interface SocialStats { authors: number; signatures: number; transactions: number; memos: number; valid: number }
 
-/** One pass over every author cursor. */
-export async function indexMemoAuthors(conn: Connection, db: Pool, opts: { maxPerAuthor?: number } = {}): Promise<SocialStats> {
+/**
+ * One pass over at most `maxAuthors` author cursors, the least recently walked first (review 3
+ * L-10: opening a profile is permissionless, so the walk is bounded per pass and rotates through
+ * every author instead of growing with each one). `SOCIAL_MAX_AUTHORS_PER_PASS` is the operator's.
+ */
+export async function indexMemoAuthors(conn: Connection, db: Pool, opts: { maxPerAuthor?: number; maxAuthors?: number } = {}): Promise<SocialStats> {
   const st: SocialStats = { authors: await refreshAuthors(db), signatures: 0, transactions: 0, memos: 0, valid: 0 };
   const lookup = await passportLookup(db);
   const maxBytes = memoMaxBytes();
   const seen = new Set<string>();
-  const authors = (await db.query<{ address: string; last_signature: string | null }>('select address, last_signature from social_authors order by address')).rows;
+  const envMax = Number(process.env.SOCIAL_MAX_AUTHORS_PER_PASS);
+  const maxAuthors = opts.maxAuthors ?? (Number.isFinite(envMax) && envMax > 0 ? Math.floor(envMax) : 200);
+  const authors = (await db.query<{ address: string; last_signature: string | null }>(
+    'select address, last_signature from social_authors order by updated_at asc nulls first, address limit $1', [maxAuthors],
+  )).rows;
   for (const a of authors) {
+    await db.query('update social_authors set updated_at = now() where address = $1', [a.address]);
     const sigs: ConfirmedSignatureInfo[] = [];
     let before: string | undefined;
     for (;;) {

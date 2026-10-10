@@ -1,12 +1,16 @@
 /**
  * Submissions, their queue and the runs. A submission is named by the sha256 of what was sent
  * (the tarball's bytes, or `git:<url>@<commit>`); nothing about who sent it is stored. Each run
- * unpacks into a fresh temporary directory, runs `hooklab check` with a timeout inside the
- * operator's sandbox command, keeps the signed report and deletes the directory.
+ * unpacks into a fresh temporary directory and has two stages (security review 3 M-9): the build,
+ * which runs the submitter's build scripts and macros, goes through the operator's sandbox command
+ * with no key in reach (`hooklab build`); once its whole process group is gone, `hooklab check
+ * --no-build` runs the property suite on the built `.so` in LiteSVM and signs the report with the
+ * lab key, outside the sandbox. The git fetch also goes through the sandbox and its result is
+ * held to the tarball limits (L-8). The signed report is kept and the directory deleted.
  */
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { crateRoot, joinRoot, readTarball, writeEntries, type TarLimits } from './tar.ts';
@@ -175,15 +179,34 @@ export class Lab {
         crate = src;
       }
       const reportTmp = join(work, 'report.json');
+      const so = join(work, 'out', 'template.so');
+      const manifestPath = join(crate, 'hooklab.json');
+      const manifest = existsSync(manifestPath) && regularFile(manifestPath) ? readFileSync(manifestPath) : null;
+      if (!manifest) throw new SubmissionError('hooklab.json must be a regular file at the crate root');
+      // Stage 1, sandboxed, no key: the build (the submitter's code runs here).
+      const features = this.cfg.checkArgs.indexOf('--features');
+      const buildArgs = [this.cfg.bin, 'build', crate, '--out-dir', join(work, 'out'), '--so-out', so,
+        ...(features >= 0 && this.cfg.checkArgs[features + 1] ? ['--features', this.cfg.checkArgs[features + 1]!] : [])];
+      const built = await this.exec([...this.cfg.sandbox, ...buildArgs], work);
+      const buildError = built !== 0 || !existsSync(so)
+        ? (existsSync(`${so}.err`) ? readFileSync(`${so}.err`, 'utf8').slice(0, 4000) : `the build ended with exit ${built}`)
+        : null;
+      // Stage 2, outside the sandbox, with the key: the suite on the built bytecode, never a build.
+      // What stage 1 left is only read if it is a plain file, and the manifest must be the one sent.
+      if (!regularFile(manifestPath) || !readFileSync(manifestPath).equals(manifest)) throw new SubmissionError('the build changed hooklab.json');
+      for (const f of [so, `${so}.json`]) if (existsSync(f) && !regularFile(f)) throw new SubmissionError('the build left a link where the lab reads its output');
+      const errFile = join(work, 'build-error.txt');
+      if (buildError !== null) writeFileSync(errFile, buildError);
       const args = [
-        this.cfg.bin, 'check', crate,
+        this.cfg.bin, 'check', crate, '--no-build',
+        ...(buildError === null ? ['--so', so, ...(existsSync(`${so}.json`) ? ['--build-meta', `${so}.json`] : [])] : ['--build-error', errFile]),
         '--key', this.cfg.keyPath,
         '--report', reportTmp,
         '--submission', id,
-        '--out-dir', join(work, 'out'),
-        ...this.cfg.checkArgs,
+        ...this.cfg.checkArgs.filter((_, i, a) => a[i] !== '--features' && a[i - 1] !== '--features'),
       ];
-      const code = await this.exec([...this.cfg.sandbox, ...args], work);
+      rmSync(reportTmp, { force: true });
+      const code = await this.exec(args, work);
       if (!existsSync(reportTmp)) throw new SubmissionError(`the lab produced no report (exit ${code})`);
       const report = readFileSync(reportTmp, 'utf8');
       const verdict = (JSON.parse(report) as { body?: { verdict?: string } }).body?.verdict ?? null;
@@ -198,27 +221,57 @@ export class Lab {
   }
 
   private async fetchGit(url: string, commit: string, dest: string): Promise<void> {
-    const git = ['git', '-c', 'core.symlinks=false', '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', '-C', dest];
+    // Review 3 L-8: through the sandbox like the build, and held to the tarball limits after.
+    const git = [...this.cfg.sandbox, 'git', '-c', 'core.symlinks=false', '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', '-C', dest];
     for (const step of [['init', '-q'], ['fetch', '-q', '--depth', '1', '--no-tags', url, commit], ['checkout', '-q', 'FETCH_HEAD']]) {
       const code = await this.exec([...git, ...step], dest, { GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1' });
       if (code !== 0) throw new SubmissionError(`git ${step[0]} failed (${code})`);
     }
     rmSync(join(dest, '.git'), { recursive: true, force: true });
+    const { bytes, files } = treeSize(dest);
+    if (files > this.cfg.tar.maxFiles) throw new SubmissionError(`the repository has more than ${this.cfg.tar.maxFiles} files`);
+    if (bytes > this.cfg.tar.maxUnpacked) throw new SubmissionError(`the repository is larger than ${this.cfg.tar.maxUnpacked} bytes`);
     for (const f of ['Cargo.toml', 'Cargo.lock', 'hooklab.json']) {
       if (!existsSync(join(dest, f))) throw new SubmissionError(`the repository must have ${f} at its root`);
     }
   }
 
+  /**
+   * Runs `argv` in its own process group and kills the whole group when it exits or times out, so
+   * nothing a build script started outlives its stage (review 3 M-9).
+   */
   private exec(argv: string[], cwd: string, env: Record<string, string> = {}): Promise<number> {
     return new Promise((resolveExit, reject) => {
       const [cmd, ...rest] = argv;
-      const child = spawn(cmd!, rest, { cwd, env: { ...process.env, ...env }, stdio: ['ignore', 'ignore', 'ignore'] });
+      const child = spawn(cmd!, rest, { cwd, env: { ...process.env, ...env }, stdio: ['ignore', 'ignore', 'ignore'], detached: true });
+      const killGroup = () => { try { if (child.pid) process.kill(-child.pid, 'SIGKILL'); } catch { /* the group is gone */ } };
       const timer = setTimeout(() => {
-        child.kill('SIGKILL');
+        killGroup();
         reject(new SubmissionError(`the run passed the ${this.cfg.timeoutMs} ms limit`));
       }, this.cfg.timeoutMs);
       child.on('error', (e) => { clearTimeout(timer); reject(e); });
-      child.on('exit', (code) => { clearTimeout(timer); resolveExit(code ?? -1); });
+      child.on('exit', (code) => { clearTimeout(timer); killGroup(); resolveExit(code ?? -1); });
     });
   }
+}
+
+/** A regular file, not a link. */
+function regularFile(p: string): boolean {
+  try { return lstatSync(p).isFile(); } catch { return false; }
+}
+
+/** Bytes and regular files under `dir` (links are not followed). */
+function treeSize(dir: string): { bytes: number; files: number } {
+  let bytes = 0;
+  let files = 0;
+  const walk = (d: string) => {
+    for (const name of readdirSync(d)) {
+      const p = join(d, name);
+      const st = lstatSync(p);
+      if (st.isDirectory()) walk(p);
+      else { files++; bytes += st.size; }
+    }
+  };
+  walk(dir);
+  return { bytes, files };
 }

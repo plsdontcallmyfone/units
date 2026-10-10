@@ -3,6 +3,7 @@
 // under its own payer. The API never sees a key: it gets public addresses and returns unsigned bytes.
 import { ComputeBudgetProgram, Connection, PublicKey, TransactionMessage, VersionedTransaction, type AddressLookupTableAccount, type TransactionInstruction } from '@solana/web3.js';
 import { hookwars } from '@hookwars/sdk';
+import { checkApiUrl } from './guard.ts';
 
 export interface Router {
   /** Instructions of a prepare route (without compute budget instructions). */
@@ -25,7 +26,7 @@ export const CRANK_ROUTES = [
 export class ApiRouter implements Router {
   readonly apiUrl: string;
   readonly conn: Connection;
-  constructor(apiUrl: string, conn: Connection) { this.apiUrl = apiUrl.replace(/\/+$/, ''); this.conn = conn; }
+  constructor(apiUrl: string, conn: Connection) { this.apiUrl = checkApiUrl(apiUrl).replace(/\/+$/, ''); this.conn = conn; }
 
   private async call(route: string, body: Record<string, unknown>): Promise<VersionedTransaction[]> {
     const res = await fetch(`${this.apiUrl}/v1/${route}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(30_000) });

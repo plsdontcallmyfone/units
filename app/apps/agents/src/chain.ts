@@ -5,6 +5,7 @@ import { hookwars } from '@hookwars/sdk';
 import { decodeDirective, decodeMemoConfig, directiveAddress, memoConfigAddress, type DirectiveAccount, type MemoParams } from './directive.ts';
 import { MEMO_PROGRAM_ID } from './memo.ts';
 import type { MintFacts } from './policy.ts';
+import { checkRulesUri } from './guard.ts';
 
 export const PASSPORT_ACTIVE = 0;
 
@@ -25,7 +26,7 @@ export interface ChainReader {
   directive(passport: PublicKey, seq: number): Promise<DirectiveAccount | null>;
   /** The bytes of the directive memo in the transaction that created the `Directive` account. */
   directiveMemo(passport: PublicKey, seq: number): Promise<Buffer | null>;
-  /** The rules document (size-capped, http(s) only). */
+  /** The rules document (size-capped, https from a public address only). */
   fetchRules(uri: string): Promise<Buffer>;
   itemsMinted(): Promise<bigint>;
   /** The creator of a token and the authors of the items equipped on it. */
@@ -41,7 +42,8 @@ export interface ChainReader {
 const RULES_MAX_BYTES = 64 * 1024;
 
 export async function fetchCapped(uri: string, maxBytes = RULES_MAX_BYTES, timeoutMs = 10_000): Promise<Buffer> {
-  if (!/^https?:\/\//.test(uri)) throw new Error('rules_uri must be http(s)');
+  // Review 3 L-9: https, public addresses only (a shared runtime must not reach its own network).
+  await checkRulesUri(uri);
   const res = await fetch(uri, { signal: AbortSignal.timeout(timeoutMs), redirect: 'error' });
   if (!res.ok) throw new Error(`rules_uri answered ${res.status}`);
   const len = Number(res.headers.get('content-length') ?? '0');

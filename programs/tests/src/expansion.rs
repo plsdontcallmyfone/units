@@ -28,6 +28,7 @@ pub const TEST_MARKET: MarketParams = MarketParams {
     commission_min_lamports: 100_000_000,
     commission_vote_secs: 7_200,
     admin_timelock_secs: 600,
+    skill_min_fee_lamports: 0,
 };
 
 /// TEST values of every social parameter.

@@ -180,7 +180,8 @@ pub fn process_register(ctx: Context<RegisterPassport>, index: u32, args: Profil
         p.created_at = t;
         p.last_active_at = t;
         p.record = TrackRecord::default();
-        p.reserved = [0; 32];
+        p.link_nonce = 0;
+        p.reserved = [0; 28];
     }
     let r = &mut ctx.accounts.agent_key_record;
     r.passport = key;

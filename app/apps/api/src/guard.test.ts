@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { Readable } from 'node:stream';
 import type { IncomingMessage } from 'node:http';
-import { clusterName, HttpError, intParam, RateLimiter, readJsonBody, redactUrl } from './guard.ts';
+import { clientKey, clusterName, HttpError, intParam, RateLimiter, readJsonBody, redactUrl } from './guard.ts';
 
 const req = (body: string, headers: Record<string, string> = {}) =>
   Object.assign(Readable.from([Buffer.from(body)]), { headers }) as unknown as IncomingMessage;
@@ -43,5 +43,18 @@ describe('battle feed kinds', () => {
   it('maps SiegeWaited apart from SiegeExecuted', () => {
     expect(KIND_OF.SiegeExecuted).toBe('siege');
     expect(KIND_OF.SiegeWaited).toBe('siege_waited');
+  });
+});
+
+describe('client key (review 3 L-8)', () => {
+  const req = (fwd: string | undefined, remote = '10.0.0.2') => ({ headers: fwd === undefined ? {} : { 'x-forwarded-for': fwd }, socket: { remoteAddress: remote } }) as unknown as IncomingMessage;
+  it('ignores a client-set x-forwarded-for unless a proxy is trusted', () => {
+    expect(clientKey(req('1.2.3.4'))).toBe('10.0.0.2');
+    expect(clientKey(req(undefined))).toBe('10.0.0.2');
+  });
+  it('behind trusted proxies takes the entry the farthest one appended, never a spoofed left entry', () => {
+    expect(clientKey(req('6.6.6.6, 203.0.113.9'), 1)).toBe('203.0.113.9');
+    expect(clientKey(req('6.6.6.6, 203.0.113.9, 10.0.0.5'), 2)).toBe('203.0.113.9');
+    expect(clientKey(req('203.0.113.9'), 2)).toBe('10.0.0.2');
   });
 });

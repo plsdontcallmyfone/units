@@ -1,4 +1,4 @@
-// Changed by Hookwars: security review 1: siege always names the rival war state (M-4); security review 2: record_funding takes the config (M-B); pass 4b: boss, coalition and rivalry builders, split_protocol_fees_with_boss.
+// Changed by Hookwars: security review 1: siege always names the rival war state (M-4); security review 2: record_funding takes the config (M-B); pass 4b: boss, coalition and rivalry builders, split_protocol_fees_with_boss; review 3: split always names the boss pool.
 //! Instruction builders for clients and the LiteSVM suites. The steps that call other programs take
 //! a `slice` (the token slice the client resolved, as the token program checks it) and `inner`:
 //! the instructions the step will build on chain, whose accounts must be present (see
@@ -601,11 +601,14 @@ pub fn finalize_season(number: u32) -> Instruction {
     )
 }
 
-/// `split_protocol_fees`: `winner` is the config's last winner and its season, when set.
+/// `split_protocol_fees`: `winner` is the config's last winner and its season, when set;
+/// `current_season` is the config's running season (its boss pool address is always passed,
+/// review 3 M-3).
 pub fn split_protocol_fees(
     cranker: Pubkey,
     treasury: Pubkey,
     winner: Option<(Pubkey, u32)>,
+    current_season: u32,
     inner: &[Instruction],
 ) -> Instruction {
     let vault = prize_vault_address().0;
@@ -617,7 +620,7 @@ pub fn split_protocol_fees(
         treasury,
         winner_chest: winner.map(|(m, _)| chest_address(&m).0),
         winner_season: winner.map(|(_, s)| Season::address(s).0),
-        boss_pool: None,
+        boss_pool: BossPool::address(current_season).0,
         system_program: system_program::ID,
         event_authority: event_authority(),
         program: crate::ID,
@@ -629,22 +632,16 @@ pub fn split_protocol_fees(
 
 // ---- pass 4b (10 sections 8, 11.1, 11.3) -----------------------------------------------------------
 
-/// `split_protocol_fees` with the running season's boss pool (`boss_season`).
+/// `split_protocol_fees` with the running season's boss pool (`boss_season`); the same as
+/// [`split_protocol_fees`] since review 3 M-3 made the account required.
 pub fn split_protocol_fees_with_boss(
     cranker: Pubkey,
     treasury: Pubkey,
     winner: Option<(Pubkey, u32)>,
-    boss_season: Option<u32>,
+    boss_season: u32,
     inner: &[Instruction],
 ) -> Instruction {
-    let mut i = split_protocol_fees(cranker, treasury, winner, inner);
-    // The optional account sits after `winner_season`: index 7 (cranker, config, vault, holding,
-    // treasury, winner chest, winner season).
-    i.accounts[7] = match boss_season {
-        Some(n) => AccountMeta::new(BossPool::address(n).0, false),
-        None => AccountMeta::new_readonly(crate::ID, false),
-    };
-    i
+    split_protocol_fees(cranker, treasury, winner, boss_season, inner)
 }
 
 pub fn init_boss_pool(admin: Pubkey, season: u32, boss_mint: Pubkey) -> Instruction {
@@ -717,6 +714,22 @@ pub fn form_coalition(payer: Pubkey, id: u32, term_secs: i64, members: &[Member]
     ix(accounts, crate::instruction::FormCoalition { id, term_secs }.data())
 }
 
+/// `join_coalition` (review 3 L-3).
+pub fn join_coalition(id: u32, member: Member) -> Instruction {
+    let mut accounts = crate::accounts::JoinCoalition {
+        config: config_address(),
+        coalition: Coalition::address(id).0,
+        event_authority: event_authority(),
+        program: crate::ID,
+    }
+    .to_account_metas(None);
+    accounts.push(AccountMeta::new_readonly(member.mint, false));
+    accounts.push(AccountMeta::new_readonly(member.item, false));
+    accounts.push(AccountMeta::new_readonly(member.template, false));
+    accounts.push(AccountMeta::new_readonly(WarState::address(&member.mint).0, false));
+    ix(accounts, crate::instruction::JoinCoalition {}.data())
+}
+
 /// `contribute`; `inner`: unwrap from the member's chest, wrap into the shared chest, and the shared
 /// chest's `create_holding`.
 pub fn contribute(cranker: Pubkey, id: u32, member: Member, amount: u64, inner: &[Instruction]) -> Instruction {
@@ -784,6 +797,19 @@ pub fn coalition_raze(
     slice: Vec<AccountMeta>,
     inner: &[Instruction],
 ) -> Instruction {
+    coalition_raze_max(cranker, id, rival_mint, rival_pool, slice, inner, 0)
+}
+
+/// `coalition_raze` selling at most `max_amount` (0: no cap; review 3 M-6).
+pub fn coalition_raze_max(
+    cranker: Pubkey,
+    id: u32,
+    rival_mint: Pubkey,
+    rival_pool: Pubkey,
+    slice: Vec<AccountMeta>,
+    inner: &[Instruction],
+    max_amount: u64,
+) -> Instruction {
     let mut accounts = crate::accounts::CoalitionRaze {
         cranker,
         config: config_address(),
@@ -800,7 +826,7 @@ pub fn coalition_raze(
     let first = slice.len() as u8;
     accounts.extend(slice);
     accounts.extend(accounts_of(inner));
-    ix(accounts, crate::instruction::CoalitionRaze { args: SliceArgs { first, second: 0 } }.data())
+    ix(accounts, crate::instruction::CoalitionRaze { args: SliceArgs { first, second: 0 }, max_amount }.data())
 }
 
 /// `dissolve_coalition` of `members` (in the coalition's order); `inner`: the bridge's

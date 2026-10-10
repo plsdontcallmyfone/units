@@ -8,6 +8,7 @@ import {
   idlAccountCodec, isCalled, itemCodec, itemLogEvents, lockedAt, logsTruncated, resolveSlices, settleEquip, sliceAccounts, swapRoute, SWAP_ID, slotRegistryAddress, structFields,
   tokenHookSigner, tyOf, vote, IDLS, type SlotData, type SlotMintData,
 } from './index.ts';
+import { LOG_EVENT_PROGRAMS, PROGRAM_OF, programLogEvents } from './events.ts';
 
 const pda = (seeds: (string | PublicKey)[], program: PublicKey) =>
   PublicKey.findProgramAddressSync(seeds.map((x) => (typeof x === 'string' ? Buffer.from(x) : x.toBuffer())), program);
@@ -149,6 +150,14 @@ describe('events', () => {
     const ev = decodeCpiEvent('war', Buffer.concat([EVENT_IX_TAG, body]));
     expect(ev?.name).toBe('BountyClaimed');
     expect(ev?.data.paid).toBe(1000n);
+  });
+  it('book fills and protocol fees are read from the book\'s log events (review 3 I-5)', () => {
+    const filled = encodeEventBody('book', 'Filled', { market: k(), makerOrder: 1n, maker: k(), taker: k(), side: 0, price: 10n, size: 2n, takerFee: 1n, makerFee: 0n, reference: Array(32).fill(0), ts: 5n }).toString('base64');
+    const fee = encodeEventBody('book', 'ProtocolFee', { source: 0, mint: k(), amount: 1n, reference: Array(32).fill(0), ts: 5n }).toString('base64');
+    const book = PROGRAM_OF.book!.toBase58();
+    const evs = programLogEvents([`Program ${book} invoke [1]`, `Program data: ${filled}`, `Program data: ${fee}`, `Program ${book} success`]);
+    expect(evs.map((e) => `${e.program}:${e.name}`)).toEqual(['book:Filled', 'book:ProtocolFee']);
+    expect(LOG_EVENT_PROGRAMS).toEqual(expect.arrayContaining(['book', 'craft', 'market']));
   });
   it('item log events only inside hookwars_items frames', () => {
     const mint = k();
