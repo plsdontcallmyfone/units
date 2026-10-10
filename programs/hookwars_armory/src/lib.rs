@@ -621,7 +621,7 @@ pub struct RegisterPreset<'info> {
     pub admin: Signer<'info>,
     #[account(seeds = [seeds::CONFIG], bump = config.bump, has_one = admin @ ArmoryError::NotAdmin)]
     pub config: Box<Account<'info, ArmoryConfig>>,
-    #[account(init, payer = admin, space = 8 + Preset::INIT_SPACE, seeds = [b"preset", &id.to_le_bytes()], bump)]
+    #[account(init, payer = admin, space = 8 + Preset::INIT_SPACE, seeds = [b"preset".as_ref(), &id.to_le_bytes()], bump)]
     pub preset: Box<Account<'info, Preset>>,
     pub system_program: Program<'info, System>,
 }
@@ -1411,7 +1411,7 @@ fn process_create_composite<'info>(
             require_keys_eq!(*info.owner, crate::ID, ArmoryError::WrongAccount);
             require_keys_eq!(
                 info.key(),
-                Pubkey::find_program_address(&[b"preset", &id.to_le_bytes()], &crate::ID).0,
+                Pubkey::find_program_address(&[b"preset".as_ref(), &id.to_le_bytes()], &crate::ID).0,
                 ArmoryError::WrongAccount
             );
             let p = Preset::try_deserialize(&mut &info.try_borrow_data()?[..])?;

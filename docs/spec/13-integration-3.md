@@ -8,8 +8,8 @@ A, LiteSVM. Every value the suites use is a TEST value, none is a decision (00 s
 | Item | Status |
 | --- | --- |
 | `crates/hookwars-common/src/lib.rs` did not compile: the economy merge left the `market` module open (`read_lease` lost its closing `}` and the module its `}`), "unclosed delimiter" | fixed (commit `423384f`). Main still has it until this branch merges |
-| stale `app_vectors` | RESULT_VECTORS |
-| the five agents bond tests the economy branch reported | RESULT_AGENTS |
+| stale `app_vectors` | not stale on this base: with the brace fix the full suite passed (529 passed, 0 failed, 3 ignored, run `base`) and both copies of `hookwars-math.json` equal what the test renders (same checksum on the Mac and on server A after the final run) |
+| the five agents bond tests the economy branch reported | pass on this base (fixed by integ2's bond test fix, which the economy branch did not have) |
 
 ## 2. Economy integration requests (11, end)
 
@@ -57,7 +57,24 @@ A unit test pins `disc("mint_crafted")` to the value 11 gives.
 
 ## 5. Tests
 
-`tests/integ3.rs` (new, `Ew::wired`): RESULT_TESTS
+`tests/integ3.rs` (new, `Ew::wired`, 7 tests):
+
+| Test | Covers |
+| --- | --- |
+| `template_economy_and_protocol_bps_are_admin_only_and_bounded` | E-7 and E-2 setters: admin only, `author_bps` at most 10,000, protocol bps at most `max_royalty_bps`, read back |
+| `a_wearing_template_needs_the_wear_accounts_and_counters_reach_social` | E-3 creation: refused without the init-wear suffix, `Wear` opened with the template's charges, `has_wear`; no `Wear` for a template that does not wear; E-6 `ITEMS_AUTHORED` with the social suffix, none without |
+| `settle_takes_the_protocol_fee_and_author_share_wears_the_item_and_drops_to_its_holder` | end to end on a slot mint with Half-Life: settle refused without the fee suffix once the bps is set, refused without the craft suffix once the item has run; exact protocol, author, royalty and bounty amounts; the run wears the only charge (dormant); the drop pays `x / 1,000` of the material to the holder; the dormant item then answers the default (the next transfer is not cut) |
+| `craft_mints_through_the_armory_and_only_its_signer_may` | E-5: a forged signer refused (`NotCraftSigner`); craft burns the inputs and the armory mints a `CRAFTED` item with midpoint params to the crafter |
+| `fuse_burns_the_components_into_one_composite` | wave F `fuse`: one component refused, a non-holder refused, components burned, modules and provenance in order, no second fuse |
+| `presets_fix_the_module_order_and_only_the_admin_registers_them` | wave F presets: admin only, at least two modules, `mint_composite` out of order refused, in order minted |
+| `the_hand_built_cpis_use_the_programs_discriminators` | the constants in `eco_cpi` equal the craft, social and armory instruction discriminators |
+
+`tests/devnet_plan.rs` (ignored by default) gains three steps (craft init with the armory as output
+and the armory and items as callers, book init, social `init_skills` with the armory as a caller);
+run explicitly on server A, all 58 steps land, and `scripts/devnet/init-plan.json` and
+`params.test.json` are regenerated (the items code hash changed with the items program; the params
+file also caught up with constants added before this pass: `proposal_min_bps`, `raze_max_discount_bps`,
+`bounty_max_point_bps`, `raid_volume_per_funded`).
 
 ## 6. For the app lane
 
@@ -73,4 +90,6 @@ A unit test pins `disc("mint_crafted")` to the value 11 gives.
 
 ## 7. Result
 
-RESULT_TOTAL
+Full suite on server A after the last program change (run `r5`): 536 passed, 0 failed, 3 ignored
+(the two Studio fixtures and `devnet_plan`, run on its own above). Base before this pass, with only
+the brace fix: 529 passed, 0 failed, 3 ignored.

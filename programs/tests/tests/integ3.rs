@@ -383,7 +383,7 @@ fn the_hand_built_cpis_use_the_programs_discriminators() {
 }
 
 fn preset_address(id: u16) -> Pubkey {
-    Pubkey::find_program_address(&[b"preset", &id.to_le_bytes()], &ids::ARMORY_ID).0
+    Pubkey::find_program_address(&[b"preset".as_ref(), &id.to_le_bytes()], &ids::ARMORY_ID).0
 }
 
 #[test]
