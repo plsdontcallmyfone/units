@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (09).
+// Changed by Hookwars: new file (09); apply_limits visible to directives (11 section 4.3); TrackedLimit for the IDL.
 //! The policy wallet (09 section 7): a vault PDA the agent key spends from through `spend`, within
 //! per-action and per-day limits and a target allowlist; the operator freezes and withdraws.
 
@@ -15,7 +15,7 @@ use crate::handlers::common::*;
 use crate::state::*;
 
 /// Checks `limits` against the config and the caps and writes them into `policy`.
-fn apply_limits(policy: &mut Policy, config: &AgentsConfig, limits: &PolicyLimits) -> Result<()> {
+pub(crate) fn apply_limits(policy: &mut Policy, config: &AgentsConfig, limits: &PolicyLimits) -> Result<()> {
     require!(
         limits.tracked.len() <= TRACKED_CAP && limits.targets.len() <= TARGETS_CAP,
         AgentsError::InvalidParams
@@ -23,9 +23,10 @@ fn apply_limits(policy: &mut Policy, config: &AgentsConfig, limits: &PolicyLimit
     for t in &limits.targets {
         require!(config.targets.contains(t), AgentsError::TargetNotAllowed);
     }
-    for (i, (m, _, _)) in limits.tracked.iter().enumerate() {
+    for (i, l) in limits.tracked.iter().enumerate() {
+        let m = &l.mint;
         require!(
-            *m != ids::BRIDGED_SOL_MINT && !limits.tracked[..i].iter().any(|(o, _, _)| o == m),
+            *m != ids::BRIDGED_SOL_MINT && !limits.tracked[..i].iter().any(|o| o.mint == *m),
             AgentsError::InvalidParams
         );
     }
@@ -35,11 +36,11 @@ fn apply_limits(policy: &mut Policy, config: &AgentsConfig, limits: &PolicyLimit
     policy.tracked = limits
         .tracked
         .iter()
-        .map(|(mint, per_action, per_day)| TrackedMint {
-            mint: *mint,
-            per_action: *per_action,
-            per_day: *per_day,
-            spent_today: old.iter().find(|o| o.mint == *mint).map_or(0, |o| o.spent_today),
+        .map(|l| TrackedMint {
+            mint: l.mint,
+            per_action: l.per_action,
+            per_day: l.per_day,
+            spent_today: old.iter().find(|o| o.mint == l.mint).map_or(0, |o| o.spent_today),
         })
         .collect();
     policy.targets = limits.targets.clone();

@@ -27,6 +27,7 @@ solana-sha256-hasher = "3.1"
 bordrless-hook = { path = "../../crates/bordrless-hook" }
 bordrless-token = { path = "../bordrless_token", features = ["no-entrypoint"] }
 hookwars-common = { path = "../../crates/hookwars-common" }
+units-memo = { path = "../../crates/units-memo" }
 hookwars-armory = { path = "../hookwars_armory", features = ["no-entrypoint"] }
 
 [lints]

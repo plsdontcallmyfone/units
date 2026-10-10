@@ -1,0 +1,15 @@
+[package]
+name = "units-memo"
+description = "units memo format version 1 (docs/spec/11-hook-economy.md section 4.2): a builder and a small dependency-free parser, usable on chain and off chain."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+
+[lints.rust]
+unsafe_code = "forbid"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }

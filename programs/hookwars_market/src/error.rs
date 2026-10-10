@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (expansion, 10).
+// Changed by Hookwars: new file (expansion, 10); licence errors (11 section 1.4).
 use anchor_lang::prelude::*;
 
 #[error_code]
@@ -67,4 +67,19 @@ pub enum MarketError {
     RefundTooEarly,
     #[msg("arithmetic overflow")]
     Overflow,
+    // Licences (11 section 1.4).
+    #[msg("licence terms are out of bounds")]
+    BadLicenceTerms,
+    #[msg("the item is not offered for licence")]
+    NotLicensable,
+    #[msg("every live licence of this item is taken")]
+    LicenceSoldOut,
+    #[msg("the licence is not live")]
+    NotLive,
+    #[msg("per-token licences cannot be revoked")]
+    NotRevocable,
+    #[msg("the licence has not ended yet")]
+    NotEnded,
+    #[msg("licence parameters out of bounds")]
+    BadLicenceParams,
 }

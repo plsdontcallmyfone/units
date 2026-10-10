@@ -1,0 +1,26 @@
+[package]
+name = "econ-caller-stub"
+description = "units, test-only, never deployed: signs as any seed PDA of its own id to call the economy programs (craft drops and wear, social record_wallet) and stands in for the armory's mint_crafted (docs/spec/11-hook-economy.md, integration requests)."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "econ_caller_stub"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+anchor-lang = { workspace = true }
+
+[lints]
+workspace = true

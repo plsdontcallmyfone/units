@@ -1,6 +1,7 @@
 // Changed by Hookwars: new program (expansion, docs/spec/10-expansion.md sections 3, 6, 7).
 // Integration pass 2: SpendToken through transfer_from_protocol (I-1), ItemsAuthored and
 // RoyaltiesClaimed criteria (I-5), RaidPoints reads a Mercenary range too.
+// Economy (11): profiles and skills (11 section 3.3).
 //! `hookwars_social`: achievement badges and guild halls.
 //!
 //! **Badges** are units tokens that do not move. Spec 10 makes them soulbound with template 42
@@ -26,6 +27,9 @@ use anchor_lang::solana_program::program::{invoke, invoke_signed};
 use anchor_lang::system_program;
 
 declare_id!("CKf4SjuiYxy4C2eSjk6oSQb2AnqC3ADoDTm8d323jWAx");
+
+pub mod profiles;
+pub use profiles::*;
 
 #[cfg(not(feature = "no-entrypoint"))]
 solana_security_txt::security_txt! {
@@ -223,6 +227,19 @@ pub enum SocialError {
     ZeroAmount,
     #[msg("arithmetic overflow")]
     Overflow,
+    // Profiles and skills (11 section 3.3).
+    #[msg("a skill is malformed (counter out of range or thresholds not ascending)")]
+    BadSkill,
+    #[msg("too many skills or callers")]
+    TooMany,
+    #[msg("the signer is not a registered caller's PDA")]
+    NotCaller,
+    #[msg("no pending skill change, or not ready yet")]
+    SkillsNotReady,
+    #[msg("unknown counter")]
+    BadCounter,
+    #[msg("two skills share an id")]
+    DuplicateSkill,
 }
 
 #[event]
@@ -885,6 +902,44 @@ pub mod hookwars_social {
         ctx.accounts.action.executed = true;
         emit_cpi!(GuildActionExecuted { id, nonce, kind, ts });
         Ok(())
+    }
+
+    /// Opens `wallet`'s profile (anyone pays the rent) (11 3.3).
+    pub fn open_profile(ctx: Context<OpenProfile>, wallet: Pubkey) -> Result<()> {
+        profiles::process_open_profile(ctx, wallet)
+    }
+
+    /// Creates the skill table (admin, once).
+    pub fn init_skills(
+        ctx: Context<InitSkills>,
+        skills: Vec<hookwars_common::economy::SkillDef>,
+        callers: Vec<Pubkey>,
+    ) -> Result<()> {
+        profiles::process_init_skills(ctx, skills, callers)
+    }
+
+    /// Proposes a new skill table and caller list (admin; applies after the admin timelock).
+    pub fn propose_skills(
+        ctx: Context<ProposeSkills>,
+        skills: Vec<hookwars_common::economy::SkillDef>,
+        callers: Vec<Pubkey>,
+    ) -> Result<()> {
+        profiles::process_propose_skills(ctx, skills, callers)
+    }
+
+    /// Applies a ready skill change (anyone).
+    pub fn apply_skills(ctx: Context<ApplySkills>) -> Result<()> {
+        profiles::process_apply_skills(ctx)
+    }
+
+    /// Adds `value` to a wallet counter; signed by a registered caller program's PDA (R43).
+    pub fn record_wallet(
+        ctx: Context<RecordWallet>,
+        caller_program: Pubkey,
+        counter: u8,
+        value: u64,
+    ) -> Result<()> {
+        profiles::process_record_wallet(ctx, caller_program, counter, value)
     }
 }
 

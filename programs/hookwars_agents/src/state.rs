@@ -1,4 +1,4 @@
-// Changed by Hookwars: new file (09).
+// Changed by Hookwars: new file (09). TrackedLimit in place of the tracked tuple (app request).
 //! Accounts of `hookwars_agents` (09 section 2).
 
 use anchor_lang::prelude::*;
@@ -241,13 +241,21 @@ pub struct TrackedMint {
     pub spent_today: u64,
 }
 
+/// One tracked mint's limits in `PolicyLimits` (a struct, not a tuple, so the IDL builds; same
+/// bytes as the former `(mint, per_action, per_day)`).
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TrackedLimit {
+    pub mint: Pubkey,
+    pub per_action: u64,
+    pub per_day: u64,
+}
+
 /// Limits an operator sets.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct PolicyLimits {
     pub per_action_lamports: u64,
     pub per_day_lamports: u64,
-    /// `(mint, per_action, per_day)`.
-    pub tracked: Vec<(Pubkey, u64, u64)>,
+    pub tracked: Vec<TrackedLimit>,
     pub targets: Vec<Pubkey>,
 }
 

@@ -12,7 +12,7 @@ use bordrless_token::client as token;
 use bordrless_token::state::{Holding, Mint};
 use hookwars_agents::constants::{bond_status, kind, pda as apda, proof, record_kind, status};
 use hookwars_agents::error::AgentsError as E;
-use hookwars_agents::state::{AgentKey, Attestation, Bond, Link, OperatorIndex, Policy, PolicyLimits};
+use hookwars_agents::state::{AgentKey, Attestation, Bond, Link, OperatorIndex, Policy, PolicyLimits, TrackedLimit};
 use hookwars_armory::state::{proposal_status, Proposal};
 use hookwars_common::{ids, template_id, EquipConfig};
 use solana_keypair::Keypair;
@@ -412,7 +412,7 @@ fn the_policy_wallet_spends_within_its_limits() {
     let limits = PolicyLimits {
         per_action_lamports: SOL,
         per_day_lamports: SOL,
-        tracked: vec![(tracked, 300, 500)],
+        tracked: vec![TrackedLimit { mint: tracked, per_action: 300, per_day: 500 }],
         targets: vec![bordrless_token::ID],
     };
     // A target outside the config's list is refused at creation.

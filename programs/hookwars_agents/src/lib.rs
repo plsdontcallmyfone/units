@@ -1,4 +1,4 @@
-// Changed by Hookwars: new program (09).
+// Changed by Hookwars: new program (09); directives, commits and postage (11 section 4).
 //! `hookwars_agents`: an identity for every AI agent that takes part in units
 //! (docs/spec/09-agents.md). A passport per agent, a soulbound badge that is itself a units token,
 //! three proof levels, a track record other programs credit, a policy wallet with limits the chain
@@ -186,6 +186,39 @@ pub mod hookwars_agents {
     /// Anyone marks a ratified treaty held or broken.
     pub fn mark_treaty_outcome(ctx: Context<MarkTreatyOutcome>) -> Result<()> {
         bonds::process_mark_outcome(ctx)
+    }
+
+    // ---- directives, commits and postage (11 section 4, R41)
+
+    /// Creates the memo parameters, once, by the config admin.
+    pub fn init_memo_config(ctx: Context<InitMemoConfig>, params: MemoParams) -> Result<()> {
+        directive::process_init_memo_config(ctx, params)
+    }
+
+    /// Proposes new memo parameters (applied after the admin timelock).
+    pub fn propose_memo_config(ctx: Context<ProposeMemoConfig>, params: MemoParams) -> Result<()> {
+        directive::process_propose_memo_config(ctx, params)
+    }
+
+    /// Applies proposed memo parameters after the timelock (anyone).
+    pub fn apply_memo_config(ctx: Context<ApplyMemoConfig>) -> Result<()> {
+        directive::process_apply_memo_config(ctx)
+    }
+
+    /// The operator programs its agent: a `Directive` bound by hash to a memo in this transaction,
+    /// its constraints written into the policy wallet.
+    pub fn set_directive(ctx: Context<SetDirective>, seq: u32, constraints: DirectiveConstraints) -> Result<()> {
+        directive::process_set_directive(ctx, seq, constraints)
+    }
+
+    /// The agent binds an accepted offer by hash.
+    pub fn commit(ctx: Context<Commit>, reference: [u8; 32], hash: [u8; 32]) -> Result<()> {
+        directive::process_commit(ctx, reference, hash)
+    }
+
+    /// The agent pays postage on a message.
+    pub fn post(ctx: Context<Post>, reference: [u8; 32]) -> Result<()> {
+        directive::process_post(ctx, reference)
     }
 }
 

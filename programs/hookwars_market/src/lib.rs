@@ -1,5 +1,6 @@
 // Changed by Hookwars: new program (expansion, docs/spec/10-expansion.md sections 0, 1, 4, 5).
 // Integration pass 2: end_lease reverts the leased slot through the armory (10 section 17 I-3).
+// Economy (11): licences (11 sections 1.4, 2.3).
 //! `hookwars_market`: items are assets. Listings and sales of item tokens (price in SOL, paid by
 //! the buyer straight to the seller, the item's author and the protocol treasury), collections
 //! (discovery only), item rental (the item token sits in a lease escrow for the term; the lessor's
@@ -19,11 +20,13 @@ use anchor_lang::prelude::*;
 pub mod cpi;
 pub mod error;
 pub mod events;
+pub mod licence;
 pub mod state;
 
 use cpi::{create_holding, holding_amount, pay_sol, read_item, transfer_plain, TokenAccs};
 use error::MarketError;
 use events::*;
+pub use licence::*;
 use state::*;
 
 declare_id!("FikEwNXoXqRWteX4kpCT8dJ34o8hWQ8w49whhZiqS2vv");
@@ -626,6 +629,57 @@ pub mod hookwars_market {
             ts
         });
         Ok(())
+    }
+
+    // ---- licences (11 sections 1.4 and 2.3, R45)
+
+    /// The market admin creates the licence parameters.
+    pub fn init_licence_config(ctx: Context<InitLicenceConfig>, params: LicenceParams) -> Result<()> {
+        licence::process_init_licence_config(ctx, params)
+    }
+
+    /// The market admin proposes new licence parameters (applied after the timelock).
+    pub fn propose_licence_params(ctx: Context<ProposeLicenceParams>, params: LicenceParams) -> Result<()> {
+        licence::process_propose_licence_params(ctx, params)
+    }
+
+    /// Anyone applies pending licence parameters once ready.
+    pub fn apply_licence_params(ctx: Context<ApplyLicenceParams>) -> Result<()> {
+        licence::process_apply_licence_params(ctx)
+    }
+
+    /// The item holder sets (or closes, `active = false`) its licence terms.
+    #[allow(clippy::too_many_arguments)]
+    pub fn set_licence_offer(
+        ctx: Context<SetLicenceOffer>,
+        price_lamports: u64,
+        term_secs: u32,
+        per: u8,
+        max_live: u16,
+        exclusive: bool,
+        active: bool,
+    ) -> Result<()> {
+        licence::process_set_licence_offer(ctx, price_lamports, term_secs, per, max_live, exclusive, active)
+    }
+
+    /// Buys (or, while live, extends) a licence for a token; pays the 2.3 split.
+    pub fn buy_license(ctx: Context<BuyLicense>, max_price: u64, reference: [u8; 32]) -> Result<()> {
+        licence::process_buy_license(ctx, max_price, false, reference)
+    }
+
+    /// Renews an existing licence by one term at the offer's price.
+    pub fn renew_license(ctx: Context<BuyLicense>, max_price: u64, reference: [u8; 32]) -> Result<()> {
+        licence::process_buy_license(ctx, max_price, true, reference)
+    }
+
+    /// The holder revokes a per-period licence and refunds the unused fraction.
+    pub fn revoke_license(ctx: Context<RevokeLicense>) -> Result<()> {
+        licence::process_revoke_license(ctx)
+    }
+
+    /// Anyone frees the live slot of an ended licence.
+    pub fn expire_license(ctx: Context<ExpireLicense>) -> Result<()> {
+        licence::process_expire_license(ctx)
     }
 }
 

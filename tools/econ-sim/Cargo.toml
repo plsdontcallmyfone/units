@@ -1,0 +1,16 @@
+[package]
+name = "econ-sim"
+description = "units hook economy faucet and sink simulation (docs/spec/11-hook-economy.md section 5.5): deterministic, seeded, driven by the hookwars-common split math. Every parameter is a TEST value."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "econ-sim"
+path = "src/main.rs"
+
+[dependencies]
+hookwars-common = { path = "../../crates/hookwars-common" }
+
+[lints]
+workspace = true
