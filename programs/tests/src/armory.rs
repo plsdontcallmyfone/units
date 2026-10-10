@@ -766,7 +766,7 @@ impl Hw {
     }
 
     /// Security review 2, L-D: the accounts an equip of slot `slot` appends for the pool registry
-    /// refresh (`[launch program, launch, pool registry]`, no item registries: the stand-in
+    /// refresh (`[launch program, launch, pool registry, launch event authority]`, no item registries: the stand-in
     /// launchpad of these suites makes no slot launches). Empty for other slot kinds.
     pub fn refresh_tail(&self, mint: &Pubkey, slot: u8) -> Vec<AccountMeta> {
         let m: bordrless_token::state::Mint = self.w.env.read(mint);
@@ -789,6 +789,9 @@ impl Hw {
             AccountMeta::new_readonly(ids::LAUNCH_ID, false),
             AccountMeta::new_readonly(launch, false),
             AccountMeta::new(registry, false),
+            // Protocol pass 4a: the launchpad's event authority (`refresh_pool_registry` is an
+            // event-cpi instruction).
+            AccountMeta::new_readonly(hookwars_common::eco_cpi::event_authority(&ids::LAUNCH_ID), false),
         ]
     }
 

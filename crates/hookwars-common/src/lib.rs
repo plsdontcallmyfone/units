@@ -2267,7 +2267,7 @@ pub mod eco_cpi {
     /// `craft::wear(caller_program, runs)` when the settle suffix's wear slot holds the item's
     /// `Wear`; a no-op otherwise.
     pub fn wear<'info>(s: &[AccountInfo<'info>], caller_program: &Pubkey, item: &Pubkey, runs: u32) -> Result<()> {
-        require!(s.len() >= CRAFT_HEAD + 1, ErrorCode::AccountNotEnoughKeys);
+        require!(s.len() > CRAFT_HEAD, ErrorCode::AccountNotEnoughKeys);
         if runs == 0 || wear_dormant(&s[4], item).is_none() {
             return Ok(());
         }

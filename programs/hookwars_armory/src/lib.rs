@@ -2581,7 +2581,15 @@ fn refresh_after_equip<'info>(
     if !slot_launch {
         return Ok(());
     }
-    require!(remaining.len() >= 3, ArmoryError::WrongAccount);
+    // Protocol pass 4a: the tail is `[launch program, launch, pool registry, the launchpad's
+    // event authority, item registries...]`; `refresh_pool_registry` is an `#[event_cpi]`
+    // instruction, so its event authority and program follow the system program.
+    require!(remaining.len() >= 4, ArmoryError::WrongAccount);
+    require_keys_eq!(
+        remaining[3].key(),
+        hookwars_common::eco_cpi::event_authority(&ids::LAUNCH_ID),
+        ArmoryError::WrongAccount
+    );
     let payer = equip.payer.to_account_info();
     let system = equip.token.system_program.to_account_info();
     let mut metas = vec![
@@ -2590,6 +2598,8 @@ fn refresh_after_equip<'info>(
         AccountMeta::new_readonly(mint_key, false),
         AccountMeta::new(remaining[2].key(), false),
         AccountMeta::new_readonly(system.key(), false),
+        AccountMeta::new_readonly(remaining[3].key(), false),
+        AccountMeta::new_readonly(ids::LAUNCH_ID, false),
     ];
     let mut infos = vec![
         payer,
@@ -2597,8 +2607,9 @@ fn refresh_after_equip<'info>(
         equip.token_mint.to_account_info(),
         remaining[2].clone(),
         system,
+        remaining[3].clone(),
     ];
-    for r in &remaining[3..] {
+    for r in &remaining[4..] {
         metas.push(AccountMeta {
             pubkey: r.key(),
             is_signer: false,

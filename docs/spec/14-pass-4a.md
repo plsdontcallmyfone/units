@@ -47,6 +47,16 @@ Test-only program `programs/ext_template` (`DwYAoZnHU2piMTpTLbPksSbmkisfpvR99LwK
 in the program-keys directory): the starter's transfer cut (`params[0]`) and a pool cut
 (`params[1]`).
 
+### 3.1 The pool registry refresh after an equip (found by pass 4b)
+
+Fixed: `refresh_after_equip` (used by `execute`, `check_performance`, `revert_for_lease_end` and
+`enforce_access`) called the launchpad's `refresh_pool_registry`, an `#[event_cpi]` instruction,
+without its event authority and program, so the documented tail failed against the real launchpad
+(`AccountNotEnoughKeys`). The tail is now `[launch program, launch, pool registry, the launchpad's
+event authority, item registries...]`; the armory checks the event authority's address and passes
+it and the launch program after the system program. `Hw::refresh_tail` returns the four accounts;
+`war_e2e.rs` uses the documented tail (its workaround removed); `security.rs` pins the length 4.
+
 ## 4. Forge of composites (08 section 2.11)
 
 Done: `forge` of two composites with the same module sequence (template ids, target slices, reads
@@ -73,7 +83,7 @@ pass item.
 | `items_stub` | kept: `protocol_vaults.rs` signs token payouts with arbitrary items seeds, including refused ones (R24) |
 | `launch_stub` | kept: the armory and items suites create slot mints directly (not through `prepare_launch`) and forward pool callbacks without a pool; the real launchpad's `equip_prepared` needs a prepared launch |
 | `pool_item_stub` | kept: the launchpad forwarding suites script refusals, wrong-side and over-bound answers, which no real item gives; `ext_template` now covers the real external path |
-| `war_items_stub`, `war_armory_stub` (and the war suites' use of `items_stub`, `armory_stub`) | for p4b: the real items program now serves the Raid touch and the real armory `mint_loot`; they duplicate `items_stub`/`armory_stub` at the same ids |
+| `war_items_stub`, `war_armory_stub` (and the war suites' use of `items_stub`, `armory_stub`) | listed for the war lane (p4b's harness, not changed here): still used by `src/war.rs`, `loot.rs`, `budgets_war.rs`, `war_expansion.rs`; the real items program serves the Raid touch and the real armory `mint_loot`, and they duplicate `items_stub`/`armory_stub` at the same ids |
 
 ## 7. App changes for the app pass
 
@@ -90,6 +100,8 @@ pass item.
   the slot states), `enforce_access` (a crank, like the performance revert), and the access proof
   suffix on every equip path for a Gated, Licensed or Leased item.
 - Item page: access mode, terms, approvals; the Hook Lab service shows the queue instruction.
+- Execute, performance revert, lease-end revert and `enforce_access` on a slot launch's Pool or
+  Relation slot: the refresh tail gains the launchpad's event authority as its 4th account.
 - `memo.ts`: the comment saying `units-memo` refuses the social kinds is now wrong; add a test that
   reads `crates/units-memo/vectors/social.json`.
 

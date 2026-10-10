@@ -412,7 +412,8 @@ fn l_d_an_equip_of_a_pool_kind_slot_names_the_launch_for_the_registry_refresh() 
     hw.w.env.warp(600);
     let full = hw.execute_ix(&o, &proposal);
     let tail = hw.refresh_tail(&mint, 3).len();
-    assert_eq!(tail, 3);
+    // Protocol pass 4a: the tail ends with the launchpad's event authority.
+    assert_eq!(tail, 4);
     let mut bare = full.clone();
     bare.accounts.truncate(bare.accounts.len() - tail);
     hw.w.env
@@ -421,7 +422,7 @@ fn l_d_an_equip_of_a_pool_kind_slot_names_the_launch_for_the_registry_refresh() 
     // A wrong launch address: refused too.
     let mut wrong = full.clone();
     let n = wrong.accounts.len();
-    wrong.accounts[n - 2].pubkey = Pubkey::new_unique();
+    wrong.accounts[n - 3].pubkey = Pubkey::new_unique();
     hw.w.env
         .send_paid_by(&[wrong], &owner, &[])
         .expect_code(armory_code(E::WrongAccount));
